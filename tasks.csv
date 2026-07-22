@@ -37,7 +37,7 @@ id,task,status,priority,notes
 36,Docs - Auth/profile/address API contracts: Document request/response contracts per API.md conventions,done,high,depends on #30 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:27:59
 37,Catalog - Catalog schema: Tables: category; service; service_addon; service_media; service_faq; service_price (SRS 23.2),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:30:37
 38,Geography - Geography master schema: Tables: city; state; pincode; zone; locality (SRS 12.9.1),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:33:50
-39,Serviceability - Serviceability mapping schema: Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),todo,high,depends on #37 #38
+39,Serviceability - Serviceability mapping schema: Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),done,high,depends on #37 #38 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:38:41
 40,Catalog - Catalog domain model: Category/Service/AddOn aggregates with activation; ordering; pricing type rules (SRS 12.5-12.7),todo,high,depends on #4 #37
 41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),todo,high,depends on #40
 42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),todo,high,depends on #40
