@@ -1,20 +1,40 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Nestly.Infrastructure.Persistence;
+using Nestly.Infrastructure.Persistence.Interceptors;
 
 namespace Nestly.Infrastructure;
 
 public static class DependencyInjection
 {
+    private const string DatabaseConnectionName = "Database";
+
     /// <summary>
-    /// Registers infrastructure services: persistence, caching, background jobs,
-    /// and external providers. Wiring is added as each capability lands
-    /// (EF Core/PostgreSQL in T008, Redis in T017, Hangfire in T018).
+    /// Registers infrastructure services: persistence, health checks, and — as
+    /// each capability lands — caching (T017), background jobs (T018), and
+    /// external providers.
     /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        _ = configuration;
+        string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
+            throw new InvalidOperationException(
+                $"Connection string '{DatabaseConnectionName}' is not configured.");
+
+        services.AddSingleton<AuditableEntityInterceptor>();
+
+        services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
+            options
+                .UseNpgsql(connectionString)
+                .UseSnakeCaseNamingConvention()
+                .AddInterceptors(serviceProvider.GetRequiredService<AuditableEntityInterceptor>()));
+
+        services
+            .AddHealthChecks()
+            .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+
         return services;
     }
 }
