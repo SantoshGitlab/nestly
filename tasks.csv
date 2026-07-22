@@ -25,7 +25,7 @@ id,task,status,priority,notes
 24,Identity - Registration API: Mobile+OTP registration; configurable email+password mode; consent capture (SRS 11.2.1),done,high,depends on #23 #11 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:26:44
 25,Identity - Login and JWT issuance: Login via OTP or email/password; JWT access+refresh tokens; session invalidation on logout (SRS 11.2.2),done,high,depends on #24 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:31:16
 26,Identity - Login throttling and lockout: Rate limiting on OTP and login attempts; account lockout policy,done,high,depends on #25 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:34:02
-27,Identity - Forgot/reset password flow: Reset with verification when password auth is enabled,todo,high,depends on #25
+27,Identity - Forgot/reset password flow: Reset with verification when password auth is enabled,done,high,depends on #25 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:41:13
 28,Customer - Profile APIs: Get/update profile; change mobile/email with re-verification; communication preferences (SRS 11.2.3),todo,high,depends on #25
 29,Customer - Address schema: customer_address table with lat/long contact fields and default flag (SRS 11.3.2),todo,high,depends on #21
 30,Customer - Address CRUD APIs: Add/edit/delete/list; set default; deleted addresses must not affect booking snapshots (SRS 11.3),todo,high,depends on #28 #29
