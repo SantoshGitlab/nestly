@@ -38,14 +38,14 @@ id,task,status,priority,notes
 37,Catalog - Catalog schema: Tables: category; service; service_addon; service_media; service_faq; service_price (SRS 23.2),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:30:37
 38,Geography - Geography master schema: Tables: city; state; pincode; zone; locality (SRS 12.9.1),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:33:50
 39,Serviceability - Serviceability mapping schema: Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),done,high,depends on #37 #38 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:38:41
-40,Catalog - Catalog domain model: Category/Service/AddOn aggregates with activation; ordering; pricing type rules (SRS 12.5-12.7),todo,high,depends on #4 #37
-41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),todo,high,depends on #40
-42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),todo,high,depends on #40
-43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),todo,high,depends on #39
+40,Catalog - Catalog domain model: Category/Service/AddOn aggregates with activation; ordering; pricing type rules (SRS 12.5-12.7),blocked,high,depends on #4 #37 | auto-blocked after 5 attempts
+41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),blocked,high,depends on #40 | auto-blocked: depends on blocked task #40
+42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),blocked,high,depends on #40 | auto-blocked: depends on blocked task #40
+43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39 | completed by local (qwen2.5-coder:7b) 2026-07-23 03:26:03
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),todo,high,depends on #9
 45,Slots - Slot engine: Availability computation honoring serviceability; cutoff; advance-days; capacity; reusable for reschedule (SRS 11.8; 15.2),todo,high,depends on #43 #44
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45
-47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,todo,high,depends on #40
+47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,blocked,high,depends on #40 | auto-blocked: depends on blocked task #40
 48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),todo,high,depends on #47
 49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,todo,high,depends on #17 #41
 50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),todo,high,depends on #15 #41
@@ -101,7 +101,7 @@ id,task,status,priority,notes
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,todo,high,depends on #98 #99
 101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),todo,high,depends on #96 #28
 102,CustomerMgmt - Customer management UI: Customer list and detail screens with authorized actions,todo,high,depends on #98 #101
-103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),todo,high,depends on #96 #40 #20
+103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),blocked,high,depends on #96 #40 #20 | auto-blocked: depends on blocked task #40
 104,Catalog - Category management UI: Category list/create/edit screens,todo,high,depends on #98 #103
 105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),todo,high,depends on #103
 106,Catalog - Service management UI: Service list/create/edit screens,todo,high,depends on #104 #105
