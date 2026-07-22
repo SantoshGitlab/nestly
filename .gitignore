@@ -37,3 +37,8 @@ coverage/
 # OS
 Thumbs.db
 Desktop.ini
+# macOS
+.DS_Store
+
+# Claude local settings
+.claude/settings.local.json
