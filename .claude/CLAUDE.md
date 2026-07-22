@@ -554,17 +554,18 @@ Before writing any code, perform the following steps.
 Read and understand the following documents:
 
 - .claude/CLAUDE.md
-- .claude/PROJECT.md
-- .claude/ARCHITECTURE.md
-- .claude/DOTNET.md
-- .claude/DATABASE.md
-- .claude/API.md
-- .claude/FRONTEND.md
-- .claude/SECURITY.md
-- .claude/TESTING.md
-- .claude/CODING-STANDARDS.md
+- docs/PROJECT.md
+- docs/ARCHITECTURE.md
+- docs/DOTNET.md
+- docs/DATABASE.md
+- docs/API.md
+- docs/FRONTEND.md
+- docs/SECURITY.md
+- docs/TESTING.md
+- docs/CODING-STANDARDS.md
+- docs/DEVOPS.md
 
-Read the relevant SRS module before implementation.
+Read the relevant module of docs/SRS.md before implementation. See docs/README.md for the full documentation index (including docs/PARTNER.md for the deferred Partner module).
 
 Do not assume requirements.
 
