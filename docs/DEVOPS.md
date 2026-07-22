@@ -127,12 +127,15 @@ Correlation IDs must flow from the frontend through APIs into logs.
 
 ## OPEN DECISIONS
 
+Decided:
+
+- CI platform: **GitHub Actions** (`.github/workflows/ci.yml` — backend build/test with disposable Postgres/Redis, frontend lint/build, Docker image builds)
+
 To be finalized before production setup:
 
 1. Cloud provider / hosting platform
-2. CI platform (e.g., GitHub Actions — repository is hosted on GitHub)
-3. Container registry
-4. Orchestrator (managed containers vs Kubernetes)
-5. Secret store implementation
-6. Monitoring/alerting stack
-7. CDN / media storage provider
+2. Container registry
+3. Orchestrator (managed containers vs Kubernetes)
+4. Secret store implementation
+5. Monitoring/alerting stack
+6. CDN / media storage provider

@@ -1,23 +1,23 @@
 ID,Phase,Module,Task,Description,Type,Priority,Dependencies,Status
-T001,Phase 0 - Foundation,Solution,Repair solution and project wiring,"Verify Nestly.sln includes all projects; set project references: APIs -> Application -> Domain, Infrastructure -> Application/Domain, BuildingBlocks referenced by all",Backend,P0,,Todo
-T002,Phase 0 - Foundation,Solution,Remove WeatherForecast template code,Delete template controllers/models from ConsumerApi and AdminApi,Backend,P0,T001,Todo
-T003,Phase 0 - Foundation,BuildingBlocks,Implement Result and Error primitives,Result<T> / error taxonomy (Validation Business Infrastructure Unexpected) per CLAUDE.md error categories,Backend,P0,T001,Todo
-T004,Phase 0 - Foundation,BuildingBlocks,Implement domain base primitives,"Base Entity, AggregateRoot, ValueObject, domain event abstractions",Backend,P0,T001,Todo
-T005,Phase 0 - Foundation,BuildingBlocks,Global exception handling middleware,ProblemDetails error contract; never expose stack traces; consistent error responses across both APIs,Backend,P0,T003,Todo
-T006,Phase 0 - Foundation,BuildingBlocks,Structured logging with correlation IDs,"Serilog structured logging, correlation ID middleware, enforce no-PII/no-secrets logging rules",Backend,P0,T001,Todo
-T007,Phase 0 - Foundation,BuildingBlocks,Request validation pipeline,FluentValidation integration; automatic 400 responses with field-level errors,Backend,P0,T003,Todo
-T008,Phase 0 - Foundation,Database,EF Core + PostgreSQL setup,"Npgsql provider, DbContext, snake_case naming convention, connection resiliency, base entity configuration (audit columns)",Database,P0,T001,Todo
-T009,Phase 0 - Foundation,Database,Migrations infrastructure,EF Core migrations wired to database/migrations; migration apply script for local dev,Database,P0,T008,Todo
-T010,Phase 0 - Foundation,DevOps,Health check endpoints,Liveness + readiness (DB/Redis) endpoints on both APIs per DEVOPS.md,Backend,P0,T008,Todo
-T011,Phase 0 - Foundation,API,API versioning and OpenAPI,"Versioned route convention (/api/v1), OpenAPI/Swagger UI in development for both APIs",Backend,P0,T001,Todo
-T012,Phase 0 - Foundation,DevOps,Dockerfiles for both APIs,Multi-stage builds; non-root user; pinned base images,DevOps,P0,T001,Todo
-T013,Phase 0 - Foundation,DevOps,docker-compose for local development,"Compose file: consumer-api, admin-api, PostgreSQL, Redis with env-based config",DevOps,P0,T012,Todo
-T014,Phase 0 - Foundation,DevOps,CI pipeline,"Build, unit tests, integration tests (disposable Postgres/Redis), analyzers/lint on every PR",DevOps,P0,T013,Todo
-T015,Phase 0 - Foundation,Frontend,Scaffold customer-web Next.js app,"TypeScript, ESLint, base layout, API client setup, env config",Frontend,P0,,Todo
-T016,Phase 0 - Foundation,Frontend,Scaffold admin-web Next.js app,"TypeScript, ESLint, base layout, API client setup, env config",Frontend,P0,,Todo
+T001,Phase 0 - Foundation,Solution,Repair solution and project wiring,"Verify Nestly.sln includes all projects; set project references: APIs -> Application -> Domain, Infrastructure -> Application/Domain, BuildingBlocks referenced by all",Backend,P0,,Done
+T002,Phase 0 - Foundation,Solution,Remove WeatherForecast template code,Delete template controllers/models from ConsumerApi and AdminApi,Backend,P0,T001,Done
+T003,Phase 0 - Foundation,BuildingBlocks,Implement Result and Error primitives,Result<T> / error taxonomy (Validation Business Infrastructure Unexpected) per CLAUDE.md error categories,Backend,P0,T001,Done
+T004,Phase 0 - Foundation,BuildingBlocks,Implement domain base primitives,"Base Entity, AggregateRoot, ValueObject, domain event abstractions",Backend,P0,T001,Done
+T005,Phase 0 - Foundation,BuildingBlocks,Global exception handling middleware,ProblemDetails error contract; never expose stack traces; consistent error responses across both APIs,Backend,P0,T003,Done
+T006,Phase 0 - Foundation,BuildingBlocks,Structured logging with correlation IDs,"Serilog structured logging, correlation ID middleware, enforce no-PII/no-secrets logging rules",Backend,P0,T001,Done
+T007,Phase 0 - Foundation,BuildingBlocks,Request validation pipeline,FluentValidation integration; automatic 400 responses with field-level errors,Backend,P0,T003,Done
+T008,Phase 0 - Foundation,Database,EF Core + PostgreSQL setup,"Npgsql provider, DbContext, snake_case naming convention, connection resiliency, base entity configuration (audit columns)",Database,P0,T001,Done
+T009,Phase 0 - Foundation,Database,Migrations infrastructure,EF Core migrations wired to database/migrations; migration apply script for local dev,Database,P0,T008,Done
+T010,Phase 0 - Foundation,DevOps,Health check endpoints,Liveness + readiness (DB/Redis) endpoints on both APIs per DEVOPS.md,Backend,P0,T008,Done
+T011,Phase 0 - Foundation,API,API versioning and OpenAPI,"Versioned route convention (/api/v1), OpenAPI/Swagger UI in development for both APIs",Backend,P0,T001,Done
+T012,Phase 0 - Foundation,DevOps,Dockerfiles for both APIs,Multi-stage builds; non-root user; pinned base images,DevOps,P0,T001,Done
+T013,Phase 0 - Foundation,DevOps,docker-compose for local development,"Compose file: consumer-api, admin-api, PostgreSQL, Redis with env-based config",DevOps,P0,T012,Done
+T014,Phase 0 - Foundation,DevOps,CI pipeline,"Build, unit tests, integration tests (disposable Postgres/Redis), analyzers/lint on every PR",DevOps,P0,T013,Done
+T015,Phase 0 - Foundation,Frontend,Scaffold customer-web Next.js app,"TypeScript, ESLint, base layout, API client setup, env config",Frontend,P0,,InProgress
+T016,Phase 0 - Foundation,Frontend,Scaffold admin-web Next.js app,"TypeScript, ESLint, base layout, API client setup, env config",Frontend,P0,,InProgress
 T017,Phase 0 - Foundation,Infrastructure,Redis caching abstraction,Distributed cache registration + typed cache helper for catalog/session use,Backend,P1,T013,Todo
 T018,Phase 0 - Foundation,Infrastructure,Hangfire background job setup,Hangfire server + dashboard (admin-only) + retry conventions,Backend,P1,T008,Todo
-T019,Phase 0 - Foundation,Configuration,Strongly typed configuration,"Options pattern per module, Development/Testing/Staging/Production env files, user-secrets for local",Backend,P0,T001,Todo
+T019,Phase 0 - Foundation,Configuration,Strongly typed configuration,"Options pattern per module, Development/Testing/Staging/Production env files, user-secrets for local",Backend,P0,T001,InProgress
 T020,Phase 0 - Foundation,Audit,Audit log infrastructure,"audit_log table + audit writer abstraction capturing actor, entity, action, old/new values, timestamp, IP (SRS 21)",Backend,P0,T008,Todo
 T021,Phase 1 - Identity & Customer,Identity,Customer identity schema,"Tables: customer, customer_auth_identity, customer_session, customer_otp with status fields (SRS 23.1)",Database,P0,T009,Todo
 T022,Phase 1 - Identity & Customer,Identity,Customer aggregate and account rules,"Customer domain model: status (active/blocked/unverified/soft-deleted), uniqueness rules for mobile/email",Backend,P0,"T004,T021",Todo
@@ -97,19 +97,19 @@ T095,Phase 6 - Admin Panel,AdminIdentity,Admin authentication,"Login, strong pas
 T096,Phase 6 - Admin Panel,AdminIdentity,RBAC enforcement engine,"Module+action permission matrix (View/Create/Edit/Delete/Export/Approve/Refund/Cancel/Reschedule/Publish/Configure) enforced via policies (SRS 12.2.3, 20)",Backend,P0,T095,Todo
 T097,Phase 6 - Admin Panel,AdminIdentity,Admin user management APIs,"CRUD, role assignment, activate/deactivate, password reset (SRS 12.2.1)",Backend,P0,T096,Todo
 T098,Phase 6 - Admin Panel,Frontend,Admin app shell,"Login screen, authenticated layout, nav by permission, session handling in admin-web (SRS 25.2)",Frontend,P0,"T016,T095",Todo
-T099,Phase 6 - Admin Panel,Dashboard,Dashboard KPIs,"Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3)",Backend,P1,"T096,T060",Todo
+T099,Phase 6 - Admin Panel,Dashboard,Dashboard KPIs,Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),Backend,P1,"T096,T060",Todo
 T100,Phase 6 - Admin Panel,Dashboard,Dashboard UI,KPI widgets and filters in admin-web,Frontend,P1,"T098,T099",Todo
 T101,Phase 6 - Admin Panel,CustomerMgmt,Customer management APIs,"Search/filter, 360 detail (bookings, wallet, coupons, tickets), block/unblock, notes (SRS 12.4)",Backend,P0,"T096,T028",Todo
 T102,Phase 6 - Admin Panel,CustomerMgmt,Customer management UI,Customer list and detail screens with authorized actions,Frontend,P0,"T098,T101",Todo
 T103,Phase 6 - Admin Panel,Catalog,Category management APIs,"CRUD, ordering, media, SEO fields, activation with audit (SRS 12.5)",Backend,P0,"T096,T040,T020",Todo
 T104,Phase 6 - Admin Panel,Catalog,Category management UI,Category list/create/edit screens,Frontend,P0,"T098,T103",Todo
-T105,Phase 6 - Admin Panel,Catalog,Service management APIs,"Service/package CRUD with full field set and service-level flags (SRS 12.6)",Backend,P0,T103,Todo
+T105,Phase 6 - Admin Panel,Catalog,Service management APIs,Service/package CRUD with full field set and service-level flags (SRS 12.6),Backend,P0,T103,Todo
 T106,Phase 6 - Admin Panel,Catalog,Service management UI,Service list/create/edit screens,Frontend,P0,"T104,T105",Todo
 T107,Phase 6 - Admin Panel,Catalog,Add-on management APIs,Add-on CRUD + service mapping (SRS 12.7),Backend,P1,T105,Todo
 T108,Phase 6 - Admin Panel,Catalog,Add-on management UI,Add-on list/create/edit screens,Frontend,P1,"T106,T107",Todo
 T109,Phase 6 - Admin Panel,Pricing,Pricing management APIs,"Base/add-on/city/promotional pricing, taxes, fees, effective dates, price change audit (SRS 12.8)",Backend,P0,"T096,T047,T020",Todo
 T110,Phase 6 - Admin Panel,Pricing,Pricing management UI,Pricing list/edit screens,Frontend,P0,"T098,T109",Todo
-T111,Phase 6 - Admin Panel,Serviceability,Serviceability management APIs,"Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9)",Backend,P0,"T096,T043",Todo
+T111,Phase 6 - Admin Panel,Serviceability,Serviceability management APIs,Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9),Backend,P0,"T096,T043",Todo
 T112,Phase 6 - Admin Panel,Serviceability,Serviceability management UI,Geography and mapping configuration screens,Frontend,P0,"T098,T111",Todo
 T113,Phase 6 - Admin Panel,Slots,Slot configuration APIs,"Slot windows, blackouts, cutoffs, capacity, availability overrides (SRS 12.10)",Backend,P0,"T096,T045",Todo
 T114,Phase 6 - Admin Panel,Slots,Slot configuration UI,Slot rule and override screens,Frontend,P0,"T098,T113",Todo
@@ -138,7 +138,7 @@ T136,Phase 7 - Hardening & Launch,Performance,Query optimization pass,"Execution
 T137,Phase 7 - Hardening & Launch,Observability,Metrics and alerting,"Metrics export + alerts for payment, booking, notification failures (SRS 29.6, DEVOPS.md)",DevOps,P0,"T010,T088",Todo
 T138,Phase 7 - Hardening & Launch,DevOps,CD pipeline and environments,"Staging auto-deploy from develop, production deploy from main with approval, migration step, rollback (DEVOPS.md)",DevOps,P0,T014,Todo
 T139,Phase 7 - Hardening & Launch,DevOps,Backup and restore procedure,Automated PostgreSQL backups + documented tested restore drill,DevOps,P0,T138,Todo
-T140,Phase 7 - Hardening & Launch,QA,End-to-end regression suite,"Automated E2E: discovery -> booking -> payment -> cancel/reschedule -> refund -> review (TESTING.md pyramid)",QA,P0,"T093,T132",Todo
+T140,Phase 7 - Hardening & Launch,QA,End-to-end regression suite,Automated E2E: discovery -> booking -> payment -> cancel/reschedule -> refund -> review (TESTING.md pyramid),QA,P0,"T093,T132",Todo
 T141,Phase 7 - Hardening & Launch,QA,UAT execution,Business acceptance against SRS 33 acceptance criteria,QA,P0,T140,Todo
 T142,Phase 7 - Hardening & Launch,Docs,Deployment runbook,"Deploy, rollback, incident response, on-call basics",Docs,P1,T138,Todo
 T143,Phase 7 - Hardening & Launch,Product,Resolve SRS open decisions,"Close SRS 34 items (cart model, COD, slot capacity, wallet phase, refund visibility, coupon stacking, tax display, reschedule fees, multilingual)",Docs,P0,,Todo

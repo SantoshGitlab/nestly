@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  backend:
+    name: Backend build & test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nestly_test
+          POSTGRES_USER: nestly
+          POSTGRES_PASSWORD: nestly_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nestly -d nestly_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Nestly.sln
+
+      - name: Build
+        run: dotnet build Nestly.sln --no-restore --configuration Release /warnaserror
+
+      - name: Test
+        env:
+          ConnectionStrings__Database: Host=localhost;Port=5432;Database=nestly_test;Username=nestly;Password=nestly_test
+        run: |
+          if ls backend/**/*Tests*.csproj >/dev/null 2>&1 || ls backend/tests/**/*.csproj >/dev/null 2>&1; then
+            dotnet test Nestly.sln --no-build --configuration Release --verbosity normal
+          else
+            echo "No test projects yet (first suite lands with T035)."
+          fi
+
+  frontend:
+    name: Frontend lint & build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [customer-web, admin-web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/${{ matrix.app }}/package-lock.json
+
+      - name: Install
+        working-directory: frontend/${{ matrix.app }}
+        run: |
+          if [ -f package.json ]; then npm ci; else echo "App not scaffolded yet"; fi
+
+      - name: Lint
+        working-directory: frontend/${{ matrix.app }}
+        run: |
+          if [ -f package.json ]; then npm run lint --if-present; fi
+
+      - name: Build
+        working-directory: frontend/${{ matrix.app }}
+        run: |
+          if [ -f package.json ]; then npm run build --if-present; fi
+
+  docker:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    needs: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build consumer-api image
+        run: docker build -f backend/consumer-api/ConsumerApi/Dockerfile -t nestly/consumer-api:ci .
+
+      - name: Build admin-api image
+        run: docker build -f backend/admin-api/AdminApi/Dockerfile -t nestly/admin-api:ci .
