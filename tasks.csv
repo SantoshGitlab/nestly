@@ -32,7 +32,7 @@ id,task,status,priority,notes
 31,Notifications - Communication provider abstraction: SMS/Email provider interface + sandbox implementation; OTP delivery wiring (SRS 30.2),done,high,depends on #23 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:06:55
 32,Frontend - Customer auth screens: Login; registration; OTP verification flows in customer-web (SRS 25.1),done,high,depends on #15 #25 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:14:29
 33,Frontend - Customer profile screen: View/edit profile and preferences,done,high,depends on #32 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:18:16
-34,Frontend - Address book screens: Address list; add/edit forms; default selection,todo,high,depends on #32 #30
+34,Frontend - Address book screens: Address list; add/edit forms; default selection,done,high,depends on #32 #30 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:22:50
 35,QA - Identity module test suite: Unit + integration tests: OTP expiry/retry; uniqueness; throttling; JWT lifecycle,todo,high,depends on #25
 36,Docs - Auth/profile/address API contracts: Document request/response contracts per API.md conventions,todo,high,depends on #30
 37,Catalog - Catalog schema: Tables: category; service; service_addon; service_media; service_faq; service_price (SRS 23.2),todo,high,depends on #9
