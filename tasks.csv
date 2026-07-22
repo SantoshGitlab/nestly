@@ -14,7 +14,7 @@ id,task,status,priority,notes
 13,DevOps - docker-compose for local development: Compose file: consumer-api; admin-api; PostgreSQL; Redis with env-based config,done,high,depends on #12
 14,DevOps - CI pipeline: Build; unit tests; integration tests (disposable Postgres/Redis); analyzers/lint on every PR,done,high,depends on #13
 15,Frontend - Scaffold customer-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high, | completed by local (qwen2.5-coder:7b) 2026-07-22 22:48:32
-16,Frontend - Scaffold admin-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,todo,high,
+16,Frontend - Scaffold admin-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high, | completed by local (qwen2.5-coder:7b) 2026-07-22 22:51:32
 17,Infrastructure - Redis caching abstraction: Distributed cache registration + typed cache helper for catalog/session use,todo,high,depends on #13
 18,Infrastructure - Hangfire background job setup: Hangfire server + dashboard (admin-only) + retry conventions,todo,high,depends on #8
 19,Configuration - Strongly typed configuration: Options pattern per module; Development/Testing/Staging/Production env files; user-secrets for local,todo,high,depends on #1
