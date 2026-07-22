@@ -1,6 +1,7 @@
 @AdminApi_HostAddress = http://localhost:5177
 
-GET {{AdminApi_HostAddress}}/weatherforecast/
+# Health check (available after T010)
+GET {{AdminApi_HostAddress}}/health
 Accept: application/json
 
 ###
