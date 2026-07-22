@@ -19,7 +19,7 @@ id,task,status,priority,notes
 18,Infrastructure - Hangfire background job setup: Hangfire server + dashboard (admin-only) + retry conventions,done,high,depends on #8 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:56:31
 19,Configuration - Strongly typed configuration: Options pattern per module; Development/Testing/Staging/Production env files; user-secrets for local,done,high,depends on #1 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:58:53
 20,Audit - Audit log infrastructure: audit_log table + audit writer abstraction capturing actor; entity; action; old/new values; timestamp; IP (SRS 21),done,high,depends on #8 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:01:57
-21,Identity - Customer identity schema: Tables: customer; customer_auth_identity; customer_session; customer_otp with status fields (SRS 23.1),todo,high,depends on #9
+21,Identity - Customer identity schema: Tables: customer; customer_auth_identity; customer_session; customer_otp with status fields (SRS 23.1),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:06:44
 22,Identity - Customer aggregate and account rules: Customer domain model: status (active/blocked/unverified/soft-deleted); uniqueness rules for mobile/email,todo,high,depends on #4 #21
 23,Identity - OTP service: OTP generation/validation with expiry; retry limits; abuse control (SRS 11.2.1; 28.1),todo,high,depends on #22
 24,Identity - Registration API: Mobile+OTP registration; configurable email+password mode; consent capture (SRS 11.2.1),todo,high,depends on #23 #11
