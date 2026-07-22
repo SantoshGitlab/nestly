@@ -17,7 +17,7 @@ id,task,status,priority,notes
 16,Frontend - Scaffold admin-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high, | completed by local (qwen2.5-coder:7b) 2026-07-22 22:51:32
 17,Infrastructure - Redis caching abstraction: Distributed cache registration + typed cache helper for catalog/session use,done,high,depends on #13 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:53:47
 18,Infrastructure - Hangfire background job setup: Hangfire server + dashboard (admin-only) + retry conventions,done,high,depends on #8 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:56:31
-19,Configuration - Strongly typed configuration: Options pattern per module; Development/Testing/Staging/Production env files; user-secrets for local,todo,high,depends on #1
+19,Configuration - Strongly typed configuration: Options pattern per module; Development/Testing/Staging/Production env files; user-secrets for local,done,high,depends on #1 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:58:53
 20,Audit - Audit log infrastructure: audit_log table + audit writer abstraction capturing actor; entity; action; old/new values; timestamp; IP (SRS 21),todo,high,depends on #8
 21,Identity - Customer identity schema: Tables: customer; customer_auth_identity; customer_session; customer_otp with status fields (SRS 23.1),todo,high,depends on #9
 22,Identity - Customer aggregate and account rules: Customer domain model: status (active/blocked/unverified/soft-deleted); uniqueness rules for mobile/email,todo,high,depends on #4 #21
