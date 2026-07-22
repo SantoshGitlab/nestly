@@ -42,3 +42,9 @@ Desktop.ini
 
 # Claude local settings
 .claude/settings.local.json
+.claude-auto-worker.log
+dashboard/index.html
+.task-completions/
+.claude-task-attempts
+.claude-task-start
+.aider*
