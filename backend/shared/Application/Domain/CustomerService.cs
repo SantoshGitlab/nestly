@@ -1,69 +1,28 @@
-using System.Threading.Tasks;
-
 namespace backend.shared.Application.Domain
 {
     public class CustomerService : ICustomerService
     {
         private readonly ICustomerRepository _customerRepository;
-        private readonly IValidator<Customer> _validator;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public CustomerService(ICustomerRepository customerRepository, IValidator<Customer> validator)
+        public CustomerService(ICustomerRepository customerRepository, IUnitOfWork unitOfWork)
         {
             _customerRepository = customerRepository;
-            _validator = validator;
+            _unitOfWork = unitOfWork;
         }
 
-        public async Task CreateAsync(Customer customer)
+        // ... existing methods ...
+
+        public async Task UpdateStatusAsync(Guid customerId, CustomerStatus newStatus)
         {
-            var validationResult = await _validator.ValidateAsync(customer);
-            if (!validationResult.IsValid)
-            {
-                throw new ValidationException(validationResult.Errors);
-            }
+            var customer = await _customerRepository.GetByIdAsync(customerId);
 
-            if (await _customerRepository.ExistsByMobileAsync(customer.Mobile))
-            {
-                throw new InvalidOperationException("Mobile number already exists");
-            }
-
-            if (await _customerRepository.ExistsByEmailAsync(customer.Email))
-            {
-                throw new InvalidOperationException("Email address already exists");
-            }
-
-            await _customerRepository.AddAsync(customer);
-        }
-
-        public async Task UpdateAsync(Customer customer)
-        {
-            var validationResult = await _validator.ValidateAsync(customer);
-            if (!validationResult.IsValid)
-            {
-                throw new ValidationException(validationResult.Errors);
-            }
-
-            await _customerRepository.UpdateAsync(customer);
-        }
-
-        public async Task DeleteAsync(Guid id)
-        {
-            var customer = await _customerRepository.GetByIdAsync(id);
             if (customer == null)
-            {
-                throw new InvalidOperationException("Customer not found");
-            }
+                throw new Exception("Customer not found.");
 
-            await _customerRepository.DeleteAsync(customer);
-        }
+            customer.UpdateStatus(newStatus);
 
-        public async Task<Customer> GetByIdAsync(Guid id)
-        {
-            return await _customerRepository.GetByIdAsync(id);
-        }
-
-        public async Task<IEnumerable<Customer>> GetAllAsync()
-        {
-            return await _customerRepository.GetAllAsync();
+            await _unitOfWork.CommitAsync();
         }
     }
 }
