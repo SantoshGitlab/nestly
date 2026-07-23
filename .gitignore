@@ -51,3 +51,4 @@ dashboard/index.html
 .claude-verify-errors
 .csv-lock
 .active-workers
+.claude-timed-out-*
