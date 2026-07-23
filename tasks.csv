@@ -42,58 +42,81 @@ id,task,status,priority,notes
 40b,"Catalog - Category aggregate: Entity, rules, repository interface (SRS 12.5)",todo,high,depends on #4 #37 #40a
 40c,"Catalog - Service aggregate: Entity, inclusions, exclusions (SRS 12.6)",todo,high,depends on #4 #37 #40b
 40d,"Catalog - AddOn aggregate: Entity, service mapping (SRS 12.7)",todo,high,depends on #4 #37 #40c
-40e,Catalog - Domain events for catalog lifecycle (SRS 12.5-12.7),todo,high,depends on #40d
+40e,Catalog - Domain events for catalog lifecycle (SRS 12.5-12.7),blocked,high,depends on #40d
+ | auto-blocked: depends on nonexistent task #40
 41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),blocked,high,depends on #40e
 42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),blocked,high,depends on #40e
 43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
-45,Slots - Slot engine: Availability computation honoring serviceability; cutoff; advance-days; capacity; reusable for reschedule (SRS 11.8; 15.2),todo,high,depends on #43 #44
-46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45
-47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,todo,high,depends on #40e
+45a,"Slots - Basic slot calculations: time windows, generation",todo,high,depends on #43 #44
+45b,Slots - Add serviceability and cutoff logic,todo,high,depends on #45a #43
+45c,Slots - Add capacity and blackout constraints,todo,high,depends on #45b
+45d,Slots - Add reschedule revalidation support,todo,high,depends on #45c
+46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45d
+47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,blocked,high,depends on #40e
+ | auto-blocked: depends on nonexistent task #40
 48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),todo,high,depends on #47
 49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,blocked,high,depends on #17 #41
  | auto-blocked: depends on blocked task #41
 50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),blocked,high,depends on #15 #41
  | auto-blocked: depends on blocked task #41
-51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),todo,high,depends on #50
+51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),blocked,high,depends on #50
+ | auto-blocked: depends on blocked task #50
 52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),blocked,high,depends on #51 #42
  | auto-blocked: depends on blocked task #42
-53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),todo,high,depends on #50 #43
+53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),blocked,high,depends on #50 #43
+ | auto-blocked: depends on blocked task #50
 54,QA - Catalog and slot engine tests: Serviceability dimensions; slot cutoff/blackout/capacity edge cases; price calc scenarios,todo,high,depends on #46 #48
 55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),todo,high,depends on #9
-56,Booking - Booking aggregate and state machine: 13-state lifecycle with enforced transition matrix; status history separate from current status (SRS 13 and 31),todo,high,depends on #4 #55
-57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),todo,high,depends on #48 #56
+56a,Booking - Define 13 booking states and lifecycle enum,todo,high,depends on #4 #55
+56b,Booking - Implement state transition matrix and invariants,todo,high,depends on #56a
+56c,Booking - Add booking status history tracking,todo,high,depends on #56b
+56d,"Booking - Add booking rules enforcement (immutability, transitions)",todo,high,depends on #56c
+57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),todo,high,depends on #48 #56d
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),todo,high,depends on #57 #46 #30
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59
-61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56
-62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),todo,high,depends on #52 #57
+61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56d
+62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),blocked,high,depends on #52 #57
+ | auto-blocked: depends on blocked task #52
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),todo,high,depends on #62 #46
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),todo,high,depends on #60
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,todo,high,depends on #60
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),todo,high,depends on #9
-68,Payments - Payment gateway abstraction: Gateway interface + create payment order flow; sandbox implementation (SRS 30.1),todo,high,depends on #67 #58
-69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),todo,high,depends on #68
+68a,Payments - Define payment gateway interface (create order),todo,high,depends on #67 #58
+68b,Payments - Implement sandbox gateway,todo,high,depends on #68a
+68c,Payments - Add payment order validation and formatting,todo,high,depends on #68b
+68d,Payments - Add idempotency keys and request deduplication,todo,high,depends on #68c
+69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),todo,high,depends on #68d
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),todo,high,depends on #69
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),todo,high,depends on #69
-72,Coupons - Coupon domain and validation: All dimensions: validity; segment; first/repeat; min amount; applicability; usage caps; max discount (SRS 11.10.2),todo,high,depends on #67
-73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),todo,high,depends on #72 #48
+72a,Coupons - Define coupon entity and validation rules,todo,high,depends on #67
+72b,"Coupons - Implement validity window checks (date, segment)",todo,high,depends on #72a
+72c,Coupons - Implement usage cap and redemption cap enforcement,todo,high,depends on #72b
+72d,"Coupons - Add applicability rules (category, min amount, first/repeat)",todo,high,depends on #72c
+73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),todo,high,depends on #72d #48
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),todo,high,depends on #67
-75,Refunds - Refund engine: Full/partial refunds via gateway or wallet credit; policy-driven amounts; trackable status lifecycle (SRS 12.13.2-12.13.3; 31.3),todo,high,depends on #69 #74
-76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),todo,high,depends on #62 #68
+75a,Refunds - Define refund entity and refund types (full/partial),todo,high,depends on #69 #74
+75b,Refunds - Implement full refund logic (gateway or wallet),todo,high,depends on #75a
+75c,Refunds - Implement partial refund calculation and policy rules,todo,high,depends on #75b
+75d,Refunds - Add refund status lifecycle and tracking,todo,high,depends on #75c
+76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),todo,high,depends on #62 #68d
 77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),todo,high,depends on #76 #73
 78,Frontend - Wallet and refund pages: Balance; ledger entries; refund status per booking (SRS 11.17),todo,high,depends on #65 #74
-79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,todo,high,depends on #69 #73 #75
-80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),todo,high,depends on #60 #75
+79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,todo,high,depends on #69 #73 #75d
+80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),todo,high,depends on #60 #75d
 81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),todo,high,depends on #80
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),todo,high,depends on #60 #46
 83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),todo,high,depends on #82
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),todo,high,depends on #9
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),todo,high,depends on #84 #60
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),todo,high,depends on #84
-87,Notifications - Notification framework: Template rendering with variables; channel dispatch (SMS/email); delivery event log (SRS 19),todo,high,depends on #31 #84 #18
-88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),todo,high,depends on #87 #81 #83
+87a,Notifications - Define notification entity and types,todo,high,depends on #31 #84 #18
+87b,Notifications - Implement template rendering with variables,todo,high,depends on #87a
+87c,Notifications - Add channel dispatch (SMS/email),todo,high,depends on #87b
+87d,Notifications - Add delivery event logging and tracking,todo,high,depends on #87c
+88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),todo,high,depends on #87d #81 #83
 89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),todo,high,depends on #65 #81
 90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),todo,high,depends on #65 #83
 91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),todo,high,depends on #65 #85
@@ -101,42 +124,52 @@ id,task,status,priority,notes
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,todo,high,depends on #81 #83 #88
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),todo,high,depends on #9
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20
-96,AdminIdentity - RBAC enforcement engine: Module+action permission matrix (View/Create/Edit/Delete/Export/Approve/Refund/Cancel/Reschedule/Publish/Configure) enforced via policies (SRS 12.2.3; 20),todo,high,depends on #95
-97,AdminIdentity - Admin user management APIs: CRUD; role assignment; activate/deactivate; password reset (SRS 12.2.1),todo,high,depends on #96
+96a,"AdminIdentity - Define permission matrix (module, action, roles)",todo,high,depends on #95
+96b,AdminIdentity - Implement authorization policies and checks,todo,high,depends on #96a
+96c,AdminIdentity - Add role-based permission enforcement middleware,todo,high,depends on #96b
+96d,AdminIdentity - Add audit logging for permission checks,todo,high,depends on #96c #20
+97,AdminIdentity - Admin user management APIs: CRUD; role assignment; activate/deactivate; password reset (SRS 12.2.1),todo,high,depends on #96d
 98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),todo,high,depends on #16 #95
-99,Dashboard - Dashboard KPIs: Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),todo,high,depends on #96 #60
+99,Dashboard - Dashboard KPIs: Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),todo,high,depends on #96d #60
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,todo,high,depends on #98 #99
-101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),todo,high,depends on #96 #28
+101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),todo,high,depends on #96d #28
 102,CustomerMgmt - Customer management UI: Customer list and detail screens with authorized actions,todo,high,depends on #98 #101
-103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),todo,high,depends on #96 #40 #20
+103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),blocked,high,depends on #96d #40 #20
+ | auto-blocked: depends on nonexistent task #40
 104,Catalog - Category management UI: Category list/create/edit screens,todo,high,depends on #98 #103
 105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),todo,high,depends on #103
 106,Catalog - Service management UI: Service list/create/edit screens,todo,high,depends on #104 #105
 107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),todo,high,depends on #105
 108,Catalog - Add-on management UI: Add-on list/create/edit screens,todo,high,depends on #106 #107
-109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),todo,high,depends on #96 #47 #20
+109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),todo,high,depends on #96d #47 #20
 110,Pricing - Pricing management UI: Pricing list/edit screens,todo,high,depends on #98 #109
-111,Serviceability - Serviceability management APIs: Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9),todo,high,depends on #96 #43
+111,Serviceability - Serviceability management APIs: Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9),todo,high,depends on #96d #43
 112,Serviceability - Serviceability management UI: Geography and mapping configuration screens,todo,high,depends on #98 #111
-113,Slots - Slot configuration APIs: Slot windows; blackouts; cutoffs; capacity; availability overrides (SRS 12.10),todo,high,depends on #96 #45
+113,Slots - Slot configuration APIs: Slot windows; blackouts; cutoffs; capacity; availability overrides (SRS 12.10),todo,high,depends on #96d #45d
 114,Slots - Slot configuration UI: Slot rule and override screens,todo,high,depends on #98 #113
-115,BookingMgmt - Booking management APIs: Filterable list; full detail (snapshots; timeline; refunds; tickets; notes); status updates; resend confirmation (SRS 12.11),todo,high,depends on #96 #60
-116,BookingMgmt - Booking management UI: Booking list and detail screens with authorized actions,todo,high,depends on #98 #115
-117,BookingMgmt - Admin cancel/reschedule/refund operations: Admin-initiated cancellation; reschedule; full/partial refund with permission checks and audit (SRS 12.11.3; 12.13.2),todo,high,depends on #115 #80 #82 #75
-118,Coupons - Coupon management APIs: Coupon CRUD with all rule dimensions + redemption reporting (SRS 12.12),todo,high,depends on #96 #72
+115a,BookingMgmt - Booking list API with filterable search,todo,high,depends on #96 #60
+115b,BookingMgmt - Booking detail API with snapshots and timeline,todo,high,depends on #115a
+115c,BookingMgmt - Booking status timeline and full history,todo,high,depends on #115b
+115d,BookingMgmt - Admin status update and action APIs,todo,high,depends on #115c
+116,BookingMgmt - Booking management UI: Booking list and detail screens with authorized actions,todo,high,depends on #98 #115d
+117,BookingMgmt - Admin cancel/reschedule/refund operations: Admin-initiated cancellation; reschedule; full/partial refund with permission checks and audit (SRS 12.11.3; 12.13.2),todo,high,depends on #115d #80 #82 #75d
+118,Coupons - Coupon management APIs: Coupon CRUD with all rule dimensions + redemption reporting (SRS 12.12),todo,high,depends on #96d #72d
 119,Coupons - Coupon management UI: Coupon list/create/edit + redemption stats screens,todo,high,depends on #98 #118
-120,Support - Support ticket management: Ticket workflow: assign; respond; escalate; resolve; link booking actions; API + UI (SRS 12.14; 16.2),todo,high,depends on #96 #86
+120,Support - Support ticket management: Ticket workflow: assign; respond; escalate; resolve; link booking actions; API + UI (SRS 12.14; 16.2),todo,high,depends on #96d #86
 121,Support - Support ticket UI: Ticket list/detail workflow screens,todo,high,depends on #98 #120
-122,Reviews - Review moderation: Hide/unhide/flag/export reviews retaining originals for audit; API + UI (SRS 12.15 and 17.2),todo,high,depends on #96 #85
+122,Reviews - Review moderation: Hide/unhide/flag/export reviews retaining originals for audit; API + UI (SRS 12.15 and 17.2),todo,high,depends on #96d #85
 123,Reviews - Review moderation UI: Moderation screen with filters,todo,high,depends on #98 #122
-124,CMS - CMS schema and APIs: Tables + CRUD: cms_page; banner; faq with draft/publish; scheduling; media; placement (SRS 12.16; 18),todo,high,depends on #96 #9
+124,CMS - CMS schema and APIs: Tables + CRUD: cms_page; banner; faq with draft/publish; scheduling; media; placement (SRS 12.16; 18),todo,high,depends on #96d #9
 125,CMS - CMS management UI: Banner; page; FAQ management screens,todo,high,depends on #98 #124
-126,Notifications - Notification template management: Channel-specific templates with variables; preview/test; change audit; API + UI (SRS 12.17),todo,high,depends on #96 #87
+126,Notifications - Notification template management: Channel-specific templates with variables; preview/test; change audit; API + UI (SRS 12.17),todo,high,depends on #96d #87d
 127,Notifications - Notification template UI: Template editor and preview screens,todo,high,depends on #98 #126
-128,Reports - Reports and exports: Standard reports (booking; revenue; refund; coupon; customer; category; city; support; review) + permission-gated async CSV/Excel export (SRS 12.18; 27),todo,high,depends on #96 #115 #18
-129,Reports - Reports UI: Report screens with filters and export actions,todo,high,depends on #98 #128
-130,Audit - Audit log viewer: Filterable audit trail screen + API (SRS 12.19 audit scope per SRS 21),todo,high,depends on #96 #20
-131,Settings - System configuration: Config/feature-flag management: booking; slot; cancellation; reschedule; tax; wallet; coupon settings; API + UI (SRS 12.19),todo,high,depends on #96
+128a,Reports - Booking and revenue reports with CSV export,todo,high,depends on #96 #115 #18
+128b,Reports - Refund and coupon usage reports,todo,high,depends on #128a
+128c,Reports - Customer segmentation and support reports,todo,high,depends on #128b
+128d,Reports - Permission-gated async export queue,todo,high,depends on #128c
+129,Reports - Reports UI: Report screens with filters and export actions,todo,high,depends on #98 #128d
+130,Audit - Audit log viewer: Filterable audit trail screen + API (SRS 12.19 audit scope per SRS 21),todo,high,depends on #96d #20
+131,Settings - System configuration: Config/feature-flag management: booking; slot; cancellation; reschedule; tax; wallet; coupon settings; API + UI (SRS 12.19),todo,high,depends on #96d
 132,QA - Admin and RBAC test suite: Permission matrix coverage; admin workflows; audit assertions,todo,high,depends on #97 #117
 133,Security - Application security review: OWASP pass: injection; XSS; CSRF; IDOR; broken access control; payment callback abuse; OTP brute force (SRS 28.3),todo,high,depends on #79 #132
 134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),todo,high,depends on #133
@@ -145,15 +178,18 @@ id,task,status,priority,notes
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),todo,high,depends on #10 #88
 138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),todo,high,depends on #14
 139,DevOps - Backup and restore procedure: Automated PostgreSQL backups + documented tested restore drill,todo,high,depends on #138
-140,QA - End-to-end regression suite: Automated E2E: discovery -> booking -> payment -> cancel/reschedule -> refund -> review (TESTING.md pyramid),todo,high,depends on #93 #132
-141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,todo,high,depends on #140
+140a,QA - E2E: Discovery → category → service detail flows,todo,high,depends on #93 #132
+140b,QA - E2E: Slot selection → booking → payment flows,todo,high,depends on #140a
+140c,QA - E2E: Cancellation and reschedule flows,todo,high,depends on #140b
+140d,QA - E2E: Refund and review submission flows,todo,high,depends on #140c
+141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,todo,high,depends on #140d
 142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,todo,high,depends on #138
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,high,
 144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),todo,low,
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,todo,low,depends on #144
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,todo,low,depends on #145
-147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,todo,low,depends on #145 #115
+147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,todo,low,depends on #145 #115d
 148,Partner - Partner earnings and payouts: Append-only earning ledger + payout batch processing per PARTNER.md,todo,low,depends on #147
 149,Partner - partner-api scaffold: New backend/partner-api project mirroring existing API structure: jobs; availability; earnings endpoints,todo,low,depends on #146
-150,Partner - Admin partner management: Partner CRUD; KYC approval; performance view + Partner/Payout RBAC modules,todo,low,depends on #146 #96
+150,Partner - Admin partner management: Partner CRUD; KYC approval; performance view + Partner/Payout RBAC modules,todo,low,depends on #146 #96d
 151,Partner - Partner-facing UI: Partner portal or app for jobs/availability/earnings (platform TBD),todo,low,depends on #149
