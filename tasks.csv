@@ -71,7 +71,7 @@ id,task,status,priority,notes
 56a,Booking - Define 13 booking states and lifecycle enum,todo,high,depends on #4 #55
 56b,Booking - Implement state transition matrix and invariants,blocked,high,depends on #56a | auto-blocked: depends on nonexistent task #56
 56c,Booking - Add booking status history tracking,blocked,high,depends on #56b | auto-blocked: depends on nonexistent task #56
-56d,"Booking - Add booking rules enforcement (immutability, transitions)",todo,high,depends on #56c
+56d,"Booking - Add booking rules enforcement (immutability,in_progress,todo,high,depends on #56c
 57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),blocked,high,depends on #48 #56d | auto-blocked: depends on nonexistent task #56
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),blocked,high,depends on #57 #46 #30 | auto-blocked: depends on blocked task #57
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),blocked,high,depends on #58 | auto-blocked: depends on blocked task #58
@@ -94,7 +94,7 @@ id,task,status,priority,notes
 72a,Coupons - Define coupon entity and validation rules,todo,high,depends on #67
 72b,"Coupons - Implement validity window checks (date, segment)",todo,high,depends on #72a
 72c,Coupons - Implement usage cap and redemption cap enforcement,blocked,high,depends on #72b | auto-blocked: depends on nonexistent task #72
-72d,"Coupons - Add applicability rules (category, min amount, first/repeat)",todo,high,depends on #72c
+72d,"Coupons - Add applicability rules (category,in_progress, first/repeat)",todo,high,depends on #72c
 73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),blocked,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),todo,high,depends on #67
 75a,Refunds - Define refund entity and refund types (full/partial),blocked,high,depends on #69 #74 | auto-blocked: depends on blocked task #69
