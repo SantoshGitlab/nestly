@@ -1,0 +1,2 @@
+84
+/usr/local/bin/entrypoint.sh: line 373: /home/node/.dotnet/dotnet: cannot execute binary file: Exec format error
