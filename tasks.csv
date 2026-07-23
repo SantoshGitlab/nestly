@@ -95,13 +95,13 @@ id,task,status,priority,notes
 56,Booking - Booking aggregate and state machine: 13-state lifecycle with enforced transition matrix; status history separate from current status (SRS 13 and 31),todo,high,depends on #4 #55
 57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),blocked,high,depends on #48 #56
  | auto-blocked: depends on blocked task #48
-58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),todo,high,depends on #57 #46 #30
+58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),blocked,high,depends on #57 #46 #30 | auto-blocked: depends on blocked task #57
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),blocked,high,depends on #52 #57
  | auto-blocked: depends on blocked task #52
-63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),todo,high,depends on #62 #46
+63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),blocked,high,depends on #62 #46 | auto-blocked: depends on blocked task #62
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),todo,high,depends on #60
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,todo,high,depends on #60
@@ -115,10 +115,10 @@ id,task,status,priority,notes
  | auto-blocked: depends on blocked task #48
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),todo,high,depends on #67
 75,Refunds - Refund engine: Full/partial refunds via gateway or wallet credit; policy-driven amounts; trackable status lifecycle (SRS 12.13.2-12.13.3; 31.3),todo,high,depends on #69 #74
-76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),todo,high,depends on #62 #68
-77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),todo,high,depends on #76 #73
+76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),blocked,high,depends on #62 #68 | auto-blocked: depends on blocked task #62
+77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),blocked,high,depends on #76 #73 | auto-blocked: depends on blocked task #73
 78,Frontend - Wallet and refund pages: Balance; ledger entries; refund status per booking (SRS 11.17),todo,high,depends on #65 #74
-79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,todo,high,depends on #69 #73 #75
+79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,blocked,high,depends on #69 #73 #75 | auto-blocked: depends on blocked task #73
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),todo,high,depends on #60 #75
 81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),todo,high,depends on #80
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),todo,high,depends on #60 #46
@@ -152,7 +152,7 @@ id,task,status,priority,notes
  | auto-blocked: depends on blocked task #104
 107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),blocked,high,depends on #105
  | auto-blocked: depends on blocked task #105
-108,Catalog - Add-on management UI: Add-on list/create/edit screens,todo,high,depends on #106 #107
+108,Catalog - Add-on management UI: Add-on list/create/edit screens,blocked,high,depends on #106 #107 | auto-blocked: depends on blocked task #106
 109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),blocked,high,depends on #96 #47 #20
  | auto-blocked: depends on blocked task #47
 110,Pricing - Pricing management UI: Pricing list/edit screens,blocked,high,depends on #98 #109
