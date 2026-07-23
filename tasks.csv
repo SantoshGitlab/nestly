@@ -174,7 +174,7 @@ id,task,status,priority,notes
 133,Security - Application security review: OWASP pass: injection; XSS; CSRF; IDOR; broken access control; payment callback abuse; OTP brute force (SRS 28.3),blocked,high,depends on #79 #132 | auto-blocked: depends on blocked task #79
 134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),blocked,high,depends on #133 | auto-blocked: depends on blocked task #133
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),blocked,high,depends on #66 | auto-blocked: depends on blocked task #66
-136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),blocked,high,depends on #135 | auto-blocked: depends on blocked task #135
+136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),todo,high,depends on #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),blocked,high,depends on #10 #88 | auto-blocked: depends on blocked task #88
 138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),todo,high,depends on #14
 139,DevOps - Backup and restore procedure: Automated PostgreSQL backups + documented tested restore drill,todo,high,depends on #138
