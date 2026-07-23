@@ -41,7 +41,7 @@ id,task,status,priority,notes
 40a,"Catalog - Value Objects: Pricing rules,done, ordering (SRS 12.5)",todo | completed by local (mistral:7b) 2026-07-23 22:33:09,high,depends on #4 #37
 40b,"Catalog - Category aggregate: Entity,done, repository interface (SRS 12.5)",todo | completed by local (mistral:7b) 2026-07-23 22:39:28,high,depends on #4 #37 #40a
 40c,"Catalog - Service aggregate: Entity,blocked, exclusions (SRS 12.6)",todo,high,depends on #4 #37 #40b
-40d,"Catalog - AddOn aggregate: Entity,todo,todo,high | completed by local (mistral:7b) 2026-07-23 23:21:03 | verification failed: dotnet build 2>&1 | grep -i error | head -5 (2026-07-23 23:21:03) | completed by local (mistral:7b) 2026-07-23 23:32:25 | verification failed: dotnet build 2>&1 | grep -i error | head -5 (2026-07-23 23:32:25),depends on #4 #37 #40c
+40d,"Catalog - AddOn aggregate: Entity,blocked,todo,high | completed by local (mistral:7b) 2026-07-23 23:21:03 | verification failed: dotnet build 2>&1 | grep -i error | head -5 (2026-07-23 23:21:03) | completed by local (mistral:7b) 2026-07-23 23:32:25 | verification failed: dotnet build 2>&1 | grep -i error | head -5 (2026-07-23 23:32:25) | auto-blocked after 5 attempts,depends on #4 #37 #40c
 40e,Catalog - Domain events for catalog lifecycle (SRS 12.5-12.7),blocked,high,depends on #40d
  | auto-blocked: depends on nonexistent task #40
 41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),blocked,high,depends on #40e
