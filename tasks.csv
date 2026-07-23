@@ -122,9 +122,9 @@ id,task,status,priority,notes
 91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),blocked,high,depends on #65 #85 | auto-blocked: depends on blocked task #65
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),blocked,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,blocked,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
-94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),todo,high,depends on #9
+94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),in_progress,high,depends on #9
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20
-96a,"AdminIdentity - Define permission matrix (module, action, roles)",todo,high,depends on #95
+96a,"AdminIdentity - Define permission matrix (module,in_progress, roles)",todo,high,depends on #95
 96b,AdminIdentity - Implement authorization policies and checks,blocked,high,depends on #96a | auto-blocked: depends on nonexistent task #96
 96c,AdminIdentity - Add role-based permission enforcement middleware,blocked,high,depends on #96b | auto-blocked: depends on nonexistent task #96
 96d,AdminIdentity - Add audit logging for permission checks,blocked,high,depends on #96c #20 | auto-blocked: depends on nonexistent task #96
