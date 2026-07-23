@@ -41,7 +41,7 @@ id,task,status,priority,notes
 40a,"Catalog - Value Objects: Pricing rules,done, ordering (SRS 12.5)",todo | completed by local (mistral:7b) 2026-07-23 22:09:12,high,depends on #4 #37
 40b,"Catalog - Category aggregate: Entity,done, repository interface (SRS 12.5)",todo | completed by local (mistral:7b) 2026-07-23 22:10:23,high,depends on #4 #37 #40a
 40c,"Catalog - Service aggregate: Entity,done, exclusions (SRS 12.6)",todo | completed by local (mistral:7b) 2026-07-23 22:11:35,high,depends on #4 #37 #40b
-40d,"Catalog - AddOn aggregate: Entity, service mapping (SRS 12.7)",todo,high,depends on #4 #37 #40c
+40d,"Catalog - AddOn aggregate: Entity,done,todo,high | completed by local (mistral:7b) 2026-07-23 22:12:47,depends on #4 #37 #40c
 40e,Catalog - Domain events for catalog lifecycle (SRS 12.5-12.7),blocked,high,depends on #40d
  | auto-blocked: depends on nonexistent task #40
 41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),blocked,high,depends on #40e
@@ -80,9 +80,9 @@ id,task,status,priority,notes
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),blocked,high,depends on #52 #57
  | auto-blocked: depends on blocked task #52
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),blocked,high,depends on #62 #46 | auto-blocked: depends on blocked task #62
-64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60
-65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),todo,high,depends on #60
-66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,todo,high,depends on #60
+64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),blocked,high,depends on #60 | auto-blocked: depends on blocked task #60
+65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),blocked,high,depends on #60 | auto-blocked: depends on blocked task #60
+66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,blocked,high,depends on #60 | auto-blocked: depends on blocked task #60
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),todo,high,depends on #9
 68a,Payments - Define payment gateway interface (create order),blocked,high,depends on #67 #58 | auto-blocked: depends on blocked task #58
 68b,Payments - Implement sandbox gateway,blocked,high,depends on #68a | auto-blocked: depends on nonexistent task #68
@@ -110,7 +110,7 @@ id,task,status,priority,notes
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),blocked,high,depends on #60 #46 | auto-blocked: depends on blocked task #46
 83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),blocked,high,depends on #82 | auto-blocked: depends on blocked task #82
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),todo,high,depends on #9
-85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),todo,high,depends on #84 #60
+85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),blocked,high,depends on #84 #60 | auto-blocked: depends on blocked task #60
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),todo,high,depends on #84
 87a,Notifications - Define notification entity and types,todo,high,depends on #31 #84 #18
 87b,Notifications - Implement template rendering with variables,blocked,high,depends on #87a | auto-blocked: depends on nonexistent task #87
