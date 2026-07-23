@@ -39,7 +39,7 @@ id,task,status,priority,notes
 38,Geography - Geography master schema: Tables: city; state; pincode; zone; locality (SRS 12.9.1),done,high,depends on #9
 39,Serviceability - Serviceability mapping schema: Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),done,high,depends on #37 #38
 40a,"Catalog - Value Objects: Pricing rules,done, ordering (SRS 12.5)",todo | completed by local (mistral:7b) 2026-07-23 22:09:12,high,depends on #4 #37
-40b,"Catalog - Category aggregate: Entity, rules, repository interface (SRS 12.5)",todo,high,depends on #4 #37 #40a
+40b,"Catalog - Category aggregate: Entity,done, repository interface (SRS 12.5)",todo | completed by local (mistral:7b) 2026-07-23 22:10:23,high,depends on #4 #37 #40a
 40c,"Catalog - Service aggregate: Entity, inclusions, exclusions (SRS 12.6)",todo,high,depends on #4 #37 #40b
 40d,"Catalog - AddOn aggregate: Entity, service mapping (SRS 12.7)",todo,high,depends on #4 #37 #40c
 40e,Catalog - Domain events for catalog lifecycle (SRS 12.5-12.7),blocked,high,depends on #40d
@@ -74,7 +74,7 @@ id,task,status,priority,notes
 56d,"Booking - Add booking rules enforcement (immutability, transitions)",todo,high,depends on #56c
 57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),blocked,high,depends on #48 #56d | auto-blocked: depends on nonexistent task #56
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),blocked,high,depends on #57 #46 #30 | auto-blocked: depends on blocked task #57
-59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58
+59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),blocked,high,depends on #58 | auto-blocked: depends on blocked task #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),blocked,high,depends on #56d | auto-blocked: depends on nonexistent task #56
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),blocked,high,depends on #52 #57
@@ -84,7 +84,7 @@ id,task,status,priority,notes
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),todo,high,depends on #60
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,todo,high,depends on #60
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),todo,high,depends on #9
-68a,Payments - Define payment gateway interface (create order),todo,high,depends on #67 #58
+68a,Payments - Define payment gateway interface (create order),blocked,high,depends on #67 #58 | auto-blocked: depends on blocked task #58
 68b,Payments - Implement sandbox gateway,blocked,high,depends on #68a | auto-blocked: depends on nonexistent task #68
 68c,Payments - Add payment order validation and formatting,blocked,high,depends on #68b | auto-blocked: depends on nonexistent task #68
 68d,Payments - Add idempotency keys and request deduplication,blocked,high,depends on #68c | auto-blocked: depends on nonexistent task #68
@@ -108,7 +108,7 @@ id,task,status,priority,notes
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),blocked,high,depends on #60 #75d | auto-blocked: depends on nonexistent task #75
 81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),blocked,high,depends on #80 | auto-blocked: depends on blocked task #80
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),blocked,high,depends on #60 #46 | auto-blocked: depends on blocked task #46
-83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),todo,high,depends on #82
+83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),blocked,high,depends on #82 | auto-blocked: depends on blocked task #82
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),todo,high,depends on #9
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),todo,high,depends on #84 #60
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),todo,high,depends on #84
@@ -117,7 +117,7 @@ id,task,status,priority,notes
 87c,Notifications - Add channel dispatch (SMS/email),blocked,high,depends on #87b | auto-blocked: depends on nonexistent task #87
 87d,Notifications - Add delivery event logging and tracking,blocked,high,depends on #87c | auto-blocked: depends on nonexistent task #87
 88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),blocked,high,depends on #87d #81 #83 | auto-blocked: depends on nonexistent task #87
-89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),todo,high,depends on #65 #81
+89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),blocked,high,depends on #65 #81 | auto-blocked: depends on blocked task #81
 90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),todo,high,depends on #65 #83
 91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),todo,high,depends on #65 #85
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),todo,high,depends on #65 #86
@@ -140,7 +140,7 @@ id,task,status,priority,notes
 105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),blocked,high,depends on #103 | auto-blocked: depends on blocked task #103
 106,Catalog - Service management UI: Service list/create/edit screens,blocked,high,depends on #104 #105 | auto-blocked: depends on blocked task #104
 107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),blocked,high,depends on #105 | auto-blocked: depends on blocked task #105
-108,Catalog - Add-on management UI: Add-on list/create/edit screens,todo,high,depends on #106 #107
+108,Catalog - Add-on management UI: Add-on list/create/edit screens,blocked,high,depends on #106 #107 | auto-blocked: depends on blocked task #106
 109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),blocked,high,depends on #96d #47 #20 | auto-blocked: depends on nonexistent task #96
 110,Pricing - Pricing management UI: Pricing list/edit screens,blocked,high,depends on #98 #109 | auto-blocked: depends on blocked task #109
 111,Serviceability - Serviceability management APIs: Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9),blocked,high,depends on #96d #43 | auto-blocked: depends on nonexistent task #96
@@ -172,13 +172,13 @@ id,task,status,priority,notes
 131,Settings - System configuration: Config/feature-flag management: booking; slot; cancellation; reschedule; tax; wallet; coupon settings; API + UI (SRS 12.19),blocked,high,depends on #96d | auto-blocked: depends on nonexistent task #96
 132,QA - Admin and RBAC test suite: Permission matrix coverage; admin workflows; audit assertions,blocked,high,depends on #97 #117 | auto-blocked: depends on blocked task #97
 133,Security - Application security review: OWASP pass: injection; XSS; CSRF; IDOR; broken access control; payment callback abuse; OTP brute force (SRS 28.3),blocked,high,depends on #79 #132 | auto-blocked: depends on blocked task #79
-134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),todo,high,depends on #133
+134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),blocked,high,depends on #133 | auto-blocked: depends on blocked task #133
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),todo,high,depends on #66
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),todo,high,depends on #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),blocked,high,depends on #10 #88 | auto-blocked: depends on blocked task #88
 138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),todo,high,depends on #14
 139,DevOps - Backup and restore procedure: Automated PostgreSQL backups + documented tested restore drill,todo,high,depends on #138
-140a,QA - E2E: Discovery → category → service detail flows,todo,high,depends on #93 #132
+140a,QA - E2E: Discovery → category → service detail flows,blocked,high,depends on #93 #132 | auto-blocked: depends on blocked task #93
 140b,QA - E2E: Slot selection → booking → payment flows,blocked,high,depends on #140a | auto-blocked: depends on nonexistent task #140
 140c,QA - E2E: Cancellation and reschedule flows,blocked,high,depends on #140b | auto-blocked: depends on nonexistent task #140
 140d,QA - E2E: Refund and review submission flows,blocked,high,depends on #140c | auto-blocked: depends on nonexistent task #140
