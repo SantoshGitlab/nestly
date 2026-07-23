@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using backend.shared.Domain;
 
 namespace backend.shared.Application.Domain
 {
@@ -11,5 +13,6 @@ namespace backend.shared.Application.Domain
         Task<T> GetByIdAsync(Guid id);
         Task<IEnumerable<T>> GetAllAsync();
         Task<bool> ExistsAsync(Guid id);
+        Task<IEnumerable<IDomainEvent>> GetDomainEventsByIdAsync(Guid id);
     }
 }
