@@ -49,3 +49,5 @@ dashboard/index.html
 .claude-task-start
 .aider*
 .claude-verify-errors
+.csv-lock
+.active-workers
