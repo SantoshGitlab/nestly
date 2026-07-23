@@ -48,3 +48,4 @@ dashboard/index.html
 .claude-task-attempts
 .claude-task-start
 .aider*
+.claude-verify-errors
