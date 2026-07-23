@@ -13,54 +13,94 @@ id,task,status,priority,notes
 12,DevOps - Dockerfiles for both APIs: Multi-stage builds; non-root user; pinned base images,done,high,depends on #1
 13,DevOps - docker-compose for local development: Compose file: consumer-api; admin-api; PostgreSQL; Redis with env-based config,done,high,depends on #12
 14,DevOps - CI pipeline: Build; unit tests; integration tests (disposable Postgres/Redis); analyzers/lint on every PR,done,high,depends on #13
-15,Frontend - Scaffold customer-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high, | completed by local (qwen2.5-coder:7b) 2026-07-22 22:48:32
-16,Frontend - Scaffold admin-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high, | completed by local (qwen2.5-coder:7b) 2026-07-22 22:51:32
-17,Infrastructure - Redis caching abstraction: Distributed cache registration + typed cache helper for catalog/session use,done,high,depends on #13 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:53:47
-18,Infrastructure - Hangfire background job setup: Hangfire server + dashboard (admin-only) + retry conventions,done,high,depends on #8 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:56:31
-19,Configuration - Strongly typed configuration: Options pattern per module; Development/Testing/Staging/Production env files; user-secrets for local,done,high,depends on #1 | completed by local (qwen2.5-coder:7b) 2026-07-22 22:58:53
-20,Audit - Audit log infrastructure: audit_log table + audit writer abstraction capturing actor; entity; action; old/new values; timestamp; IP (SRS 21),done,high,depends on #8 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:01:57
-21,Identity - Customer identity schema: Tables: customer; customer_auth_identity; customer_session; customer_otp with status fields (SRS 23.1),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:06:44
-22,Identity - Customer aggregate and account rules: Customer domain model: status (active/blocked/unverified/soft-deleted); uniqueness rules for mobile/email,done,high,depends on #4 #21 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:11:20
-23,Identity - OTP service: OTP generation/validation with expiry; retry limits; abuse control (SRS 11.2.1; 28.1),done,high,depends on #22 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:13:54
-24,Identity - Registration API: Mobile+OTP registration; configurable email+password mode; consent capture (SRS 11.2.1),done,high,depends on #23 #11 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:26:44
-25,Identity - Login and JWT issuance: Login via OTP or email/password; JWT access+refresh tokens; session invalidation on logout (SRS 11.2.2),done,high,depends on #24 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:31:16
-26,Identity - Login throttling and lockout: Rate limiting on OTP and login attempts; account lockout policy,done,high,depends on #25 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:34:02
-27,Identity - Forgot/reset password flow: Reset with verification when password auth is enabled,done,high,depends on #25 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:41:13
-28,Customer - Profile APIs: Get/update profile; change mobile/email with re-verification; communication preferences (SRS 11.2.3),done,high,depends on #25 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:45:54
-29,Customer - Address schema: customer_address table with lat/long contact fields and default flag (SRS 11.3.2),done,high,depends on #21 | completed by local (qwen2.5-coder:7b) 2026-07-22 23:59:28
-30,Customer - Address CRUD APIs: Add/edit/delete/list; set default; deleted addresses must not affect booking snapshots (SRS 11.3),done,high,depends on #28 #29 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:03:46
-31,Notifications - Communication provider abstraction: SMS/Email provider interface + sandbox implementation; OTP delivery wiring (SRS 30.2),done,high,depends on #23 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:06:55
-32,Frontend - Customer auth screens: Login; registration; OTP verification flows in customer-web (SRS 25.1),done,high,depends on #15 #25 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:14:29
-33,Frontend - Customer profile screen: View/edit profile and preferences,done,high,depends on #32 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:18:16
-34,Frontend - Address book screens: Address list; add/edit forms; default selection,done,high,depends on #32 #30 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:22:50
-35,QA - Identity module test suite: Unit + integration tests: OTP expiry/retry; uniqueness; throttling; JWT lifecycle,done,high,depends on #25 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:25:03
-36,Docs - Auth/profile/address API contracts: Document request/response contracts per API.md conventions,done,high,depends on #30 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:27:59
-37,Catalog - Catalog schema: Tables: category; service; service_addon; service_media; service_faq; service_price (SRS 23.2),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:30:37
-38,Geography - Geography master schema: Tables: city; state; pincode; zone; locality (SRS 12.9.1),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:33:50
-39,Serviceability - Serviceability mapping schema: Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),done,high,depends on #37 #38 | completed by local (qwen2.5-coder:7b) 2026-07-23 00:38:41
-40,Catalog - Catalog domain model: Category/Service/AddOn aggregates with activation; ordering; pricing type rules (SRS 12.5-12.7),blocked,high,depends on #4 #37 | auto-blocked after 5 attempts
-41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),blocked,high,depends on #40 | auto-blocked: depends on blocked task #40
-42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),blocked,high,depends on #40 | auto-blocked: depends on blocked task #40
-43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39 | completed by local (qwen2.5-coder:7b) 2026-07-23 03:26:03
-44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9 | completed by local (qwen2.5-coder:7b) 2026-07-23 03:37:34
+15,Frontend - Scaffold customer-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high,
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 22:48:32
+16,Frontend - Scaffold admin-web Next.js app: TypeScript; ESLint; base layout; API client setup; env config,done,high,
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 22:51:32
+17,Infrastructure - Redis caching abstraction: Distributed cache registration + typed cache helper for catalog/session use,done,high,depends on #13
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 22:53:47
+18,Infrastructure - Hangfire background job setup: Hangfire server + dashboard (admin-only) + retry conventions,done,high,depends on #8
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 22:56:31
+19,Configuration - Strongly typed configuration: Options pattern per module; Development/Testing/Staging/Production env files; user-secrets for local,done,high,depends on #1
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 22:58:53
+20,Audit - Audit log infrastructure: audit_log table + audit writer abstraction capturing actor; entity; action; old/new values; timestamp; IP (SRS 21),done,high,depends on #8
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:01:57
+21,Identity - Customer identity schema: Tables: customer; customer_auth_identity; customer_session; customer_otp with status fields (SRS 23.1),done,high,depends on #9
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:06:44
+22,Identity - Customer aggregate and account rules: Customer domain model: status (active/blocked/unverified/soft-deleted); uniqueness rules for mobile/email,done,high,depends on #4 #21
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:11:20
+23,Identity - OTP service: OTP generation/validation with expiry; retry limits; abuse control (SRS 11.2.1; 28.1),done,high,depends on #22
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:13:54
+24,Identity - Registration API: Mobile+OTP registration; configurable email+password mode; consent capture (SRS 11.2.1),done,high,depends on #23 #11
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:26:44
+25,Identity - Login and JWT issuance: Login via OTP or email/password; JWT access+refresh tokens; session invalidation on logout (SRS 11.2.2),done,high,depends on #24
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:31:16
+26,Identity - Login throttling and lockout: Rate limiting on OTP and login attempts; account lockout policy,done,high,depends on #25
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:34:02
+27,Identity - Forgot/reset password flow: Reset with verification when password auth is enabled,done,high,depends on #25
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:41:13
+28,Customer - Profile APIs: Get/update profile; change mobile/email with re-verification; communication preferences (SRS 11.2.3),done,high,depends on #25
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:45:54
+29,Customer - Address schema: customer_address table with lat/long contact fields and default flag (SRS 11.3.2),done,high,depends on #21
+ | completed by local (qwen2.5-coder:7b) 2026-07-22 23:59:28
+30,Customer - Address CRUD APIs: Add/edit/delete/list; set default; deleted addresses must not affect booking snapshots (SRS 11.3),done,high,depends on #28 #29
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:03:46
+31,Notifications - Communication provider abstraction: SMS/Email provider interface + sandbox implementation; OTP delivery wiring (SRS 30.2),done,high,depends on #23
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:06:55
+32,Frontend - Customer auth screens: Login; registration; OTP verification flows in customer-web (SRS 25.1),done,high,depends on #15 #25
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:14:29
+33,Frontend - Customer profile screen: View/edit profile and preferences,done,high,depends on #32
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:18:16
+34,Frontend - Address book screens: Address list; add/edit forms; default selection,done,high,depends on #32 #30
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:22:50
+35,QA - Identity module test suite: Unit + integration tests: OTP expiry/retry; uniqueness; throttling; JWT lifecycle,done,high,depends on #25
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:25:03
+36,Docs - Auth/profile/address API contracts: Document request/response contracts per API.md conventions,done,high,depends on #30
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:27:59
+37,Catalog - Catalog schema: Tables: category; service; service_addon; service_media; service_faq; service_price (SRS 23.2),done,high,depends on #9
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:30:37
+38,Geography - Geography master schema: Tables: city; state; pincode; zone; locality (SRS 12.9.1),done,high,depends on #9
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:33:50
+39,Serviceability - Serviceability mapping schema: Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),done,high,depends on #37 #38
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 00:38:41
+40,Catalog - Catalog domain model: Category/Service/AddOn aggregates with activation; ordering; pricing type rules (SRS 12.5-12.7),todo,high,depends on #4 #37
+ | auto-blocked after 5 attempts
+41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),blocked,high,depends on #40
+ | auto-blocked: depends on blocked task #40
+42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),blocked,high,depends on #40
+ | auto-blocked: depends on blocked task #40
+43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 03:26:03
+44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
+ | completed by local (qwen2.5-coder:7b) 2026-07-23 03:37:34
 45,Slots - Slot engine: Availability computation honoring serviceability; cutoff; advance-days; capacity; reusable for reschedule (SRS 11.8; 15.2),todo,high,depends on #43 #44
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45
-47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,blocked,high,depends on #40 | auto-blocked: depends on blocked task #40
-48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),blocked,high,depends on #47 | auto-blocked: depends on blocked task #47
-49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,blocked,high,depends on #17 #41 | auto-blocked: depends on blocked task #41
-50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),blocked,high,depends on #15 #41 | auto-blocked: depends on blocked task #41
-51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),todo,high,depends on #50
-52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),blocked,high,depends on #51 #42 | auto-blocked: depends on blocked task #42
-53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),todo,high,depends on #50 #43
-54,QA - Catalog and slot engine tests: Serviceability dimensions; slot cutoff/blackout/capacity edge cases; price calc scenarios,todo,high,depends on #46 #48
+47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,blocked,high,depends on #40
+ | auto-blocked: depends on blocked task #40
+48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),blocked,high,depends on #47
+ | auto-blocked: depends on blocked task #47
+49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,blocked,high,depends on #17 #41
+ | auto-blocked: depends on blocked task #41
+50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),blocked,high,depends on #15 #41
+ | auto-blocked: depends on blocked task #41
+51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),blocked,high,depends on #50
+ | auto-blocked: depends on blocked task #50
+52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),blocked,high,depends on #51 #42
+ | auto-blocked: depends on blocked task #42
+53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),blocked,high,depends on #50 #43
+ | auto-blocked: depends on blocked task #50
+54,QA - Catalog and slot engine tests: Serviceability dimensions; slot cutoff/blackout/capacity edge cases; price calc scenarios,blocked,high,depends on #46 #48
+ | auto-blocked: depends on blocked task #48
 55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),todo,high,depends on #9
 56,Booking - Booking aggregate and state machine: 13-state lifecycle with enforced transition matrix; status history separate from current status (SRS 13 and 31),todo,high,depends on #4 #55
-57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),todo,high,depends on #48 #56
+57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),blocked,high,depends on #48 #56
+ | auto-blocked: depends on blocked task #48
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),todo,high,depends on #57 #46 #30
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56
-62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),todo,high,depends on #52 #57
+62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),blocked,high,depends on #52 #57
+ | auto-blocked: depends on blocked task #52
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),todo,high,depends on #62 #46
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),todo,high,depends on #60
@@ -71,7 +111,8 @@ id,task,status,priority,notes
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),todo,high,depends on #69
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),todo,high,depends on #69
 72,Coupons - Coupon domain and validation: All dimensions: validity; segment; first/repeat; min amount; applicability; usage caps; max discount (SRS 11.10.2),todo,high,depends on #67
-73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),todo,high,depends on #72 #48
+73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),blocked,high,depends on #72 #48
+ | auto-blocked: depends on blocked task #48
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),todo,high,depends on #67
 75,Refunds - Refund engine: Full/partial refunds via gateway or wallet credit; policy-driven amounts; trackable status lifecycle (SRS 12.13.2-12.13.3; 31.3),todo,high,depends on #69 #74
 76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),todo,high,depends on #62 #68
@@ -101,14 +142,21 @@ id,task,status,priority,notes
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,todo,high,depends on #98 #99
 101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),todo,high,depends on #96 #28
 102,CustomerMgmt - Customer management UI: Customer list and detail screens with authorized actions,todo,high,depends on #98 #101
-103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),blocked,high,depends on #96 #40 #20 | auto-blocked: depends on blocked task #40
-104,Catalog - Category management UI: Category list/create/edit screens,blocked,high,depends on #98 #103 | auto-blocked: depends on blocked task #103
-105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),blocked,high,depends on #103 | auto-blocked: depends on blocked task #103
-106,Catalog - Service management UI: Service list/create/edit screens,todo,high,depends on #104 #105
-107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),todo,high,depends on #105
+103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),blocked,high,depends on #96 #40 #20
+ | auto-blocked: depends on blocked task #40
+104,Catalog - Category management UI: Category list/create/edit screens,blocked,high,depends on #98 #103
+ | auto-blocked: depends on blocked task #103
+105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),blocked,high,depends on #103
+ | auto-blocked: depends on blocked task #103
+106,Catalog - Service management UI: Service list/create/edit screens,blocked,high,depends on #104 #105
+ | auto-blocked: depends on blocked task #104
+107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),blocked,high,depends on #105
+ | auto-blocked: depends on blocked task #105
 108,Catalog - Add-on management UI: Add-on list/create/edit screens,todo,high,depends on #106 #107
-109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),blocked,high,depends on #96 #47 #20 | auto-blocked: depends on blocked task #47
-110,Pricing - Pricing management UI: Pricing list/edit screens,todo,high,depends on #98 #109
+109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),blocked,high,depends on #96 #47 #20
+ | auto-blocked: depends on blocked task #47
+110,Pricing - Pricing management UI: Pricing list/edit screens,blocked,high,depends on #98 #109
+ | auto-blocked: depends on blocked task #109
 111,Serviceability - Serviceability management APIs: Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9),todo,high,depends on #96 #43
 112,Serviceability - Serviceability management UI: Geography and mapping configuration screens,todo,high,depends on #98 #111
 113,Slots - Slot configuration APIs: Slot windows; blackouts; cutoffs; capacity; availability overrides (SRS 12.10),todo,high,depends on #96 #45
