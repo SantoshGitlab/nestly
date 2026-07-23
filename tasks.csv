@@ -103,7 +103,7 @@ id,task,status,priority,notes
 75d,Refunds - Add refund status lifecycle and tracking,blocked,high,depends on #75c | auto-blocked: depends on nonexistent task #75
 76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),blocked,high,depends on #62 #68d | auto-blocked: depends on blocked task #62
 77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),blocked,high,depends on #76 #73 | auto-blocked: depends on blocked task #76
-78,Frontend - Wallet and refund pages: Balance; ledger entries; refund status per booking (SRS 11.17),todo,high,depends on #65 #74
+78,Frontend - Wallet and refund pages: Balance; ledger entries; refund status per booking (SRS 11.17),blocked,high,depends on #65 #74 | auto-blocked: depends on blocked task #65
 79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,blocked,high,depends on #69 #73 #75d | auto-blocked: depends on nonexistent task #75
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),blocked,high,depends on #60 #75d | auto-blocked: depends on nonexistent task #75
 81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),blocked,high,depends on #80 | auto-blocked: depends on blocked task #80
@@ -119,8 +119,8 @@ id,task,status,priority,notes
 88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),blocked,high,depends on #87d #81 #83 | auto-blocked: depends on nonexistent task #87
 89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),blocked,high,depends on #65 #81 | auto-blocked: depends on blocked task #81
 90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),blocked,high,depends on #65 #83 | auto-blocked: depends on blocked task #83
-91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),todo,high,depends on #65 #85
-92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),todo,high,depends on #65 #86
+91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),blocked,high,depends on #65 #85 | auto-blocked: depends on blocked task #65
+92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),blocked,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,blocked,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),todo,high,depends on #9
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20
@@ -173,7 +173,7 @@ id,task,status,priority,notes
 132,QA - Admin and RBAC test suite: Permission matrix coverage; admin workflows; audit assertions,blocked,high,depends on #97 #117 | auto-blocked: depends on blocked task #97
 133,Security - Application security review: OWASP pass: injection; XSS; CSRF; IDOR; broken access control; payment callback abuse; OTP brute force (SRS 28.3),blocked,high,depends on #79 #132 | auto-blocked: depends on blocked task #79
 134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),blocked,high,depends on #133 | auto-blocked: depends on blocked task #133
-135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),todo,high,depends on #66
+135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),blocked,high,depends on #66 | auto-blocked: depends on blocked task #66
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),todo,high,depends on #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),blocked,high,depends on #10 #88 | auto-blocked: depends on blocked task #88
 138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),todo,high,depends on #14
