@@ -67,7 +67,7 @@ id,task,status,priority,notes
 53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),blocked,high,depends on #50 #43
  | auto-blocked: depends on blocked task #50
 54,QA - Catalog and slot engine tests: Serviceability dimensions; slot cutoff/blackout/capacity edge cases; price calc scenarios,blocked,high,depends on #46 #48 | auto-blocked: depends on blocked task #46
-55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),todo,high,depends on #9
+55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),in_progress,high,depends on #9
 56a,Booking - Define 13 booking states and lifecycle enum,todo,high,depends on #4 #55
 56b,Booking - Implement state transition matrix and invariants,blocked,high,depends on #56a | auto-blocked: depends on nonexistent task #56
 56c,Booking - Add booking status history tracking,blocked,high,depends on #56b | auto-blocked: depends on nonexistent task #56
@@ -92,7 +92,7 @@ id,task,status,priority,notes
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),blocked,high,depends on #69 | auto-blocked: depends on blocked task #69
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),blocked,high,depends on #69 | auto-blocked: depends on blocked task #69
 72a,Coupons - Define coupon entity and validation rules,todo,high,depends on #67
-72b,"Coupons - Implement validity window checks (date, segment)",todo,high,depends on #72a
+72b,"Coupons - Implement validity window checks (date,in_progress,todo,high,depends on #72a
 72c,Coupons - Implement usage cap and redemption cap enforcement,blocked,high,depends on #72b | auto-blocked: depends on nonexistent task #72
 72d,"Coupons - Add applicability rules (category,in_progress, first/repeat)",todo,high,depends on #72c
 73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),blocked,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72
