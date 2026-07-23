@@ -1,7 +1,8 @@
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using backend.shared.Application.Domain;
 
-namespace backend.shared.Domain
+namespace backend.shared.Application.Domain
 {
     public class CustomerValidator : AbstractValidator<Customer>
     {
@@ -16,11 +17,8 @@ namespace backend.shared.Domain
             RuleFor(c => c.Mobile).NotEmpty().WithMessage("Mobile number is required.");
             RuleFor(c => c.Email).NotEmpty().WithMessage("Email address is required.");
 
-            RuleFor(c => c.Mobile).MustAsync(async (mobile, cancellation) =>
-                await UniqueMobile(c, mobile)).WithMessage("Mobile number already exists.");
-
-            RuleFor(c => c.Email).MustAsync(async (email, cancellation) =>
-                await UniqueEmail(c, email)).WithMessage("Email address already exists.");
+            RuleFor(c => c.Mobile).MustAsync(async (mobile, cancellation) => await _customerRepository.ExistsByMobileAsync(mobile)).WithMessage("Mobile number already exists.");
+            RuleFor(c => c.Email).MustAsync(async (email, cancellation) => await _customerRepository.ExistsByEmailAsync(email)).WithMessage("Email address already exists.");
         }
 
         private bool UniqueMobile(Customer customer, string mobile)

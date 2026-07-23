@@ -1,30 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using backend.shared.Infrastructure.Persistence.Configurations;
-using backend.shared.Domain;
 
 namespace backend.shared.Domain
 {
     public class SupportTicketComment : Entity<Guid>
     {
-        private readonly List<NotificationEvent> _notifications = new();
+        private Guid _supportTicketId;
+        // ... other properties and methods
 
-        public Guid SupportTicketId { get; set; }
-        public string Content { get; set; }
-        public DateTime CreatedAt { get; set; }
+        public void SetSupportTicketId(Guid supportTicketId) => this._supportTicketId = supportTicketId;
 
-        public virtual SupportTicket SupportTicket { get; set; }
-        public virtual ICollection<NotificationEvent> Notifications => _notifications;
-
-        private void SetSupportTicketId(Guid supportTicketId)
+        public override async Task OnModelCreatingAsync(ModelBuilder modelBuilder)
         {
-            if (SupportTicketId == default || SupportTicketId != supportTicketId)
-            {
-                SupportTicketId = supportTicketId;
-                SupportTicket = null;
-            }
+            base.OnModelCreatingAsync(modelBuilder);
+            modelBuilder.ApplyConfiguration<SupportTicketComment>(new SupportTicketCommentConfiguration());
         }
     }
 }
