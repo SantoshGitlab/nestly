@@ -185,7 +185,7 @@ id,task,status,priority,notes
 141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,blocked,high,depends on #140d | auto-blocked: depends on nonexistent task #140
 142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,todo,high,depends on #138
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,high,
-144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),todo,low,
+144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),in_progress,low,
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,todo,low,depends on #144
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,todo,low,depends on #145
 147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,blocked,low,depends on #145 #115d | auto-blocked: depends on nonexistent task #115
