@@ -97,7 +97,7 @@ id,task,status,priority,notes
  | auto-blocked: depends on blocked task #48
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),blocked,high,depends on #57 #46 #30 | auto-blocked: depends on blocked task #57
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),blocked,high,depends on #58 | auto-blocked: depends on blocked task #58
-60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59
+60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),blocked,high,depends on #59 | auto-blocked: depends on blocked task #59
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),blocked,high,depends on #52 #57
  | auto-blocked: depends on blocked task #52
@@ -107,7 +107,7 @@ id,task,status,priority,notes
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,todo,high,depends on #60
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),todo,high,depends on #9
 68,Payments - Payment gateway abstraction: Gateway interface + create payment order flow; sandbox implementation (SRS 30.1),blocked,high,depends on #67 #58 | auto-blocked: depends on blocked task #58
-69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),todo,high,depends on #68
+69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),blocked,high,depends on #68 | auto-blocked: depends on blocked task #68
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),todo,high,depends on #69
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),todo,high,depends on #69
 72,Coupons - Coupon domain and validation: All dimensions: validity; segment; first/repeat; min amount; applicability; usage caps; max discount (SRS 11.10.2),todo,high,depends on #67
@@ -180,7 +180,7 @@ id,task,status,priority,notes
 131,Settings - System configuration: Config/feature-flag management: booking; slot; cancellation; reschedule; tax; wallet; coupon settings; API + UI (SRS 12.19),todo,high,depends on #96
 132,QA - Admin and RBAC test suite: Permission matrix coverage; admin workflows; audit assertions,todo,high,depends on #97 #117
 133,Security - Application security review: OWASP pass: injection; XSS; CSRF; IDOR; broken access control; payment callback abuse; OTP brute force (SRS 28.3),blocked,high,depends on #79 #132 | auto-blocked: depends on blocked task #79
-134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),todo,high,depends on #133
+134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),blocked,high,depends on #133 | auto-blocked: depends on blocked task #133
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),todo,high,depends on #66
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),todo,high,depends on #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),todo,high,depends on #10 #88
