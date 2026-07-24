@@ -62,7 +62,7 @@ id,task,status,priority,notes
  | auto-blocked: depends on blocked task #41
 51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),done,high,depends on #50 | completed by local (orca-mini) 2026-07-24 15:25:21
  | auto-blocked: depends on blocked task #50
-52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),in_progress,high,depends on #51 #42
+52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),done,high,depends on #51 #42 | completed by local (orca-mini) 2026-07-24 16:41:02
  | auto-blocked: depends on blocked task #42
 53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),todo,high,depends on #50 #43
  | auto-blocked: depends on blocked task #50
@@ -129,7 +129,7 @@ id,task,status,priority,notes
 96c,AdminIdentity - Add role-based permission enforcement middleware,todo,high,depends on #96b | auto-blocked: depends on nonexistent task #96
 96d,AdminIdentity - Add audit logging for permission checks,todo,high,depends on #96c #20 | auto-blocked: depends on nonexistent task #96
 97,AdminIdentity - Admin user management APIs: CRUD; role assignment; activate/deactivate; password reset (SRS 12.2.1),todo,high,depends on #96d | auto-blocked: depends on nonexistent task #96
-98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),todo,high,depends on #16 #95 | auto-blocked: depends on blocked task #95
+98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),in_progress,high,depends on #16 #95 | auto-blocked: depends on blocked task #95
 99,Dashboard - Dashboard KPIs: Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),todo,high,depends on #96d #60 | auto-blocked: depends on nonexistent task #96
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,todo,high,depends on #98 #99 | auto-blocked: depends on blocked task #99
 101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),todo,high,depends on #96d #28 | auto-blocked: depends on nonexistent task #96
