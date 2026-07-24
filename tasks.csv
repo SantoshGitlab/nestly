@@ -94,9 +94,9 @@ id,task,status,priority,notes
 72a,Coupons - Define coupon entity and validation rules,todo,high,depends on #67
 72b,"Coupons - Implement validity window checks (date,todo,todo,,depends on #72a
 72c,Coupons - Implement usage cap and redemption cap enforcement,blocked,high,depends on #72b | auto-blocked: depends on nonexistent task #72
-72d,"Coupons - Add applicability rules (category,in_progress, first/repeat)",,high,depends on #72c
+72d,"Coupons - Add applicability rules (category,done, first/repeat)",completed by local (qwen2.5-coder:7b) 2026-07-24 10:16:42,high,depends on #72c
 73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),blocked,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72
-74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),todo,high,depends on #67
+74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),in_progress,high,depends on #67
 75a,Refunds - Define refund entity and refund types (full/partial),blocked,high,depends on #69 #74 | auto-blocked: depends on blocked task #69
 75b,Refunds - Implement full refund logic (gateway or wallet),blocked,high,depends on #75a | auto-blocked: depends on nonexistent task #75
 75c,Refunds - Implement partial refund calculation and policy rules,blocked,high,depends on #75b | auto-blocked: depends on nonexistent task #75
