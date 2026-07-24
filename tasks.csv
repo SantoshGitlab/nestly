@@ -183,11 +183,11 @@ id,task,status,priority,notes
 140c,QA - E2E: Cancellation and reschedule flows,blocked,high,depends on #140b | auto-blocked: depends on nonexistent task #140
 140d,QA - E2E: Refund and review submission flows,blocked,high,depends on #140c | auto-blocked: depends on nonexistent task #140
 141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,blocked,high,depends on #140d | auto-blocked: depends on nonexistent task #140
-142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,todo,high,depends on #138
+142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,in_progress,high,depends on #138
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,high,
 144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),done,low,completed by local (orca-mini) 2026-07-24 11:31:15
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,done,low,depends on #144 | completed by local (orca-mini) 2026-07-24 11:55:45
-146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,in_progress,low,depends on #145
+146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,done,low,depends on #145 | completed by local (qwen2.5-coder:7b) 2026-07-24 12:00:00
 147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,blocked,low,depends on #145 #115d | auto-blocked: depends on nonexistent task #115
 148,Partner - Partner earnings and payouts: Append-only earning ledger + payout batch processing per PARTNER.md,blocked,low,depends on #147 | auto-blocked: depends on blocked task #147
 149,Partner - partner-api scaffold: New backend/partner-api project mirroring existing API structure: jobs; availability; earnings endpoints,todo,low,depends on #146
