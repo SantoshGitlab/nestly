@@ -72,7 +72,7 @@ id,task,status,priority,notes
 56b,Booking - Implement state transition matrix and invariants,todo,high,depends on #56a | auto-blocked: depends on nonexistent task #56
 56c,Booking - Add booking status history tracking,todo,high,depends on #56b | auto-blocked: depends on nonexistent task #56
 56d,"Booking - Add booking rules enforcement (immutability,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:14:58,depends on #56c
-57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),todo,high,depends on #48 #56d | auto-blocked: depends on nonexistent task #56
+57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),done,high,depends on #48 #56d | auto-blocked: depends on nonexistent task #56 | completed by local (qwen2.5-coder:7b) 2026-07-24 14:51:10
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),todo,high,depends on #57 #46 #30 | auto-blocked: depends on blocked task #57
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58 | auto-blocked: depends on blocked task #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59 | auto-blocked: depends on blocked task #59
