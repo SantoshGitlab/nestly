@@ -192,4 +192,4 @@ id,task,status,priority,notes
 148,Partner - Partner earnings and payouts: Append-only earning ledger + payout batch processing per PARTNER.md,blocked,low,depends on #147 | auto-blocked: depends on blocked task #147
 149,Partner - partner-api scaffold: New backend/partner-api project mirroring existing API structure: jobs; availability; earnings endpoints,done,low,depends on #146 | completed by local (orca-mini) 2026-07-24 12:01:14
 150,Partner - Admin partner management: Partner CRUD; KYC approval; performance view + Partner/Payout RBAC modules,blocked,low,depends on #146 #96d | auto-blocked: depends on nonexistent task #96
-151,Partner - Partner-facing UI: Partner portal or app for jobs/availability/earnings (platform TBD),todo,low,depends on #149
+151,Partner - Partner-facing UI: Partner portal or app for jobs/availability/earnings (platform TBD),done,low,depends on #149 | completed by local (orca-mini) 2026-07-24 12:04:32
