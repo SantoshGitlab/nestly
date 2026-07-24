@@ -67,8 +67,8 @@ id,task,status,priority,notes
 53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),blocked,high,depends on #50 #43
  | auto-blocked: depends on blocked task #50
 54,QA - Catalog and slot engine tests: Serviceability dimensions; slot cutoff/blackout/capacity edge cases; price calc scenarios,blocked,high,depends on #46 #48 | auto-blocked: depends on blocked task #46
-55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),in_progress,high,
-56a,Booking - Define 13 booking states and lifecycle enum,todo,high,depends on #4 #55
+55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),blocked,high,timed out: 2026-07-24 11:09:28 | blocked after rescue+decompose: /workspace/backend/shared/Domain/SupportTicketComment.cs(2,49): error CS0234: The type or namespace name 'Entities' does not exist in the namespace 'backend.shared.Infrastructure.Persistence' (are you missing an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj] /workspace/backend/shared/Domain/SupportTicketCommentConfiguration.cs(2,49): error CS0234: The type or namespace name 'Configurations' does not exist in the namespace 'backend.shared.Infrastructure.Persistence' (are you missing an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj] /workspace/backend/shared/Domain/SupportTicketCommentConfiguration.cs(3,49): error CS0234: The type or namespace name 'Entities' does not exist in the namespace 'backend.shared.Infrastructure.Persistence' (are you missing an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj] /workspace/backend/shared/Domain/CustomerService.cs(8,36): error CS0246: The type or namespace name 'ICustomerService' could not be found (are you missing a using directive or an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj] /workspace/backend/shared/Domain/CustomerService.cs(10,26): error CS0246: The type or namespace name 'ApplicationDbContext' could not be found (are you missing a using directive or an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj] 
+56a,Booking - Define 13 booking states and lifecycle enum,blocked,high,depends on #4 #55 | auto-blocked: depends on blocked task #55
 56b,Booking - Implement state transition matrix and invariants,blocked,high,depends on #56a | auto-blocked: depends on nonexistent task #56
 56c,Booking - Add booking status history tracking,blocked,high,depends on #56b | auto-blocked: depends on nonexistent task #56
 56d,"Booking - Add booking rules enforcement (immutability,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:14:58,depends on #56c
@@ -112,7 +112,7 @@ id,task,status,priority,notes
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),done,high,completed by local (orca-mini) 2026-07-24 10:00:19
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),blocked,high,depends on #84 #60 | auto-blocked: depends on blocked task #60
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),done,high,depends on #84 | completed by local (qwen2.5-coder:7b) 2026-07-24 10:24:25
-87a,Notifications - Define notification entity and types,todo,high,depends on #31 #84 #18
+87a,Notifications - Define notification entity and types,blocked,high,depends on #31 #84 #18 | timed out: 2026-07-24 11:16:45 | auto-blocked: depends on nonexistent task #2026
 87b,Notifications - Implement template rendering with variables,blocked,high,depends on #87a | auto-blocked: depends on nonexistent task #87
 87c,Notifications - Add channel dispatch (SMS/email),blocked,high,depends on #87b | auto-blocked: depends on nonexistent task #87
 87d,Notifications - Add delivery event logging and tracking,blocked,high,depends on #87c | auto-blocked: depends on nonexistent task #87
@@ -122,9 +122,9 @@ id,task,status,priority,notes
 91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),blocked,high,depends on #65 #85 | auto-blocked: depends on blocked task #65
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),blocked,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,blocked,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
-94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),todo,high,
+94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),in_progress,high,
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20
-96a,"AdminIdentity - Define permission matrix (module,todo, roles)",,high,depends on #95
+96a,"AdminIdentity - Define permission matrix (module,done, roles)",completed by local (qwen2.5-coder:7b) 2026-07-24 11:20:08,high,depends on #95
 96b,AdminIdentity - Implement authorization policies and checks,blocked,high,depends on #96a | auto-blocked: depends on nonexistent task #96
 96c,AdminIdentity - Add role-based permission enforcement middleware,blocked,high,depends on #96b | auto-blocked: depends on nonexistent task #96
 96d,AdminIdentity - Add audit logging for permission checks,blocked,high,depends on #96c #20 | auto-blocked: depends on nonexistent task #96
