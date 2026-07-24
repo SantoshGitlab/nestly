@@ -1,7 +1,8 @@
+using Nestly.BuildingBlocks.Primitives;
 using System;
 using System.Collections.Generic;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Application
 {
     public class Customer : Entity<Guid>
     {

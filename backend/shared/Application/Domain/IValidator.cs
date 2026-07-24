@@ -1,6 +1,6 @@
 using FluentValidation.Results;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Application
 {
     public interface IValidator<T>
     {

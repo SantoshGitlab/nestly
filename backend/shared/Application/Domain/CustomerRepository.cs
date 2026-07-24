@@ -1,6 +1,7 @@
+using Nestly.BuildingBlocks.Primitives;
 using System.Collections.Generic;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Application
 {
     public interface ICustomerRepository : IRepository<Customer>
     {

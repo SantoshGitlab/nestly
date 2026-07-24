@@ -1,34 +1,35 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using backend.shared.Application.Domain;
-using backend.shared.Infrastructure.Persistence;
+using Nestly.BuildingBlocks.Primitives;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Application;
+
+public interface ICustomerService
 {
-    public class CustomerService : ICustomerService
+    Task<Customer?> GetByIdAsync(Guid id);
+    Task AddAsync(Customer customer);
+    Task UpdateAsync(Customer customer);
+    Task DeleteAsync(Customer customer);
+    Task UpdateStatusAsync(Guid customerId, CustomerStatus newStatus);
+}
+
+public class CustomerService : ICustomerService
+{
+    private readonly IRepository<Customer> _customerRepository;
+
+    public CustomerService(IRepository<Customer> customerRepository)
     {
-        private readonly IRepository<Customer> _customerRepository;
-        private readonly IUnitOfWork _unitOfWork;
+        _customerRepository = customerRepository;
+    }
 
-        public CustomerService(IRepository<Customer> customerRepository, IUnitOfWork unitOfWork)
-        {
-            _customerRepository = customerRepository;
-            _unitOfWork = unitOfWork;
-        }
+    public Task<Customer?> GetByIdAsync(Guid id) => _customerRepository.GetByIdAsync(id);
+    public Task AddAsync(Customer customer) => _customerRepository.AddAsync(customer);
+    public Task UpdateAsync(Customer customer) => _customerRepository.UpdateAsync(customer);
+    public Task DeleteAsync(Customer customer) => _customerRepository.DeleteAsync(customer);
 
-        // ... existing methods ...
-
-        public async Task UpdateStatusAsync(Guid customerId, CustomerStatus newStatus)
-        {
-            var customer = await _customerRepository.GetByIdAsync(customerId);
-
-            if (customer == null)
-                throw new Exception("Customer not found.");
-
-            customer.UpdateStatus(newStatus);
-
-            await _unitOfWork.CommitAsync();
-        }
+    public async Task UpdateStatusAsync(Guid customerId, CustomerStatus newStatus)
+    {
+        var customer = await _customerRepository.GetByIdAsync(customerId)
+            ?? throw new Exception($"Customer {customerId} not found.");
+        customer.UpdateStatus(newStatus);
+        await _customerRepository.UpdateAsync(customer);
     }
 }

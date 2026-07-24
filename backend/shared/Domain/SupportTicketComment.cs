@@ -1,19 +1,19 @@
-using Microsoft.EntityFrameworkCore;
-using backend.shared.Infrastructure.Persistence.Configurations;
+using Nestly.BuildingBlocks.Primitives;
 
-namespace backend.shared.Domain
+namespace Nestly.Domain;
+
+public class SupportTicketComment : Entity<Guid>
 {
-    public class SupportTicketComment : Entity<Guid>
+    public Guid SupportTicketId { get; private set; }
+    public string Comment { get; private set; } = string.Empty;
+    public DateTime CreatedAt { get; private set; }
+
+    protected SupportTicketComment() { }
+
+    public SupportTicketComment(Guid id, Guid supportTicketId, string comment) : base(id)
     {
-        private Guid _supportTicketId;
-        // ... other properties and methods
-
-        public void SetSupportTicketId(Guid supportTicketId) => this._supportTicketId = supportTicketId;
-
-        public override async Task OnModelCreatingAsync(ModelBuilder modelBuilder)
-        {
-            base.OnModelCreatingAsync(modelBuilder);
-            modelBuilder.ApplyConfiguration<SupportTicketComment>(new SupportTicketCommentConfiguration());
-        }
+        SupportTicketId = supportTicketId;
+        Comment = comment;
+        CreatedAt = DateTime.UtcNow;
     }
 }

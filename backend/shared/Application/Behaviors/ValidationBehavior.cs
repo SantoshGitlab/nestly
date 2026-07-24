@@ -1,14 +1,10 @@
 using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 using Nestly.BuildingBlocks.Results;
 
 namespace Nestly.Application.Behaviors;
 
-/// <summary>
-/// Runs all registered FluentValidation validators for a request before its handler.
-/// Failures short-circuit into a <see cref="ValidationResult"/> — handlers never see
-/// invalid requests.
-/// </summary>
 public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
     where TResponse : Result
@@ -30,10 +26,11 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
             return await next();
         }
 
-        var context = new ValidationContext<TRequest>(request);
+        IValidationContext context = new ValidationContext<TRequest>(request);
+        var results = await Task.WhenAll(
+            _validators.Select(v => ((IValidator)v).ValidateAsync(context, cancellationToken)));
 
-        var failures = (await Task.WhenAll(
-                _validators.Select(v => v.ValidateAsync(context, cancellationToken))))
+        var failures = results
             .SelectMany(r => r.Errors)
             .Where(f => f is not null)
             .ToList();
@@ -56,15 +53,14 @@ public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
     {
         if (typeof(TResult) == typeof(Result))
         {
-            return (ValidationResult.WithErrors(errors) as TResult)!;
+            return (Nestly.BuildingBlocks.Results.ValidationResult.WithErrors(errors) as TResult)!;
         }
 
-        // For Result<T>, surface the aggregated validation error.
         object failure = typeof(Result)
             .GetMethods()
             .First(m => m is { Name: nameof(Result.Failure), IsGenericMethod: true })
             .MakeGenericMethod(typeof(TResult).GenericTypeArguments[0])
-            .Invoke(null, [Error.Validation(ValidationResult.ErrorCode, FormatMessage(errors))])!;
+            .Invoke(null, [Error.Validation(Nestly.BuildingBlocks.Results.ValidationResult.ErrorCode, FormatMessage(errors))])!;
 
         return (TResult)failure;
     }

@@ -1,23 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using backend.shared.Domain;
+using Nestly.Domain;
 
-namespace backend.shared.Infrastructure.Persistence.Configurations
+namespace Nestly.Infrastructure.Persistence.Configurations;
+
+public class SupportTicketCommentConfiguration : IEntityTypeConfiguration<SupportTicketComment>
 {
-    public class SupportTicketCommentConfiguration : IEntityTypeConfiguration<SupportTicketComment>
+    public void Configure(EntityTypeBuilder<SupportTicketComment> builder)
     {
-        public void Configure(EntityTypeBuilder<SupportTicketComment> builder)
-        {
-            builder.HasKey(t => t.Id);
-            builder.Property(t => t.Id).UseIdentityColumn();
-
-            builder.HasOne(t => t.SupportTicket)
-                .WithMany()
-                .HasForeignKey(t => t.SupportTicketId);
-
-            builder.HasMany(t => t.Notifications)
-                .WithOne(n => n.SupportTicketComment)
-                .OnDelete(DeleteBehavior.Cascade);
-        }
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Comment).IsRequired().HasMaxLength(2000);
+        builder.Property(x => x.CreatedAt).IsRequired();
     }
 }

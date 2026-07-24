@@ -1,15 +1,19 @@
-using System.Collections.Generic;
+using FluentValidation.Results;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Application;
+
+public class ValidationException : Exception
 {
-    public class ValidationException : Exception
-    {
-        public IEnumerable<ValidationFailure> Errors { get; }
+    public IEnumerable<ValidationFailure> Errors { get; }
 
-        public ValidationException(IEnumerable<ValidationFailure> errors)
-            : base("One or more validation errors occurred.")
-        {
-            Errors = errors;
-        }
+    public ValidationException(IEnumerable<ValidationFailure> errors)
+        : base("One or more validation errors occurred.")
+    {
+        Errors = errors;
+    }
+
+    public ValidationException(string message) : base(message)
+    {
+        Errors = [];
     }
 }

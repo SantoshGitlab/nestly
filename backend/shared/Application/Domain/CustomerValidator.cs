@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Application
 {
     public class CustomerValidator : AbstractValidator<Customer>
     {

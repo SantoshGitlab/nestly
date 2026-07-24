@@ -1,19 +1,19 @@
-namespace backend.shared.Application.Domain
+using Nestly.BuildingBlocks.Primitives;
+
+namespace Nestly.Domain;
+
+public class ServiceMedia : Entity<Guid>
 {
-    public class ServiceMedia : Entity<Guid>
+    public Guid ServiceId { get; private set; }
+    public string Url { get; private set; } = string.Empty;
+
+    protected ServiceMedia() { }
+
+    public ServiceMedia(Guid id, Guid serviceId, string url) : base(id)
     {
-        private readonly Guid _serviceId;
-
-        public ServiceMedia()
-        {
-            _serviceId = Guid.Empty;
-        }
-
-        public void SetServiceId(Guid serviceId)
-        {
-            _serviceId = serviceId;
-        }
-
-        public Guid ServiceId => _serviceId;
+        ServiceId = serviceId;
+        Url = url;
     }
+
+    public void SetServiceId(Guid serviceId) => ServiceId = serviceId;
 }

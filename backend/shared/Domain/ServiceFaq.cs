@@ -1,19 +1,21 @@
-namespace backend.shared.Application.Domain
+using Nestly.BuildingBlocks.Primitives;
+
+namespace Nestly.Domain;
+
+public class ServiceFaq : Entity<Guid>
 {
-    public class ServiceFaq : Entity<Guid>
+    public Guid ServiceId { get; private set; }
+    public string Question { get; private set; } = string.Empty;
+    public string Answer { get; private set; } = string.Empty;
+
+    protected ServiceFaq() { }
+
+    public ServiceFaq(Guid id, Guid serviceId, string question, string answer) : base(id)
     {
-        private readonly Guid _serviceId;
-
-        public ServiceFaq()
-        {
-            _serviceId = Guid.Empty;
-        }
-
-        public void SetServiceId(Guid serviceId)
-        {
-            _serviceId = serviceId;
-        }
-
-        public Guid ServiceId => _serviceId;
+        ServiceId = serviceId;
+        Question = question;
+        Answer = answer;
     }
+
+    public void SetServiceId(Guid serviceId) => ServiceId = serviceId;
 }

@@ -1,18 +1,23 @@
-using Microsoft.EntityFrameworkCore;
-using backend.shared.Application.Domain;
+using Nestly.BuildingBlocks.Primitives;
 
-namespace backend.shared.Application.Domain
+namespace Nestly.Domain;
+
+public class ServiceAddOn : Entity<Guid>
 {
-    public class ServiceAddOn : Entity<Guid>
+    public Guid ServiceId { get; private set; }
+    public string Name { get; private set; } = string.Empty;
+    public decimal Price { get; private set; }
+
+    protected ServiceAddOn() { }
+
+    public ServiceAddOn(Guid id, Guid serviceId, string name, decimal price) : base(id)
     {
-        private Guid _serviceId;
-        // ... other properties and methods
-
-        public void SetServiceId(Guid serviceId) => this._serviceId = serviceId;
-
-        public async Task<Service> GetServiceAsync(DbContext context)
-        {
-            return await context.Set<Service>().FindAsync(this._serviceId);
-        }
+        ServiceId = serviceId;
+        Name = name;
+        Price = price;
     }
+
+    public void SetServiceId(Guid serviceId) => ServiceId = serviceId;
+    public void SetName(string name) => Name = name;
+    public void SetPrice(decimal price) => Price = price;
 }
