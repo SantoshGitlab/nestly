@@ -111,7 +111,7 @@ id,task,status,priority,notes
 83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),blocked,high,depends on #82 | auto-blocked: depends on blocked task #82
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),done,high,completed by local (orca-mini) 2026-07-24 10:00:19
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),blocked,high,depends on #84 #60 | auto-blocked: depends on blocked task #60
-86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),in_progress,high,depends on #84
+86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),done,high,depends on #84 | completed by local (qwen2.5-coder:7b) 2026-07-24 10:24:25
 87a,Notifications - Define notification entity and types,todo,high,depends on #31 #84 #18
 87b,Notifications - Implement template rendering with variables,blocked,high,depends on #87a | auto-blocked: depends on nonexistent task #87
 87c,Notifications - Add channel dispatch (SMS/email),blocked,high,depends on #87b | auto-blocked: depends on nonexistent task #87
@@ -176,7 +176,7 @@ id,task,status,priority,notes
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),blocked,high,depends on #66 | auto-blocked: depends on blocked task #66
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),blocked,high,depends on #135 | auto-blocked: depends on blocked task #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),blocked,high,depends on #10 #88 | auto-blocked: depends on blocked task #88
-138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),todo,high,
+138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),in_progress,high,
 139,DevOps - Backup and restore procedure: Automated PostgreSQL backups + documented tested restore drill,todo,high,depends on #138
 140a,QA - E2E: Discovery → category → service detail flows,blocked,high,depends on #93 #132 | auto-blocked: depends on blocked task #93
 140b,QA - E2E: Slot selection → booking → payment flows,blocked,high,depends on #140a | auto-blocked: depends on nonexistent task #140
