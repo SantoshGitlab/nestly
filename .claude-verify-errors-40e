@@ -1,0 +1,5 @@
+40e
+/workspace/backend/shared/Domain/BookingStatusHistory.cs(6,41): error CS0246: The type or namespace name 'Entity<>' could not be found (are you missing a using directive or an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj]
+Build FAILED.
+/workspace/backend/shared/Domain/BookingStatusHistory.cs(6,41): error CS0246: The type or namespace name 'Entity<>' could not be found (are you missing a using directive or an assembly reference?) [/workspace/backend/shared/Domain/Domain.csproj]
+    1 Error(s)
