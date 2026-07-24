@@ -50,7 +50,7 @@ id,task,status,priority,notes
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
 45a,"Slots - Basic slot calculations: time windows,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:28:58,depends on #43 #44
 45b,Slots - Add serviceability and cutoff logic,done,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45 | completed by local (qwen2.5-coder:7b) 2026-07-24 15:05:13
-45c,Slots - Add capacity and blackout constraints,todo,high,
+45c,Slots - Add capacity and blackout constraints,done,high,completed by local (mistral:7b) 2026-07-24 16:47:23
 45d,Slots - Add reschedule revalidation support,todo,high,depends on #45c | auto-blocked: depends on nonexistent task #45
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45d | auto-blocked: depends on nonexistent task #45
 47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,done,high,depends on #40e | completed by local (qwen2.5-coder:7b) 2026-07-24 14:24:21
