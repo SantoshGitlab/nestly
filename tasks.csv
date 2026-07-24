@@ -96,7 +96,7 @@ id,task,status,priority,notes
 72c,Coupons - Implement usage cap and redemption cap enforcement,blocked,high,depends on #72b | auto-blocked: depends on nonexistent task #72
 72d,"Coupons - Add applicability rules (category,done, first/repeat)",completed by local (qwen2.5-coder:7b) 2026-07-24 10:16:42,high,depends on #72c
 73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),blocked,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72
-74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),in_progress,high,depends on #67
+74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),done,high,depends on #67 | completed by local (qwen2.5-coder:7b) 2026-07-24 10:22:41
 75a,Refunds - Define refund entity and refund types (full/partial),blocked,high,depends on #69 #74 | auto-blocked: depends on blocked task #69
 75b,Refunds - Implement full refund logic (gateway or wallet),blocked,high,depends on #75a | auto-blocked: depends on nonexistent task #75
 75c,Refunds - Implement partial refund calculation and policy rules,blocked,high,depends on #75b | auto-blocked: depends on nonexistent task #75
@@ -111,7 +111,7 @@ id,task,status,priority,notes
 83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),blocked,high,depends on #82 | auto-blocked: depends on blocked task #82
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),done,high,completed by local (orca-mini) 2026-07-24 10:00:19
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),blocked,high,depends on #84 #60 | auto-blocked: depends on blocked task #60
-86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),todo,high,depends on #84
+86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),in_progress,high,depends on #84
 87a,Notifications - Define notification entity and types,todo,high,depends on #31 #84 #18
 87b,Notifications - Implement template rendering with variables,blocked,high,depends on #87a | auto-blocked: depends on nonexistent task #87
 87c,Notifications - Add channel dispatch (SMS/email),blocked,high,depends on #87b | auto-blocked: depends on nonexistent task #87
