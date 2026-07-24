@@ -58,7 +58,7 @@ id,task,status,priority,notes
 48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),done,high,depends on #47 | auto-blocked: depends on blocked task #47 | completed by local (qwen2.5-coder:7b) 2026-07-24 14:45:30
 49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,todo,high,depends on #17 #41
  | auto-blocked: depends on blocked task #41
-50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),in_progress,high,depends on #15 #41
+50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),done,high,depends on #15 #41 | completed by local (orca-mini) 2026-07-24 14:56:46
  | auto-blocked: depends on blocked task #41
 51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),todo,high,depends on #50
  | auto-blocked: depends on blocked task #50
@@ -95,7 +95,7 @@ id,task,status,priority,notes
 72b,"Coupons - Implement validity window checks (date,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:46:40,depends on #72a
 72c,Coupons - Implement usage cap and redemption cap enforcement,todo,high,depends on #72b | auto-blocked: depends on nonexistent task #72
 72d,"Coupons - Add applicability rules (category,done, first/repeat)",completed by local (qwen2.5-coder:7b) 2026-07-24 10:16:42,high,depends on #72c
-73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),todo,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72
+73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),done,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72 | completed by local (qwen2.5-coder:7b) 2026-07-24 14:56:45
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),done,high,depends on #67 | completed by local (qwen2.5-coder:7b) 2026-07-24 10:22:41
 75a,Refunds - Define refund entity and refund types (full/partial),todo,high,depends on #69 #74 | auto-blocked: depends on blocked task #69
 75b,Refunds - Implement full refund logic (gateway or wallet),todo,high,depends on #75a | auto-blocked: depends on nonexistent task #75
