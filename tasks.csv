@@ -77,7 +77,7 @@ id,task,status,priority,notes
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58 | auto-blocked: depends on blocked task #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59 | auto-blocked: depends on blocked task #59
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56d | auto-blocked: depends on nonexistent task #56
-62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),todo,high,depends on #52 #57
+62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),in_progress,high,depends on #52 #57
  | auto-blocked: depends on blocked task #52
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),todo,high,depends on #62 #46 | auto-blocked: depends on blocked task #62
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60 | auto-blocked: depends on blocked task #60
@@ -129,7 +129,7 @@ id,task,status,priority,notes
 96c,AdminIdentity - Add role-based permission enforcement middleware,todo,high,depends on #96b | auto-blocked: depends on nonexistent task #96
 96d,AdminIdentity - Add audit logging for permission checks,todo,high,depends on #96c #20 | auto-blocked: depends on nonexistent task #96
 97,AdminIdentity - Admin user management APIs: CRUD; role assignment; activate/deactivate; password reset (SRS 12.2.1),todo,high,depends on #96d | auto-blocked: depends on nonexistent task #96
-98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),in_progress,high,depends on #16 #95 | auto-blocked: depends on blocked task #95
+98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),done,high,depends on #16 #95 | auto-blocked: depends on blocked task #95 | completed by local (orca-mini) 2026-07-24 16:41:11
 99,Dashboard - Dashboard KPIs: Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),todo,high,depends on #96d #60 | auto-blocked: depends on nonexistent task #96
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,todo,high,depends on #98 #99 | auto-blocked: depends on blocked task #99
 101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),todo,high,depends on #96d #28 | auto-blocked: depends on nonexistent task #96
