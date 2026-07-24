@@ -51,7 +51,7 @@ id,task,status,priority,notes
 45a,"Slots - Basic slot calculations: time windows,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:28:58,depends on #43 #44
 45b,Slots - Add serviceability and cutoff logic,done,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45 | completed by local (qwen2.5-coder:7b) 2026-07-24 15:05:13
 45c,Slots - Add capacity and blackout constraints,done,high,completed by local (mistral:7b) 2026-07-24 16:47:23
-45d,Slots - Add reschedule revalidation support,todo,high,depends on #45c | auto-blocked: depends on nonexistent task #45
+45d,Slots - Add reschedule revalidation support,in_progress,high,depends on #45c | auto-blocked: depends on nonexistent task #45
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45d | auto-blocked: depends on nonexistent task #45
 47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,done,high,depends on #40e | completed by local (qwen2.5-coder:7b) 2026-07-24 14:24:21
  | auto-blocked: depends on nonexistent task #40
@@ -77,7 +77,7 @@ id,task,status,priority,notes
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),todo,high,depends on #58 | auto-blocked: depends on blocked task #58
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #59 | auto-blocked: depends on blocked task #59
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56d | auto-blocked: depends on nonexistent task #56
-62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),in_progress,high,depends on #52 #57
+62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),done,high,depends on #52 #57 | completed by local (orca-mini) 2026-07-24 16:56:51
  | auto-blocked: depends on blocked task #52
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),todo,high,depends on #62 #46 | auto-blocked: depends on blocked task #62
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60 | auto-blocked: depends on blocked task #60
