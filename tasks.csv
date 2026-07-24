@@ -48,7 +48,7 @@ id,task,status,priority,notes
 42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),blocked,high,depends on #40e
 43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
-45a,"Slots - Basic slot calculations: time windows,todo,todo,,depends on #43 #44
+45a,"Slots - Basic slot calculations: time windows,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:28:58,depends on #43 #44
 45b,Slots - Add serviceability and cutoff logic,blocked,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45
 45c,Slots - Add capacity and blackout constraints,blocked,high,depends on #45b | auto-blocked: depends on nonexistent task #45
 45d,Slots - Add reschedule revalidation support,blocked,high,depends on #45c | auto-blocked: depends on nonexistent task #45
@@ -176,7 +176,7 @@ id,task,status,priority,notes
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),blocked,high,depends on #66 | auto-blocked: depends on blocked task #66
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),blocked,high,depends on #135 | auto-blocked: depends on blocked task #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),blocked,high,depends on #10 #88 | auto-blocked: depends on blocked task #88
-138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),in_progress,high,
+138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),done,high,completed by local (orca-mini) 2026-07-24 10:28:59
 139,DevOps - Backup and restore procedure: Automated PostgreSQL backups + documented tested restore drill,todo,high,depends on #138
 140a,QA - E2E: Discovery → category → service detail flows,blocked,high,depends on #93 #132 | auto-blocked: depends on blocked task #93
 140b,QA - E2E: Slot selection → booking → payment flows,blocked,high,depends on #140a | auto-blocked: depends on nonexistent task #140
