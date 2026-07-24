@@ -123,7 +123,7 @@ id,task,status,priority,notes
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),blocked,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,blocked,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),done,high,completed by local (orca-mini) 2026-07-24 11:21:10
-95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20
+95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),in_progress,high,depends on #94 #20
 96a,"AdminIdentity - Define permission matrix (module,done, roles)",completed by local (qwen2.5-coder:7b) 2026-07-24 11:20:08,high,depends on #95
 96b,AdminIdentity - Implement authorization policies and checks,blocked,high,depends on #96a | auto-blocked: depends on nonexistent task #96
 96c,AdminIdentity - Add role-based permission enforcement middleware,blocked,high,depends on #96b | auto-blocked: depends on nonexistent task #96
@@ -185,7 +185,7 @@ id,task,status,priority,notes
 141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,blocked,high,depends on #140d | auto-blocked: depends on nonexistent task #140
 142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,todo,high,depends on #138
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,high,
-144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),in_progress,low,
+144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),done,low,completed by local (orca-mini) 2026-07-24 11:31:15
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,todo,low,depends on #144
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,todo,low,depends on #145
 147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,blocked,low,depends on #145 #115d | auto-blocked: depends on nonexistent task #115
