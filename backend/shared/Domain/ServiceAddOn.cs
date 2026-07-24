@@ -1,6 +1,6 @@
-using Nestly.BuildingBlocks.Primitives;
+using Nesty;
 
-namespace Nestly.Domain;
+namespace Nesty.Domain;
 
 public class ServiceAddOn : Entity<Guid>
 {
@@ -13,11 +13,11 @@ public class ServiceAddOn : Entity<Guid>
     public ServiceAddOn(Guid id, Guid serviceId, string name, decimal price) : base(id)
     {
         ServiceId = serviceId;
-        Name = name;
-        Price = price;
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
     }
 
     public void SetServiceId(Guid serviceId) => ServiceId = serviceId;
-    public void SetName(string name) => Name = name;
-    public void SetPrice(decimal price) => Price = price;
+    public void SetName(string name) => Name = name ?? throw new ArgumentNullException(nameof(name));
+    public void SetPrice(decimal price) => Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
 }

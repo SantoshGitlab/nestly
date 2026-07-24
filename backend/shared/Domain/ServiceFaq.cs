@@ -1,6 +1,6 @@
-using Nestly.BuildingBlocks.Primitives;
+using Nesty;
 
-namespace Nestly.Domain;
+namespace Nesty.Domain;
 
 public class ServiceFaq : Entity<Guid>
 {
@@ -13,8 +13,8 @@ public class ServiceFaq : Entity<Guid>
     public ServiceFaq(Guid id, Guid serviceId, string question, string answer) : base(id)
     {
         ServiceId = serviceId;
-        Question = question;
-        Answer = answer;
+        Question = question ?? throw new ArgumentNullException(nameof(question));
+        Answer = answer ?? string.Empty;
     }
 
     public void SetServiceId(Guid serviceId) => ServiceId = serviceId;
