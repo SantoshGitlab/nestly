@@ -49,7 +49,7 @@ id,task,status,priority,notes
 43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
 45a,"Slots - Basic slot calculations: time windows,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:28:58,depends on #43 #44
-45b,Slots - Add serviceability and cutoff logic,todo,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45
+45b,Slots - Add serviceability and cutoff logic,done,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45 | completed by local (qwen2.5-coder:7b) 2026-07-24 15:05:13
 45c,Slots - Add capacity and blackout constraints,todo,high,depends on #45b | auto-blocked: depends on nonexistent task #45
 45d,Slots - Add reschedule revalidation support,todo,high,depends on #45c | auto-blocked: depends on nonexistent task #45
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45d | auto-blocked: depends on nonexistent task #45
