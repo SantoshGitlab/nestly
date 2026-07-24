@@ -91,7 +91,7 @@ id,task,status,priority,notes
 69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),blocked,high,depends on #68d | auto-blocked: depends on nonexistent task #68
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),blocked,high,depends on #69 | auto-blocked: depends on blocked task #69
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),blocked,high,depends on #69 | auto-blocked: depends on blocked task #69
-72a,Coupons - Define coupon entity and validation rules,todo,high,depends on #67
+72a,Coupons - Define coupon entity and validation rules,done,high,depends on #67 | completed by local (qwen2.5-coder:7b) 2026-07-24 11:54:47
 72b,"Coupons - Implement validity window checks (date,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:46:40,depends on #72a
 72c,Coupons - Implement usage cap and redemption cap enforcement,blocked,high,depends on #72b | auto-blocked: depends on nonexistent task #72
 72d,"Coupons - Add applicability rules (category,done, first/repeat)",completed by local (qwen2.5-coder:7b) 2026-07-24 10:16:42,high,depends on #72c
@@ -123,13 +123,13 @@ id,task,status,priority,notes
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),blocked,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,blocked,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),done,high,completed by local (orca-mini) 2026-07-24 11:21:10
-95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),in_progress,high,depends on #94 #20
+95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),blocked,high,depends on #94 #20 | timed out: 2026-07-24 11:51:12 | auto-blocked: depends on nonexistent task #2026
 96a,"AdminIdentity - Define permission matrix (module,done, roles)",completed by local (qwen2.5-coder:7b) 2026-07-24 11:20:08,high,depends on #95
 96b,AdminIdentity - Implement authorization policies and checks,blocked,high,depends on #96a | auto-blocked: depends on nonexistent task #96
 96c,AdminIdentity - Add role-based permission enforcement middleware,blocked,high,depends on #96b | auto-blocked: depends on nonexistent task #96
 96d,AdminIdentity - Add audit logging for permission checks,blocked,high,depends on #96c #20 | auto-blocked: depends on nonexistent task #96
 97,AdminIdentity - Admin user management APIs: CRUD; role assignment; activate/deactivate; password reset (SRS 12.2.1),blocked,high,depends on #96d | auto-blocked: depends on nonexistent task #96
-98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),todo,high,depends on #16 #95
+98,Frontend - Admin app shell: Login screen; authenticated layout; nav by permission; session handling in admin-web (SRS 25.2),blocked,high,depends on #16 #95 | auto-blocked: depends on blocked task #95
 99,Dashboard - Dashboard KPIs: Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),blocked,high,depends on #96d #60 | auto-blocked: depends on nonexistent task #96
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,blocked,high,depends on #98 #99 | auto-blocked: depends on blocked task #99
 101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),blocked,high,depends on #96d #28 | auto-blocked: depends on nonexistent task #96
@@ -186,7 +186,7 @@ id,task,status,priority,notes
 142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,todo,high,depends on #138
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,high,
 144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),done,low,completed by local (orca-mini) 2026-07-24 11:31:15
-145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,todo,low,depends on #144
+145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,in_progress,low,depends on #144
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,todo,low,depends on #145
 147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,blocked,low,depends on #145 #115d | auto-blocked: depends on nonexistent task #115
 148,Partner - Partner earnings and payouts: Append-only earning ledger + payout batch processing per PARTNER.md,blocked,low,depends on #147 | auto-blocked: depends on blocked task #147
