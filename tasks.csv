@@ -55,10 +55,10 @@ id,task,status,priority,notes
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45d | auto-blocked: depends on nonexistent task #45
 47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,done,high,depends on #40e | completed by local (qwen2.5-coder:7b) 2026-07-24 14:24:21
  | auto-blocked: depends on nonexistent task #40
-48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),todo,high,depends on #47 | auto-blocked: depends on blocked task #47
+48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),done,high,depends on #47 | auto-blocked: depends on blocked task #47 | completed by local (qwen2.5-coder:7b) 2026-07-24 14:45:30
 49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,todo,high,depends on #17 #41
  | auto-blocked: depends on blocked task #41
-50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),todo,high,depends on #15 #41
+50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),in_progress,high,depends on #15 #41
  | auto-blocked: depends on blocked task #41
 51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),todo,high,depends on #50
  | auto-blocked: depends on blocked task #50
