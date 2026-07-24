@@ -48,7 +48,7 @@ id,task,status,priority,notes
 42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),blocked,high,depends on #40e
 43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
-45a,"Slots - Basic slot calculations: time windows,in_progress,todo,high,depends on #43 #44
+45a,"Slots - Basic slot calculations: time windows,todo,todo,,depends on #43 #44
 45b,Slots - Add serviceability and cutoff logic,blocked,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45
 45c,Slots - Add capacity and blackout constraints,blocked,high,depends on #45b | auto-blocked: depends on nonexistent task #45
 45d,Slots - Add reschedule revalidation support,blocked,high,depends on #45c | auto-blocked: depends on nonexistent task #45
@@ -67,11 +67,11 @@ id,task,status,priority,notes
 53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),blocked,high,depends on #50 #43
  | auto-blocked: depends on blocked task #50
 54,QA - Catalog and slot engine tests: Serviceability dimensions; slot cutoff/blackout/capacity edge cases; price calc scenarios,blocked,high,depends on #46 #48 | auto-blocked: depends on blocked task #46
-55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),in_progress,high,depends on #9
+55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),todo,high,
 56a,Booking - Define 13 booking states and lifecycle enum,todo,high,depends on #4 #55
 56b,Booking - Implement state transition matrix and invariants,blocked,high,depends on #56a | auto-blocked: depends on nonexistent task #56
 56c,Booking - Add booking status history tracking,blocked,high,depends on #56b | auto-blocked: depends on nonexistent task #56
-56d,"Booking - Add booking rules enforcement (immutability,in_progress,todo,high,depends on #56c
+56d,"Booking - Add booking rules enforcement (immutability,todo,todo,,depends on #56c
 57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),blocked,high,depends on #48 #56d | auto-blocked: depends on nonexistent task #56
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),blocked,high,depends on #57 #46 #30 | auto-blocked: depends on blocked task #57
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),blocked,high,depends on #58 | auto-blocked: depends on blocked task #58
@@ -83,7 +83,7 @@ id,task,status,priority,notes
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),blocked,high,depends on #60 | auto-blocked: depends on blocked task #60
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),blocked,high,depends on #60 | auto-blocked: depends on blocked task #60
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,blocked,high,depends on #60 | auto-blocked: depends on blocked task #60
-67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),in_progress,high,depends on #9
+67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),done,high,completed by local (orca-mini) 2026-07-24 10:00:20
 68a,Payments - Define payment gateway interface (create order),blocked,high,depends on #67 #58 | auto-blocked: depends on blocked task #58
 68b,Payments - Implement sandbox gateway,blocked,high,depends on #68a | auto-blocked: depends on nonexistent task #68
 68c,Payments - Add payment order validation and formatting,blocked,high,depends on #68b | auto-blocked: depends on nonexistent task #68
@@ -92,9 +92,9 @@ id,task,status,priority,notes
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),blocked,high,depends on #69 | auto-blocked: depends on blocked task #69
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),blocked,high,depends on #69 | auto-blocked: depends on blocked task #69
 72a,Coupons - Define coupon entity and validation rules,todo,high,depends on #67
-72b,"Coupons - Implement validity window checks (date,in_progress,todo,high,depends on #72a
+72b,"Coupons - Implement validity window checks (date,todo,todo,,depends on #72a
 72c,Coupons - Implement usage cap and redemption cap enforcement,blocked,high,depends on #72b | auto-blocked: depends on nonexistent task #72
-72d,"Coupons - Add applicability rules (category,in_progress, first/repeat)",todo,high,depends on #72c
+72d,"Coupons - Add applicability rules (category,todo, first/repeat)",,high,depends on #72c
 73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),blocked,high,depends on #72d #48 | auto-blocked: depends on nonexistent task #72
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),todo,high,depends on #67
 75a,Refunds - Define refund entity and refund types (full/partial),blocked,high,depends on #69 #74 | auto-blocked: depends on blocked task #69
@@ -109,7 +109,7 @@ id,task,status,priority,notes
 81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),blocked,high,depends on #80 | auto-blocked: depends on blocked task #80
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),blocked,high,depends on #60 #46 | auto-blocked: depends on blocked task #46
 83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),blocked,high,depends on #82 | auto-blocked: depends on blocked task #82
-84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),in_progress,high,depends on #9
+84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),done,high,completed by local (orca-mini) 2026-07-24 10:00:19
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),blocked,high,depends on #84 #60 | auto-blocked: depends on blocked task #60
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),todo,high,depends on #84
 87a,Notifications - Define notification entity and types,todo,high,depends on #31 #84 #18
@@ -122,9 +122,9 @@ id,task,status,priority,notes
 91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),blocked,high,depends on #65 #85 | auto-blocked: depends on blocked task #65
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),blocked,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,blocked,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
-94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),in_progress,high,depends on #9
+94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),todo,high,
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20
-96a,"AdminIdentity - Define permission matrix (module,in_progress, roles)",todo,high,depends on #95
+96a,"AdminIdentity - Define permission matrix (module,todo, roles)",,high,depends on #95
 96b,AdminIdentity - Implement authorization policies and checks,blocked,high,depends on #96a | auto-blocked: depends on nonexistent task #96
 96c,AdminIdentity - Add role-based permission enforcement middleware,blocked,high,depends on #96b | auto-blocked: depends on nonexistent task #96
 96d,AdminIdentity - Add audit logging for permission checks,blocked,high,depends on #96c #20 | auto-blocked: depends on nonexistent task #96
@@ -176,7 +176,7 @@ id,task,status,priority,notes
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),blocked,high,depends on #66 | auto-blocked: depends on blocked task #66
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),blocked,high,depends on #135 | auto-blocked: depends on blocked task #135
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),blocked,high,depends on #10 #88 | auto-blocked: depends on blocked task #88
-138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),in_progress,high,depends on #14
+138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),todo,high,
 139,DevOps - Backup and restore procedure: Automated PostgreSQL backups + documented tested restore drill,todo,high,depends on #138
 140a,QA - E2E: Discovery → category → service detail flows,blocked,high,depends on #93 #132 | auto-blocked: depends on blocked task #93
 140b,QA - E2E: Slot selection → booking → payment flows,blocked,high,depends on #140a | auto-blocked: depends on nonexistent task #140
@@ -185,7 +185,7 @@ id,task,status,priority,notes
 141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,blocked,high,depends on #140d | auto-blocked: depends on nonexistent task #140
 142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,todo,high,depends on #138
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,high,
-144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),in_progress,low,
+144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),todo,low,
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,todo,low,depends on #144
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,todo,low,depends on #145
 147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,blocked,low,depends on #145 #115d | auto-blocked: depends on nonexistent task #115
