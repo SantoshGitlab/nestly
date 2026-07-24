@@ -15,9 +15,9 @@ public class Service : Entity<Guid>
     public Service(Guid id, Guid categoryId, string name, string description, decimal price) : base(id)
     {
         CategoryId = categoryId;
-        Name = name;
-        Description = description;
-        Price = price;
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Description = description ?? string.Empty;
+        Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
         IsActive = true;
     }
 

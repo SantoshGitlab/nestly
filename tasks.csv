@@ -50,7 +50,7 @@ id,task,status,priority,notes
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
 45a,"Slots - Basic slot calculations: time windows,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:28:58,depends on #43 #44
 45b,Slots - Add serviceability and cutoff logic,done,high,depends on #45a #43 | auto-blocked: depends on nonexistent task #45 | completed by local (qwen2.5-coder:7b) 2026-07-24 15:05:13
-45c,Slots - Add capacity and blackout constraints,in_progress,high,depends on #45b | auto-blocked: depends on nonexistent task #45
+45c,Slots - Add capacity and blackout constraints,todo,high,
 45d,Slots - Add reschedule revalidation support,todo,high,depends on #45c | auto-blocked: depends on nonexistent task #45
 46,Slots - Slot APIs: Get available slots for service+address+date; revalidate slot (SRS 24.4),todo,high,depends on #45d | auto-blocked: depends on nonexistent task #45
 47,Pricing - Pricing rules service: Base; add-on; quantity; city-wise; visit charge; tax/GST; fees per SRS 11.9.1,done,high,depends on #40e | completed by local (qwen2.5-coder:7b) 2026-07-24 14:24:21
@@ -62,7 +62,7 @@ id,task,status,priority,notes
  | auto-blocked: depends on blocked task #41
 51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),done,high,depends on #50 | completed by local (orca-mini) 2026-07-24 15:25:21
  | auto-blocked: depends on blocked task #50
-52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),todo,high,depends on #51 #42
+52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),in_progress,high,depends on #51 #42
  | auto-blocked: depends on blocked task #42
 53,Frontend - Location and serviceability UX: City/pincode selection; non-serviceable blocking messages (SRS 11.4.3),todo,high,depends on #50 #43
  | auto-blocked: depends on blocked task #50
@@ -123,7 +123,7 @@ id,task,status,priority,notes
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),todo,high,depends on #65 #86 | auto-blocked: depends on blocked task #65
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,todo,high,depends on #81 #83 #88 | auto-blocked: depends on blocked task #88
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),done,high,completed by local (orca-mini) 2026-07-24 11:21:10
-95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),todo,high,depends on #94 #20 | timed out: 2026-07-24 11:51:12 | auto-blocked: depends on nonexistent task #2026
+95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),done,high,depends on #94 #20 | timed out: 2026-07-24 11:51:12 | auto-blocked: depends on nonexistent task #2026 | completed by local (mistral:7b) 2026-07-24 16:39:57
 96a,"AdminIdentity - Define permission matrix (module,done, roles)",completed by local (qwen2.5-coder:7b) 2026-07-24 11:20:08,high,depends on #95
 96b,AdminIdentity - Implement authorization policies and checks,todo,high,depends on #96a | auto-blocked: depends on nonexistent task #96
 96c,AdminIdentity - Add role-based permission enforcement middleware,todo,high,depends on #96b | auto-blocked: depends on nonexistent task #96
