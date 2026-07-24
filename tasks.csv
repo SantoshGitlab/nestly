@@ -45,7 +45,7 @@ id,task,status,priority,notes
 40e,Catalog - Domain events for catalog lifecycle (SRS 12.5-12.7),done,high,depends on #40d | completed by local (qwen2.5-coder:7b) 2026-07-24 14:19:05
  | auto-blocked: depends on nonexistent task #40
 41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),done,high,depends on #40e | completed by local (qwen2.5-coder:7b) 2026-07-24 14:30:52
-42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),todo,high,depends on #40e
+42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),done,high,depends on #40e | completed by local (qwen2.5-coder:7b) 2026-07-24 15:00:58
 43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),done,high,depends on #39
 44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),done,high,depends on #9
 45a,"Slots - Basic slot calculations: time windows,done,todo,completed by local (qwen2.5-coder:7b) 2026-07-24 10:28:58,depends on #43 #44
@@ -60,7 +60,7 @@ id,task,status,priority,notes
  | auto-blocked: depends on blocked task #41
 50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),done,high,depends on #15 #41 | completed by local (orca-mini) 2026-07-24 14:56:46
  | auto-blocked: depends on blocked task #41
-51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),todo,high,depends on #50
+51,Frontend - Category pages: Category listing and detail pages with service cards (SRS 11.5),in_progress,high,depends on #50
  | auto-blocked: depends on blocked task #50
 52,Frontend - Service detail page: Full detail: inclusions; add-ons; pricing; FAQs; policies; reviews summary (SRS 11.6),todo,high,depends on #51 #42
  | auto-blocked: depends on blocked task #42
