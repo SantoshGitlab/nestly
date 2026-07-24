@@ -184,7 +184,7 @@ id,task,status,priority,notes
 140d,QA - E2E: Refund and review submission flows,blocked,high,depends on #140c | auto-blocked: depends on nonexistent task #140
 141,QA - UAT execution: Business acceptance against SRS 33 acceptance criteria,blocked,high,depends on #140d | auto-blocked: depends on nonexistent task #140
 142,Docs - Deployment runbook: Deploy; rollback; incident response; on-call basics,done,high,depends on #138 | completed by local (orca-mini) 2026-07-24 12:01:07
-143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),in_progress,high,
+143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),done,high, | completed by local (orca-mini) 2026-07-24 12:02:18
 144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),done,low,completed by local (orca-mini) 2026-07-24 11:31:15
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,done,low,depends on #144 | completed by local (orca-mini) 2026-07-24 11:55:45
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,done,low,depends on #145 | completed by local (qwen2.5-coder:7b) 2026-07-24 12:00:00
