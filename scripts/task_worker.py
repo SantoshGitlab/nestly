@@ -330,27 +330,62 @@ def decompose_task_via_model(task, project_dir, cfg, glob_cfg, env):
         f"This task bundles multiple pieces of work into one. Break it into "
         f"between 2 and {max_sub} smaller subtasks, ordered so each one "
         f"builds on the previous and can be implemented (and compiled) on "
-        f"its own. Respond with EXACTLY one line per subtask, in this "
-        f"literal format and nothing else:\n"
+        f"its own.\n\n"
+        f"You MUST output MORE THAN ONE line - a single combined line is "
+        f"wrong even if it mentions several things. Respond with EXACTLY "
+        f"one line per subtask, nothing else, in this literal format:\n"
         f"SUBTASK: <short description>\n"
+        f"SUBTASK: <short description>\n"
+        f"(one more SUBTASK: line per remaining subtask)\n\n"
+        f"Example, for a hypothetical task 'User profile module: schema; "
+        f"CRUD API; validation; frontend screen':\n"
+        f"SUBTASK: Define the UserProfile entity and its EF Core configuration\n"
+        f"SUBTASK: Implement the CRUD API endpoints for user profiles\n"
+        f"SUBTASK: Add request validation for profile fields\n"
+        f"SUBTASK: Build the frontend profile screen\n"
     )
-    sem = FileLock(LOCKS_DIR / "model-slot-0.lock",
-                   label=f"{Path(project_dir).name}:decompose:{task['id']}")
-    sem.acquire()
-    try:
-        code, out = run(
-            [glob_cfg["hermes_bin"], "--no-restore-cwd", "--yolo", "-z", prompt],
-            project_dir, env, cfg.get("decompose_timeout_sec", 300))
-    finally:
-        sem.release()
 
-    if code != 0:
-        return None
-    titles = []
-    for line in out.splitlines():
-        m = re.match(r"SUBTASK:\s*(.+)", line.strip(), re.IGNORECASE)
-        if m and m.group(1).strip():
-            titles.append(m.group(1).strip())
+    def call_model(p):
+        sem = FileLock(LOCKS_DIR / "model-slot-0.lock",
+                       label=f"{Path(project_dir).name}:decompose:{task['id']}")
+        sem.acquire()
+        try:
+            return run(
+                [glob_cfg["hermes_bin"], "--no-restore-cwd", "--yolo", "-z", p],
+                project_dir, env, cfg.get("decompose_timeout_sec", 300))
+        finally:
+            sem.release()
+
+    def parse(out):
+        titles = []
+        for line in out.splitlines():
+            m = re.match(r"SUBTASK:\s*(.+)", line.strip(), re.IGNORECASE)
+            if m and m.group(1).strip():
+                titles.append(m.group(1).strip())
+        if len(titles) < 2:
+            # Fallback: some small models substitute a plain numbered/
+            # bulleted list despite the requested format.
+            titles = []
+            for line in out.splitlines():
+                m = re.match(r"(?:\d+[.\):]|-|\*)\s*(.+)", line.strip())
+                if m and m.group(1).strip():
+                    titles.append(m.group(1).strip())
+        return titles
+
+    code, out = call_model(prompt)
+    titles = parse(out) if code == 0 else []
+
+    if len(titles) < 2:
+        # One retry with an explicit nudge - small models often collapse
+        # multi-line instructions into one line on the first try.
+        nudge = prompt + (
+            f"\nYour previous answer only gave one combined line. Give "
+            f"AT LEAST 2 separate SUBTASK: lines this time - one per "
+            f"distinct piece of work, nothing combined with '+' or 'and'.\n"
+        )
+        code, out = call_model(nudge)
+        titles = parse(out) if code == 0 else []
+
     if not (2 <= len(titles) <= max_sub):
         return None
     return titles
