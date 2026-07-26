@@ -100,8 +100,33 @@ Global settings live in `~/.hermes/workers/config.json`:
 
 ## Running several projects at once
 
-Add a `.hermes-worker.json` to the other repo with its own build command, then
-start a second worker:
+One command sets up a new project:
+
+```bash
+python3 /Users/mukesh/Projects/Nestly/scripts/init_worker_project.py /path/to/other-repo
+```
+
+It detects the project type (dotnet/node/rust/go/python) from the files
+present, proposes a `verify` command, shows you what it found, and asks for
+confirmation before writing `.hermes-worker.json` (plus a starter
+`tasks.csv`/`AGENTS.md` if the repo doesn't have them). It refuses to write a
+config with an empty `verify` list rather than guess — an unverified worker
+is exactly what corrupted this repo before.
+
+**The proposed verify command is a starting point to check, not something to
+trust blindly.** Run it by hand once before trusting the worker with it:
+
+```bash
+cd /path/to/other-repo && <the verify command it proposed>
+```
+
+Then start the worker:
+
+```bash
+cd /path/to/other-repo && python3 /Users/mukesh/Projects/Nestly/scripts/task_worker.py --project /path/to/other-repo --once
+```
+
+And once that single task looks right, the full backlog:
 
 ```bash
 nohup python3 /Users/mukesh/Projects/Nestly/scripts/task_worker.py --project /path/to/other-repo > /dev/null 2>&1 &
