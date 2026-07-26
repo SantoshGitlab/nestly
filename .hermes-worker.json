@@ -14,7 +14,7 @@
     "~/.dotnet/tools"
   ],
   "max_attempts": 2,
-  "task_timeout_sec": 300,
+  "task_timeout_sec": 600,
   "auto_decompose": true,
   "max_subtasks": 5,
   "decompose_timeout_sec": 180,
