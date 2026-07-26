@@ -58,5 +58,6 @@ dashboard/index.html
 .hermes-worker-attempts.json
 .hermes-worker-failures.jsonl
 .hermes-worker-status.json
+.hermes-worker-decompose-tried.json
 tasks.csv.tmp
 __pycache__/

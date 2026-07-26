@@ -58,6 +58,9 @@ DEFAULT_CONFIG = {
     "task_timeout_sec": 900,
     "branch": None,
     "context_files": ["AGENTS.md"],
+    "auto_decompose": True,
+    "max_subtasks": 5,
+    "decompose_timeout_sec": 300,
 }
 
 
@@ -272,6 +275,145 @@ def pick_task(rows, project_dir, max_attempts):
 
 # ------------------------------------------------------------------ running
 
+def is_complex_heuristic(task_text):
+    """Cheap proxy for 'this bundles multiple distinct deliverables'.
+
+    Many rows in this style of backlog read like
+    'Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-
+    days; capacity' - each semicolon-separated clause is really its own
+    deliverable jammed into one row. Flag those before the first attempt
+    rather than waiting for it to fail.
+    """
+    text = task_text or ""
+    clauses = [c for c in re.split(r"[;]", text) if c.strip()]
+    return len(clauses) >= 3 or len(text.split()) >= 22
+
+
+def decompose_tried(project_dir, task_id):
+    f = Path(project_dir) / ".hermes-worker-decompose-tried.json"
+    if not f.exists():
+        return False
+    try:
+        return task_id in json.loads(f.read_text())
+    except Exception:
+        return False
+
+
+def mark_decompose_tried(project_dir, task_id):
+    f = Path(project_dir) / ".hermes-worker-decompose-tried.json"
+    data = []
+    if f.exists():
+        try:
+            data = json.loads(f.read_text())
+        except Exception:
+            data = []
+    if task_id not in data:
+        data.append(task_id)
+        f.write_text(json.dumps(data))
+
+
+def decompose_task_via_model(task, project_dir, cfg, glob_cfg, env):
+    """Ask the model for a subtask breakdown only - no file/terminal tools,
+    no implementation. Much cheaper than a full agentic attempt: single
+    completion, capped timeout, nothing to verify or revert.
+
+    Returns a list of subtask title strings, or None if the model didn't
+    return something in the expected shape (never invented/guessed - a
+    malformed response just means "don't decompose", not "decompose badly").
+    """
+    max_sub = cfg.get("max_subtasks", 5)
+    prompt = (
+        "You are a technical project-planning assistant. Respond with TEXT "
+        "ONLY - do not call any file, terminal, search, or other tools.\n\n"
+        f"TASK: {task['task']}\n"
+        f"NOTES: {task.get('notes', '')}\n\n"
+        f"This task bundles multiple pieces of work into one. Break it into "
+        f"between 2 and {max_sub} smaller subtasks, ordered so each one "
+        f"builds on the previous and can be implemented (and compiled) on "
+        f"its own. Respond with EXACTLY one line per subtask, in this "
+        f"literal format and nothing else:\n"
+        f"SUBTASK: <short description>\n"
+    )
+    sem = FileLock(LOCKS_DIR / "model-slot-0.lock",
+                   label=f"{Path(project_dir).name}:decompose:{task['id']}")
+    sem.acquire()
+    try:
+        code, out = run(
+            [glob_cfg["hermes_bin"], "--no-restore-cwd", "--yolo", "-z", prompt],
+            project_dir, env, cfg.get("decompose_timeout_sec", 300))
+    finally:
+        sem.release()
+
+    if code != 0:
+        return None
+    titles = []
+    for line in out.splitlines():
+        m = re.match(r"SUBTASK:\s*(.+)", line.strip(), re.IGNORECASE)
+        if m and m.group(1).strip():
+            titles.append(m.group(1).strip())
+    if not (2 <= len(titles) <= max_sub):
+        return None
+    return titles
+
+
+def apply_decomposition(csv_path, parent_row, titles, project_dir):
+    """Replace parent_row with lettered subtask rows (9 -> 9a, 9b, 9c, ...),
+    matching this backlog's existing decomposition convention. Subtasks form
+    a dependency chain; the first inherits the parent's original deps, so
+    downstream rows that depended on the parent only need to depend on the
+    LAST subtask (transitively satisfies the whole chain) - rewritten here.
+
+    Returns the new id list, or None if it can't be applied safely (id
+    collision, or the parent id already carries a letter suffix - decomposing
+    an already-decomposed task would need a different id scheme, so this
+    just declines rather than guessing one).
+    """
+    rows = read_tasks(csv_path)
+    parent_id = parent_row["id"]
+    if not re.fullmatch(r"[0-9]+", parent_id):
+        return None
+
+    suffixes = "abcdefghij"
+    titles = titles[:len(suffixes)]
+    new_ids = [parent_id + suffixes[i] for i in range(len(titles))]
+    existing_ids = {r["id"] for r in rows}
+    if any(nid in existing_ids for nid in new_ids):
+        return None
+
+    original_head = (parent_row.get("notes") or "").split("|")[0].strip()
+    new_rows = []
+    for i, (nid, title) in enumerate(zip(new_ids, titles)):
+        notes = original_head if i == 0 else f"depends on #{new_ids[i - 1]}"
+        new_rows.append({
+            "id": nid, "task": title, "status": "todo",
+            "priority": parent_row.get("priority", "medium"), "notes": notes,
+        })
+
+    last_id = new_ids[-1]
+    ref_pat = re.compile(r"#" + re.escape(parent_id) + r"(?![0-9a-zA-Z])")
+    out_rows = []
+    for r in rows:
+        if r["id"] == parent_id:
+            out_rows.extend(new_rows)
+            continue
+        notes = r.get("notes") or ""
+        if ref_pat.search(notes):
+            r = dict(r)
+            r["notes"] = ref_pat.sub("#" + last_id, notes)
+        out_rows.append(r)
+
+    write_tasks(csv_path, out_rows)
+    git(project_dir, "add", csv_path.name)
+    git(project_dir, "commit", "-m",
+        f"worker: decompose task {parent_id} into {', '.join(new_ids)}\n\n"
+        f"Auto-decomposed - the task bundled multiple deliverables and/or "
+        f"repeatedly failed verification as a single attempt. Any row that "
+        f"depended on #{parent_id} now depends on #{last_id} (the end of "
+        f"the new chain), which transitively requires all of "
+        f"{', '.join(new_ids)} to be done.")
+    return new_ids
+
+
 def run(cmd, cwd, env, timeout):
     try:
         p = subprocess.run(cmd, cwd=cwd, env=env, timeout=timeout,
@@ -385,7 +527,8 @@ def do_one_task(project_dir, cfg, glob_cfg, env, dry_run=False):
         return "empty"
 
     tid = task["id"]
-    prior = last_failure(project_dir, tid) if attempts_of(project_dir, tid) else None
+    n_attempts = attempts_of(project_dir, tid)
+    prior = last_failure(project_dir, tid) if n_attempts else None
     write_status(project_dir, cfg, rows, current=tid)
     log(project_dir, f"[{tid}] START  {task['task'][:110]}"
                      + (f"  (retry after {prior['phase']})" if prior else ""))
@@ -394,6 +537,40 @@ def do_one_task(project_dir, cfg, glob_cfg, env, dry_run=False):
         log(project_dir, f"[{tid}] DRY-RUN prompt:\n"
                          f"{build_prompt(task, cfg, project_dir, prior)}")
         return "empty"
+
+    # Auto-decomposition: detect first, decompose only if required.
+    # - Proactive: a brand-new task that reads like several bundled
+    #   deliverables gets a chance to split before the first (expensive,
+    #   tool-using) implementation attempt.
+    # - Reactive: a task that has struggled through every attempt but one
+    #   gets a decomposition attempt as a last resort before its final
+    #   attempt burns out and it's marked blocked.
+    # Either way this is a single cheap text-only model call, not a full
+    # agentic attempt, and a malformed response just means "skip it, try
+    # the task as-is" rather than "decompose badly".
+    if cfg.get("auto_decompose", True) and re.fullmatch(r"[0-9]+", tid) \
+            and not decompose_tried(project_dir, tid):
+        proactive = n_attempts == 0 and is_complex_heuristic(task["task"])
+        reactive = n_attempts > 0 and n_attempts >= cfg["max_attempts"] - 1
+        if proactive or reactive:
+            mark_decompose_tried(project_dir, tid)
+            reason = "looks like bundled deliverables" if proactive \
+                else f"struggling ({n_attempts}/{cfg['max_attempts']} attempts used)"
+            log(project_dir, f"[{tid}] considering decomposition - {reason}")
+            titles = decompose_task_via_model(task, project_dir, cfg, glob_cfg, env)
+            if titles:
+                new_ids = apply_decomposition(csv_path, task, titles, project_dir)
+                if new_ids:
+                    log(project_dir,
+                        f"[{tid}] decomposed into {', '.join(new_ids)}")
+                    write_status(project_dir, cfg, read_tasks(csv_path), current=None)
+                    return "decomposed"
+                log(project_dir, f"[{tid}] decomposition proposed but could "
+                                 f"not be applied (id collision?) - "
+                                 f"proceeding with original task")
+            else:
+                log(project_dir, f"[{tid}] decomposition attempt produced no "
+                                 f"usable subtasks - proceeding with original task")
 
     # Never start on a dirty tree - a leftover diff would get miscredited to
     # this task and committed.
@@ -535,7 +712,7 @@ def run_project(project_dir, once=False, dry_run=False, max_tasks=None):
     signal.signal(signal.SIGINT, _sig)
     signal.signal(signal.SIGTERM, _sig)
 
-    counts = {"done": 0, "failed": 0}
+    counts = {"done": 0, "failed": 0, "decomposed": 0}
     try:
         if cfg.get("branch"):
             _, cur = git(project_dir, "branch", "--show-current")
@@ -550,13 +727,21 @@ def run_project(project_dir, once=False, dry_run=False, max_tasks=None):
                 log(project_dir, "no eligible tasks remain")
                 break
             counts[res if res in counts else "failed"] += 1
+            if res == "decomposed":
+                # Free action - planning, not implementing. Loop straight
+                # into the new first subtask instead of counting this as
+                # the one task --once asked for.
+                if stop["flag"]:
+                    break
+                continue
             if once or stop["flag"]:
                 break
             if max_tasks and sum(counts.values()) >= max_tasks:
                 log(project_dir, f"reached --max-tasks {max_tasks}")
                 break
         log(project_dir, f"worker stopping: {counts['done']} done, "
-                         f"{counts['failed']} failed this run")
+                         f"{counts['failed']} failed, "
+                         f"{counts['decomposed']} decomposed this run")
     finally:
         try:
             write_status(project_dir, cfg,
