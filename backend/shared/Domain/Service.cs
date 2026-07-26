@@ -1,6 +1,6 @@
-using Nesty;
+using Nestly.BuildingBlocks.Primitives;
 
-namespace Nesty.Domain;
+namespace Nestly.Domain;
 
 public class Service : Entity<Guid>
 {
