@@ -13,8 +13,11 @@
     "~/.dotnet",
     "~/.dotnet/tools"
   ],
-  "max_attempts": 3,
-  "task_timeout_sec": 900,
+  "max_attempts": 2,
+  "task_timeout_sec": 300,
+  "auto_decompose": true,
+  "max_subtasks": 5,
+  "decompose_timeout_sec": 180,
   "context_files": [
     "AGENTS.md"
   ]
