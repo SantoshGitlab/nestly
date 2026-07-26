@@ -47,12 +47,30 @@ For each task you work on:
    exactly what broke this project's task list before.
 6. Commit your work with a clear message referencing the task id.
 
-## Known project state (as of this cleanup)
+## Known project state (audited against actual code, not assumed from status)
 
-Tasks 1-39 are trustworthy pre-existing "done" work (solution scaffolding,
-building blocks, database/EF setup, DevOps, Identity/Customer modules,
-Catalog schema) — verified present under `backend/shared/`. Everything from
-task 40 onward was touched by a broken prior automation and has been reset to
-`todo` pending real (re-)verification; some of that work may already be
-correct and just need a quick `dotnet build` confirmation rather than a full
-rewrite — check before reimplementing from scratch.
+Only tasks 1-8 and 10-16 are genuinely done: solution wiring, BuildingBlocks
+primitives (Result/Error/Entity/AggregateRoot/ValueObject), the exception
+middleware, Serilog, the FluentValidation pipeline, DbContext/Npgsql wiring,
+health checks, API versioning/OpenAPI, both Dockerfiles, docker-compose, CI,
+and both frontend scaffolds.
+
+**Everything else is genuinely `todo`**, including several tasks that were
+initially (wrongly) trusted because they had no suspicious automation
+annotation — an audit against the actual filesystem found they were never
+implemented at all: no migrations were ever generated (task 9), no Redis/
+Hangfire/Options-pattern/audit-log/OTP-implementation/JWT/controllers exist
+anywhere in `backend/` (tasks 17-31), no auth/profile screens exist in the
+frontend (tasks 32-33, though address screens do exist with no backend to
+call — task 34), no tests exist anywhere (task 35), the API contracts doc is
+a 277-byte stub (task 36), the Catalog/Geography/Serviceability/Slot schemas
+were never actually mapped into the DB model (tasks 37-39, 43-44 — Service/
+ServiceAddOn/ServiceFaq/ServiceMedia exist as classes but have zero EF
+configurations, so they aren't part of the database model yet either).
+
+**Lesson for whoever works this backlog next: a task's `status` column is not
+evidence.** Before treating any `done` task as a safe foundation to build on,
+grep for the concrete artifact it claims (the entity class, the EF
+configuration, the controller, the test file) rather than trusting the CSV.
+That is exactly the assumption that let ~24 false-`done` tasks slip through
+the first correction pass on this file.
