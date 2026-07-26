@@ -1,9 +1,0 @@
-using System;
-
-namespace backend.shared.Application.Domain
-{
-    public class ValidationResult
-    {
-        // ... rest of the code ...
-    }
-}
