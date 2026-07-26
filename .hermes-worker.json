@@ -10,7 +10,8 @@
     "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
   },
   "path_prepend": [
-    "~/.dotnet"
+    "~/.dotnet",
+    "~/.dotnet/tools"
   ],
   "max_attempts": 3,
   "task_timeout_sec": 900,
