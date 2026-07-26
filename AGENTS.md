@@ -15,7 +15,13 @@ not be trusted over the root file.
 For each task you work on:
 
 1. Pick a `todo` row whose dependencies (see the `notes` column, "depends on
-   #N") are already `done`.
+   #N") are already `done`. **The task id is the literal string in the `id`
+   column** (e.g. `40a`, `40b` — decomposed subtasks use lettered suffixes).
+   It is NOT the same as the file's line number — row `40a` happens to sit on
+   line 41 of `tasks.csv` (line 1 is the header) purely because rows 1-39
+   aren't decomposed, but never report or use a line number as if it were the
+   id. When reading the file with a line-numbering tool, strip the line-number
+   prefix before quoting or referencing the id.
 2. Read the `notes` column carefully — many rows have a note like "reset:
    previously auto-marked done by unverified local-model automation... needs
    real implementation" or point at `_salvage/` for a relevant draft. A
