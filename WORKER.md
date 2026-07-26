@@ -154,6 +154,60 @@ A RAM guard also pauses before each model call if free memory is below
 `min_free_ram_gb`, and gives up on that cycle after 10 minutes rather than
 hanging forever.
 
+## Automatic decomposition
+
+Complex tasks get slower and less reliable in a single agentic attempt — the
+model has to explore several files, run real toolchain commands, maybe fix
+compile errors, all while its own context keeps growing (and generation gets
+slower as it grows). The worker detects this and splits a task into
+sequential subtasks rather than pushing through a single, longer attempt.
+
+Two detection paths, "detect first, decompose only if required":
+
+- **Proactive** — before a task's *first* attempt, a cheap heuristic flags
+  ones that read like bundled deliverables (3+ semicolon-separated clauses,
+  or a description ≥22 words). Many rows in this backlog are written exactly
+  that way ("Slot windows; day-of-week rules; holidays/blackouts; cutoffs;
+  advance-days; capacity").
+- **Reactive** — a task that's used up all but its last attempt gets one
+  decomposition attempt as a last resort before it would otherwise be marked
+  `blocked`, regardless of what the heuristic said. Repeated failure is
+  itself evidence the task was too large for one shot.
+
+The decomposition request itself is a single **text-only** model call — no
+file/terminal tools, no implementation, capped at `decompose_timeout_sec`
+(default 300s). Far cheaper than a full agentic attempt. If the response
+doesn't parse into 2-`max_subtasks` clean lines, decomposition is simply
+skipped and the task runs as originally written — a malformed response never
+triggers a guessed decomposition.
+
+When it does apply, the parent row (e.g. `9`) is replaced with lettered
+subtask rows (`9a`, `9b`, `9c`, ...), the same convention this backlog already
+uses for its hand-decomposed groups (`40` → `40a`...`40e`). Subtasks form a
+dependency chain — `9b` depends on `9a`, `9c` on `9b` — the first inherits
+the parent's original dependencies, and any other row that depended on `9`
+gets rewritten to depend on `9c` instead (which transitively requires the
+whole chain). This restructuring is committed on its own, separately from any
+code change.
+
+Declines safely (falls through to a normal attempt) on an id collision, or if
+the parent id already carries a letter suffix — decomposing an
+already-decomposed task would need a different id scheme, so it just declines
+rather than guessing one. A task is only ever offered one decomposition
+attempt (tracked in `.hermes-worker-decompose-tried.json`), so a task that
+still struggles after being split doesn't get split again on every
+subsequent failure.
+
+Config knobs, in `.hermes-worker.json`:
+
+```json
+{
+  "auto_decompose": true,
+  "max_subtasks": 5,
+  "decompose_timeout_sec": 300
+}
+```
+
 ## Task selection and retries
 
 A task is eligible when its status is `todo`, every id in its `depends on #…`
