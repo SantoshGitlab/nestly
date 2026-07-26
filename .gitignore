@@ -52,3 +52,10 @@ dashboard/index.html
 .csv-lock
 .active-workers
 .claude-timed-out-*
+
+# hermes task_worker runtime state
+.hermes-worker.log
+.hermes-worker-attempts.json
+.hermes-worker-failures.jsonl
+.hermes-worker-status.json
+tasks.csv.tmp
