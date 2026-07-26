@@ -7,7 +7,9 @@ id,task,status,priority,notes
 6,BuildingBlocks - Structured logging with correlation IDs: Serilog structured logging; correlation ID middleware; enforce no-PII/no-secrets logging rules,done,high,depends on #1
 7,BuildingBlocks - Request validation pipeline: FluentValidation integration; automatic 400 responses with field-level errors,done,high,depends on #3
 8,Database - EF Core + PostgreSQL setup: Npgsql provider; DbContext; snake_case naming convention; connection resiliency; base entity configuration (audit columns),done,high,depends on #1
-9,Database - Migrations infrastructure: EF Core migrations wired to database/migrations; migration apply script for local dev,todo,high,"reset: audited against actual code, found false - no migration has ever been generated (database/migrations/ has only .gitkeep); apply script exists but nothing to apply. Not done."
+9a,Review NestlyDbContext configuration to understand current entity classes and verify which models lack migration scaffolding in database/migrations/,todo,high,"reset: audited against actual code, found false - no migration has ever been generated (database/migrations/ has only .gitkeep); apply script exists but nothing to apply. Not done."
+9b,"Create a list or spec document mapping domain entities (Service, ServiceAddOn, Catalog items from Schema) expected for initial migrations based on the project specification",todo,high,depends on #9a
+9c,Generate EF Core migration files via dotnet ef that create all missing table mappings to database/migrations directory,todo,high,depends on #9b
 10,DevOps - Health check endpoints: Liveness + readiness (DB/Redis) endpoints on both APIs per DEVOPS.md,done,high,depends on #8
 11,API - API versioning and OpenAPI: Versioned route convention (/api/v1); OpenAPI/Swagger UI in development for both APIs,done,high,depends on #1
 12,DevOps - Dockerfiles for both APIs: Multi-stage builds; non-root user; pinned base images,done,high,depends on #1
@@ -46,7 +48,7 @@ id,task,status,priority,notes
 41,Catalog - Public category APIs: List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),todo,high,"depends on #40e | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
 42,Catalog - Public service APIs: Services by category; service detail (inclusions/exclusions/add-ons/policies); search (SRS 11.5-11.6; 24.3),todo,high,"depends on #40e | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
 43,Serviceability - Serviceability validation service: Validate by city/pincode/zone/locality at category and service level; exposed via API (SRS 11.4; 24.4),todo,high,"depends on #39 | reset: audited against actual code, found false - zero serviceability-validation code exists in backend/, and its dependency #39 (serviceability mapping schema) also does not exist. Not done."
-44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),todo,high,"depends on #9 | reset: audited against actual code, found false - Slot.cs/SlotConfiguration.cs exist only as unintegrated drafts in _salvage/slots/ (wrong namespace: backend.shared.* not Nestly.*); the real backend/ has zero Slot entity. Not done."
+44,Slots - Slot rules schema: Slot windows; day-of-week rules; holidays/blackouts; cutoffs; advance-days; capacity (SRS 12.10),todo,high,"depends on #9c | reset: audited against actual code, found false - Slot.cs/SlotConfiguration.cs exist only as unintegrated drafts in _salvage/slots/ (wrong namespace: backend.shared.* not Nestly.*); the real backend/ has zero Slot entity. Not done."
 45a,Slots - Basic slot calculations: time windows,todo,high,"depends on #43 #44 | partial draft in _salvage/slots/Slot.cs; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
 45b,Slots - Add serviceability and cutoff logic,todo,high,"depends on #45a #43 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
 45c,Slots - Add capacity and blackout constraints,todo,high,"depends on #45b | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
@@ -75,7 +77,7 @@ id,task,status,priority,notes
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),todo,high,depends on #60
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),todo,high,depends on #60
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,todo,high,depends on #60
-67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),todo,high,"depends on #9 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
+67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),todo,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification"
 68a,Payments - Define payment gateway interface (create order),todo,high,depends on #67 #58
 68b,Payments - Implement sandbox gateway,todo,high,depends on #68a
 68c,Payments - Add payment order validation and formatting,todo,high,depends on #68b
@@ -150,7 +152,7 @@ id,task,status,priority,notes
 121,Support - Support ticket UI: Ticket list/detail workflow screens,todo,high,depends on #98 #120
 122,Reviews - Review moderation: Hide/unhide/flag/export reviews retaining originals for audit; API + UI (SRS 12.15 and 17.2),todo,high,depends on #96d #85
 123,Reviews - Review moderation UI: Moderation screen with filters,todo,high,depends on #98 #122
-124,CMS - CMS schema and APIs: Tables + CRUD: cms_page; banner; faq with draft/publish; scheduling; media; placement (SRS 12.16; 18),todo,high,depends on #96d #9
+124,CMS - CMS schema and APIs: Tables + CRUD: cms_page; banner; faq with draft/publish; scheduling; media; placement (SRS 12.16; 18),todo,high,depends on #96d #9c
 125,CMS - CMS management UI: Banner; page; FAQ management screens,todo,high,depends on #98 #124
 126,Notifications - Notification template management: Channel-specific templates with variables; preview/test; change audit; API + UI (SRS 12.17),todo,high,depends on #96d #87d
 127,Notifications - Notification template UI: Template editor and preview screens,todo,high,depends on #98 #126
