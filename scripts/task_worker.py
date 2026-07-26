@@ -218,6 +218,45 @@ def record_failure(project_dir, task_id, phase, detail):
         }) + "\n")
 
 
+def last_failure(project_dir, task_id):
+    """Most recent failure record for this task, or None.
+
+    Used to feed the previous attempt's compiler errors back into the next
+    attempt - without this, retries re-send an identical prompt and tend to
+    reproduce an identical failure.
+    """
+    f = Path(project_dir) / ".hermes-worker-failures.jsonl"
+    if not f.exists():
+        return None
+    found = None
+    with f.open() as fh:
+        for line in fh:
+            try:
+                rec = json.loads(line)
+            except Exception:
+                continue
+            if rec.get("task") == task_id:
+                found = rec
+    return found
+
+
+def salient_errors(detail, max_lines=25):
+    """Pull the actual compiler/test errors out of a wall of build output."""
+    if not detail:
+        return ""
+    pats = ("error CS", "error MSB", ": error", "Build FAILED",
+            "Failed!", "error NU")
+    hits, seen = [], set()
+    for line in detail.splitlines():
+        s = line.strip()
+        if any(p in s for p in pats) and s not in seen:
+            seen.add(s)
+            hits.append(s)
+    if not hits:  # no recognisable errors - fall back to the tail
+        return "\n".join(detail.splitlines()[-max_lines:])
+    return "\n".join(hits[:max_lines])
+
+
 def pick_task(rows, project_dir, max_attempts):
     """First todo row whose deps are all done and which hasn't exhausted retries."""
     done = {r["id"] for r in rows if r["status"].strip().lower() == "done"}
@@ -262,18 +301,38 @@ def git_is_clean(project_dir):
     return out.strip() == ""
 
 
-def build_prompt(task, cfg, project_dir):
+def build_prompt(task, cfg, project_dir, prior=None):
     ctx = [n for n in (cfg.get("context_files") or [])
            if (Path(project_dir) / n).exists()]
     ctx_line = (f"Project conventions are documented in: {', '.join(ctx)}. "
                 f"Read them first.\n" if ctx else "")
     verify_line = "\n".join(f"  {c}" for c in cfg.get("verify", []))
+
+    retry_block = ""
+    if prior:
+        phase = prior.get("phase")
+        if phase == "verify":
+            retry_block = (
+                "\nA PREVIOUS ATTEMPT AT THIS TASK FAILED TO COMPILE and was\n"
+                "discarded. These are the errors it produced - do not repeat\n"
+                "them. Read the files involved before editing this time:\n\n"
+                f"{salient_errors(prior.get('detail', ''))}\n")
+        elif phase == "no-changes":
+            retry_block = (
+                "\nA PREVIOUS ATTEMPT AT THIS TASK ENDED WITHOUT WRITING ANY\n"
+                "FILES. Do not just describe or plan the work this time -\n"
+                "actually create/edit the files with your tools.\n")
+        elif phase == "timeout":
+            retry_block = (
+                "\nA PREVIOUS ATTEMPT AT THIS TASK TIMED OUT. Keep the change\n"
+                "minimal and focused; do not explore the repo exhaustively.\n")
+
     return f"""You are implementing ONE task in this repository. Work only in this repo.
 
 TASK ID: {task['id']}
 TASK: {task['task']}
 NOTES: {task.get('notes', '')}
-
+{retry_block}
 {ctx_line}
 Rules:
 - Implement this task properly, matching the existing code's conventions
@@ -326,12 +385,14 @@ def do_one_task(project_dir, cfg, glob_cfg, env, dry_run=False):
         return "empty"
 
     tid = task["id"]
+    prior = last_failure(project_dir, tid) if attempts_of(project_dir, tid) else None
     write_status(project_dir, cfg, rows, current=tid)
-    log(project_dir, f"[{tid}] START  {task['task'][:110]}")
+    log(project_dir, f"[{tid}] START  {task['task'][:110]}"
+                     + (f"  (retry after {prior['phase']})" if prior else ""))
 
     if dry_run:
-        log(project_dir,
-            f"[{tid}] DRY-RUN prompt:\n{build_prompt(task, cfg, project_dir)}")
+        log(project_dir, f"[{tid}] DRY-RUN prompt:\n"
+                         f"{build_prompt(task, cfg, project_dir, prior)}")
         return "empty"
 
     # Never start on a dirty tree - a leftover diff would get miscredited to
@@ -367,7 +428,7 @@ def do_one_task(project_dir, cfg, glob_cfg, env, dry_run=False):
         log(project_dir, f"[{tid}] running hermes")
         code, out = run(
             [glob_cfg["hermes_bin"], "--no-restore-cwd", "--yolo", "-z",
-             build_prompt(task, cfg, project_dir)],
+             build_prompt(task, cfg, project_dir, prior)],
             project_dir, env, cfg["task_timeout_sec"])
     finally:
         sem.release()
