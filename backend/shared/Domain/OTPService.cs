@@ -4,8 +4,12 @@ namespace Nestly.Domain;
 
 public interface IOTPService
 {
-    Task<ValidationResult> GenerateAsync(string phoneNumber);
-    Task<ValidationResult> ValidateAsync(string phoneNumber, string otpCode);
+    // Was Task<ValidationResult> - ValidationResult's constructor is private
+    // and only reachable via WithErrors(), so it can never represent success.
+    // Result (the base type) can represent both, which is what generation/
+    // validation actually need to report.
+    Task<Result> GenerateAsync(string phoneNumber);
+    Task<Result> ValidateAsync(string phoneNumber, string otpCode);
 }
 
 public interface ICustomerService

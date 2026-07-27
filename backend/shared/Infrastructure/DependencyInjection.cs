@@ -3,10 +3,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
+using Nestly.Domain;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
+using Nestly.Infrastructure.Services;
 
 namespace Nestly.Infrastructure;
 
@@ -46,6 +48,7 @@ public static class DependencyInjection
             .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IOTPService, OtpService>();
 
         return services;
     }
