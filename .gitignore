@@ -52,6 +52,8 @@ dashboard/index.html
 .csv-lock
 .active-workers
 .claude-timed-out-*
+.claude-decomposed-*
+.claude-rescue-done-*
 
 # hermes task_worker runtime state
 .hermes-worker.log
