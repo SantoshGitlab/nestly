@@ -4,6 +4,8 @@ Enterprise-grade home services marketplace platform — customers discover, book
 
 Built as a **modular monolith** on Clean Architecture and DDD principles, designed so business modules can be extracted into microservices later without a rewrite.
 
+> **New to this repository?** Read [docs/ORIENTATION.md](docs/ORIENTATION.md) first — it covers what actually exists today versus what is still planned, and the non-obvious conventions that will otherwise cost you time.
+
 ## Technology Stack
 
 | Layer | Technology |

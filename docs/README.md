@@ -19,6 +19,7 @@ Every topic has exactly **one authoritative document**.
 
 | Document | Responsibility |
 |---|---|
+| [ORIENTATION.md](ORIENTATION.md) | **Start here.** What exists today vs. what is planned, how the layers fit together, and the non-obvious rules. The only document describing current repository state |
 | [../.claude/CLAUDE.md](../.claude/CLAUDE.md) | AI behavior, workflow, reasoning and response rules |
 | [PROJECT.md](PROJECT.md) | Business domain, project vision, goals, users and modules |
 | [SRS.md](SRS.md) | Full Software Requirements Specification (v2) — functional, workflow, validation, RBAC, screen, API, and operational requirements |
