@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Nestly.AdminApi</RootNamespace>
+    <UserSecretsId>59c5c3f6-c098-4e9a-bb0d-f545cd652428</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
