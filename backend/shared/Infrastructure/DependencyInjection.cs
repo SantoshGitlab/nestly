@@ -2,9 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Nestly.Application;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
+using Nestly.Infrastructure.Persistence.Repositories;
 
 namespace Nestly.Infrastructure;
 
@@ -42,6 +44,8 @@ public static class DependencyInjection
         services
             .AddHealthChecks()
             .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
 
         return services;
     }
