@@ -61,3 +61,5 @@ dashboard/index.html
 .hermes-worker-decompose-tried.json
 tasks.csv.tmp
 __pycache__/
+.claude-verify-errors*
+.autopilot-memory.json
