@@ -45,8 +45,8 @@ Desktop.ini
 .claude-auto-worker.log
 dashboard/index.html
 .task-completions/
-.claude-task-attempts
-.claude-task-start
+.claude-task-attempts*
+.claude-task-start*
 .aider*
 .claude-verify-errors
 .csv-lock
