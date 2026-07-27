@@ -1,0 +1,152 @@
+ID,Phase,Module,Task,Description,Type,Priority,Dependencies,Status
+T001,Phase 0 - Foundation,Solution,Repair solution and project wiring,"Verify Nestly.sln includes all projects; set project references: APIs -> Application -> Domain, Infrastructure -> Application/Domain, BuildingBlocks referenced by all",Backend,P0,,Done
+T002,Phase 0 - Foundation,Solution,Remove WeatherForecast template code,Delete template controllers/models from ConsumerApi and AdminApi,Backend,P0,T001,Done
+T003,Phase 0 - Foundation,BuildingBlocks,Implement Result and Error primitives,Result<T> / error taxonomy (Validation Business Infrastructure Unexpected) per CLAUDE.md error categories,Backend,P0,T001,Done
+T004,Phase 0 - Foundation,BuildingBlocks,Implement domain base primitives,"Base Entity, AggregateRoot, ValueObject, domain event abstractions",Backend,P0,T001,Done
+T005,Phase 0 - Foundation,BuildingBlocks,Global exception handling middleware,ProblemDetails error contract; never expose stack traces; consistent error responses across both APIs,Backend,P0,T003,Done
+T006,Phase 0 - Foundation,BuildingBlocks,Structured logging with correlation IDs,"Serilog structured logging, correlation ID middleware, enforce no-PII/no-secrets logging rules",Backend,P0,T001,Done
+T007,Phase 0 - Foundation,BuildingBlocks,Request validation pipeline,FluentValidation integration; automatic 400 responses with field-level errors,Backend,P0,T003,Done
+T008,Phase 0 - Foundation,Database,EF Core + PostgreSQL setup,"Npgsql provider, DbContext, snake_case naming convention, connection resiliency, base entity configuration (audit columns)",Database,P0,T001,Done
+T009,Phase 0 - Foundation,Database,Migrations infrastructure,EF Core migrations wired to database/migrations; migration apply script for local dev,Database,P0,T008,Done
+T010,Phase 0 - Foundation,DevOps,Health check endpoints,Liveness + readiness (DB/Redis) endpoints on both APIs per DEVOPS.md,Backend,P0,T008,Done
+T011,Phase 0 - Foundation,API,API versioning and OpenAPI,"Versioned route convention (/api/v1), OpenAPI/Swagger UI in development for both APIs",Backend,P0,T001,Done
+T012,Phase 0 - Foundation,DevOps,Dockerfiles for both APIs,Multi-stage builds; non-root user; pinned base images,DevOps,P0,T001,Done
+T013,Phase 0 - Foundation,DevOps,docker-compose for local development,"Compose file: consumer-api, admin-api, PostgreSQL, Redis with env-based config",DevOps,P0,T012,Done
+T014,Phase 0 - Foundation,DevOps,CI pipeline,"Build, unit tests, integration tests (disposable Postgres/Redis), analyzers/lint on every PR",DevOps,P0,T013,Done
+T015,Phase 0 - Foundation,Frontend,Scaffold customer-web Next.js app,"TypeScript, ESLint, base layout, API client setup, env config",Frontend,P0,,InProgress
+T016,Phase 0 - Foundation,Frontend,Scaffold admin-web Next.js app,"TypeScript, ESLint, base layout, API client setup, env config",Frontend,P0,,InProgress
+T017,Phase 0 - Foundation,Infrastructure,Redis caching abstraction,Distributed cache registration + typed cache helper for catalog/session use,Backend,P1,T013,Todo
+T018,Phase 0 - Foundation,Infrastructure,Hangfire background job setup,Hangfire server + dashboard (admin-only) + retry conventions,Backend,P1,T008,Todo
+T019,Phase 0 - Foundation,Configuration,Strongly typed configuration,"Options pattern per module, Development/Testing/Staging/Production env files, user-secrets for local",Backend,P0,T001,InProgress
+T020,Phase 0 - Foundation,Audit,Audit log infrastructure,"audit_log table + audit writer abstraction capturing actor, entity, action, old/new values, timestamp, IP (SRS 21)",Backend,P0,T008,Todo
+T021,Phase 1 - Identity & Customer,Identity,Customer identity schema,"Tables: customer, customer_auth_identity, customer_session, customer_otp with status fields (SRS 23.1)",Database,P0,T009,Todo
+T022,Phase 1 - Identity & Customer,Identity,Customer aggregate and account rules,"Customer domain model: status (active/blocked/unverified/soft-deleted), uniqueness rules for mobile/email",Backend,P0,"T004,T021",Todo
+T023,Phase 1 - Identity & Customer,Identity,OTP service,"OTP generation/validation with expiry, retry limits, abuse control (SRS 11.2.1, 28.1)",Backend,P0,T022,Todo
+T024,Phase 1 - Identity & Customer,Identity,Registration API,Mobile+OTP registration; configurable email+password mode; consent capture (SRS 11.2.1),Backend,P0,"T023,T011",Todo
+T025,Phase 1 - Identity & Customer,Identity,Login and JWT issuance,"Login via OTP or email/password; JWT access+refresh tokens, session invalidation on logout (SRS 11.2.2)",Backend,P0,T024,Todo
+T026,Phase 1 - Identity & Customer,Identity,Login throttling and lockout,Rate limiting on OTP and login attempts; account lockout policy,Backend,P0,T025,Todo
+T027,Phase 1 - Identity & Customer,Identity,Forgot/reset password flow,Reset with verification when password auth is enabled,Backend,P1,T025,Todo
+T028,Phase 1 - Identity & Customer,Customer,Profile APIs,"Get/update profile, change mobile/email with re-verification, communication preferences (SRS 11.2.3)",Backend,P0,T025,Todo
+T029,Phase 1 - Identity & Customer,Customer,Address schema,customer_address table with lat/long contact fields and default flag (SRS 11.3.2),Database,P0,T021,Todo
+T030,Phase 1 - Identity & Customer,Customer,Address CRUD APIs,"Add/edit/delete/list, set default; deleted addresses must not affect booking snapshots (SRS 11.3)",Backend,P0,"T028,T029",Todo
+T031,Phase 1 - Identity & Customer,Notifications,Communication provider abstraction,SMS/Email provider interface + sandbox implementation; OTP delivery wiring (SRS 30.2),Backend,P0,T023,Todo
+T032,Phase 1 - Identity & Customer,Frontend,Customer auth screens,"Login, registration, OTP verification flows in customer-web (SRS 25.1)",Frontend,P0,"T015,T025",Todo
+T033,Phase 1 - Identity & Customer,Frontend,Customer profile screen,View/edit profile and preferences,Frontend,P1,T032,Todo
+T034,Phase 1 - Identity & Customer,Frontend,Address book screens,"Address list, add/edit forms, default selection",Frontend,P0,"T032,T030",Todo
+T035,Phase 1 - Identity & Customer,QA,Identity module test suite,"Unit + integration tests: OTP expiry/retry, uniqueness, throttling, JWT lifecycle",QA,P0,T025,Todo
+T036,Phase 1 - Identity & Customer,Docs,Auth/profile/address API contracts,Document request/response contracts per API.md conventions,Docs,P1,T030,Todo
+T037,Phase 2 - Catalog & Serviceability,Catalog,Catalog schema,"Tables: category, service, service_addon, service_media, service_faq, service_price (SRS 23.2)",Database,P0,T009,Todo
+T038,Phase 2 - Catalog & Serviceability,Geography,Geography master schema,"Tables: city, state, pincode, zone, locality (SRS 12.9.1)",Database,P0,T009,Todo
+T039,Phase 2 - Catalog & Serviceability,Serviceability,Serviceability mapping schema,Category-city and service-pincode/locality mappings + blackout support (SRS 23.2),Database,P0,"T037,T038",Todo
+T040,Phase 2 - Catalog & Serviceability,Catalog,Catalog domain model,"Category/Service/AddOn aggregates with activation, ordering, pricing type rules (SRS 12.5-12.7)",Backend,P0,"T004,T037",Todo
+T041,Phase 2 - Catalog & Serviceability,Catalog,Public category APIs,List categories (city-filtered) and category detail with services and FAQs (SRS 11.5),Backend,P0,T040,Todo
+T042,Phase 2 - Catalog & Serviceability,Catalog,Public service APIs,"Services by category, service detail (inclusions/exclusions/add-ons/policies), search (SRS 11.5-11.6, 24.3)",Backend,P0,T040,Todo
+T043,Phase 2 - Catalog & Serviceability,Serviceability,Serviceability validation service,"Validate by city/pincode/zone/locality at category and service level, exposed via API (SRS 11.4, 24.4)",Backend,P0,T039,Todo
+T044,Phase 2 - Catalog & Serviceability,Slots,Slot rules schema,"Slot windows, day-of-week rules, holidays/blackouts, cutoffs, advance-days, capacity (SRS 12.10)",Database,P0,T009,Todo
+T045,Phase 2 - Catalog & Serviceability,Slots,Slot engine,"Availability computation honoring serviceability, cutoff, advance-days, capacity; reusable for reschedule (SRS 11.8, 15.2)",Backend,P0,"T043,T044",Todo
+T046,Phase 2 - Catalog & Serviceability,Slots,Slot APIs,Get available slots for service+address+date; revalidate slot (SRS 24.4),Backend,P0,T045,Todo
+T047,Phase 2 - Catalog & Serviceability,Pricing,Pricing rules service,"Base, add-on, quantity, city-wise, visit charge, tax/GST, fees per SRS 11.9.1",Backend,P0,T040,Todo
+T048,Phase 2 - Catalog & Serviceability,Pricing,Price calculation API,Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),Backend,P0,T047,Todo
+T049,Phase 2 - Catalog & Serviceability,Performance,Catalog read caching,Redis caching for categories/services/serviceability with invalidation on admin changes,Backend,P1,"T017,T041",Todo
+T050,Phase 2 - Catalog & Serviceability,Frontend,Home page,"Hero banners, search, category tiles, city selector, trust markers (SRS 11.1)",Frontend,P0,"T015,T041",Todo
+T051,Phase 2 - Catalog & Serviceability,Frontend,Category pages,Category listing and detail pages with service cards (SRS 11.5),Frontend,P0,T050,Todo
+T052,Phase 2 - Catalog & Serviceability,Frontend,Service detail page,"Full detail: inclusions, add-ons, pricing, FAQs, policies, reviews summary (SRS 11.6)",Frontend,P0,"T051,T042",Todo
+T053,Phase 2 - Catalog & Serviceability,Frontend,Location and serviceability UX,"City/pincode selection, non-serviceable blocking messages (SRS 11.4.3)",Frontend,P0,"T050,T043",Todo
+T054,Phase 2 - Catalog & Serviceability,QA,Catalog and slot engine tests,"Serviceability dimensions, slot cutoff/blackout/capacity edge cases, price calc scenarios",QA,P0,"T046,T048",Todo
+T055,Phase 3 - Booking Core,Booking,Booking schema,"Tables: booking, booking_item, booking_addon_item, booking_status_history + snapshot columns (SRS 23.3)",Database,P0,T009,Todo
+T056,Phase 3 - Booking Core,Booking,Booking aggregate and state machine,13-state lifecycle with enforced transition matrix; status history separate from current status (SRS 13 and 31),Backend,P0,"T004,T055",Todo
+T057,Phase 3 - Booking Core,Booking,Booking summary service,"Cart model (single-service Phase 1 configurable), summary with price breakdown and policy display (SRS 11.7)",Backend,P0,"T048,T056",Todo
+T058,Phase 3 - Booking Core,Booking,Booking creation orchestration,"Preconditions: identity, active catalog, serviceable address, valid slot, price snapshot, payment policy (SRS 11.12.1, 32.1)",Backend,P0,"T057,T046,T030",Todo
+T059,Phase 3 - Booking Core,Booking,Booking snapshot persistence,"Immutable snapshots: customer, address, service, add-ons, slot, price, coupon, tax (SRS 8.2, 11.12.2)",Backend,P0,T058,Todo
+T060,Phase 3 - Booking Core,Booking,Customer booking APIs,"Create booking, list (upcoming/completed/cancelled), booking detail with status timeline (SRS 11.13, 24.6)",Backend,P0,T059,Todo
+T061,Phase 3 - Booking Core,Booking,Status mapping layer,Customer-visible status labels distinct from internal operational status (SRS 13.2),Backend,P1,T056,Todo
+T062,Phase 3 - Booking Core,Frontend,Booking summary page,"Cart/summary with add-on, address, slot, coupon, price breakdown, policy summary (SRS 11.7)",Frontend,P0,"T052,T057",Todo
+T063,Phase 3 - Booking Core,Frontend,Slot selection UI,"Date picker + time windows, disabled slots, graceful failure on stale slot (SRS 11.8)",Frontend,P0,"T062,T046",Todo
+T064,Phase 3 - Booking Core,Frontend,Booking success page,"Confirmation: booking ID, summary, guidance, link to detail (SRS 11.12.3)",Frontend,P0,T060,Todo
+T065,Phase 3 - Booking Core,Frontend,Order history and detail pages,"Booking list tabs and full detail with timeline, refund info, action CTAs (SRS 11.13)",Frontend,P0,T060,Todo
+T066,Phase 3 - Booking Core,QA,Booking lifecycle tests,"State transition matrix coverage, snapshot immutability, concurrent slot race cases",QA,P0,T060,Todo
+T067,Phase 4 - Payments & Financial,Payments,Financial schema,"Tables: payment_transaction, payment_attempt, refund_transaction, wallet_ledger, coupon, coupon_redemption (SRS 23.4)",Database,P0,T009,Todo
+T068,Phase 4 - Payments & Financial,Payments,Payment gateway abstraction,Gateway interface + create payment order flow; sandbox implementation (SRS 30.1),Backend,P0,"T067,T058",Todo
+T069,Phase 4 - Payments & Financial,Payments,Payment verification and webhook,"Signed callback verification, idempotent duplicate handling, booking-payment mapping (SRS 11.11.3)",Backend,P0,T068,Todo
+T070,Phase 4 - Payments & Financial,Payments,Payment retry flow,Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),Backend,P0,T069,Todo
+T071,Phase 4 - Payments & Financial,Payments,Payment reconciliation support,Transaction records queryable for booking-payment reconciliation (SRS 14.3),Backend,P1,T069,Todo
+T072,Phase 4 - Payments & Financial,Coupons,Coupon domain and validation,"All dimensions: validity, segment, first/repeat, min amount, applicability, usage caps, max discount (SRS 11.10.2)",Backend,P0,T067,Todo
+T073,Phase 4 - Payments & Financial,Coupons,Coupon apply/remove APIs,Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),Backend,P0,"T072,T048",Todo
+T074,Phase 4 - Payments & Financial,Wallet,Wallet ledger,"Append-only ledger, every entry references source event, balance API (SRS 14.5, 11.17)",Backend,P1,T067,Todo
+T075,Phase 4 - Payments & Financial,Refunds,Refund engine,"Full/partial refunds via gateway or wallet credit, policy-driven amounts, trackable status lifecycle (SRS 12.13.2-12.13.3, 31.3)",Backend,P0,"T069,T074",Todo
+T076,Phase 4 - Payments & Financial,Frontend,Checkout and payment page,"Payment initiation, result handling, retry UX (SRS 25.1)",Frontend,P0,"T062,T068",Todo
+T077,Phase 4 - Payments & Financial,Frontend,Coupon UI,"Apply/remove at checkout with success/error messaging, recomputed totals (SRS 11.10.3)",Frontend,P0,"T076,T073",Todo
+T078,Phase 4 - Payments & Financial,Frontend,Wallet and refund pages,"Balance, ledger entries, refund status per booking (SRS 11.17)",Frontend,P1,"T065,T074",Todo
+T079,Phase 4 - Payments & Financial,QA,Financial flows test suite,"Webhook idempotency, duplicate callbacks, coupon abuse cases, refund calculations",QA,P0,"T069,T073,T075",Todo
+T080,Phase 5 - Post-Booking,Cancellation,Cancellation engine,"Eligibility rules, fee/refund computation, actor+reason capture (SRS 11.14, 32.2)",Backend,P0,"T060,T075",Todo
+T081,Phase 5 - Post-Booking,Cancellation,Cancellation API,Customer cancellation with policy summary and refund outcome (SRS 24.6),Backend,P0,T080,Todo
+T082,Phase 5 - Post-Booking,Reschedule,Reschedule engine,"Eligibility window, count limits, slot revalidation via slot engine, fee impact (SRS 11.15, 32.3)",Backend,P0,"T060,T046",Todo
+T083,Phase 5 - Post-Booking,Reschedule,Reschedule API,Get eligible slots + confirm reschedule with history record (SRS 24.6),Backend,P0,T082,Todo
+T084,Phase 5 - Post-Booking,Support,Experience schema,"Tables: review, support_ticket, support_ticket_comment, notification_event (SRS 23.5)",Database,P0,T009,Todo
+T085,Phase 5 - Post-Booking,Reviews,Review submission API,"Completed-booking eligibility, one primary review per booking, optional time window (SRS 11.16, 17)",Backend,P0,"T084,T060",Todo
+T086,Phase 5 - Post-Booking,Support,Support ticket APIs,"Create ticket (categories per SRS 16.1), list, detail; booking-linked and generic tickets (SRS 11.18)",Backend,P0,T084,Todo
+T087,Phase 5 - Post-Booking,Notifications,Notification framework,"Template rendering with variables, channel dispatch (SMS/email), delivery event log (SRS 19)",Backend,P0,"T031,T084,T018",Todo
+T088,Phase 5 - Post-Booking,Notifications,Notification trigger wiring,"Events: welcome, booking confirmed, payment success/failure, cancellation, reschedule, refund, ticket updates (SRS 19.1)",Backend,P0,"T087,T081,T083",Todo
+T089,Phase 5 - Post-Booking,Frontend,Cancellation flow UI,"Policy display, confirmation, refund outcome (SRS 11.14.3)",Frontend,P0,"T065,T081",Todo
+T090,Phase 5 - Post-Booking,Frontend,Reschedule flow UI,Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),Frontend,P0,"T065,T083",Todo
+T091,Phase 5 - Post-Booking,Frontend,Review submission UI,Rating + review form for completed bookings (SRS 25.1),Frontend,P1,"T065,T085",Todo
+T092,Phase 5 - Post-Booking,Frontend,Support ticket UI,Raise issue + ticket status view (SRS 11.18),Frontend,P1,"T065,T086",Todo
+T093,Phase 5 - Post-Booking,QA,Post-booking test suite,"Cancellation/reschedule eligibility matrices, notification event coverage",QA,P0,"T081,T083,T088",Todo
+T094,Phase 6 - Admin Panel,AdminIdentity,Admin RBAC schema,"Tables: admin_user, admin_role, admin_permission, role_permission_mapping (SRS 23.6)",Database,P0,T009,Todo
+T095,Phase 6 - Admin Panel,AdminIdentity,Admin authentication,"Login, strong password policy, throttling, lockout, session timeout, MFA hook, login audit (SRS 12.1)",Backend,P0,"T094,T020",Todo
+T096,Phase 6 - Admin Panel,AdminIdentity,RBAC enforcement engine,"Module+action permission matrix (View/Create/Edit/Delete/Export/Approve/Refund/Cancel/Reschedule/Publish/Configure) enforced via policies (SRS 12.2.3, 20)",Backend,P0,T095,Todo
+T097,Phase 6 - Admin Panel,AdminIdentity,Admin user management APIs,"CRUD, role assignment, activate/deactivate, password reset (SRS 12.2.1)",Backend,P0,T096,Todo
+T098,Phase 6 - Admin Panel,Frontend,Admin app shell,"Login screen, authenticated layout, nav by permission, session handling in admin-web (SRS 25.2)",Frontend,P0,"T016,T095",Todo
+T099,Phase 6 - Admin Panel,Dashboard,Dashboard KPIs,Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),Backend,P1,"T096,T060",Todo
+T100,Phase 6 - Admin Panel,Dashboard,Dashboard UI,KPI widgets and filters in admin-web,Frontend,P1,"T098,T099",Todo
+T101,Phase 6 - Admin Panel,CustomerMgmt,Customer management APIs,"Search/filter, 360 detail (bookings, wallet, coupons, tickets), block/unblock, notes (SRS 12.4)",Backend,P0,"T096,T028",Todo
+T102,Phase 6 - Admin Panel,CustomerMgmt,Customer management UI,Customer list and detail screens with authorized actions,Frontend,P0,"T098,T101",Todo
+T103,Phase 6 - Admin Panel,Catalog,Category management APIs,"CRUD, ordering, media, SEO fields, activation with audit (SRS 12.5)",Backend,P0,"T096,T040,T020",Todo
+T104,Phase 6 - Admin Panel,Catalog,Category management UI,Category list/create/edit screens,Frontend,P0,"T098,T103",Todo
+T105,Phase 6 - Admin Panel,Catalog,Service management APIs,Service/package CRUD with full field set and service-level flags (SRS 12.6),Backend,P0,T103,Todo
+T106,Phase 6 - Admin Panel,Catalog,Service management UI,Service list/create/edit screens,Frontend,P0,"T104,T105",Todo
+T107,Phase 6 - Admin Panel,Catalog,Add-on management APIs,Add-on CRUD + service mapping (SRS 12.7),Backend,P1,T105,Todo
+T108,Phase 6 - Admin Panel,Catalog,Add-on management UI,Add-on list/create/edit screens,Frontend,P1,"T106,T107",Todo
+T109,Phase 6 - Admin Panel,Pricing,Pricing management APIs,"Base/add-on/city/promotional pricing, taxes, fees, effective dates, price change audit (SRS 12.8)",Backend,P0,"T096,T047,T020",Todo
+T110,Phase 6 - Admin Panel,Pricing,Pricing management UI,Pricing list/edit screens,Frontend,P0,"T098,T109",Todo
+T111,Phase 6 - Admin Panel,Serviceability,Serviceability management APIs,Geography master CRUD + category/service serviceability mapping + suspensions (SRS 12.9),Backend,P0,"T096,T043",Todo
+T112,Phase 6 - Admin Panel,Serviceability,Serviceability management UI,Geography and mapping configuration screens,Frontend,P0,"T098,T111",Todo
+T113,Phase 6 - Admin Panel,Slots,Slot configuration APIs,"Slot windows, blackouts, cutoffs, capacity, availability overrides (SRS 12.10)",Backend,P0,"T096,T045",Todo
+T114,Phase 6 - Admin Panel,Slots,Slot configuration UI,Slot rule and override screens,Frontend,P0,"T098,T113",Todo
+T115,Phase 6 - Admin Panel,BookingMgmt,Booking management APIs,"Filterable list, full detail (snapshots, timeline, refunds, tickets, notes), status updates, resend confirmation (SRS 12.11)",Backend,P0,"T096,T060",Todo
+T116,Phase 6 - Admin Panel,BookingMgmt,Booking management UI,Booking list and detail screens with authorized actions,Frontend,P0,"T098,T115",Todo
+T117,Phase 6 - Admin Panel,BookingMgmt,Admin cancel/reschedule/refund operations,"Admin-initiated cancellation, reschedule, full/partial refund with permission checks and audit (SRS 12.11.3, 12.13.2)",Backend,P0,"T115,T080,T082,T075",Todo
+T118,Phase 6 - Admin Panel,Coupons,Coupon management APIs,Coupon CRUD with all rule dimensions + redemption reporting (SRS 12.12),Backend,P1,"T096,T072",Todo
+T119,Phase 6 - Admin Panel,Coupons,Coupon management UI,Coupon list/create/edit + redemption stats screens,Frontend,P1,"T098,T118",Todo
+T120,Phase 6 - Admin Panel,Support,Support ticket management,"Ticket workflow: assign, respond, escalate, resolve, link booking actions; API + UI (SRS 12.14, 16.2)",Backend,P0,"T096,T086",Todo
+T121,Phase 6 - Admin Panel,Support,Support ticket UI,Ticket list/detail workflow screens,Frontend,P0,"T098,T120",Todo
+T122,Phase 6 - Admin Panel,Reviews,Review moderation,Hide/unhide/flag/export reviews retaining originals for audit; API + UI (SRS 12.15 and 17.2),Backend,P1,"T096,T085",Todo
+T123,Phase 6 - Admin Panel,Reviews,Review moderation UI,Moderation screen with filters,Frontend,P1,"T098,T122",Todo
+T124,Phase 6 - Admin Panel,CMS,CMS schema and APIs,"Tables + CRUD: cms_page, banner, faq with draft/publish, scheduling, media, placement (SRS 12.16, 18)",Backend,P1,"T096,T009",Todo
+T125,Phase 6 - Admin Panel,CMS,CMS management UI,"Banner, page, FAQ management screens",Frontend,P1,"T098,T124",Todo
+T126,Phase 6 - Admin Panel,Notifications,Notification template management,"Channel-specific templates with variables, preview/test, change audit; API + UI (SRS 12.17)",Backend,P1,"T096,T087",Todo
+T127,Phase 6 - Admin Panel,Notifications,Notification template UI,Template editor and preview screens,Frontend,P1,"T098,T126",Todo
+T128,Phase 6 - Admin Panel,Reports,Reports and exports,"Standard reports (booking, revenue, refund, coupon, customer, category, city, support, review) + permission-gated async CSV/Excel export (SRS 12.18, 27)",Backend,P1,"T096,T115,T018",Todo
+T129,Phase 6 - Admin Panel,Reports,Reports UI,Report screens with filters and export actions,Frontend,P1,"T098,T128",Todo
+T130,Phase 6 - Admin Panel,Audit,Audit log viewer,Filterable audit trail screen + API (SRS 12.19 audit scope per SRS 21),Backend,P1,"T096,T020",Todo
+T131,Phase 6 - Admin Panel,Settings,System configuration,"Config/feature-flag management: booking, slot, cancellation, reschedule, tax, wallet, coupon settings; API + UI (SRS 12.19)",Backend,P1,T096,Todo
+T132,Phase 6 - Admin Panel,QA,Admin and RBAC test suite,"Permission matrix coverage, admin workflows, audit assertions",QA,P0,"T097,T117",Todo
+T133,Phase 7 - Hardening & Launch,Security,Application security review,"OWASP pass: injection, XSS, CSRF, IDOR, broken access control, payment callback abuse, OTP brute force (SRS 28.3)",QA,P0,"T079,T132",Todo
+T134,Phase 7 - Hardening & Launch,Security,Rate limiting rollout,Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),Backend,P0,T133,Todo
+T135,Phase 7 - Hardening & Launch,Performance,Load and performance testing,"Catalog browse, checkout, concurrent slot booking under promotion-level traffic (SRS 29.1-29.2)",QA,P0,T066,Todo
+T136,Phase 7 - Hardening & Launch,Performance,Query optimization pass,"Execution plan review, index tuning, pagination audits on hot paths (DATABASE.md)",Database,P1,T135,Todo
+T137,Phase 7 - Hardening & Launch,Observability,Metrics and alerting,"Metrics export + alerts for payment, booking, notification failures (SRS 29.6, DEVOPS.md)",DevOps,P0,"T010,T088",Todo
+T138,Phase 7 - Hardening & Launch,DevOps,CD pipeline and environments,"Staging auto-deploy from develop, production deploy from main with approval, migration step, rollback (DEVOPS.md)",DevOps,P0,T014,Todo
+T139,Phase 7 - Hardening & Launch,DevOps,Backup and restore procedure,Automated PostgreSQL backups + documented tested restore drill,DevOps,P0,T138,Todo
+T140,Phase 7 - Hardening & Launch,QA,End-to-end regression suite,Automated E2E: discovery -> booking -> payment -> cancel/reschedule -> refund -> review (TESTING.md pyramid),QA,P0,"T093,T132",Todo
+T141,Phase 7 - Hardening & Launch,QA,UAT execution,Business acceptance against SRS 33 acceptance criteria,QA,P0,T140,Todo
+T142,Phase 7 - Hardening & Launch,Docs,Deployment runbook,"Deploy, rollback, incident response, on-call basics",Docs,P1,T138,Todo
+T143,Phase 7 - Hardening & Launch,Product,Resolve SRS open decisions,"Close SRS 34 items (cart model, COD, slot capacity, wallet phase, refund visibility, coupon stacking, tax display, reschedule fees, multilingual)",Docs,P0,,Todo
+T144,Phase 8 - Partner (Deferred),Partner,Resolve partner open decisions,"Answer PARTNER.md open decisions (assignment model, company vs individual, payout rails, rating impact)",Docs,P3,,Todo
+T145,Phase 8 - Partner (Deferred),Partner,Partner schema,"Identity, KYC, skills, service areas, availability, capacity tables per PARTNER.md",Database,P3,T144,Todo
+T146,Phase 8 - Partner (Deferred),Partner,Partner auth and onboarding,"Registration, OTP login, KYC document submission and verification workflow",Backend,P3,T145,Todo
+T147,Phase 8 - Partner (Deferred),Partner,Assignment bridge,booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,Backend,P3,"T145,T115",Todo
+T148,Phase 8 - Partner (Deferred),Partner,Partner earnings and payouts,Append-only earning ledger + payout batch processing per PARTNER.md,Backend,P3,T147,Todo
+T149,Phase 8 - Partner (Deferred),Partner,partner-api scaffold,"New backend/partner-api project mirroring existing API structure: jobs, availability, earnings endpoints",Backend,P3,T146,Todo
+T150,Phase 8 - Partner (Deferred),Partner,Admin partner management,"Partner CRUD, KYC approval, performance view + Partner/Payout RBAC modules",Backend,P3,"T146,T096",Todo
+T151,Phase 8 - Partner (Deferred),Partner,Partner-facing UI,Partner portal or app for jobs/availability/earnings (platform TBD),Frontend,P3,T149,Todo

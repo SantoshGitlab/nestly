@@ -1,4 +1,35 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Nestly.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Infrastructure is the outermost layer and owns hosting concerns: the
+    Hangfire dashboard (T018) and HTTP-derived audit attribution (T020) both
+    need ASP.NET Core abstractions. Domain and Application stay framework-free.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="8.0.2" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="8.0.1" />
+    <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.24" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Application\Application.csproj" />
@@ -6,10 +37,16 @@
     <ProjectReference Include="..\BuildingBlocks\BuildingBlocks.csproj" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+  <!--
+    EF Core migrations live in database/migrations at the repo root (task 9c),
+    outside this project's own directory tree, so the SDK's default implicit
+    glob (**/*.cs relative to this .csproj) never picks them up. Include them
+    explicitly so they're actually compiled into this assembly - without this
+    `dotnet ef migrations list/script` silently finds zero migrations even
+    though `dotnet build` succeeds (the files just aren't part of any project).
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\..\database\migrations\**\*.cs" LinkBase="Migrations" />
+  </ItemGroup>
 
 </Project>

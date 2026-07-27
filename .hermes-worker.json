@@ -1,0 +1,24 @@
+{
+  "name": "nestly",
+  "tasks_csv": "tasks.csv",
+  "branch": "autopilot-work",
+  "verify": [
+    "dotnet build Nestly.sln"
+  ],
+  "env": {
+    "DOTNET_ROOT": "~/.dotnet",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+  },
+  "path_prepend": [
+    "~/.dotnet",
+    "~/.dotnet/tools"
+  ],
+  "max_attempts": 2,
+  "task_timeout_sec": 600,
+  "auto_decompose": true,
+  "max_subtasks": 5,
+  "decompose_timeout_sec": 180,
+  "context_files": [
+    "AGENTS.md"
+  ]
+}
