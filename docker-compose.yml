@@ -35,6 +35,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Database: Host=postgres;Port=5432;Database=nestly;Username=nestly;Password=nestly_dev
+      Cache__ConnectionString: redis:6379
     ports:
       - "5257:8080"
     depends_on:
@@ -51,6 +52,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Database: Host=postgres;Port=5432;Database=nestly;Username=nestly;Password=nestly_dev
+      Cache__ConnectionString: redis:6379
     ports:
       - "5177:8080"
     depends_on:

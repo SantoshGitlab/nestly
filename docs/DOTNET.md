@@ -193,6 +193,23 @@ Typical scenarios:
 
 Background tasks should be idempotent and recoverable.
 
+### Implementation (T018)
+
+Hangfire, hosted in the API process, backed by the application's PostgreSQL
+database (it provisions its own `hangfire` schema on first run).
+
+- Configure through the `BackgroundJobs` section (`BackgroundJobOptions`).
+- `ServerEnabled` controls whether a process *executes* jobs. The admin API
+  runs the server; the consumer API enqueues only. Tests disable it so they
+  never drain a shared queue.
+- Retry convention is applied globally: bounded attempts with a widening
+  backoff (10s, 1m, 5m, 15m, 1h). A job that exhausts them fails rather than
+  retrying forever.
+- Because a retry re-runs the whole method, **every job must be idempotent**.
+- Jobs must accept and honour a `CancellationToken` so shutdown is graceful.
+- The dashboard is admin-only and mounted **only** in the admin API. It can
+  enqueue and delete jobs, so it must never appear on the customer surface.
+
 ## ASYNCHRONOUS PROGRAMMING
 
 Use asynchronous programming for I/O-bound operations.
@@ -236,6 +253,24 @@ Typical scenarios:
 - Frequently Read Data
 
 Cache invalidation should be deterministic.
+
+### Implementation (T017)
+
+Application code depends on `ICacheService` (Application layer), never on
+`IDistributedCache` directly. The backing store is chosen by configuration:
+Redis when `Cache:ConnectionString` is set, an in-process store otherwise.
+
+- The in-process fallback exists for local development and tests. It is **not**
+  valid for a scaled deployment — each replica would cache independently — so
+  deployed environments must configure a Redis endpoint.
+- Build every key through `CacheKeys`. Inlining key strings at call sites is
+  how writer and invalidator drift apart.
+- Entries are always written with a TTL; `Cache:DefaultExpiration` applies when
+  a caller does not specify one.
+- The cache is advisory. A miss, an unreachable server, or an undeserializable
+  payload degrades to the source of truth and is logged, never thrown.
+- `GetOrCreateAsync` is cache-aside, not a lock: concurrent misses may each run
+  the factory. Do not use it where the factory has side effects.
 
 ## HEALTH CHECKS
 

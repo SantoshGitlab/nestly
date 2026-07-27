@@ -199,6 +199,38 @@ Typical fields include:
 
 Business requirements determine audit scope.
 
+### Column stamping vs. the audit trail
+
+These are two distinct mechanisms and should not be confused:
+
+- **Column stamping** — `IAuditable` entities get `CreatedOnUtc` /
+  `ModifiedOnUtc` populated automatically by `AuditableEntityInterceptor`.
+  This records *when a row last changed*, nothing more.
+- **The audit trail (T020)** — the `audit_log` table records *who did what to
+  which entity, from where*: actor type and id, entity name and id, action,
+  before/after values, IP, correlation id, timestamp.
+
+### Writing audit entries
+
+Use `IAuditLogWriter` (Application layer). It enlists the entry in the current
+unit of work and does **not** save — the caller's `SaveChangesAsync` commits it
+in the same transaction as the change it describes. That is deliberate: a
+rolled-back operation must not leave a phantom audit entry, and a committed one
+must never be missing its record.
+
+Attribution (actor, IP, correlation id) is resolved from the ambient request by
+`IAuditContextProvider`; callers do not supply it and so cannot misattribute an
+action. Work with no request — background jobs, tooling — is recorded as the
+`System` actor.
+
+`OldValues` / `NewValues` are `jsonb` and hold the changed fields only. Callers
+must strip secrets and PII before constructing the entry; the writer cannot know
+which fields of an arbitrary entity are sensitive, and the project rule is
+absolute: never log passwords, tokens, or PII.
+
+The table is append-only — the entity exposes no mutators. An audit trail that
+can be edited after the fact is not an audit trail.
+
 ## SOFT DELETE
 
 Where business requirements require record retention:

@@ -3,7 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Domain;
+using Nestly.Infrastructure.Auditing;
+using Nestly.Infrastructure.BackgroundJobs;
+using Nestly.Infrastructure.Caching;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
@@ -17,9 +21,9 @@ public static class DependencyInjection
     private const string DatabaseConnectionName = "Database";
 
     /// <summary>
-    /// Registers infrastructure services: persistence, health checks, and — as
-    /// each capability lands — caching (T017), background jobs (T018), and
-    /// external providers.
+    /// Registers infrastructure services: persistence, caching (T017),
+    /// background jobs (T018), auditing (T020), health checks, and — as each
+    /// capability lands — external providers.
     /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
@@ -46,6 +50,15 @@ public static class DependencyInjection
         services
             .AddHealthChecks()
             .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+
+        services.AddCaching(configuration);
+        services.AddBackgroundJobs(configuration, connectionString);
+
+        // Audit attribution reads the current request; without this accessor
+        // every user action would be silently attributed to the system.
+        services.AddHttpContextAccessor();
+        services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
+        services.AddScoped<IAuditLogWriter, AuditLogWriter>();
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IOTPService, OtpService>();

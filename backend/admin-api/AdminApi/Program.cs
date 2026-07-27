@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Nestly.Application;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
+using Nestly.Infrastructure.BackgroundJobs;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +47,10 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
+
+// Background-job dashboard (T018) — admin API only, and after authorization so
+// the dashboard's admin-role filter has a populated principal to check.
+app.UseBackgroundJobsDashboard();
 
 app.MapControllers();
 
