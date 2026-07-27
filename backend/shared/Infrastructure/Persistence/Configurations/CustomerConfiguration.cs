@@ -13,7 +13,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.Mobile).IsRequired().HasMaxLength(20);
         builder.HasIndex(x => x.Mobile).IsUnique();
         builder.Property(x => x.Email).HasMaxLength(200);
-        builder.HasIndex(x => x.Email).IsUnique().HasFilter("\"Email\" IS NOT NULL");
+        builder.HasIndex(x => x.Email).IsUnique().HasFilter("email IS NOT NULL");
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Address).HasMaxLength(200);
         builder.Property(x => x.City).HasMaxLength(200);

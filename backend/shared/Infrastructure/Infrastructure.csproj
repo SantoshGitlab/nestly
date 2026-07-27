@@ -24,4 +24,16 @@
     <ProjectReference Include="..\BuildingBlocks\BuildingBlocks.csproj" />
   </ItemGroup>
 
+  <!--
+    EF Core migrations live in database/migrations at the repo root (task 9c),
+    outside this project's own directory tree, so the SDK's default implicit
+    glob (**/*.cs relative to this .csproj) never picks them up. Include them
+    explicitly so they're actually compiled into this assembly - without this
+    `dotnet ef migrations list/script` silently finds zero migrations even
+    though `dotnet build` succeeds (the files just aren't part of any project).
+  -->
+  <ItemGroup>
+    <Compile Include="..\..\..\database\migrations\**\*.cs" LinkBase="Migrations" />
+  </ItemGroup>
+
 </Project>

@@ -56,6 +56,60 @@ namespace Nestly.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "customer_auth_identity",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    customer_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    provider = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    identifier = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    password_hash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    is_primary = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_customer_auth_identity", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "customer_otp",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    customer_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    target = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    purpose = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    code_hash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    consumed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    attempt_count = table.Column<int>(type: "integer", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_customer_otp", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "customer_session",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    customer_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    refresh_token_hash = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    issued_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    expires_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    revoked_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    device_info = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    ip_address = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_customer_session", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "service",
                 columns: table => new
                 {
@@ -137,12 +191,44 @@ namespace Nestly.Infrastructure.Migrations
                 table: "customer",
                 column: "email",
                 unique: true,
-                filter: "\"Email\" IS NOT NULL");
+                filter: "email IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_customer_mobile",
                 table: "customer",
                 column: "mobile",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_customer_auth_identity_customer_id",
+                table: "customer_auth_identity",
+                column: "customer_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_customer_auth_identity_provider_identifier",
+                table: "customer_auth_identity",
+                columns: new[] { "provider", "identifier" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_customer_otp_customer_id",
+                table: "customer_otp",
+                column: "customer_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_customer_otp_target",
+                table: "customer_otp",
+                column: "target");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_customer_session_customer_id",
+                table: "customer_session",
+                column: "customer_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_customer_session_refresh_token_hash",
+                table: "customer_session",
+                column: "refresh_token_hash",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -174,6 +260,15 @@ namespace Nestly.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "customer");
+
+            migrationBuilder.DropTable(
+                name: "customer_auth_identity");
+
+            migrationBuilder.DropTable(
+                name: "customer_otp");
+
+            migrationBuilder.DropTable(
+                name: "customer_session");
 
             migrationBuilder.DropTable(
                 name: "service");
