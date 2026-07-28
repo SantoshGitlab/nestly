@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IAuditLogWriter, AuditLogWriter>();
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<IOTPService, OtpService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email
