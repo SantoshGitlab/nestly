@@ -44,4 +44,7 @@ public class CustomerRepository : ICustomerRepository
 
     public Task<bool> ExistsByEmailAsync(string email) =>
         _context.Set<Customer>().AnyAsync(c => c.Email == email);
+
+    public Task<Customer?> GetByMobileAsync(string mobile) =>
+        _context.Set<Customer>().FirstOrDefaultAsync(c => c.Mobile == mobile);
 }

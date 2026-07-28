@@ -14,17 +14,35 @@ namespace Nestly.ConsumerApi.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly ICustomerRegistrationService _registrationService;
+    private readonly ICustomerLoginService _loginService;
     private readonly IValidator<RequestRegistrationOtpRequest> _otpRequestValidator;
     private readonly IValidator<RegisterCustomerRequest> _registerValidator;
+    private readonly IValidator<RequestLoginOtpRequest> _loginOtpRequestValidator;
+    private readonly IValidator<LoginWithOtpRequest> _loginWithOtpValidator;
+    private readonly IValidator<LoginWithPasswordRequest> _loginWithPasswordValidator;
+    private readonly IValidator<RefreshTokenRequest> _refreshValidator;
+    private readonly IValidator<LogoutRequest> _logoutValidator;
 
     public AuthController(
         ICustomerRegistrationService registrationService,
+        ICustomerLoginService loginService,
         IValidator<RequestRegistrationOtpRequest> otpRequestValidator,
-        IValidator<RegisterCustomerRequest> registerValidator)
+        IValidator<RegisterCustomerRequest> registerValidator,
+        IValidator<RequestLoginOtpRequest> loginOtpRequestValidator,
+        IValidator<LoginWithOtpRequest> loginWithOtpValidator,
+        IValidator<LoginWithPasswordRequest> loginWithPasswordValidator,
+        IValidator<RefreshTokenRequest> refreshValidator,
+        IValidator<LogoutRequest> logoutValidator)
     {
         _registrationService = registrationService;
+        _loginService = loginService;
         _otpRequestValidator = otpRequestValidator;
         _registerValidator = registerValidator;
+        _loginOtpRequestValidator = loginOtpRequestValidator;
+        _loginWithOtpValidator = loginWithOtpValidator;
+        _loginWithPasswordValidator = loginWithPasswordValidator;
+        _refreshValidator = refreshValidator;
+        _logoutValidator = logoutValidator;
     }
 
     /// <summary>Step 1: send a registration OTP to a mobile number (SRS 11.2.1).</summary>
@@ -59,6 +77,90 @@ public class AuthController : ControllerBase
 
         var result = await _registrationService.RegisterAsync(request);
         return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Send a login OTP to an already-registered mobile number (SRS 11.2.2).</summary>
+    [HttpPost("login/otp")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RequestLoginOtp([FromBody] RequestLoginOtpRequest request)
+    {
+        var validation = await _loginOtpRequestValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _loginService.RequestOtpAsync(request);
+        return result.IsSuccess ? Ok() : result.ToProblemResult();
+    }
+
+    /// <summary>Login via mobile OTP (SRS 11.2.2).</summary>
+    [HttpPost("login/otp/verify")]
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LoginWithOtp([FromBody] LoginWithOtpRequest request)
+    {
+        var validation = await _loginWithOtpValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _loginService.LoginWithOtpAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Login via email + password, when password auth is enabled (SRS 11.2.2).</summary>
+    [HttpPost("login/password")]
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LoginWithPassword([FromBody] LoginWithPasswordRequest request)
+    {
+        var validation = await _loginWithPasswordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _loginService.LoginWithPasswordAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Exchange a still-valid refresh token for a new access+refresh pair (rotation, SRS 28.3).</summary>
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    {
+        var validation = await _refreshValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _loginService.RefreshAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Invalidate a session's refresh token (SRS 11.2.2: logout invalidates the active session).</summary>
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
+    {
+        var validation = await _logoutValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _loginService.LogoutAsync(request);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
     private static ModelStateDictionary ToModelState(ValidationResult validation)

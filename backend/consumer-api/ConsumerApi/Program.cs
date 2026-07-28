@@ -14,6 +14,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 // Application layers.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddJwtAuthentication(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -45,6 +46,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -9,5 +9,6 @@ namespace Nestly.Application
         // it here shadowed the base member (CS0108) without changing behaviour.
         Task<bool> ExistsByMobileAsync(string mobile);
         Task<bool> ExistsByEmailAsync(string email);
+        Task<Customer?> GetByMobileAsync(string mobile);
     }
 }
