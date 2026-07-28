@@ -7,30 +7,35 @@ namespace Nestly.Application
     public class Customer : Entity<Guid>
     {
         public string Mobile { get; private set; }
-        public string Email { get; private set; }
+        public string? Email { get; private set; }
         public string Name { get; private set; }
-        public DateTime DateOfBirth { get; private set; }
-        public string Address { get; private set; }
-        public string City { get; private set; }
-        public string State { get; private set; }
-        public string Pincode { get; private set; }
-        public string Country { get; private set; }
+        public DateTime? DateOfBirth { get; private set; }
+        public string? Address { get; private set; }
+        public string? City { get; private set; }
+        public string? State { get; private set; }
+        public string? Pincode { get; private set; }
+        public string? Country { get; private set; }
         public DateTime CreatedAt { get; private set; }
         public DateTime UpdatedAt { get; private set; }
         public CustomerStatus Status { get; private set; }
 
+        // Mobile+OTP is the always-available registration path (SRS 11.2.1)
+        // and collects only mobile/name/email at signup; date of birth and
+        // address are optional and, for address, superseded entirely by the
+        // separate address book (CustomerAddress / SRS 11.3) rather than
+        // living on the customer record.
         public Customer(
             Guid id,
             string mobile,
-            string email,
             string name,
-            DateTime dateOfBirth,
-            string address,
-            string city,
-            string state,
-            string pincode,
-            string country,
-            CustomerStatus status)
+            CustomerStatus status,
+            string? email = null,
+            DateTime? dateOfBirth = null,
+            string? address = null,
+            string? city = null,
+            string? state = null,
+            string? pincode = null,
+            string? country = null)
         {
             Id = id;
             Mobile = mobile;
@@ -54,6 +59,13 @@ namespace Nestly.Application
                 Status = newStatus;
                 UpdatedAt = DateTime.UtcNow;
             }
+        }
+
+        public void UpdateProfile(string name, string? email)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            Email = email;
+            UpdatedAt = DateTime.UtcNow;
         }
 
         public override bool Equals(object? obj)
