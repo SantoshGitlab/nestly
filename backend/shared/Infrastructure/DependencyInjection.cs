@@ -63,6 +63,11 @@ public static class DependencyInjection
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IOTPService, OtpService>();
 
+        // Sandbox in every environment for now (SRS 30.2): no real SMS/email
+        // vendor is configured yet. Swap this registration, not the callers,
+        // when a production provider lands.
+        services.AddScoped<INotificationProvider, SandboxNotificationProvider>();
+
         return services;
     }
 }

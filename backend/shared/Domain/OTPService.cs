@@ -8,8 +8,12 @@ public interface IOTPService
     // and only reachable via WithErrors(), so it can never represent success.
     // Result (the base type) can represent both, which is what generation/
     // validation actually need to report.
-    Task<Result> GenerateAsync(string phoneNumber);
-    Task<Result> ValidateAsync(string phoneNumber, string otpCode);
+    //
+    // Purpose is required on both ends (not just stored) so an OTP issued for
+    // login cannot be replayed to satisfy registration or password-reset -
+    // SRS 28.3 "replay / OTP brute force".
+    Task<Result> GenerateAsync(string phoneNumber, OtpPurpose purpose);
+    Task<Result> ValidateAsync(string phoneNumber, string otpCode, OtpPurpose purpose);
 }
 
 public interface ICustomerService

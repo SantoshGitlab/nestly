@@ -18,13 +18,15 @@ public class OtpService : IOTPService
     private const int MaxAttempts = 5;
 
     private readonly NestlyDbContext _context;
+    private readonly INotificationProvider _notificationProvider;
 
-    public OtpService(NestlyDbContext context)
+    public OtpService(NestlyDbContext context, INotificationProvider notificationProvider)
     {
         _context = context;
+        _notificationProvider = notificationProvider;
     }
 
-    public async Task<Result> GenerateAsync(string phoneNumber)
+    public async Task<Result> GenerateAsync(string phoneNumber, OtpPurpose purpose)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
         {
@@ -34,7 +36,7 @@ public class OtpService : IOTPService
         var now = DateTime.UtcNow;
 
         bool requestedRecently = await _context.Set<CustomerOtp>()
-            .AnyAsync(o => o.Target == phoneNumber && o.CreatedAt > now.Subtract(ResendCooldown));
+            .AnyAsync(o => o.Target == phoneNumber && o.Purpose == purpose && o.CreatedAt > now.Subtract(ResendCooldown));
         if (requestedRecently)
         {
             return Result.Failure(Error.Business("Otp.TooManyRequests",
@@ -42,19 +44,25 @@ public class OtpService : IOTPService
         }
 
         string code = GenerateNumericCode(6);
-        var otp = new CustomerOtp(Guid.NewGuid(), customerId: null, phoneNumber, OtpPurpose.Login,
+        var otp = new CustomerOtp(Guid.NewGuid(), customerId: null, phoneNumber, purpose,
             Hash(code), now.Add(Expiry));
 
         await _context.Set<CustomerOtp>().AddAsync(otp);
         await _context.SaveChangesAsync();
 
-        // In production this hands off to an SMS provider (task 26 area); for
-        // now the plaintext code only ever exists in memory here and is never
-        // persisted or logged, matching the no-PII/no-secrets logging rule.
+        // The plaintext code only ever exists in memory here and on the
+        // recipient's device; it is never persisted or logged, matching the
+        // no-PII/no-secrets logging rule (the sandbox provider follows suit).
+        var sendResult = await _notificationProvider.SendSmsAsync(phoneNumber, $"Your Nestly verification code is {code}");
+        if (sendResult.IsFailure)
+        {
+            return sendResult;
+        }
+
         return Result.Success();
     }
 
-    public async Task<Result> ValidateAsync(string phoneNumber, string otpCode)
+    public async Task<Result> ValidateAsync(string phoneNumber, string otpCode, OtpPurpose purpose)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber) || string.IsNullOrWhiteSpace(otpCode))
         {
@@ -62,7 +70,7 @@ public class OtpService : IOTPService
         }
 
         var otp = await _context.Set<CustomerOtp>()
-            .Where(o => o.Target == phoneNumber && o.ConsumedAt == null)
+            .Where(o => o.Target == phoneNumber && o.Purpose == purpose && o.ConsumedAt == null)
             .OrderByDescending(o => o.CreatedAt)
             .FirstOrDefaultAsync();
 
