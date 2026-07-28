@@ -65,3 +65,4 @@ tasks.csv.tmp
 __pycache__/
 .claude-verify-errors*
 .autopilot-memory.json
+.claude-project-facts

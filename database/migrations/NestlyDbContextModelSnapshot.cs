@@ -30,19 +30,16 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnName("id");
 
                     b.Property<string>("Address")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("address");
 
                     b.Property<string>("City")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("city");
 
                     b.Property<string>("Country")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("country");
@@ -51,12 +48,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<DateTime>("DateOfBirth")
+                    b.Property<DateTime?>("DateOfBirth")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("date_of_birth");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("email");
@@ -74,13 +70,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnName("name");
 
                     b.Property<string>("Pincode")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("pincode");
 
                     b.Property<string>("State")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("state");
@@ -250,6 +244,103 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("category", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.CustomerAddress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("city");
+
+                    b.Property<string>("ContactMobile")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("contact_mobile");
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("contact_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<string>("Landmark")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("landmark");
+
+                    b.Property<decimal>("Latitude")
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("latitude");
+
+                    b.Property<string>("Line1")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("line1");
+
+                    b.Property<string>("Line2")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("line2");
+
+                    b.Property<decimal>("Longitude")
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("Pincode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("pincode");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("state");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_customer_address");
+
+                    b.HasIndex(new[] { "CustomerId" }, "ix_customer_address_all")
+                        .HasDatabaseName("ix_customer_address_customer_id");
+
+                    b.HasIndex(new[] { "CustomerId" }, "ix_customer_address_one_default_per_customer")
+                        .IsUnique()
+                        .HasDatabaseName("ix_customer_address_customer_id1")
+                        .HasFilter("is_default = true");
+
+                    b.ToTable("customer_address", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.CustomerAuthIdentity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -297,6 +388,63 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_customer_auth_identity_provider_identifier");
 
                     b.ToTable("customer_auth_identity", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CustomerCommunicationPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<bool>("PromotionalEmailEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("promotional_email_enabled");
+
+                    b.Property<bool>("PromotionalSmsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("promotional_sms_enabled");
+
+                    b.Property<bool>("PromotionalWhatsAppEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("promotional_whatsapp_enabled");
+
+                    b.Property<bool>("PushEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("push_enabled");
+
+                    b.Property<bool>("TransactionalEmailEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("transactional_email_enabled");
+
+                    b.Property<bool>("TransactionalSmsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("transactional_sms_enabled");
+
+                    b.Property<bool>("TransactionalWhatsAppEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("transactional_whatsapp_enabled");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_customer_communication_preference");
+
+                    b.HasIndex("CustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_customer_communication_preference_customer_id");
+
+                    b.ToTable("customer_communication_preference", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.CustomerOtp", b =>
@@ -406,6 +554,36 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_customer_session_refresh_token_hash");
 
                     b.ToTable("customer_session", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.LoginAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Identifier")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("identifier");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("succeeded");
+
+                    b.HasKey("Id")
+                        .HasName("pk_login_attempt");
+
+                    b.HasIndex("Identifier", "OccurredAtUtc")
+                        .HasDatabaseName("ix_login_attempt_identifier_occurred_at_utc");
+
+                    b.ToTable("login_attempt", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.Service", b =>

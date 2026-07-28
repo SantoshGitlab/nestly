@@ -6,7 +6,14 @@ public enum OtpPurpose
 {
     Registration,
     Login,
-    PasswordReset
+    PasswordReset,
+
+    // Re-verification of a *new* contact detail before it replaces the one on
+    // file (SRS 11.2.3 "Change mobile/email subject to verification"). Kept
+    // distinct from Registration/Login so a code issued to prove ownership of
+    // a new number can never be replayed to log in or register.
+    MobileChange,
+    EmailChange
 }
 
 /// <summary>

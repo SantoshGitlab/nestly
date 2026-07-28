@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Nestly.Application.Addresses;
 using Nestly.Application.Behaviors;
 
 namespace Nestly.Application;
@@ -21,7 +22,7 @@ public static class DependencyInjection
 
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly, includeInternalTypes: true);
 
-        services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<ICustomerAddressService, CustomerAddressService>();
 
         return services;
     }

@@ -15,6 +15,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(x => x.Email).HasMaxLength(200);
         builder.HasIndex(x => x.Email).IsUnique().HasFilter("email IS NOT NULL");
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.DateOfBirth);
         builder.Property(x => x.Address).HasMaxLength(200);
         builder.Property(x => x.City).HasMaxLength(200);
         builder.Property(x => x.State).HasMaxLength(200);

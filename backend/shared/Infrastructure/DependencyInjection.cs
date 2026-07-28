@@ -1,9 +1,14 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Identity;
+using Nestly.Application.Profile;
 using Nestly.Domain;
 using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.BackgroundJobs;
@@ -35,6 +40,16 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services
+            .AddOptions<AccountOptions>()
+            .Bind(configuration.GetSection(AccountOptions.SectionName));
+
+        services
+            .AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
@@ -61,7 +76,64 @@ public static class DependencyInjection
         services.AddScoped<IAuditLogWriter, AuditLogWriter>();
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
+        services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
+        services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();
+        services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
         services.AddScoped<IOTPService, OtpService>();
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<ICustomerRegistrationService, CustomerRegistrationService>();
+        services.AddScoped<ICustomerLoginService, CustomerLoginService>();
+        services.AddScoped<ICustomerPasswordResetService, CustomerPasswordResetService>();
+        services.AddScoped<ICustomerCommunicationPreferenceRepository, CustomerCommunicationPreferenceRepository>();
+        services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+
+        // Sandbox in every environment for now (SRS 30.2): no real SMS/email
+        // vendor is configured yet. Swap this registration, not the callers,
+        // when a production provider lands.
+        services.AddScoped<INotificationProvider, SandboxNotificationProvider>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// JWT bearer authentication (SRS 11.2.2). Separate from
+    /// <see cref="AddInfrastructure"/> because <c>AddAuthentication</c> sets
+    /// the process-wide default scheme — each API's Program.cs calls this
+    /// explicitly rather than getting it silently bundled in.
+    /// </summary>
+    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwtSection = configuration.GetSection(JwtOptions.SectionName);
+        var signingKey = jwtSection[nameof(JwtOptions.SigningKey)] ??
+            throw new InvalidOperationException($"Configuration section '{JwtOptions.SectionName}:{nameof(JwtOptions.SigningKey)}' is not configured.");
+        var issuer = jwtSection[nameof(JwtOptions.Issuer)] ?? "Nestly";
+        var audience = jwtSection[nameof(JwtOptions.Audience)] ?? "Nestly.Customers";
+
+        services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                // Without this, the default inbound claim mapping silently
+                // renames "sub" to ClaimTypes.NameIdentifier, so every
+                // controller reading the customer id would have to know that
+                // translation. Keep claim types exactly as TokenService issued
+                // them (JwtRegisteredClaimNames.Sub, "mobile", ...jti).
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = issuer,
+                    ValidateAudience = true,
+                    ValidAudience = audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(signingKey)),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromSeconds(30)
+                };
+            });
+
+        services.AddAuthorization();
 
         return services;
     }
