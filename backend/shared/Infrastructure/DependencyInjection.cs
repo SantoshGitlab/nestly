@@ -110,6 +110,12 @@ public static class DependencyInjection
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
+                // Without this, the default inbound claim mapping silently
+                // renames "sub" to ClaimTypes.NameIdentifier, so every
+                // controller reading the customer id would have to know that
+                // translation. Keep claim types exactly as TokenService issued
+                // them (JwtRegisteredClaimNames.Sub, "mobile", ...jti).
+                options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
