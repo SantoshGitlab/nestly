@@ -9,7 +9,7 @@ The rest of the documentation suite describes how things *should* be built
 is the only one that describes **the current state of the repository** — so
 treat the others as the specification and this one as the map.
 
-Last verified: 2026-07-27, at the completion of Phase 0.
+Last verified: 2026-07-28, at the completion of Phase 1.
 
 ---
 
@@ -34,37 +34,46 @@ Full requirements: [SRS.md](SRS.md).
 This is the section most likely to be out of date, and the most important to
 keep honest.
 
-**Phase 0 (Foundation) is complete — 25/25.** Overall backlog: **30 of 196
-tasks done**. The active phase is **Phase 1 — Identity & Customer (3/21)**.
+**Phase 0 (Foundation) is complete — 25/25. Phase 1 (Identity & Customer) is
+complete — 46/46**, merged to `main`. Overall backlog: **73 of 227 tasks
+done** (the backlog grew from 196 to 227 rows as later phases were decomposed
+into subtasks — that is expected, not lost work). The active phase is
+**Phase 2 — Catalog & Serviceability (2/26)**.
 
 ### What genuinely exists and is verified
 
 | Area | State |
 |---|---|
-| Solution & layering | 6 projects, dependencies flow inward, builds clean |
+| Solution & layering | 7 projects (adds `Identity.Tests`), dependencies flow inward, builds clean |
 | BuildingBlocks | `Result`/`Error` primitives, `Entity`/`AggregateRoot`/`ValueObject`, correlation-id and global-exception middleware |
-| Persistence | EF Core + PostgreSQL, snake_case naming, configuration-by-assembly-scan, 3 migrations applied against a real database |
-| Domain entities | Customer, CustomerAuthIdentity, CustomerSession, CustomerOtp, Category, Service, ServiceAddOn, ServiceFaq, ServiceMedia, SupportTicketComment, AuditLog |
-| Caching | `ICacheService` over Redis, with in-process fallback |
-| Background jobs | Hangfire on PostgreSQL, admin-only dashboard |
+| Persistence | EF Core + PostgreSQL, snake_case naming, configuration-by-assembly-scan, 8 migrations applied against a real database |
+| Domain entities | Customer, CustomerAuthIdentity, CustomerSession, CustomerOtp, CustomerAddress, LoginAttempt, CustomerCommunicationPreference, Category, Service, ServiceAddOn, ServiceFaq, ServiceMedia, SupportTicketComment, AuditLog |
+| Identity & auth | Mobile+OTP and email+password registration/login, JWT access+refresh with rotation, login throttling/lockout, forgot/reset password (verified against the account's mobile, not the unverified email) |
+| Profile & addresses | View/edit profile, re-verified mobile/email change, communication preferences, full address-book CRUD with a partial-unique-index-enforced single default |
+| Consumer-web screens | Login (OTP + password), registration, forgot/reset password, profile, address book — real product screens, not scaffolds |
+| Tests | `Identity.Tests`: 69 tests (unit + SQLite-backed integration) covering OTP lifecycle, login lockout, uniqueness constraints, password reset, profile service |
+| Caching | `ICacheService` over Redis, with in-process fallback — wired, no consumer yet (first real cache use case lands with Phase 2 catalog) |
+| Background jobs | Hangfire on PostgreSQL, admin-only dashboard — wired, no consumer yet |
 | Audit trail | `audit_log` table + `IAuditLogWriter` |
 | Health checks | `/health/live`, `/health/ready` (Postgres + Redis) |
 | Observability | Serilog structured logging, correlation ids |
 | DevOps | Dockerfiles for both APIs, docker-compose (Postgres + Redis + both APIs), GitHub Actions CI |
-| Frontend | `customer-web` and `admin-web` scaffolded (Next.js + TypeScript + Tailwind) — scaffolds only, no product screens |
+| Admin frontend | `admin-web` scaffolded only — no product screens yet (Phase 6) |
 
 ### What does **not** exist yet
 
 Be blunt about this, because the layering makes it easy to assume otherwise:
 
-- **There are zero API endpoints.** No controllers exist in either API. Both
-  processes boot, serve health checks and Swagger, and nothing else.
-- **There is no authentication.** No JWT issuance, no login, no principal. The
-  admin-only Hangfire dashboard therefore denies *everyone* today, which is the
-  correct and intended default until T025 lands.
-- **There are no tests and no test project.** Test tasks are 35a–35d in Phase 1.
-- **No booking, payments, slots, coupons, notifications or admin panel.**
-  Phases 3–7. Some early drafts sit in `_salvage/` (see §7).
+- **No catalog, serviceability, booking, payments, slots, coupons, post-booking
+  or admin panel.** Phases 2–7. Some early drafts sit in `_salvage/` (see §7).
+- **MediatR (`ICommand`/`IQuery`/handlers) and `AggregateRoot`/domain events
+  are wired but have zero real callers** — every Phase 1 controller calls its
+  service directly rather than going through `ISender`, and every entity so
+  far derives from plain `Entity<Guid>`, not `AggregateRoot`. Flagged by a
+  ponytail-audit pass on 2026-07-28 and left in place rather than removed,
+  since both are documented architecture here — but do not assume a command/
+  query or a domain event actually fires anywhere yet; grep before relying on
+  either.
 
 ---
 
@@ -257,7 +266,7 @@ exists.
 | Phase | Scope | Done |
 |---|---|---|
 | 0 | Foundation — solution, persistence, caching, jobs, audit, DevOps | 25/25 |
-| 1 | Identity & Customer — registration, JWT, profile, addresses, tests | 3/21 |
+| 1 | Identity & Customer — registration, JWT, profile, addresses, tests | 46/46 |
 | 2 | Catalog & Serviceability | 2/26 |
 | 3 | Booking Core | 0/15 |
 | 4 | Payments & Financial | 0/22 |
@@ -266,10 +275,17 @@ exists.
 | 7 | Hardening & Launch | 0/14 |
 | 8 | Partner module (deferred) | 0/8 |
 
-**Phase 1 is the current focus.** Its first real milestone is also the
-repository's first API endpoint — registration (T024) and JWT issuance (T025).
-Until T025 lands there is no authenticated principal anywhere in the system,
-which is why role-gated surfaces currently deny all callers.
+Per-phase task counts grew during Phase 1 as several tasks were decomposed
+into subtasks by an automated worker (e.g. `#35` → `#35a`..`#35d` →
+`#35ba`..`#35bx4`); the done/total ratio for a phase is only meaningful
+relative to its *current* total, not the number originally planned.
+
+**Phase 2 (Catalog & Serviceability) is the current focus.** There is now an
+authenticated principal throughout the system — every `[Authorize]`-protected
+endpoint (profile, addresses) requires a JWT issued by the Phase 1 login
+flow, and the admin-only Hangfire dashboard's authorization filter has real
+identities to evaluate against, even though nothing has been granted admin
+access yet (Phase 6).
 
 ---
 
