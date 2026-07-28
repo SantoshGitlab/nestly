@@ -26,17 +26,17 @@ public class OtpService : IOTPService
         _notificationProvider = notificationProvider;
     }
 
-    public async Task<Result> GenerateAsync(string phoneNumber, OtpPurpose purpose)
+    public async Task<Result> GenerateAsync(string target, OtpPurpose purpose, NotificationChannel channel = NotificationChannel.Sms)
     {
-        if (string.IsNullOrWhiteSpace(phoneNumber))
+        if (string.IsNullOrWhiteSpace(target))
         {
-            return Result.Failure(Error.Validation("Otp.InvalidTarget", "Phone number is required."));
+            return Result.Failure(Error.Validation("Otp.InvalidTarget", "A delivery target is required."));
         }
 
         var now = DateTime.UtcNow;
 
         bool requestedRecently = await _context.Set<CustomerOtp>()
-            .AnyAsync(o => o.Target == phoneNumber && o.Purpose == purpose && o.CreatedAt > now.Subtract(ResendCooldown));
+            .AnyAsync(o => o.Target == target && o.Purpose == purpose && o.CreatedAt > now.Subtract(ResendCooldown));
         if (requestedRecently)
         {
             return Result.Failure(Error.Business("Otp.TooManyRequests",
@@ -44,7 +44,7 @@ public class OtpService : IOTPService
         }
 
         string code = GenerateNumericCode(6);
-        var otp = new CustomerOtp(Guid.NewGuid(), customerId: null, phoneNumber, purpose,
+        var otp = new CustomerOtp(Guid.NewGuid(), customerId: null, target, purpose,
             Hash(code), now.Add(Expiry));
 
         await _context.Set<CustomerOtp>().AddAsync(otp);
@@ -53,7 +53,13 @@ public class OtpService : IOTPService
         // The plaintext code only ever exists in memory here and on the
         // recipient's device; it is never persisted or logged, matching the
         // no-PII/no-secrets logging rule (the sandbox provider follows suit).
-        var sendResult = await _notificationProvider.SendSmsAsync(phoneNumber, $"Your Nestly verification code is {code}");
+        string message = $"Your Nestly verification code is {code}";
+        var sendResult = channel switch
+        {
+            NotificationChannel.Email => await _notificationProvider.SendEmailAsync(target, "Your Nestly verification code", message),
+            _ => await _notificationProvider.SendSmsAsync(target, message)
+        };
+
         if (sendResult.IsFailure)
         {
             return sendResult;
@@ -62,21 +68,21 @@ public class OtpService : IOTPService
         return Result.Success();
     }
 
-    public async Task<Result> ValidateAsync(string phoneNumber, string otpCode, OtpPurpose purpose)
+    public async Task<Result> ValidateAsync(string target, string otpCode, OtpPurpose purpose)
     {
-        if (string.IsNullOrWhiteSpace(phoneNumber) || string.IsNullOrWhiteSpace(otpCode))
+        if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(otpCode))
         {
-            return Result.Failure(Error.Validation("Otp.InvalidInput", "Phone number and OTP code are required."));
+            return Result.Failure(Error.Validation("Otp.InvalidInput", "A delivery target and OTP code are required."));
         }
 
         var otp = await _context.Set<CustomerOtp>()
-            .Where(o => o.Target == phoneNumber && o.Purpose == purpose && o.ConsumedAt == null)
+            .Where(o => o.Target == target && o.Purpose == purpose && o.ConsumedAt == null)
             .OrderByDescending(o => o.CreatedAt)
             .FirstOrDefaultAsync();
 
         if (otp is null)
         {
-            return Result.Failure(Error.NotFound("Otp.NotFound", "No pending OTP for this number."));
+            return Result.Failure(Error.NotFound("Otp.NotFound", "No pending OTP for this request."));
         }
 
         if (otp.AttemptCount >= MaxAttempts)

@@ -38,4 +38,15 @@ public class CustomerAuthIdentity : Entity<Guid>
         PasswordHash = passwordHash ?? throw new ArgumentNullException(nameof(passwordHash));
 
     public void MakePrimary() => IsPrimary = true;
+
+    /// <summary>
+    /// Repoints this credential at a new mobile number or email address after
+    /// the customer re-verified it (SRS 11.2.3). Callers must have proven
+    /// ownership of <paramref name="identifier"/> first — this type only
+    /// records the decision, it cannot check it.
+    /// </summary>
+    public void ChangeIdentifier(string identifier) =>
+        Identifier = string.IsNullOrWhiteSpace(identifier)
+            ? throw new ArgumentException("Identifier is required.", nameof(identifier))
+            : identifier;
 }

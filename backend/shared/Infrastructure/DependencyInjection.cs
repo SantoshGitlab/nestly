@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
+using Nestly.Application.Profile;
 using Nestly.Domain;
 using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.BackgroundJobs;
@@ -83,6 +84,9 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICustomerRegistrationService, CustomerRegistrationService>();
         services.AddScoped<ICustomerLoginService, CustomerLoginService>();
+        services.AddScoped<ICustomerPasswordResetService, CustomerPasswordResetService>();
+        services.AddScoped<ICustomerCommunicationPreferenceRepository, CustomerCommunicationPreferenceRepository>();
+        services.AddScoped<ICustomerProfileService, CustomerProfileService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email
         // vendor is configured yet. Swap this registration, not the callers,

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
+using Nestly.Infrastructure.Options;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,17 +37,33 @@ builder.Services.AddSwaggerGen();
 // endpoints are unauthenticated — there is no customer identity yet to key
 // on. The per-identifier lockout in CustomerLoginService is what actually
 // stops a slow, distributed brute force; this stops the fast, single-IP one.
+//
+// Limits come from the "RateLimiting" section so an end-to-end suite or load
+// test can be given headroom without changing the production behaviour; the
+// defaults in RateLimitOptions are the production values.
+var rateLimits = builder.Configuration
+    .GetSection(RateLimitOptions.SectionName)
+    .Get<RateLimitOptions>() ?? new RateLimitOptions();
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("otp", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { Window = TimeSpan.FromHours(1), PermitLimit = 5 }));
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Otp.WindowMinutes),
+            PermitLimit = rateLimits.Otp.PermitLimit
+        }));
 
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { Window = TimeSpan.FromMinutes(15), PermitLimit = 10 }));
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Login.WindowMinutes),
+            PermitLimit = rateLimits.Login.PermitLimit
+        }));
 });
 
 var app = builder.Build();

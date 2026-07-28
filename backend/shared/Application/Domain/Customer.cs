@@ -68,6 +68,49 @@ namespace Nestly.Application
             UpdatedAt = DateTime.UtcNow;
         }
 
+        /// <summary>
+        /// Self-service profile edit (SRS 11.2.3: "Edit name, email, optional
+        /// profile data"). Email is deliberately absent: changing it goes
+        /// through <see cref="ChangeEmail"/> after OTP re-verification, so it
+        /// cannot be swapped by an unverified PUT.
+        /// </summary>
+        public void UpdateProfileDetails(
+            string name,
+            DateTime? dateOfBirth,
+            string? city,
+            string? state,
+            string? pincode,
+            string? country)
+        {
+            Name = string.IsNullOrWhiteSpace(name)
+                ? throw new ArgumentException("Name is required.", nameof(name))
+                : name;
+            DateOfBirth = dateOfBirth;
+            City = city;
+            State = state;
+            Pincode = pincode;
+            Country = country;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>Applied only after an OTP proved control of the new number (SRS 11.2.3).</summary>
+        public void ChangeMobile(string newMobile)
+        {
+            Mobile = string.IsNullOrWhiteSpace(newMobile)
+                ? throw new ArgumentException("Mobile is required.", nameof(newMobile))
+                : newMobile;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>Applied only after an OTP proved control of the new address (SRS 11.2.3).</summary>
+        public void ChangeEmail(string newEmail)
+        {
+            Email = string.IsNullOrWhiteSpace(newEmail)
+                ? throw new ArgumentException("Email is required.", nameof(newEmail))
+                : newEmail;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
         public override bool Equals(object? obj)
         {
             return obj is Customer other && Id == other.Id;
