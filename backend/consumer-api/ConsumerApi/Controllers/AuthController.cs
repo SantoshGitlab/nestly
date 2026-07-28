@@ -3,6 +3,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application.Identity;
 using Nestly.BuildingBlocks.Extensions;
 
@@ -46,6 +47,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Step 1: send a registration OTP to a mobile number (SRS 11.2.1).</summary>
+    [EnableRateLimiting("otp")]
     [HttpPost("registration/otp")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -80,6 +82,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Send a login OTP to an already-registered mobile number (SRS 11.2.2).</summary>
+    [EnableRateLimiting("otp")]
     [HttpPost("login/otp")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -97,6 +100,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Login via mobile OTP (SRS 11.2.2).</summary>
+    [EnableRateLimiting("login")]
     [HttpPost("login/otp/verify")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -114,6 +118,7 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>Login via email + password, when password auth is enabled (SRS 11.2.2).</summary>
+    [EnableRateLimiting("login")]
     [HttpPost("login/password")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

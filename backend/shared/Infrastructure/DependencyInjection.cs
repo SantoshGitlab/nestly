@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();
+        services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
         services.AddScoped<IOTPService, OtpService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICustomerRegistrationService, CustomerRegistrationService>();

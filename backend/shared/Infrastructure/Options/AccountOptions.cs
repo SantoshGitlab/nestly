@@ -17,4 +17,14 @@ public class AccountOptions
 
     /// <summary>Whether two customers may share the same email address.</summary>
     public bool RequireUniqueEmail { get; set; } = true;
+
+    /// <summary>
+    /// Consecutive failed login attempts against one identifier (mobile or
+    /// email) within <see cref="LockoutWindowMinutes"/> before further
+    /// attempts against it are refused outright, regardless of whether the
+    /// next one would have been correct (SRS 11.2.2 lockout policy).
+    /// </summary>
+    public int MaxFailedLoginAttempts { get; set; } = 5;
+
+    public int LockoutWindowMinutes { get; set; } = 15;
 }
