@@ -66,3 +66,4 @@ __pycache__/
 .claude-verify-errors*
 .autopilot-memory.json
 .claude-project-facts
+.claude-token-usage

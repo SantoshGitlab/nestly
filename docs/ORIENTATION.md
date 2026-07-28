@@ -35,8 +35,8 @@ This is the section most likely to be out of date, and the most important to
 keep honest.
 
 **Phase 0 (Foundation) is complete — 25/25. Phase 1 (Identity & Customer) is
-complete — 46/46**, merged to `main`. Overall backlog: **73 of 227 tasks
-done** (the backlog grew from 196 to 227 rows as later phases were decomposed
+complete — 46/46**, merged to `main`. Overall backlog: **73 of 221 tasks
+done** (the backlog grew from 196 to 221 rows as later phases were decomposed
 into subtasks — that is expected, not lost work). The active phase is
 **Phase 2 — Catalog & Serviceability (2/26)**.
 
