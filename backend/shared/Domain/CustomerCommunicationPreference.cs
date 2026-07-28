@@ -75,20 +75,4 @@ public class CustomerCommunicationPreference : Entity<Guid>
         PushEnabled = push;
         UpdatedAt = DateTime.UtcNow;
     }
-
-    /// <summary>Whether a promotional message may be sent on a given channel.</summary>
-    public bool AllowsPromotional(NotificationChannel channel) => channel switch
-    {
-        NotificationChannel.Sms => PromotionalSmsEnabled,
-        NotificationChannel.Email => PromotionalEmailEnabled,
-        _ => false
-    };
-
-    /// <summary>Whether a transactional message may be sent on a given channel.</summary>
-    public bool AllowsTransactional(NotificationChannel channel) => channel switch
-    {
-        NotificationChannel.Sms => TransactionalSmsEnabled,
-        NotificationChannel.Email => TransactionalEmailEnabled,
-        _ => false
-    };
 }

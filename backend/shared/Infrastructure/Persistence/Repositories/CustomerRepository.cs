@@ -24,17 +24,8 @@ public class CustomerRepository : ICustomerRepository
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(Customer entity)
-    {
-        _context.Set<Customer>().Remove(entity);
-        await _context.SaveChangesAsync();
-    }
-
     public Task<Customer?> GetByIdAsync(Guid id) =>
         _context.Set<Customer>().FirstOrDefaultAsync(c => c.Id == id);
-
-    public async Task<IEnumerable<Customer>> GetAllAsync() =>
-        await _context.Set<Customer>().ToListAsync();
 
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Customer>().AnyAsync(c => c.Id == id);

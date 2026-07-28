@@ -22,10 +22,3 @@ public interface IOTPService
     Task<Result> GenerateAsync(string target, OtpPurpose purpose, NotificationChannel channel = NotificationChannel.Sms);
     Task<Result> ValidateAsync(string target, string otpCode, OtpPurpose purpose);
 }
-
-public interface ICustomerService
-{
-    Task CreateAsync(object customer);
-    Task UpdateAsync(object customer);
-    Task DeleteAsync(Guid id);
-}
