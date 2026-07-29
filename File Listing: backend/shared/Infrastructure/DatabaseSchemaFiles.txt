@@ -1,0 +1,3 @@
+path/to/Nestly.Infrastructure/Migrations/20231001000000_InitialCreate.sql
+path/to/Nestly.Infrastructure/Migrations/20231001000001_AddUserTable.sql
+path/to/Nestly.Infrastructure/Migrations/20231001000002_AddProductTable.sql
