@@ -1,7 +1,7 @@
 {
   "name": "nestly",
   "tasks_csv": "tasks.csv",
-  "branch": "autopilot-work",
+  "branch": "phase-2-catalog-serviceability",
   "verify": [
     "dotnet build Nestly.sln"
   ],
