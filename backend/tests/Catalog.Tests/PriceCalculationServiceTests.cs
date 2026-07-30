@@ -152,4 +152,51 @@ public sealed class PriceCalculationServiceTests : IClassFixture<TestDatabase>
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Pricing.CityNotFound");
     }
+
+    [Fact]
+    public async Task Zero_or_negative_addon_quantity_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Sofa Cleaning", 150m);
+        context.Add(addOn);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(
+            new PriceCalculationRequest(service.Id, city.Id, 1, [new AddOnSelection(addOn.Id, 0)]));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.InvalidAddOnQuantity");
+    }
+
+    [Fact]
+    public async Task An_inactive_service_returns_not_found()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context);
+        service.Deactivate();
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(service.Id, city.Id, 1, []));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.ServiceNotFound");
+    }
+
+    [Fact]
+    public async Task An_inactive_addon_is_rejected_even_though_it_belongs_to_the_right_service()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Sofa Cleaning", 150m);
+        addOn.Deactivate();
+        context.Add(addOn);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(
+            new PriceCalculationRequest(service.Id, city.Id, 1, [new AddOnSelection(addOn.Id, 1)]));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.InvalidAddOn");
+    }
 }

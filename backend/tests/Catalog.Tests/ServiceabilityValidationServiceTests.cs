@@ -150,6 +150,45 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         result.Value.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Deactivated_category_city_mapping_is_reported_not_serviceable()
+    {
+        var category = new Category(Guid.NewGuid(), "Plumbing", "plumbing-" + Guid.NewGuid(), "desc");
+        var state = new State(Guid.NewGuid(), "Gujarat", "GJ" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Ahmedabad");
+        var mapping = new CategoryCityMapping(Guid.NewGuid(), category.Id, city.Id);
+        mapping.Deactivate();
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.CategoryCityMappings.Add(mapping);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext), new InMemoryCacheService());
+
+        var result = await service.IsCategoryServiceableAsync(category.Id, city.Id);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Unknown_pincode_returns_a_not_found_error_when_checked_directly()
+    {
+        using var context = _db.CreateContext();
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService());
+
+        var result = await service.IsServiceServiceableByPincodeAsync(Guid.NewGuid(), Guid.NewGuid());
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Serviceability.PincodeNotFound");
+    }
+
     /// <summary>
     /// Regression guard for task 49's caching: a naive GetOrCreateAsync
     /// implementation that null-checks a boxed T? to detect a cache hit

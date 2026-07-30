@@ -230,4 +230,109 @@ public sealed class SlotAvailabilityServiceTests : IClassFixture<TestDatabase>
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Slots.LocalityNotFound");
     }
+
+    /// <summary>Boundary check on SlotBlackout.CoversDate: the day right after a blackout range ends must not be blocked.</summary>
+    [Fact]
+    public async Task The_day_immediately_after_a_blackout_range_is_not_blocked()
+    {
+        var blackoutEnd = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        var dayAfter = blackoutEnd.AddDays(1);
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = SeedGeographyAndService(context, dayAfter.DayOfWeek, TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+            context.SlotBlackouts.Add(new SlotBlackout(
+                Guid.NewGuid(), fixture.City.Id, blackoutEnd.AddDays(-1), blackoutEnd, SlotBlackoutType.Holiday, "Festival"));
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetAvailableSlotsAsync(fixture.Service.Id, fixture.Locality.Id, dayAfter);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Slots.Should().ContainSingle();
+    }
+
+    /// <summary>Boundary check on the max-advance-days cutoff: exactly on the last bookable day, slots must still be returned.</summary>
+    [Fact]
+    public async Task Date_exactly_on_the_max_advance_days_boundary_still_returns_slots()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var boundaryDate = today.AddDays(7);
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = SeedGeographyAndService(context, boundaryDate.DayOfWeek, TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+            context.SlotBookingPolicies.Add(new SlotBookingPolicy(Guid.NewGuid(), fixture.City.Id, 60, 7));
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetAvailableSlotsAsync(fixture.Service.Id, fixture.Locality.Id, boundaryDate);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsServiceable.Should().BeTrue();
+        result.Value.Slots.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// A slot valid when first offered can fail revalidation once the cutoff
+    /// threshold passes before the customer confirms it - RevalidateSlotAsync
+    /// must re-check against current time, not just against blackouts.
+    /// </summary>
+    [Fact]
+    public async Task Revalidate_fails_once_the_cutoff_passes_between_offer_and_confirmation()
+    {
+        // A fixed midday anchor, not the real wall clock: keeps the window's
+        // start time-of-day and the mutable clock in lockstep without any
+        // risk of a midnight rollover flaking the test depending on when the
+        // suite happens to run.
+        var anchor = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero).AddHours(10);
+        var today = DateOnly.FromDateTime(anchor.DateTime);
+        var windowStart = anchor.TimeOfDay.Add(TimeSpan.FromMinutes(90));
+
+        Fixture fixture;
+        Guid windowId;
+        using (var context = _db.CreateContext())
+        {
+            // Starts 90 minutes after the anchor: available with no policy yet,
+            // but will fail a 60-minute cutoff once the clock advances 80 minutes.
+            fixture = SeedGeographyAndService(context, today.DayOfWeek, windowStart, windowStart.Add(TimeSpan.FromHours(1)));
+            windowId = context.SlotWindows.Single(w => w.CityId == fixture.City.Id).Id;
+        }
+
+        var clock = new MutableTimeProvider(anchor);
+
+        using (var readContext = _db.CreateContext())
+        {
+            var initialOffer = await BuildService(readContext, clock).GetAvailableSlotsAsync(fixture.Service.Id, fixture.Locality.Id, today);
+            initialOffer.Value.Slots.Should().ContainSingle(s => s.SlotWindowId == windowId);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            context.SlotBookingPolicies.Add(new SlotBookingPolicy(Guid.NewGuid(), fixture.City.Id, cutoffMinutes: 60, maxAdvanceDays: 30));
+            context.SaveChanges();
+        }
+
+        // The customer takes 80 minutes to confirm - past the window start minus the 60-minute cutoff.
+        clock.Advance(TimeSpan.FromMinutes(80));
+
+        using var revalidateContext = _db.CreateContext();
+        var result = await BuildService(revalidateContext, clock).RevalidateSlotAsync(fixture.Service.Id, fixture.Locality.Id, windowId, today);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsValid.Should().BeFalse();
+        result.Value.Reason.Should().NotBeNullOrEmpty();
+    }
+
+    /// <summary>Minimal mutable clock for cutoff/revalidation tests - TimeProvider has no built-in fake in the packages this project already references.</summary>
+    private sealed class MutableTimeProvider(DateTimeOffset start) : TimeProvider
+    {
+        private DateTimeOffset _now = start;
+
+        public void Advance(TimeSpan by) => _now += by;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+    }
 }
