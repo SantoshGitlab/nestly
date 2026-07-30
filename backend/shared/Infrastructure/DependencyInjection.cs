@@ -12,6 +12,7 @@ using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
+using Nestly.Application.Coupons;
 using Nestly.Application.Geography;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
@@ -145,6 +146,9 @@ public static class DependencyInjection
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
         services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<ICouponRepository, CouponRepository>();
+        services.AddScoped<ICouponRedemptionRepository, CouponRedemptionRepository>();
+        services.AddScoped<ICouponService, CouponService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email
         // vendor is configured yet. Swap this registration, not the callers,

@@ -1,0 +1,32 @@
+using Nestly.BuildingBlocks.Results;
+
+namespace Nestly.Application.Coupons;
+
+/// <summary>
+/// Coupon validation and redemption (SRS 11.10, 14.2, tasks 72a-d, 73).
+/// Split into a read-only preview (<see cref="ValidateAsync"/>, safe to call
+/// as many times as the customer edits their cart/checkout) and a two-step
+/// commit used only once, at booking creation:
+/// <see cref="ReserveAsync"/> atomically consumes one unit of the coupon's
+/// global usage cap before the booking exists (so the cap can never be
+/// exceeded, and a failed reservation never creates a booking), and
+/// <see cref="CreateRedemptionRecordAsync"/> links that reservation to the
+/// booking once it has actually been persisted (a <see cref="Domain.CouponRedemption"/>
+/// row has a foreign key to the booking, so it cannot be inserted first).
+/// </summary>
+public interface ICouponService
+{
+    /// <summary>
+    /// Validates <paramref name="code"/> against every applicability rule
+    /// (validity window, min order amount + cap, category, first/repeat
+    /// booking segment, both usage caps) and computes the discount for
+    /// <paramref name="orderAmount"/> without reserving anything. Used by
+    /// the booking summary/preview and the coupon apply/remove endpoints.
+    /// </summary>
+    Task<Result<CouponSummaryResponse>> ValidateAsync(Guid customerId, string code, Guid categoryId, decimal orderAmount);
+
+    /// <summary>Atomically reserves one redemption against the coupon's global cap. Call only immediately before creating the booking that will use it.</summary>
+    Task<Result> ReserveAsync(Guid couponId);
+
+    Task CreateRedemptionRecordAsync(Guid couponId, Guid customerId, Guid bookingId, decimal discountAmount);
+}

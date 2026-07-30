@@ -1,4 +1,5 @@
 using Nestly.Application.Catalog;
+using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
 using Nestly.Domain;
 
@@ -12,6 +13,13 @@ namespace Nestly.Application.Bookings;
 /// until the address form gains a locality field, so callers must still
 /// supply the locality they picked for serviceability/slot checks, the same
 /// way the existing frontend location picker already works.
+///
+/// <paramref name="CouponCode"/> is optional and doubles as the coupon
+/// apply/remove mechanism (task 73): supplying a code (re-)applies and
+/// recomputes the discount server-side; omitting it (or calling again with
+/// null) recomputes with no discount - "remove" is simply "preview again
+/// without a code," not a separate stateful operation, since nothing about
+/// checkout is server-side session state until the booking itself is created.
 /// </summary>
 public record BookingSummaryRequest(
     Guid ServiceId,
@@ -21,7 +29,8 @@ public record BookingSummaryRequest(
     Guid SlotWindowId,
     DateOnly SlotDate,
     int Quantity,
-    IReadOnlyList<AddOnSelection> AddOns);
+    IReadOnlyList<AddOnSelection> AddOns,
+    string? CouponCode = null);
 
 public record BookingServiceSummary(Guid Id, string Name, string Slug);
 
@@ -41,7 +50,16 @@ public record BookingAddressSummary(
 
 public record BookingSlotSummary(Guid SlotWindowId, string Name, DateOnly Date, TimeSpan StartTime, TimeSpan EndTime);
 
-/// <summary>Booking summary data (SRS 11.7.2). Coupon discount and wallet credit are omitted - neither module exists yet (Phase 4).</summary>
+/// <summary>
+/// Booking summary data (SRS 11.7.2). Wallet credit is omitted - that module
+/// doesn't apply at checkout yet (Phase 4's wallet tasks cover the ledger
+/// and balance API only, not spending at checkout). <paramref name="Coupon"/>
+/// is null when no coupon was applied (or removed); when present,
+/// <paramref name="FinalPayable"/> is <c>Price.TotalPayable - Coupon.DiscountAmount</c>
+/// (SRS 14.1's formula subtracts the discount after tax/fees, not before) -
+/// <see cref="PriceBreakdownResponse"/> itself is always the pre-discount
+/// breakdown, so a caller can still show "was / now" pricing.
+/// </summary>
 public record BookingSummaryResponse(
     BookingServiceSummary Service,
     IReadOnlyList<ServiceAddOnSummaryResponse> AddOns,
@@ -49,7 +67,9 @@ public record BookingSummaryResponse(
     BookingSlotSummary Slot,
     PriceBreakdownResponse Price,
     string? CancellationPolicy,
-    string? ReschedulePolicy);
+    string? ReschedulePolicy,
+    CouponSummaryResponse? Coupon,
+    decimal FinalPayable);
 
 /// <summary>
 /// One entry in a booking's status timeline (SRS 11.13, task 60c), mirroring
@@ -58,7 +78,16 @@ public record BookingSummaryResponse(
 /// </summary>
 public record BookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatus ToStatus, string ToStatusLabel, string? Reason, DateTime ChangedAtUtc);
 
-/// <summary>Full booking detail (SRS 11.13, task 60c).</summary>
+/// <summary>
+/// Full booking detail (SRS 11.13, task 60c). <paramref name="CouponCode"/>/
+/// <paramref name="CouponDiscountAmount"/> mirror the booking's own
+/// snapshot (immutable once created, unlike the live re-validated preview
+/// on <see cref="BookingSummaryResponse"/>). <paramref name="FinalPayable"/>
+/// and <c>Price.TotalPayable</c> are equal here and both already
+/// coupon-adjusted - unlike the pre-booking preview, a persisted booking has
+/// only one "amount actually charged" (<see cref="Domain.Booking.TotalPayableSnapshot"/>),
+/// not a separate pre-/post-discount pair.
+/// </summary>
 public record BookingDetailResponse(
     Guid Id,
     BookingServiceSummary Service,
@@ -69,7 +98,10 @@ public record BookingDetailResponse(
     BookingStatus Status,
     string StatusLabel,
     IReadOnlyList<BookingStatusTimelineEntry> Timeline,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string? CouponCode,
+    decimal? CouponDiscountAmount,
+    decimal FinalPayable);
 
 /// <summary>A row in the booking list (SRS 11.13, task 60b) - a lighter shape than the detail, for a list screen.</summary>
 public record BookingListItemResponse(

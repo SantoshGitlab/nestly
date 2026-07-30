@@ -25,6 +25,12 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
 
     private static BookingService BuildBookingService(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {
+        var couponService = new CouponService(
+            new CouponRepository(context),
+            new CouponRedemptionRepository(context),
+            new BookingRepository(context),
+            TimeProvider.System);
+
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
             new ServiceAddOnRepository(context),
@@ -41,9 +47,10 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context)));
+                new CityPricingPolicyRepository(context)),
+            couponService);
 
-        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context));
+        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
     }
 
     private static (PaymentService Payments, PaymentWebhookService Webhook) BuildServices(
