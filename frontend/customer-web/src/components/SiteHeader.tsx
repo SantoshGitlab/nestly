@@ -65,6 +65,9 @@ export function SiteHeader() {
               <Link href="/addresses" className="hover:underline">
                 Addresses
               </Link>
+              <Link href="/bookings" className="hover:underline">
+                My bookings
+              </Link>
               <button type="button" onClick={signOut} className="hover:underline">
                 Sign out
               </button>

@@ -18,6 +18,10 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<SlotBookingPolicy> SlotBookingPolicies { get; set; }
     public DbSet<ServiceCityPrice> ServiceCityPrices { get; set; }
     public DbSet<CityPricingPolicy> CityPricingPolicies { get; set; }
+    public DbSet<Booking> Bookings { get; set; }
+    public DbSet<BookingItem> BookingItems { get; set; }
+    public DbSet<BookingAddOnItem> BookingAddOnItems { get; set; }
+    public DbSet<BookingStatusHistory> BookingStatusHistories { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

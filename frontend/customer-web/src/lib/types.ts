@@ -203,3 +203,117 @@ export interface PriceBreakdown {
   platformFee: number;
   totalPayable: number;
 }
+
+/**
+ * Booking shapes mirror the C# records in Nestly.Application.Bookings
+ * (BookingContracts.cs) - see BookingsController.
+ */
+
+export interface BookingSummaryRequestBody {
+  serviceId: string;
+  cityId: string;
+  addressId: string;
+  localityId: string;
+  slotWindowId: string;
+  /** .NET DateOnly serialises as "yyyy-MM-dd". */
+  slotDate: string;
+  quantity: number;
+  addOns: AddOnSelection[];
+}
+
+export interface BookingServiceSummary {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface BookingAddressSummary {
+  id: string;
+  label: string;
+  line1: string;
+  line2: string | null;
+  landmark: string | null;
+  pincode: string;
+  city: string;
+  state: string;
+  latitude: number;
+  longitude: number;
+  contactName: string;
+  contactMobile: string;
+}
+
+export interface BookingSlotSummary {
+  slotWindowId: string;
+  name: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
+/** Booking summary/preview (SRS 11.7). Coupon/wallet are omitted - neither module exists yet (Phase 4). */
+export interface BookingSummary {
+  service: BookingServiceSummary;
+  addOns: ServiceAddOnSummary[];
+  address: BookingAddressSummary;
+  slot: BookingSlotSummary;
+  price: PriceBreakdown;
+  cancellationPolicy: string | null;
+  reschedulePolicy: string | null;
+}
+
+/**
+ * Mirrors Nestly.Domain.BookingStatus's declaration order exactly. The
+ * ConsumerApi has no JsonStringEnumConverter registered, so this enum
+ * serialises over the wire as its ordinal (a plain number), not its name -
+ * this mapping must stay in sync with BookingStatus.cs if that enum's order
+ * ever changes.
+ */
+export enum BookingStatus {
+  Initiated = 0,
+  PaymentPending = 1,
+  PaymentFailed = 2,
+  Confirmed = 3,
+  AwaitingFulfilment = 4,
+  Assigned = 5,
+  InProgress = 6,
+  Completed = 7,
+  CancelledByCustomer = 8,
+  CancelledByAdmin = 9,
+  Rescheduled = 10,
+  RefundPending = 11,
+  Refunded = 12,
+}
+
+/** Matches Nestly.Domain.BookingStatusBucket's member names - passed as the `bucket` query string value, which ASP.NET binds by name. */
+export type BookingStatusBucket = "Upcoming" | "Completed" | "Cancelled";
+
+export interface BookingStatusTimelineEntry {
+  fromStatus: BookingStatus | null;
+  toStatus: BookingStatus;
+  toStatusLabel: string;
+  reason: string | null;
+  changedAtUtc: string;
+}
+
+export interface BookingDetail {
+  id: string;
+  service: BookingServiceSummary;
+  addOns: ServiceAddOnSummary[];
+  address: BookingAddressSummary;
+  slot: BookingSlotSummary;
+  price: PriceBreakdown;
+  status: BookingStatus;
+  statusLabel: string;
+  timeline: BookingStatusTimelineEntry[];
+  createdAtUtc: string;
+}
+
+export interface BookingListItem {
+  id: string;
+  serviceName: string;
+  slotDate: string;
+  totalPayable: number;
+  status: BookingStatus;
+  statusLabel: string;
+  createdAtUtc: string;
+}

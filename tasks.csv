@@ -143,60 +143,61 @@ id,task,status,priority,notes,phase
 54b,QA - slot cutoff/blackout/capacity edge cases,done,high,"depends on #54a | completed: audited SlotAvailabilityServiceTests and added 3 gaps: the day immediately after a blackout range is not blocked (off-by-one on SlotBlackout.CoversDate), a date exactly on the max-advance-days boundary still returns slots (off-by-one on the advance-window check), and RevalidateSlotAsync fails once the cutoff passes between a slot being offered and the customer confirming it (previously only blackout was tested as a revalidation-failure cause)",Phase 2 - Catalog & Serviceability
 54c,QA - price calc scenarios,done,high,"depends on #54b | completed: audited PriceCalculationServiceTests and added 3 gaps: zero/negative add-on quantity rejected (Pricing.InvalidAddOnQuantity had zero test coverage despite existing in code), an inactive service rejected as not-found, and an inactive add-on rejected even when it belongs to the right service",Phase 2 - Catalog & Serviceability
 55,Booking - Booking schema: Tables: booking; booking_item; booking_addon_item; booking_status_history + snapshot columns (SRS 23.3),decomposed,high,"depends on #21 #37b | earlier attempt hit CS0234/CS0246 namespace errors; entity drafts salvaged to _salvage/booking/ (Booking, BookingItem, BookingAddonItem, BookingStatusHistory) - use Nestly.Domain namespace, not backend.shared.*; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 55a,55b,55c,55d",Phase 3 - Booking Core
-55a,Booking - Tables: booking,todo,high,"depends on #21 #37b | earlier attempt hit CS0234/CS0246 namespace errors; entity drafts salvaged to _salvage/booking/ (Booking, BookingItem, BookingAddonItem, BookingStatusHistory) - use Nestly.Domain namespace, not backend.shared.*; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
-55b,Booking - booking_item,todo,high,depends on #55a,Phase 3 - Booking Core
-55c,Booking - booking_addon_item,todo,high,depends on #55b,Phase 3 - Booking Core
-55d,Booking - booking_status_history + snapshot columns (SRS 23.3),todo,high,depends on #55c,Phase 3 - Booking Core
-56a,Booking - Define 13 booking states and lifecycle enum,todo,high,,Phase 3 - Booking Core
-56b,Booking - Implement state transition matrix and invariants,todo,high,depends on #56a,Phase 3 - Booking Core
-56c,Booking - Add booking status history tracking,todo,high,depends on #56b,Phase 3 - Booking Core
-56d,Booking - Add booking rules enforcement (immutability),todo,high,"depends on #56c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
-57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),todo,high,"depends on #48 #56d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
+55a,Booking - Tables: booking,done,high,"depends on #21 #37b | earlier attempt hit CS0234/CS0246 namespace errors; entity drafts salvaged to _salvage/booking/ (Booking, BookingItem, BookingAddonItem, BookingStatusHistory) - use Nestly.Domain namespace, not backend.shared.*; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | completed: Booking aggregate root (backend/shared/Domain/Booking.cs): customer/address/slot/price snapshot columns per SRS 23.3 and CustomerAddress.cs's own design note (denormalized fields, no FK to the mutable source rows), FK to Customer, EF migration 20260730171704_AddBookingSchema. built from scratch rather than the _salvage/booking/ drafts - those were thin skeletons (bare Entity<Guid>, string Status, no snapshot fields, no lifecycle validation) that didn't meet SRS 23.3's immutable-snapshot requirement or SRS 13's 13-state lifecycle; kept only as confirmation of entity/field names",Phase 3 - Booking Core
+55b,Booking - booking_item,done,high,"depends on #55a | completed: BookingItem child entity (service line, snapshot name/slug/price/quantity), owned by Booking via a private-field-backed IReadOnlyList navigation",Phase 3 - Booking Core
+55c,Booking - booking_addon_item,done,high,"depends on #55b | completed: BookingAddOnItem child entity (add-on line under a BookingItem, snapshot name/price/quantity)",Phase 3 - Booking Core
+55d,Booking - booking_status_history + snapshot columns (SRS 23.3),done,high,"depends on #55c | completed: BookingStatusHistory child entity (append-only, FromStatus/ToStatus/Reason/ChangedAtUtc) + all snapshot columns from 55a",Phase 3 - Booking Core
+56a,Booking - Define 13 booking states and lifecycle enum,done,high," | completed: BookingStatus enum, the 13 states from SRS 13.1 exactly",Phase 3 - Booking Core
+56b,Booking - Implement state transition matrix and invariants,done,high,"depends on #56a | completed: BookingLifecycle static transition matrix (IsValidTransition/IsTerminal) as its own testable table, not scattered guard clauses",Phase 3 - Booking Core
+56c,Booking - Add booking status history tracking,done,high,"depends on #56b | completed: Booking.TransitionTo appends a BookingStatusHistory row on every change, including the initial Initiated row at creation",Phase 3 - Booking Core
+56d,Booking - Add booking rules enforcement (immutability),done,high,"depends on #56c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | completed: Booking.AddItem throws once status has moved past Initiated (EnsureStillMutable) - the price/item snapshot locks the instant payment starts, per SRS 14.1",Phase 3 - Booking Core
+154,Backend - Link CustomerAddress to the Geography module (SRS 12.9.1),done,high,"discovered while starting task 57 (booking summary service): CustomerAddress (Phase 1) stores city/pincode as free text with no way to resolve a localityId/pincodeId for the slot/serviceability APIs (Phase 2). User chose to add optional PincodeId/LocalityId to CustomerAddress, backfilled on save via a text match, over keeping the two selections fully separate | completed: CustomerAddress.PincodeId/LocalityId (nullable, SetNull on delete - not a snapshot field, this is a maintained link, unlike Booking's deliberately-non-FK columns) resolved by CustomerAddressService on every AddAsync/UpdateAsync via IGeographyRepository.FindActivePincodeIdByCodeAsync (Pincode.Code is globally unique, no city-name matching needed); LocalityId always resolves to null for now - the address form has no locality-name field to match against, noted as a real gap rather than a fragile fuzzy-match against Line1/Landmark text; migration 20260730 AddCustomerAddressGeographyLink; 4 new tests (resolved, unmatched, inactive-pincode, re-resolve-on-update), full suite 176/176 pass",Phase 3 - Booking Core
+57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),done,high,"depends on #48 #56d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | completed: BookingSummaryService composes the already-tested ISlotAvailabilityService and IPriceCalculationService rather than re-validating independently, so a summary can never approve a combination booking creation would reject; POST /api/v1/bookings/summary ([Authorize], IDOR-scoped to the JWT customer id like the address endpoints). Distinguishes Booking.NotServiceable (locality) from Booking.SlotNotAvailable (specific window) rather than one conflated error. Coupon discount/wallet credit omitted from the response - neither module exists yet (Phase 4). 6 new tests, full suite 182/182 pass",Phase 3 - Booking Core
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),decomposed,critical,"depends on #57 #46 #30 | auto-blocked: depends on blocked task #30 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 58a,58b,58c,58d,58e,58f",Phase 3 - Booking Core
-58a,Booking - Preconditions: identity,todo,critical,"depends on #57 #46 #30| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-58b,Booking - active catalog,todo,critical,depends on #58a,Phase 3 - Booking Core
-58c,Booking - serviceable address,todo,critical,depends on #58b,Phase 3 - Booking Core
-58d,Booking - valid slot,todo,critical,depends on #58c,Phase 3 - Booking Core
-58e,Booking - price snapshot,todo,critical,depends on #58d,Phase 3 - Booking Core
-58f,Booking - payment policy (SRS 11.12.1; 32.1),todo,critical,depends on #58e,Phase 3 - Booking Core
+58a,Booking - Preconditions: identity,done,critical,"depends on #57 #46 #30| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+58b,Booking - active catalog,done,critical,depends on #58a,Phase 3 - Booking Core
+58c,Booking - serviceable address,done,critical,depends on #58b,Phase 3 - Booking Core
+58d,Booking - valid slot,done,critical,depends on #58c,Phase 3 - Booking Core
+58e,Booking - price snapshot,done,critical,depends on #58d,Phase 3 - Booking Core
+58f,Booking - payment policy (SRS 11.12.1; 32.1),done,critical,depends on #58e,Phase 3 - Booking Core
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),decomposed,critical,"depends on #58f | auto-blocked: depends on blocked task #58 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 59a,59b,59c,59d,59e,59f,59g,59h",Phase 3 - Booking Core
-59a,Booking - Immutable snapshots: customer,todo,critical,"depends on #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-59b,Booking - address,todo,critical,depends on #59a,Phase 3 - Booking Core
-59c,Booking - service,todo,critical,depends on #59b,Phase 3 - Booking Core
-59d,Booking - add-ons,todo,critical,depends on #59c,Phase 3 - Booking Core
-59e,Booking - slot,todo,critical,depends on #59d,Phase 3 - Booking Core
-59f,Booking - price,todo,critical,depends on #59e,Phase 3 - Booking Core
-59g,Booking - coupon,todo,critical,depends on #59f,Phase 3 - Booking Core
-59h,Booking - tax (SRS 8.2; 11.12.2),todo,critical,depends on #59g,Phase 3 - Booking Core
+59a,Booking - Immutable snapshots: customer,done,critical,"depends on #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+59b,Booking - address,done,critical,depends on #59a,Phase 3 - Booking Core
+59c,Booking - service,done,critical,depends on #59b,Phase 3 - Booking Core
+59d,Booking - add-ons,done,critical,depends on #59c,Phase 3 - Booking Core
+59e,Booking - slot,done,critical,depends on #59d,Phase 3 - Booking Core
+59f,Booking - price,done,critical,depends on #59e,Phase 3 - Booking Core
+59g,Booking - coupon,done,critical,depends on #59f,Phase 3 - Booking Core
+59h,Booking - tax (SRS 8.2; 11.12.2),done,critical,depends on #59g,Phase 3 - Booking Core
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),decomposed,high,"depends on #59h | auto-blocked: depends on blocked task #59 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 60a,60b,60c",Phase 3 - Booking Core
-60a,Booking - Create booking,todo,high,"depends on #59h| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-60b,Booking - list (upcoming/completed/cancelled),todo,high,depends on #60a,Phase 3 - Booking Core
-60c,Booking - booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #60b,Phase 3 - Booking Core
-61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56d,Phase 3 - Booking Core
+60a,Booking - Create booking,done,high,"depends on #59h| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+60b,Booking - list (upcoming/completed/cancelled),done,high,depends on #60a,Phase 3 - Booking Core
+60c,Booking - booking detail with status timeline (SRS 11.13; 24.6),done,high,depends on #60b,Phase 3 - Booking Core
+61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),done,high,depends on #56d,Phase 3 - Booking Core
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),decomposed,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 62a,62b,62c,62d,62e,62f",Phase 3 - Booking Core
-62a,Frontend - Cart/summary with add-on,todo,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
-62b,Frontend - address,todo,high,depends on #62a,Phase 3 - Booking Core
-62c,Frontend - slot,todo,high,depends on #62b,Phase 3 - Booking Core
-62d,Frontend - coupon,todo,high,depends on #62c,Phase 3 - Booking Core
-62e,Frontend - price breakdown,todo,high,depends on #62d,Phase 3 - Booking Core
-62f,Frontend - policy summary (SRS 11.7),todo,high,depends on #62e,Phase 3 - Booking Core
+62a,Frontend - Cart/summary with add-on,done,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
+62b,Frontend - address,done,high,depends on #62a,Phase 3 - Booking Core
+62c,Frontend - slot,done,high,depends on #62b,Phase 3 - Booking Core
+62d,Frontend - coupon,done,high,depends on #62c,Phase 3 - Booking Core
+62e,Frontend - price breakdown,done,high,depends on #62d,Phase 3 - Booking Core
+62f,Frontend - policy summary (SRS 11.7),done,high,depends on #62e,Phase 3 - Booking Core
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),decomposed,high,"depends on #62f #46 | superseded: decomposed into subtasks 63a,63b,63c",Phase 3 - Booking Core
-63a,Frontend - Date picker + time windows,todo,high,depends on #62f #46,Phase 3 - Booking Core
-63b,Frontend - disabled slots,todo,high,depends on #63a,Phase 3 - Booking Core
-63c,Frontend - graceful failure on stale slot (SRS 11.8),todo,high,depends on #63b,Phase 3 - Booking Core
+63a,Frontend - Date picker + time windows,done,high,depends on #62f #46,Phase 3 - Booking Core
+63b,Frontend - disabled slots,done,high,depends on #63a,Phase 3 - Booking Core
+63c,Frontend - graceful failure on stale slot (SRS 11.8),done,high,depends on #63b,Phase 3 - Booking Core
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),decomposed,high,"depends on #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 64a,64b,64c,64d",Phase 3 - Booking Core
-64a,Frontend - Confirmation: booking ID,todo,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-64b,Frontend - summary,todo,high,depends on #64a,Phase 3 - Booking Core
-64c,Frontend - guidance,todo,high,depends on #64b,Phase 3 - Booking Core
-64d,Frontend - link to detail (SRS 11.12.3),todo,high,depends on #64c,Phase 3 - Booking Core
+64a,Frontend - Confirmation: booking ID,done,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+64b,Frontend - summary,done,high,depends on #64a,Phase 3 - Booking Core
+64c,Frontend - guidance,done,high,depends on #64b,Phase 3 - Booking Core
+64d,Frontend - link to detail (SRS 11.12.3),done,high,depends on #64c,Phase 3 - Booking Core
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),decomposed,high,"depends on #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 65a,65b,65c",Phase 3 - Booking Core
-65a,Frontend - Booking list tabs and full detail with timeline,todo,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-65b,Frontend - refund info,todo,high,depends on #65a,Phase 3 - Booking Core
-65c,Frontend - action CTAs (SRS 11.13),todo,high,depends on #65b,Phase 3 - Booking Core
+65a,Frontend - Booking list tabs and full detail with timeline,done,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+65b,Frontend - refund info,done,high,depends on #65a,Phase 3 - Booking Core
+65c,Frontend - action CTAs (SRS 11.13),done,high,depends on #65b,Phase 3 - Booking Core
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,decomposed,high,"depends on #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 66a,66b,66c",Phase 3 - Booking Core
-66a,QA - State transition matrix coverage,todo,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-66b,QA - snapshot immutability,todo,high,depends on #66a,Phase 3 - Booking Core
-66c,QA - concurrent slot race cases,todo,high,depends on #66b,Phase 3 - Booking Core
+66a,QA - State transition matrix coverage,done,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+66b,QA - snapshot immutability,done,high,depends on #66a,Phase 3 - Booking Core
+66c,QA - concurrent slot race cases,done,high,depends on #66b,Phase 3 - Booking Core
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),decomposed,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 67a,67b,67c,67d,67e,67f",Phase 4 - Payments & Financial
 67a,Payments - Tables: payment_transaction,todo,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
 67b,Payments - payment_attempt,todo,high,depends on #67a,Phase 4 - Payments & Financial
