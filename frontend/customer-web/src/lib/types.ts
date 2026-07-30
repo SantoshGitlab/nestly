@@ -317,3 +317,60 @@ export interface BookingListItem {
   statusLabel: string;
   createdAtUtc: string;
 }
+
+/**
+ * Payment shapes mirror the C# records in Nestly.Application.Payments
+ * (PaymentContracts.cs) - see PaymentsController.
+ */
+
+/**
+ * Mirrors Nestly.Domain.PaymentTransactionStatus's declaration order exactly
+ * (no JsonStringEnumConverter is registered - see BookingStatus's doc comment
+ * above for the same pattern).
+ */
+export enum PaymentTransactionStatus {
+  Pending = 0,
+  Success = 1,
+  Failed = 2,
+  Cancelled = 3,
+}
+
+/** Mirrors Nestly.Domain.PaymentAttemptStatus's declaration order exactly. */
+export enum PaymentAttemptStatus {
+  Created = 0,
+  Success = 1,
+  Failed = 2,
+}
+
+export interface PaymentOrderResponse {
+  paymentTransactionId: string;
+  attemptId: string;
+  gatewayOrderId: string;
+  amount: number;
+  currency: string;
+  attemptNumber: number;
+  createdAtUtc: string;
+}
+
+export interface PaymentAttemptResponse {
+  id: string;
+  attemptNumber: number;
+  gatewayOrderId: string;
+  gatewayPaymentRef: string | null;
+  status: PaymentAttemptStatus;
+  failureReason: string | null;
+  createdAtUtc: string;
+  completedAtUtc: string | null;
+}
+
+export interface PaymentTransactionResponse {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  amount: number;
+  currency: string;
+  status: PaymentTransactionStatus;
+  attempts: PaymentAttemptResponse[];
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}

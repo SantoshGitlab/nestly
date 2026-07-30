@@ -240,9 +240,9 @@ summary-note,"Recently added after comparing Urban.docx (original workflow diagr
 75c,Refunds - Implement partial refund calculation and policy rules,done,high,"depends on #75b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 75d,Refunds - Add refund status lifecycle and tracking,done,high,"depends on #75c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),decomposed,high,"depends on #62f #68d | auto-blocked: depends on blocked task #68d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 76a,76b,76c",Phase 4 - Payments & Financial
-76a,Frontend - Payment initiation,todo,high,"depends on #62f #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-76b,Frontend - result handling,todo,high,depends on #76a,Phase 4 - Payments & Financial
-76c,Frontend - retry UX (SRS 25.1),todo,high,depends on #76b,Phase 4 - Payments & Financial
+76a,Frontend - Payment initiation,done,high,"depends on #62f #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+76b,Frontend - result handling,done,high,depends on #76a,Phase 4 - Payments & Financial
+76c,Frontend - retry UX (SRS 25.1),done,high,depends on #76b,Phase 4 - Payments & Financial
 77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),todo,high,"depends on #76c #73| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 78,Frontend - Wallet and refund pages: Balance; ledger entries; refund status per booking (SRS 11.17),decomposed,high,"depends on #65c #74c | auto-blocked: depends on blocked task #65 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 78a,78b,78c",Phase 4 - Payments & Financial
 78a,Frontend - Balance,todo,high,"depends on #65c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial

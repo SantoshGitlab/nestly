@@ -139,7 +139,7 @@ function BookingSummaryScreen() {
         body: JSON.stringify(request),
       });
 
-      router.push(`/booking/success/${booking.id}?serviceSlug=${service.slug}`);
+      router.push(`/booking/payment/${booking.id}?serviceSlug=${service.slug}`);
     } catch (err) {
       setSubmitError(describeError(err));
       setIsSubmitting(false);
