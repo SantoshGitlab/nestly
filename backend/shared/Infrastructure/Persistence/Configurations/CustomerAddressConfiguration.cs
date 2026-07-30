@@ -26,6 +26,19 @@ public class CustomerAddressConfiguration : IEntityTypeConfiguration<CustomerAdd
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
 
+        // Best-effort links into the geography master (see CustomerAddress's
+        // doc comments). SetNull rather than Restrict/Cascade: if a pincode
+        // or locality is later deleted, the address itself - and its raw
+        // Pincode/City/State text - must remain valid; only the link breaks.
+        builder.HasOne<Pincode>()
+            .WithMany()
+            .HasForeignKey(x => x.PincodeId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<Locality>()
+            .WithMany()
+            .HasForeignKey(x => x.LocalityId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // At most one default address per customer — enforced at the
         // database level (partial unique index), not only in the service.
         // A second plain index also exists for general "all addresses for

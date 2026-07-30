@@ -14,4 +14,11 @@ public interface IGeographyRepository
     /// type-ahead picker, not a browsable listing.
     /// </summary>
     Task<IReadOnlyList<LocalityResponse>> SearchActiveLocalitiesAsync(Guid cityId, string? search);
+
+    /// <summary>
+    /// Resolves an active pincode's id from its code, or null if no active
+    /// pincode has that exact code. Pincode.Code is globally unique (not
+    /// scoped to a city), so no city context is needed to disambiguate.
+    /// </summary>
+    Task<Guid?> FindActivePincodeIdByCodeAsync(string pincodeCode);
 }

@@ -50,4 +50,14 @@ public class GeographyRepository : IGeographyRepository
             .Select(x => new LocalityResponse(x.locality.Id, x.locality.Name, x.zone.Name, x.pincode.Code, x.pincode.Id))
             .ToListAsync();
     }
+
+    public async Task<Guid?> FindActivePincodeIdByCodeAsync(string pincodeCode)
+    {
+        var match = await _context.Set<Pincode>()
+            .Where(p => p.IsActive && p.Code == pincodeCode)
+            .Select(p => (Guid?)p.Id)
+            .FirstOrDefaultAsync();
+
+        return match;
+    }
 }

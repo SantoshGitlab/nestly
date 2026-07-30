@@ -28,4 +28,7 @@ public record CustomerAddressResponse(
     decimal Longitude,
     string ContactName,
     string ContactMobile,
-    bool IsDefault);
+    bool IsDefault,
+    // Both null when no active pincode/locality matches - see CustomerAddress's doc comment.
+    Guid? PincodeId,
+    Guid? LocalityId);

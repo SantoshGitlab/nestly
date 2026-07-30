@@ -32,6 +32,22 @@ public class CustomerAddress : Entity<Guid>
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Best-effort link into the Geography module (SRS 12.9.1), resolved from
+    /// <see cref="Pincode"/>'s free-text code by <c>CustomerAddressService</c>
+    /// after every create/update. Null when no active pincode matches -
+    /// booking/serviceability checks that need this must handle that case
+    /// rather than assume every address resolves.
+    /// </summary>
+    public Guid? PincodeId { get; private set; }
+
+    /// <summary>
+    /// Null for now: this entity has no locality-name field to match against
+    /// <see cref="Locality"/>, so there is nothing reliable to resolve this
+    /// from yet. Wire it up if/when the address form gains a locality picker.
+    /// </summary>
+    public Guid? LocalityId { get; private set; }
+
     protected CustomerAddress() { }
 
     public CustomerAddress(
@@ -92,6 +108,13 @@ public class CustomerAddress : Entity<Guid>
         ContactName = contactName ?? throw new ArgumentNullException(nameof(contactName));
         ContactMobile = contactMobile ?? throw new ArgumentNullException(nameof(contactMobile));
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Called by the service layer after resolving <see cref="Pincode"/> against the geography master.</summary>
+    public void LinkToGeography(Guid? pincodeId, Guid? localityId)
+    {
+        PincodeId = pincodeId;
+        LocalityId = localityId;
     }
 
     public void MarkAsDefault() => IsDefault = true;
