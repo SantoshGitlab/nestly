@@ -216,10 +216,10 @@ summary-note,"Recently added after comparing Urban.docx (original workflow diagr
 67d,Payments - wallet_ledger,done,high,depends on #67c,Phase 4 - Payments & Financial
 67e,Payments - coupon,done,high,depends on #67d,Phase 4 - Payments & Financial
 67f,Payments - coupon_redemption (SRS 23.4),done,high,depends on #67e,Phase 4 - Payments & Financial
-68a,Payments - Define payment gateway interface (create order),todo,critical,"depends on #67f #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-68b,Payments - Implement sandbox gateway,todo,critical,"depends on #68a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-68c,Payments - Add payment order validation and formatting,todo,high,"depends on #68b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-68d,Payments - Add idempotency keys and request deduplication,todo,critical,"depends on #68c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68a,Payments - Define payment gateway interface (create order),done,critical,"depends on #67f #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68b,Payments - Implement sandbox gateway,done,critical,"depends on #68a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68c,Payments - Add payment order validation and formatting,done,high,"depends on #68b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68d,Payments - Add idempotency keys and request deduplication,done,critical,"depends on #68c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),decomposed,critical,"depends on #68d | auto-blocked: depends on blocked task #68d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 69a,69b,69c",Phase 4 - Payments & Financial
 69a,Payments - Signed callback verification,todo,critical,"depends on #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 69b,Payments - idempotent duplicate handling,todo,critical,depends on #69a,Phase 4 - Payments & Financial

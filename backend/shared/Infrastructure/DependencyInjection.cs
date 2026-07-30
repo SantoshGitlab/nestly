@@ -13,6 +13,7 @@ using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
 using Nestly.Application.Geography;
+using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
@@ -54,6 +55,12 @@ public static class DependencyInjection
         services
             .AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services
+            .AddOptions<SandboxGatewayOptions>()
+            .Bind(configuration.GetSection(SandboxGatewayOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
@@ -126,6 +133,15 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPasswordResetService, CustomerPasswordResetService>();
         services.AddScoped<ICustomerCommunicationPreferenceRepository, CustomerCommunicationPreferenceRepository>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+
+        // Stateless - depends only on bound Options - so one shared instance
+        // safely serves both interfaces (SandboxPaymentGateway implements
+        // IPaymentGateway and the sandbox-only ISandboxPaymentSimulator).
+        services.AddSingleton<SandboxPaymentGateway>();
+        services.AddSingleton<IPaymentGateway>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
+        services.AddSingleton<ISandboxPaymentSimulator>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
+        services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IPaymentService, PaymentService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email
         // vendor is configured yet. Swap this registration, not the callers,
