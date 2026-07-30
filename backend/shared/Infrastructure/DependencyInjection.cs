@@ -10,6 +10,7 @@ using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Catalog;
+using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Domain;
@@ -92,6 +93,7 @@ public static class DependencyInjection
         services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
         services.AddScoped<IServiceCityPriceRepository, ServiceCityPriceRepository>();
         services.AddScoped<ICityPricingPolicyRepository, CityPricingPolicyRepository>();
+        services.AddScoped<IPriceCalculationService, PriceCalculationService>();
         services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();
