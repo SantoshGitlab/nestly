@@ -102,7 +102,7 @@ id,task,status,priority,notes,phase
 44c,Slots - holidays/blackouts,decomposed,high,depends on #44b | timed out: 2026-07-30 20:29:41 | superseded: decomposed into subtasks,Phase 2 - Catalog & Serviceability
 44d,Slots - cutoffs,todo,high,depends on #44cc,Phase 2 - Catalog & Serviceability
 44e,Slots - advance-days,todo,high,depends on #44d,Phase 2 - Catalog & Serviceability
-44f,Slots - capacity (SRS 12.10),todo,high,depends on #44e,Phase 2 - Catalog & Serviceability
+44f,Slots - capacity (SRS 12.10),done,high,"depends on #44e | completed: folded into task 44a's SlotWindow.MaxBookingsPerSlot (nullable int) rather than a separate SlotCapacityRule table - capacity naturally belongs to the window it constrains, and SRS 12.10.1 phrases it as optional ('if capacity is used'), which a nullable field expresses directly. See commit for 44a/44b.",Phase 2 - Catalog & Serviceability
 44ca,Create C# data transfer objects for HolidayEvent and BlackoutPeriod including start/end dates and exclusion flags within the entity repository models.,todo,high,,Phase 2 - Catalog & Serviceability
 44cb,Implement a storage access method that retrieves active holiday/blackout records falling within a requested date range from the database or configuration store.,todo,high,depends on #44ca,Phase 2 - Catalog & Serviceability
 44cc,Update the slot availability calculation logic to iterate through cached blackout periods and mask any calendar segments overlapping with defined intervals before returning results.cw,todo,high,depends on #44cb,Phase 2 - Catalog & Serviceability
