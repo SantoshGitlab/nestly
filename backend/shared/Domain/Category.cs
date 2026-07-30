@@ -1,8 +1,9 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
-public class Category : Entity<Guid>
+public class Category : AggregateRoot<Guid>
 {
     public string Name { get; private set; } = string.Empty;
     public string Slug { get; private set; } = string.Empty;
@@ -25,6 +26,7 @@ public class Category : Entity<Guid>
         IsActive = true;
         IsFeatured = false;
         SortOrder = 0;
+        RaiseDomainEvent(new CategoryCreatedEvent(Id));
     }
 
     public void SetName(string name) => Name = name ?? throw new ArgumentNullException(nameof(name));
@@ -38,8 +40,19 @@ public class Category : Entity<Guid>
         SeoTitle = title;
         SeoMetaDescription = metaDescription;
     }
-    public void Activate() => IsActive = true;
-    public void Deactivate() => IsActive = false;
+    public void Activate()
+    {
+        if (IsActive) return;
+        IsActive = true;
+        RaiseDomainEvent(new CategoryActivatedEvent(Id));
+    }
+
+    public void Deactivate()
+    {
+        if (!IsActive) return;
+        IsActive = false;
+        RaiseDomainEvent(new CategoryDeactivatedEvent(Id));
+    }
     public void Feature() => IsFeatured = true;
     public void Unfeature() => IsFeatured = false;
 }

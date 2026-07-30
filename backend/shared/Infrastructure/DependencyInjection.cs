@@ -1,4 +1,5 @@
 using System.Text;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +10,11 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
+using Nestly.Application.Catalog;
+using Nestly.Application.Geography;
+using Nestly.Application.Pricing;
+using Nestly.Application.Serviceability;
+using Nestly.Application.Slots;
 using Nestly.Domain;
 using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.BackgroundJobs;
@@ -55,12 +61,15 @@ public static class DependencyInjection
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
 
         services.AddSingleton<AuditableEntityInterceptor>();
+        services.AddScoped<DomainEventDispatchInterceptor>();
 
         services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
             options
                 .UseNpgsql(connectionString)
                 .UseSnakeCaseNamingConvention()
-                .AddInterceptors(serviceProvider.GetRequiredService<AuditableEntityInterceptor>()));
+                .AddInterceptors(
+                    serviceProvider.GetRequiredService<AuditableEntityInterceptor>(),
+                    serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>()));
 
         services
             .AddHealthChecks()
@@ -69,6 +78,14 @@ public static class DependencyInjection
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
 
+        // Application.DependencyInjection.AddApplication() only scans the
+        // Application assembly for MediatR handlers, so this second
+        // registration is what actually wires up CatalogCacheInvalidationHandler
+        // (and any other Infrastructure-layer handler) - without it, domain
+        // events would keep dispatching, but nothing in this assembly would
+        // receive them.
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
+
         // Audit attribution reads the current request; without this accessor
         // every user action would be silently attributed to the system.
         services.AddHttpContextAccessor();
@@ -76,6 +93,24 @@ public static class DependencyInjection
         services.AddScoped<IAuditLogWriter, AuditLogWriter>();
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IServiceRepository, ServiceRepository>();
+        services.AddScoped<IServiceAddOnRepository, ServiceAddOnRepository>();
+        services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
+        services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
+        services.AddScoped<ISlotWindowRepository, SlotWindowRepository>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
+        services.AddScoped<IServiceCityPriceRepository, ServiceCityPriceRepository>();
+        services.AddScoped<ICityPricingPolicyRepository, CityPricingPolicyRepository>();
+        services.AddScoped<IPriceCalculationService, PriceCalculationService>();
+        services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
+        services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
+        services.AddScoped<IGeographyRepository, GeographyRepository>();
+        services.AddScoped<IGeographyQueryService, GeographyQueryService>();
+        services.AddScoped<ICategoryQueryService, CategoryQueryService>();
+        services.AddScoped<IServiceQueryService, ServiceQueryService>();
+        services.AddScoped<ICatalogSearchService, CatalogSearchService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();

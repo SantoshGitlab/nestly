@@ -244,6 +244,102 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("category", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.CategoryCityMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.HasKey("Id")
+                        .HasName("pk_category_city_mapping");
+
+                    b.HasIndex("CityId")
+                        .HasDatabaseName("ix_category_city_mapping_city_id");
+
+                    b.HasIndex("CategoryId", "CityId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_category_city_mapping_category_id_city_id");
+
+                    b.ToTable("category_city_mapping", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.City", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("StateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("state_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_city");
+
+                    b.HasIndex("StateId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_city_state_id_name");
+
+                    b.ToTable("city", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CityPricingPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<decimal>("PlatformFee")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("platform_fee");
+
+                    b.Property<decimal>("TaxPercentage")
+                        .HasColumnType("decimal(5,2)")
+                        .HasColumnName("tax_percentage");
+
+                    b.Property<decimal>("VisitCharge")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("visit_charge");
+
+                    b.HasKey("Id")
+                        .HasName("pk_city_pricing_policy");
+
+                    b.HasIndex("CityId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_city_pricing_policy_city_id");
+
+                    b.ToTable("city_pricing_policy", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.CustomerAddress", b =>
                 {
                     b.Property<Guid>("Id")
@@ -556,6 +652,44 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("customer_session", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Locality", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("PincodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pincode_id");
+
+                    b.Property<Guid>("ZoneId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("zone_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_locality");
+
+                    b.HasIndex("PincodeId")
+                        .HasDatabaseName("ix_locality_pincode_id");
+
+                    b.HasIndex("ZoneId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_locality_zone_id_name");
+
+                    b.ToTable("locality", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.LoginAttempt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -586,12 +720,51 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("login_attempt", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Pincode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pincode");
+
+                    b.HasIndex("CityId")
+                        .HasDatabaseName("ix_pincode_city_id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_pincode_code");
+
+                    b.ToTable("pincode", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.Service", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("CancellationPolicy")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("cancellation_policy");
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid")
@@ -602,6 +775,22 @@ namespace Nestly.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
+
+                    b.Property<string>("Exclusions")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasDefaultValue("")
+                        .HasColumnName("exclusions");
+
+                    b.Property<string>("Inclusions")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasDefaultValue("")
+                        .HasColumnName("inclusions");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -617,11 +806,26 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("price");
 
+                    b.Property<string>("ReschedulePolicy")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("reschedule_policy");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("slug");
+
                     b.HasKey("Id")
                         .HasName("pk_service");
 
                     b.HasIndex("CategoryId")
                         .HasDatabaseName("ix_service_category_id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_slug");
 
                     b.ToTable("service", (string)null);
                 });
@@ -632,6 +836,17 @@ namespace Nestly.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -647,6 +862,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("service_id");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
                     b.HasKey("Id")
                         .HasName("pk_service_addon");
 
@@ -654,6 +873,38 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_service_addon_service_id");
 
                     b.ToTable("service_addon", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ServiceCityPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("price");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_city_price");
+
+                    b.HasIndex("CityId")
+                        .HasDatabaseName("ix_service_city_price_city_id");
+
+                    b.HasIndex("ServiceId", "CityId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_city_price_service_id_city_id");
+
+                    b.ToTable("service_city_price", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.ServiceFaq", b =>
@@ -714,6 +965,206 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("service_media", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.ServicePincodeMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("PincodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pincode_id");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_pincode_mapping");
+
+                    b.HasIndex("PincodeId")
+                        .HasDatabaseName("ix_service_pincode_mapping_pincode_id");
+
+                    b.HasIndex("ServiceId", "PincodeId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_service_pincode_mapping_service_id_pincode_id");
+
+                    b.ToTable("service_pincode_mapping", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotBlackout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_slot_blackout");
+
+                    b.HasIndex("CityId", "StartDate", "EndDate")
+                        .HasDatabaseName("ix_slot_blackout_city_id_start_date_end_date");
+
+                    b.ToTable("slot_blackout", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotBookingPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<int>("CutoffMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("cutoff_minutes");
+
+                    b.Property<int>("MaxAdvanceDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_advance_days");
+
+                    b.HasKey("Id")
+                        .HasName("pk_slot_booking_policy");
+
+                    b.HasIndex("CityId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_slot_booking_policy_city_id");
+
+                    b.ToTable("slot_booking_policy", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotWindow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("interval")
+                        .HasColumnName("end_time");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int?>("MaxBookingsPerSlot")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_bookings_per_slot");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("interval")
+                        .HasColumnName("start_time");
+
+                    b.HasKey("Id")
+                        .HasName("pk_slot_window");
+
+                    b.HasIndex("CityId")
+                        .HasDatabaseName("ix_slot_window_city_id");
+
+                    b.ToTable("slot_window", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotWindowRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_of_week");
+
+                    b.Property<Guid>("SlotWindowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("slot_window_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_slot_window_rule");
+
+                    b.HasIndex("SlotWindowId", "DayOfWeek")
+                        .IsUnique()
+                        .HasDatabaseName("ix_slot_window_rule_slot_window_id_day_of_week");
+
+                    b.ToTable("slot_window_rule", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.State", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_state");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_state_code");
+
+                    b.ToTable("state", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.SupportTicketComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -739,6 +1190,199 @@ namespace Nestly.Infrastructure.Migrations
                         .HasName("pk_support_ticket_comment");
 
                     b.ToTable("support_ticket_comment", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Zone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("city_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_zone");
+
+                    b.HasIndex("CityId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_zone_city_id_name");
+
+                    b.ToTable("zone", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CategoryCityMapping", b =>
+                {
+                    b.HasOne("Nestly.Domain.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_category_city_mapping_category_category_id");
+
+                    b.HasOne("Nestly.Domain.City", null)
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_category_city_mapping_cities_city_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.City", b =>
+                {
+                    b.HasOne("Nestly.Domain.State", "State")
+                        .WithMany()
+                        .HasForeignKey("StateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_city_states_state_id");
+
+                    b.Navigation("State");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CityPricingPolicy", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", null)
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_city_pricing_policy_city_city_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Locality", b =>
+                {
+                    b.HasOne("Nestly.Domain.Pincode", "Pincode")
+                        .WithMany()
+                        .HasForeignKey("PincodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_locality_pincodes_pincode_id");
+
+                    b.HasOne("Nestly.Domain.Zone", "Zone")
+                        .WithMany()
+                        .HasForeignKey("ZoneId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_locality_zones_zone_id");
+
+                    b.Navigation("Pincode");
+
+                    b.Navigation("Zone");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Pincode", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", "City")
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pincode_city_city_id");
+
+                    b.Navigation("City");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ServiceCityPrice", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", null)
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_city_price_city_city_id");
+
+                    b.HasOne("Nestly.Domain.Service", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_city_price_service_service_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ServicePincodeMapping", b =>
+                {
+                    b.HasOne("Nestly.Domain.Pincode", null)
+                        .WithMany()
+                        .HasForeignKey("PincodeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_pincode_mapping_pincode_pincode_id");
+
+                    b.HasOne("Nestly.Domain.Service", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_pincode_mapping_service_service_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotBlackout", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", null)
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_slot_blackout_city_city_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotBookingPolicy", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", null)
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_slot_booking_policy_city_city_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotWindow", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", "City")
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_slot_window_city_city_id");
+
+                    b.Navigation("City");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotWindowRule", b =>
+                {
+                    b.HasOne("Nestly.Domain.SlotWindow", "SlotWindow")
+                        .WithMany()
+                        .HasForeignKey("SlotWindowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_slot_window_rule_slot_window_slot_window_id");
+
+                    b.Navigation("SlotWindow");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Zone", b =>
+                {
+                    b.HasOne("Nestly.Domain.City", "City")
+                        .WithMany()
+                        .HasForeignKey("CityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_zone_city_city_id");
+
+                    b.Navigation("City");
                 });
 #pragma warning restore 612, 618
         }

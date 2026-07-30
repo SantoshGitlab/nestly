@@ -61,3 +61,145 @@ export interface CustomerAddress {
   contactMobile: string;
   isDefault: boolean;
 }
+
+/**
+ * Catalog/geography/serviceability/slot/pricing shapes mirror the C# records
+ * in Nestly.Application (Catalog/*, Geography/*, Serviceability/*, Slots/*,
+ * Pricing/*) - see CategoriesController, ServicesController, CatalogSearchController,
+ * GeographyController, ServiceabilityController, SlotsController, PricingController.
+ */
+
+export interface CategorySummary {
+  id: string;
+  name: string;
+  slug: string;
+  iconUrl: string | null;
+  bannerUrl: string | null;
+  isFeatured: boolean;
+}
+
+export interface ServiceAddOnSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+}
+
+export interface ServiceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  addOns: ServiceAddOnSummary[];
+}
+
+export interface CategoryDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  iconUrl: string | null;
+  bannerUrl: string | null;
+  services: ServiceSummary[];
+}
+
+export interface ServiceListItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+}
+
+export interface ServiceDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  price: number;
+  inclusions: string;
+  exclusions: string;
+  cancellationPolicy: string | null;
+  reschedulePolicy: string | null;
+  categoryId: string;
+  categoryName: string;
+  categorySlug: string;
+  addOns: ServiceAddOnSummary[];
+}
+
+export interface CatalogSearchResult {
+  categories: CategorySummary[];
+  services: ServiceListItem[];
+}
+
+export interface City {
+  id: string;
+  name: string;
+  stateName: string;
+}
+
+export interface LocalitySearchResult {
+  id: string;
+  name: string;
+  zoneName: string;
+  pincodeCode: string;
+  pincodeId: string;
+}
+
+export interface ServiceabilityResult {
+  isServiceable: boolean;
+}
+
+export interface SlotOption {
+  slotWindowId: string;
+  name: string;
+  /** .NET TimeSpan serialises as "hh:mm:ss". */
+  startTime: string;
+  endTime: string;
+  maxBookingsPerSlot: number | null;
+}
+
+export interface SlotAvailability {
+  isServiceable: boolean;
+  slots: SlotOption[];
+}
+
+export interface SlotRevalidation {
+  isValid: boolean;
+  reason: string | null;
+}
+
+export interface AddOnSelection {
+  addOnId: string;
+  quantity: number;
+}
+
+export interface PriceCalculationRequest {
+  serviceId: string;
+  cityId: string;
+  quantity: number;
+  addOns: AddOnSelection[];
+}
+
+export interface AddOnLineItem {
+  addOnId: string;
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+}
+
+export interface PriceBreakdown {
+  basePrice: number;
+  quantity: number;
+  baseTotal: number;
+  addOnLineItems: AddOnLineItem[];
+  addOnTotal: number;
+  visitCharge: number;
+  subtotal: number;
+  taxPercentage: number;
+  taxAmount: number;
+  platformFee: number;
+  totalPayable: number;
+}

@@ -34,6 +34,25 @@ public static class CacheKeys
     public static string ServicesByCategory(Guid categoryId) =>
         Compose(Areas.Catalog, "category", categoryId.ToString("D"), "services");
 
+    /// <summary>
+    /// The list of categories serviceable in a city. Short-TTL only (task
+    /// 49) - not invalidated by category/mapping events, since determining
+    /// every city a changed category maps to would need a reverse scan this
+    /// listing doesn't otherwise need. Bounded staleness is an acceptable
+    /// trade for a browse-page listing; add precise invalidation if it
+    /// becomes a measured problem.
+    /// </summary>
+    public static string CategoriesInCity(Guid cityId) =>
+        Compose(Areas.Catalog, "city", cityId.ToString("D"), "categories");
+
+    /// <summary>Whether a category is serviceable in a city (SRS 12.9.2).</summary>
+    public static string CategoryServiceability(Guid categoryId, Guid cityId) =>
+        Compose(Areas.Catalog, "serviceability", "category", categoryId.ToString("D"), "city", cityId.ToString("D"));
+
+    /// <summary>Whether a service is serviceable in a pincode (SRS 12.9.2).</summary>
+    public static string ServicePincodeServiceability(Guid serviceId, Guid pincodeId) =>
+        Compose(Areas.Catalog, "serviceability", "service", serviceId.ToString("D"), "pincode", pincodeId.ToString("D"));
+
     /// <summary>A customer's active session projection.</summary>
     public static string CustomerSession(Guid customerId) =>
         Compose(Areas.Session, "customer", customerId.ToString("D"));
