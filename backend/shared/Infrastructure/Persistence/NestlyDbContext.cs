@@ -12,6 +12,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<Locality> Localities { get; set; }
     public DbSet<CategoryCityMapping> CategoryCityMappings { get; set; }
     public DbSet<ServicePincodeMapping> ServicePincodeMappings { get; set; }
+    public DbSet<SlotWindow> SlotWindows { get; set; }
+    public DbSet<SlotWindowRule> SlotWindowRules { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

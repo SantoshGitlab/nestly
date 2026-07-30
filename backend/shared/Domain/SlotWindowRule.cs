@@ -3,33 +3,22 @@ using Nestly.BuildingBlocks.Primitives;
 namespace Nestly.Domain;
 
 /// <summary>
-/// Represents a rule for slot windows based on the day of the week.
+/// Marks a <see cref="SlotWindow"/> as offered on a given day of the week
+/// (SRS 12.10.1 "Day-of-week availability"). The time range comes from the
+/// parent window - this rule only says which days it applies.
 /// </summary>
 public class SlotWindowRule : Entity<Guid>
 {
     public Guid SlotWindowId { get; private set; }
     public DayOfWeek DayOfWeek { get; private set; }
-    public TimeSpan Start { get; private set; }
-    public TimeSpan End { get; private set; }
 
     public SlotWindow? SlotWindow { get; private set; }
 
     protected SlotWindowRule() { }
 
-    public SlotWindowRule(Guid id, Guid slotWindowId, DayOfWeek dayOfWeek, TimeSpan start, TimeSpan end)
-        : base(id)
+    public SlotWindowRule(Guid id, Guid slotWindowId, DayOfWeek dayOfWeek) : base(id)
     {
         SlotWindowId = slotWindowId;
         DayOfWeek = dayOfWeek;
-        Start = start;
-        End = end;
-
-        Validate();
-    }
-
-    private void Validate()
-    {
-        if (Start >= End)
-            throw new ArgumentException("The start time must be before the end time.");
     }
 }
