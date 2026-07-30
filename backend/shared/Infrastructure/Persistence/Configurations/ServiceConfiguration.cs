@@ -16,5 +16,7 @@ public class ServiceConfiguration : IEntityTypeConfiguration<Service>
         builder.Property(x => x.Description).IsRequired().HasMaxLength(2000);
         builder.Property(x => x.Price).HasColumnType("decimal(18,2)").IsRequired();
         builder.Property(x => x.IsActive).IsRequired();
+        builder.Property(x => x.Inclusions).IsRequired().HasMaxLength(4000).HasDefaultValue(string.Empty);
+        builder.Property(x => x.Exclusions).IsRequired().HasMaxLength(4000).HasDefaultValue(string.Empty);
     }
 }
