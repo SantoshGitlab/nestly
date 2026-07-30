@@ -10,6 +10,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<Zone> Zones { get; set; }
     public DbSet<Pincode> Pincodes { get; set; }
     public DbSet<Locality> Localities { get; set; }
+    public DbSet<CategoryCityMapping> CategoryCityMappings { get; set; }
+    public DbSet<ServicePincodeMapping> ServicePincodeMappings { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
