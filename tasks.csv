@@ -154,26 +154,26 @@ id,task,status,priority,notes,phase
 154,Backend - Link CustomerAddress to the Geography module (SRS 12.9.1),done,high,"discovered while starting task 57 (booking summary service): CustomerAddress (Phase 1) stores city/pincode as free text with no way to resolve a localityId/pincodeId for the slot/serviceability APIs (Phase 2). User chose to add optional PincodeId/LocalityId to CustomerAddress, backfilled on save via a text match, over keeping the two selections fully separate | completed: CustomerAddress.PincodeId/LocalityId (nullable, SetNull on delete - not a snapshot field, this is a maintained link, unlike Booking's deliberately-non-FK columns) resolved by CustomerAddressService on every AddAsync/UpdateAsync via IGeographyRepository.FindActivePincodeIdByCodeAsync (Pincode.Code is globally unique, no city-name matching needed); LocalityId always resolves to null for now - the address form has no locality-name field to match against, noted as a real gap rather than a fragile fuzzy-match against Line1/Landmark text; migration 20260730 AddCustomerAddressGeographyLink; 4 new tests (resolved, unmatched, inactive-pincode, re-resolve-on-update), full suite 176/176 pass",Phase 3 - Booking Core
 57,Booking - Booking summary service: Cart model (single-service Phase 1 configurable); summary with price breakdown and policy display (SRS 11.7),done,high,"depends on #48 #56d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | completed: BookingSummaryService composes the already-tested ISlotAvailabilityService and IPriceCalculationService rather than re-validating independently, so a summary can never approve a combination booking creation would reject; POST /api/v1/bookings/summary ([Authorize], IDOR-scoped to the JWT customer id like the address endpoints). Distinguishes Booking.NotServiceable (locality) from Booking.SlotNotAvailable (specific window) rather than one conflated error. Coupon discount/wallet credit omitted from the response - neither module exists yet (Phase 4). 6 new tests, full suite 182/182 pass",Phase 3 - Booking Core
 58,Booking - Booking creation orchestration: Preconditions: identity; active catalog; serviceable address; valid slot; price snapshot; payment policy (SRS 11.12.1; 32.1),decomposed,critical,"depends on #57 #46 #30 | auto-blocked: depends on blocked task #30 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 58a,58b,58c,58d,58e,58f",Phase 3 - Booking Core
-58a,Booking - Preconditions: identity,todo,critical,"depends on #57 #46 #30| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-58b,Booking - active catalog,todo,critical,depends on #58a,Phase 3 - Booking Core
-58c,Booking - serviceable address,todo,critical,depends on #58b,Phase 3 - Booking Core
-58d,Booking - valid slot,todo,critical,depends on #58c,Phase 3 - Booking Core
-58e,Booking - price snapshot,todo,critical,depends on #58d,Phase 3 - Booking Core
-58f,Booking - payment policy (SRS 11.12.1; 32.1),todo,critical,depends on #58e,Phase 3 - Booking Core
+58a,Booking - Preconditions: identity,done,critical,"depends on #57 #46 #30| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+58b,Booking - active catalog,done,critical,depends on #58a,Phase 3 - Booking Core
+58c,Booking - serviceable address,done,critical,depends on #58b,Phase 3 - Booking Core
+58d,Booking - valid slot,done,critical,depends on #58c,Phase 3 - Booking Core
+58e,Booking - price snapshot,done,critical,depends on #58d,Phase 3 - Booking Core
+58f,Booking - payment policy (SRS 11.12.1; 32.1),done,critical,depends on #58e,Phase 3 - Booking Core
 59,Booking - Booking snapshot persistence: Immutable snapshots: customer; address; service; add-ons; slot; price; coupon; tax (SRS 8.2; 11.12.2),decomposed,critical,"depends on #58f | auto-blocked: depends on blocked task #58 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 59a,59b,59c,59d,59e,59f,59g,59h",Phase 3 - Booking Core
-59a,Booking - Immutable snapshots: customer,todo,critical,"depends on #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-59b,Booking - address,todo,critical,depends on #59a,Phase 3 - Booking Core
-59c,Booking - service,todo,critical,depends on #59b,Phase 3 - Booking Core
-59d,Booking - add-ons,todo,critical,depends on #59c,Phase 3 - Booking Core
-59e,Booking - slot,todo,critical,depends on #59d,Phase 3 - Booking Core
-59f,Booking - price,todo,critical,depends on #59e,Phase 3 - Booking Core
-59g,Booking - coupon,todo,critical,depends on #59f,Phase 3 - Booking Core
-59h,Booking - tax (SRS 8.2; 11.12.2),todo,critical,depends on #59g,Phase 3 - Booking Core
+59a,Booking - Immutable snapshots: customer,done,critical,"depends on #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+59b,Booking - address,done,critical,depends on #59a,Phase 3 - Booking Core
+59c,Booking - service,done,critical,depends on #59b,Phase 3 - Booking Core
+59d,Booking - add-ons,done,critical,depends on #59c,Phase 3 - Booking Core
+59e,Booking - slot,done,critical,depends on #59d,Phase 3 - Booking Core
+59f,Booking - price,done,critical,depends on #59e,Phase 3 - Booking Core
+59g,Booking - coupon,done,critical,depends on #59f,Phase 3 - Booking Core
+59h,Booking - tax (SRS 8.2; 11.12.2),done,critical,depends on #59g,Phase 3 - Booking Core
 60,Booking - Customer booking APIs: Create booking; list (upcoming/completed/cancelled); booking detail with status timeline (SRS 11.13; 24.6),decomposed,high,"depends on #59h | auto-blocked: depends on blocked task #59 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 60a,60b,60c",Phase 3 - Booking Core
-60a,Booking - Create booking,todo,high,"depends on #59h| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-60b,Booking - list (upcoming/completed/cancelled),todo,high,depends on #60a,Phase 3 - Booking Core
-60c,Booking - booking detail with status timeline (SRS 11.13; 24.6),todo,high,depends on #60b,Phase 3 - Booking Core
-61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),todo,high,depends on #56d,Phase 3 - Booking Core
+60a,Booking - Create booking,done,high,"depends on #59h| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+60b,Booking - list (upcoming/completed/cancelled),done,high,depends on #60a,Phase 3 - Booking Core
+60c,Booking - booking detail with status timeline (SRS 11.13; 24.6),done,high,depends on #60b,Phase 3 - Booking Core
+61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),done,high,depends on #56d,Phase 3 - Booking Core
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),decomposed,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 62a,62b,62c,62d,62e,62f",Phase 3 - Booking Core
 62a,Frontend - Cart/summary with add-on,todo,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
 62b,Frontend - address,todo,high,depends on #62a,Phase 3 - Booking Core

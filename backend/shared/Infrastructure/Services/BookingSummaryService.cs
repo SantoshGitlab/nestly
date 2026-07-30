@@ -96,8 +96,9 @@ public class BookingSummaryService : IBookingSummaryService
             addOnSummaries,
             new BookingAddressSummary(
                 address.Id, address.Label, address.Line1, address.Line2, address.Landmark,
-                address.Pincode, address.City, address.State, address.ContactName, address.ContactMobile),
-            new BookingSlotSummary(slot.SlotWindowId, request.SlotDate, slot.StartTime, slot.EndTime),
+                address.Pincode, address.City, address.State, address.Latitude, address.Longitude,
+                address.ContactName, address.ContactMobile),
+            new BookingSlotSummary(slot.SlotWindowId, slot.Name, request.SlotDate, slot.StartTime, slot.EndTime),
             priceResult.Value,
             service.CancellationPolicy,
             service.ReschedulePolicy);

@@ -114,6 +114,8 @@ public static class DependencyInjection
         services.AddScoped<ICatalogSearchService, CatalogSearchService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<IBookingSummaryService, BookingSummaryService>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
+        services.AddScoped<IBookingService, BookingService>();
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
