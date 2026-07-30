@@ -21,6 +21,12 @@ public class Service : AggregateRoot<Guid>
     /// <summary>What the service explicitly does not cover (SRS 12.6.2).</summary>
     public string Exclusions { get; private set; } = string.Empty;
 
+    /// <summary>Cancellation policy summary shown on the detail page (SRS 12.6.2, 11.6.1).</summary>
+    public string? CancellationPolicy { get; private set; }
+
+    /// <summary>Reschedule policy summary shown on the detail page (SRS 12.6.2, 11.6.1).</summary>
+    public string? ReschedulePolicy { get; private set; }
+
     protected Service() { }
 
     public Service(Guid id, Guid categoryId, string name, string slug, string description, decimal price) : base(id)
@@ -49,6 +55,8 @@ public class Service : AggregateRoot<Guid>
 
     public void SetInclusions(string inclusions) => Inclusions = inclusions ?? string.Empty;
     public void SetExclusions(string exclusions) => Exclusions = exclusions ?? string.Empty;
+    public void SetCancellationPolicy(string? policy) => CancellationPolicy = policy;
+    public void SetReschedulePolicy(string? policy) => ReschedulePolicy = policy;
 
     public void Activate()
     {

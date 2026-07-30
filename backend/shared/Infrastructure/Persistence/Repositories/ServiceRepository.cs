@@ -36,4 +36,16 @@ public class ServiceRepository : IServiceRepository
             .Where(s => s.CategoryId == categoryId && s.IsActive)
             .OrderBy(s => s.Name)
             .ToListAsync();
+
+    public Task<Service?> GetBySlugAsync(string slug) =>
+        _context.Set<Service>().FirstOrDefaultAsync(s => s.Slug == slug);
+
+    public async Task<IReadOnlyList<Service>> SearchActiveAsync(string query)
+    {
+        string normalized = query.ToLowerInvariant();
+        return await _context.Set<Service>()
+            .Where(s => s.IsActive && s.Name.ToLower().Contains(normalized))
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+    }
 }

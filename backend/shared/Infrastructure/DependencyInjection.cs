@@ -87,6 +87,8 @@ public static class DependencyInjection
         services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();
+        services.AddScoped<IServiceQueryService, ServiceQueryService>();
+        services.AddScoped<ICatalogSearchService, CatalogSearchService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();

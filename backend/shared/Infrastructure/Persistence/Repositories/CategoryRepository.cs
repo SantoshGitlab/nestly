@@ -49,4 +49,14 @@ public class CategoryRepository : ICategoryRepository
             .ThenBy(c => c.Name)
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<Category>> SearchActiveAsync(string query)
+    {
+        string normalized = query.ToLowerInvariant();
+        return await _context.Set<Category>()
+            .Where(c => c.IsActive && c.Name.ToLower().Contains(normalized))
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
+            .ToListAsync();
+    }
 }
