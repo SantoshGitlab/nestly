@@ -2,7 +2,7 @@ using Nestly.BuildingBlocks.Primitives;
 
 namespace Nestly.Domain;
 
-public class Category : Entity<Guid>
+public class Category : AggregateRoot<Guid>
 {
     public string Name { get; private set; } = string.Empty;
     public string Slug { get; private set; } = string.Empty;
