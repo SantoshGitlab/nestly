@@ -12,6 +12,8 @@ public class Pincode : Entity<Guid>
     public string Code { get; private set; } = string.Empty;
     public bool IsActive { get; private set; }
 
+    public City? City { get; private set; }
+
     protected Pincode() { }
 
     public Pincode(Guid id, Guid cityId, string code) : base(id)

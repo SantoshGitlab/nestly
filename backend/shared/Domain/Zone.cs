@@ -12,6 +12,8 @@ public class Zone : Entity<Guid>
     public string Name { get; private set; } = string.Empty;
     public bool IsActive { get; private set; }
 
+    public City? City { get; private set; }
+
     protected Zone() { }
 
     public Zone(Guid id, Guid cityId, string name) : base(id)

@@ -14,6 +14,9 @@ public class Locality : Entity<Guid>
     public string Name { get; private set; } = string.Empty;
     public bool IsActive { get; private set; }
 
+    public Zone? Zone { get; private set; }
+    public Pincode? Pincode { get; private set; }
+
     protected Locality() { }
 
     public Locality(Guid id, Guid zoneId, Guid pincodeId, string name) : base(id)
