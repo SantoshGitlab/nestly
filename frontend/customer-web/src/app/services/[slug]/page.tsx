@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { PriceCalculator } from "@/components/PriceCalculator";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
-import { Alert } from "@/components/ui";
+import { Alert, Button } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { ServiceDetail } from "@/lib/types";
@@ -85,6 +85,11 @@ export default function ServiceDetailPage() {
       <aside className="flex flex-col gap-4 md:sticky md:top-6 md:self-start">
         <PriceCalculator serviceId={service.id} addOns={service.addOns} cityId={city ? city.id : null} />
         <ServiceAvailability serviceId={service.id} />
+        <Link href={`/booking/summary?serviceSlug=${service.slug}`}>
+          <Button type="button" className="w-full">
+            Book now
+          </Button>
+        </Link>
       </aside>
     </main>
   );

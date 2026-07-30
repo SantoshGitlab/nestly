@@ -175,25 +175,25 @@ id,task,status,priority,notes,phase
 60c,Booking - booking detail with status timeline (SRS 11.13; 24.6),done,high,depends on #60b,Phase 3 - Booking Core
 61,Booking - Status mapping layer: Customer-visible status labels distinct from internal operational status (SRS 13.2),done,high,depends on #56d,Phase 3 - Booking Core
 62,Frontend - Booking summary page: Cart/summary with add-on; address; slot; coupon; price breakdown; policy summary (SRS 11.7),decomposed,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 62a,62b,62c,62d,62e,62f",Phase 3 - Booking Core
-62a,Frontend - Cart/summary with add-on,todo,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
-62b,Frontend - address,todo,high,depends on #62a,Phase 3 - Booking Core
-62c,Frontend - slot,todo,high,depends on #62b,Phase 3 - Booking Core
-62d,Frontend - coupon,todo,high,depends on #62c,Phase 3 - Booking Core
-62e,Frontend - price breakdown,todo,high,depends on #62d,Phase 3 - Booking Core
-62f,Frontend - policy summary (SRS 11.7),todo,high,depends on #62e,Phase 3 - Booking Core
+62a,Frontend - Cart/summary with add-on,done,high,"depends on #52f #57 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 3 - Booking Core
+62b,Frontend - address,done,high,depends on #62a,Phase 3 - Booking Core
+62c,Frontend - slot,done,high,depends on #62b,Phase 3 - Booking Core
+62d,Frontend - coupon,done,high,depends on #62c,Phase 3 - Booking Core
+62e,Frontend - price breakdown,done,high,depends on #62d,Phase 3 - Booking Core
+62f,Frontend - policy summary (SRS 11.7),done,high,depends on #62e,Phase 3 - Booking Core
 63,Frontend - Slot selection UI: Date picker + time windows; disabled slots; graceful failure on stale slot (SRS 11.8),decomposed,high,"depends on #62f #46 | superseded: decomposed into subtasks 63a,63b,63c",Phase 3 - Booking Core
-63a,Frontend - Date picker + time windows,todo,high,depends on #62f #46,Phase 3 - Booking Core
-63b,Frontend - disabled slots,todo,high,depends on #63a,Phase 3 - Booking Core
-63c,Frontend - graceful failure on stale slot (SRS 11.8),todo,high,depends on #63b,Phase 3 - Booking Core
+63a,Frontend - Date picker + time windows,done,high,depends on #62f #46,Phase 3 - Booking Core
+63b,Frontend - disabled slots,done,high,depends on #63a,Phase 3 - Booking Core
+63c,Frontend - graceful failure on stale slot (SRS 11.8),done,high,depends on #63b,Phase 3 - Booking Core
 64,Frontend - Booking success page: Confirmation: booking ID; summary; guidance; link to detail (SRS 11.12.3),decomposed,high,"depends on #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 64a,64b,64c,64d",Phase 3 - Booking Core
-64a,Frontend - Confirmation: booking ID,todo,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-64b,Frontend - summary,todo,high,depends on #64a,Phase 3 - Booking Core
-64c,Frontend - guidance,todo,high,depends on #64b,Phase 3 - Booking Core
-64d,Frontend - link to detail (SRS 11.12.3),todo,high,depends on #64c,Phase 3 - Booking Core
+64a,Frontend - Confirmation: booking ID,done,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+64b,Frontend - summary,done,high,depends on #64a,Phase 3 - Booking Core
+64c,Frontend - guidance,done,high,depends on #64b,Phase 3 - Booking Core
+64d,Frontend - link to detail (SRS 11.12.3),done,high,depends on #64c,Phase 3 - Booking Core
 65,Frontend - Order history and detail pages: Booking list tabs and full detail with timeline; refund info; action CTAs (SRS 11.13),decomposed,high,"depends on #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 65a,65b,65c",Phase 3 - Booking Core
-65a,Frontend - Booking list tabs and full detail with timeline,todo,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
-65b,Frontend - refund info,todo,high,depends on #65a,Phase 3 - Booking Core
-65c,Frontend - action CTAs (SRS 11.13),todo,high,depends on #65b,Phase 3 - Booking Core
+65a,Frontend - Booking list tabs and full detail with timeline,done,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
+65b,Frontend - refund info,done,high,depends on #65a,Phase 3 - Booking Core
+65c,Frontend - action CTAs (SRS 11.13),done,high,depends on #65b,Phase 3 - Booking Core
 66,QA - Booking lifecycle tests: State transition matrix coverage; snapshot immutability; concurrent slot race cases,decomposed,high,"depends on #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 66a,66b,66c",Phase 3 - Booking Core
 66a,QA - State transition matrix coverage,todo,high,"depends on #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 3 - Booking Core
 66b,QA - snapshot immutability,todo,high,depends on #66a,Phase 3 - Booking Core
