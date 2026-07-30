@@ -1,0 +1,166 @@
+using Nestly.Application.Bookings;
+using Nestly.Application.Payments;
+using Nestly.Application.Refunds;
+using Nestly.Application.Wallet;
+using Nestly.BuildingBlocks.Results;
+using Nestly.Domain;
+using Nestly.Infrastructure.Persistence;
+
+namespace Nestly.Infrastructure.Services;
+
+/// <summary>
+/// Refund initiation and lifecycle (SRS 11.17.2, 14.4, tasks 75a-d). Like
+/// <see cref="PaymentWebhookService"/>, this depends on <see cref="NestlyDbContext"/>
+/// directly to commit the Booking transition and the RefundTransaction
+/// atomically - a refund that "succeeded" but left the booking in the wrong
+/// state (or vice versa) is exactly the kind of inconsistency SRS 29.3
+/// ("critical workflows should support reconciliation") exists to prevent.
+/// </summary>
+public class RefundService : IRefundService
+{
+    private static readonly BookingStatus[] EligibleBookingStatuses =
+    [
+        BookingStatus.Completed, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin, BookingStatus.RefundPending
+    ];
+
+    private readonly IBookingRepository _bookingRepository;
+    private readonly IPaymentTransactionRepository _paymentRepository;
+    private readonly IRefundTransactionRepository _refundRepository;
+    private readonly IWalletService _walletService;
+    private readonly IPaymentGateway _gateway;
+    private readonly NestlyDbContext _context;
+
+    public RefundService(
+        IBookingRepository bookingRepository,
+        IPaymentTransactionRepository paymentRepository,
+        IRefundTransactionRepository refundRepository,
+        IWalletService walletService,
+        IPaymentGateway gateway,
+        NestlyDbContext context)
+    {
+        _bookingRepository = bookingRepository;
+        _paymentRepository = paymentRepository;
+        _refundRepository = refundRepository;
+        _walletService = walletService;
+        _gateway = gateway;
+        _context = context;
+    }
+
+    public Task<Result<RefundTransactionResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
+        InitiateAsync(bookingId, RefundType.Full, requestedAmount: null, reason, method);
+
+    public Task<Result<RefundTransactionResponse>> InitiatePartialRefundAsync(Guid bookingId, decimal amount, string reason, RefundMethod method = RefundMethod.Gateway)
+    {
+        if (amount <= 0)
+        {
+            return Task.FromResult(Result.Failure<RefundTransactionResponse>(Error.Validation("Refund.InvalidAmount", "Refund amount must be positive.")));
+        }
+
+        return InitiateAsync(bookingId, RefundType.Partial, amount, reason, method);
+    }
+
+    public async Task<Result<IReadOnlyList<RefundTransactionResponse>>> ListByBookingAsync(Guid customerId, Guid bookingId)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null || booking.CustomerId != customerId)
+        {
+            return Error.NotFound("Refund.BookingNotFound", "The specified booking does not exist.");
+        }
+
+        var refunds = await _refundRepository.ListByBookingAsync(bookingId);
+        IReadOnlyList<RefundTransactionResponse> response = refunds.Select(ToResponse).ToList();
+        return Result.Success(response);
+    }
+
+    private async Task<Result<RefundTransactionResponse>> InitiateAsync(
+        Guid bookingId, RefundType type, decimal? requestedAmount, string reason, RefundMethod method)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("Refund.BookingNotFound", "The specified booking does not exist.");
+        }
+
+        if (!EligibleBookingStatuses.Contains(booking.Status))
+        {
+            return Error.Business(
+                "Refund.BookingNotEligible",
+                $"A booking in status '{booking.Status}' is not eligible for a refund.");
+        }
+
+        var payment = await _paymentRepository.GetByBookingIdAsync(bookingId);
+        if (payment is null || payment.Status != PaymentTransactionStatus.Success)
+        {
+            return Error.Business("Refund.NoSuccessfulPayment", "This booking has no successful payment to refund.");
+        }
+
+        var priorRefunds = await _refundRepository.ListByPaymentTransactionAsync(payment.Id);
+        decimal alreadyRefunded = priorRefunds.Where(r => r.Status != RefundStatus.Failed).Sum(r => r.Amount);
+        decimal remaining = payment.Amount - alreadyRefunded;
+
+        decimal amount;
+        if (type == RefundType.Full)
+        {
+            if (remaining <= 0)
+            {
+                return Error.Business("Refund.NothingToRefund", "This payment has already been fully refunded.");
+            }
+
+            amount = remaining;
+        }
+        else
+        {
+            amount = requestedAmount!.Value;
+            if (amount > remaining)
+            {
+                return Error.Validation("Refund.ExceedsRemainingBalance", $"Only {remaining} remains refundable on this payment.");
+            }
+        }
+
+        var refund = new RefundTransaction(Guid.NewGuid(), bookingId, payment.Id, type, method, amount, reason);
+        refund.MarkProcessing();
+
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            if (booking.Status != BookingStatus.RefundPending)
+            {
+                booking.TransitionTo(BookingStatus.RefundPending, reason);
+            }
+
+            if (method == RefundMethod.Wallet)
+            {
+                await _walletService.CreditAsync(booking.CustomerId, amount, WalletSourceType.Refund, refund.Id, reason);
+                refund.MarkRefunded(gatewayRefundRef: null);
+            }
+            else
+            {
+                var successfulAttempt = payment.Attempts.First(a => a.Status == PaymentAttemptStatus.Success);
+                var gatewayResult = await _gateway.RefundAsync(
+                    new GatewayRefundRequest(successfulAttempt.GatewayPaymentRef!, amount, payment.Currency, bookingId.ToString("N")));
+                refund.MarkRefunded(gatewayResult.GatewayRefundId);
+            }
+
+            if (alreadyRefunded + amount >= payment.Amount)
+            {
+                booking.TransitionTo(BookingStatus.Refunded, "Refund completed.");
+            }
+
+            await _refundRepository.AddAsync(refund);
+            await _bookingRepository.UpdateAsync(booking);
+
+            await dbTransaction.CommitAsync();
+        }
+        catch
+        {
+            await dbTransaction.RollbackAsync();
+            throw;
+        }
+
+        return Result.Success(ToResponse(refund));
+    }
+
+    private static RefundTransactionResponse ToResponse(RefundTransaction refund) => new(
+        refund.Id, refund.BookingId, refund.PaymentTransactionId, refund.Type, refund.Method,
+        refund.Amount, refund.Status, refund.GatewayRefundRef, refund.Reason, refund.CreatedAtUtc, refund.ProcessedAtUtc);
+}

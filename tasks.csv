@@ -235,10 +235,10 @@ summary-note,"Recently added after comparing Urban.docx (original workflow diagr
 74a,Wallet - Append-only ledger,done,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
 74b,Wallet - every entry references source event,done,high,depends on #74a,Phase 4 - Payments & Financial
 74c,Wallet - balance API (SRS 14.5; 11.17),done,high,depends on #74b,Phase 4 - Payments & Financial
-75a,Refunds - Define refund entity and refund types (full/partial),todo,high,"depends on #69c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-75b,Refunds - Implement full refund logic (gateway or wallet),todo,high,"depends on #75a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-75c,Refunds - Implement partial refund calculation and policy rules,todo,high,"depends on #75b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-75d,Refunds - Add refund status lifecycle and tracking,todo,high,"depends on #75c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75a,Refunds - Define refund entity and refund types (full/partial),done,high,"depends on #69c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75b,Refunds - Implement full refund logic (gateway or wallet),done,high,"depends on #75a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75c,Refunds - Implement partial refund calculation and policy rules,done,high,"depends on #75b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75d,Refunds - Add refund status lifecycle and tracking,done,high,"depends on #75c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),decomposed,high,"depends on #62f #68d | auto-blocked: depends on blocked task #68d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 76a,76b,76c",Phase 4 - Payments & Financial
 76a,Frontend - Payment initiation,todo,high,"depends on #62f #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 76b,Frontend - result handling,todo,high,depends on #76a,Phase 4 - Payments & Financial
