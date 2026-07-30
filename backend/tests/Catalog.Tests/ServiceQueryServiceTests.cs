@@ -15,7 +15,8 @@ public sealed class ServiceQueryServiceTests : IClassFixture<TestDatabase>
     private ServiceQueryService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
         new CategoryRepository(context),
         new ServiceRepository(context),
-        new ServiceAddOnRepository(context));
+        new ServiceAddOnRepository(context),
+        new InMemoryCacheService());
 
     [Fact]
     public async Task ListByCategoryAsync_returns_only_active_services_under_that_category()

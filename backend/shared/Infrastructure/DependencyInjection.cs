@@ -1,4 +1,5 @@
 using System.Text;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -75,6 +76,14 @@ public static class DependencyInjection
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
+
+        // Application.DependencyInjection.AddApplication() only scans the
+        // Application assembly for MediatR handlers, so this second
+        // registration is what actually wires up CatalogCacheInvalidationHandler
+        // (and any other Infrastructure-layer handler) - without it, domain
+        // events would keep dispatching, but nothing in this assembly would
+        // receive them.
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
 
         // Audit attribution reads the current request; without this accessor
         // every user action would be silently attributed to the system.

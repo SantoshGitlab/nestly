@@ -16,7 +16,8 @@ public sealed class CategoryQueryServiceTests : IClassFixture<TestDatabase>
         new CategoryRepository(context),
         new ServiceRepository(context),
         new ServiceAddOnRepository(context),
-        new ServiceabilityRepository(context));
+        new ServiceabilityRepository(context),
+        new InMemoryCacheService());
 
     [Fact]
     public async Task Listing_by_city_returns_only_categories_actively_mapped_to_that_city()

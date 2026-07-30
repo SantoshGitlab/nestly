@@ -1,4 +1,5 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
@@ -8,7 +9,7 @@ namespace Nestly.Domain;
 /// Deactivating a mapping is how admins apply a temporary suspension or
 /// blackout for that category in that city, without deleting the record.
 /// </summary>
-public class CategoryCityMapping : Entity<Guid>
+public class CategoryCityMapping : AggregateRoot<Guid>
 {
     public Guid CategoryId { get; private set; }
     public Guid CityId { get; private set; }
@@ -21,8 +22,20 @@ public class CategoryCityMapping : Entity<Guid>
         CategoryId = categoryId;
         CityId = cityId;
         IsActive = true;
+        RaiseDomainEvent(new CategoryCityMappingChangedEvent(CategoryId, CityId));
     }
 
-    public void Activate() => IsActive = true;
-    public void Deactivate() => IsActive = false;
+    public void Activate()
+    {
+        if (IsActive) return;
+        IsActive = true;
+        RaiseDomainEvent(new CategoryCityMappingChangedEvent(CategoryId, CityId));
+    }
+
+    public void Deactivate()
+    {
+        if (!IsActive) return;
+        IsActive = false;
+        RaiseDomainEvent(new CategoryCityMappingChangedEvent(CategoryId, CityId));
+    }
 }

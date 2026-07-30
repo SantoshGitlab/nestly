@@ -19,6 +19,14 @@ public interface ICacheService
     /// when the key is absent or its payload can no longer be deserialized
     /// (for example after the cached type's shape changed between deploys).
     /// </summary>
+    /// <remarks>
+    /// When <typeparamref name="T"/> is a non-nullable value type (<c>bool</c>,
+    /// <c>int</c>, ...), a miss and a legitimately cached <c>default(T)</c> both
+    /// return the same value - there is no way to tell them apart through this
+    /// method alone. Code that must tell a miss from a cached default for such
+    /// a type should rely on <see cref="GetOrCreateAsync{T}"/>, which resolves
+    /// presence from the raw payload rather than from the deserialized value.
+    /// </remarks>
     Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default);
 
     /// <summary>

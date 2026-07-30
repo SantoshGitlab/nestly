@@ -30,7 +30,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext));
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext), new InMemoryCacheService());
 
         var result = await service.IsCategoryServiceableAsync(category.Id, city.Id);
 
@@ -54,7 +54,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext));
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext), new InMemoryCacheService());
 
         var result = await service.IsCategoryServiceableAsync(category.Id, city.Id);
 
@@ -66,7 +66,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
     public async Task Unknown_city_returns_a_not_found_error()
     {
         using var context = _db.CreateContext();
-        var service = new ServiceabilityValidationService(new ServiceabilityRepository(context));
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService());
 
         var result = await service.IsCategoryServiceableAsync(Guid.NewGuid(), Guid.NewGuid());
 
@@ -99,7 +99,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext));
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext), new InMemoryCacheService());
 
         var result = await service.IsServiceServiceableByLocalityAsync(svc.Id, locality.Id);
 
@@ -111,7 +111,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
     public async Task Unknown_locality_returns_a_not_found_error()
     {
         using var context = _db.CreateContext();
-        var service = new ServiceabilityValidationService(new ServiceabilityRepository(context));
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService());
 
         var result = await service.IsServiceServiceableByLocalityAsync(Guid.NewGuid(), Guid.NewGuid());
 
@@ -142,11 +142,64 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext));
+        var service = new ServiceabilityValidationService(new ServiceabilityRepository(readContext), new InMemoryCacheService());
 
         var result = await service.IsServiceServiceableByPincodeAsync(svc.Id, pincode.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Regression guard for task 49's caching: a naive GetOrCreateAsync
+    /// implementation that null-checks a boxed T? to detect a cache hit
+    /// cannot distinguish a genuine miss from a legitimately cached `true`
+    /// serviceability result for a non-nullable value type like bool - see
+    /// DistributedCacheService.GetOrCreateAsync's payload-presence check.
+    /// This exercises the real cache (not a stub), across two separately
+    /// constructed service instances sharing one ICacheService, to prove the
+    /// second call is answered from cache rather than by re-querying a
+    /// mapping that has since been deactivated.
+    /// </summary>
+    [Fact]
+    public async Task A_true_result_is_actually_cached_and_survives_the_mapping_later_being_deactivated()
+    {
+        var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+        var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
+        var mapping = new CategoryCityMapping(Guid.NewGuid(), category.Id, city.Id);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.CategoryCityMappings.Add(mapping);
+            context.SaveChanges();
+        }
+
+        var cache = new InMemoryCacheService();
+
+        using (var firstContext = _db.CreateContext())
+        {
+            var firstResult = await new ServiceabilityValidationService(new ServiceabilityRepository(firstContext), cache)
+                .IsCategoryServiceableAsync(category.Id, city.Id);
+            firstResult.Value.Should().BeTrue();
+        }
+
+        using (var mutateContext = _db.CreateContext())
+        {
+            mutateContext.CategoryCityMappings.Attach(mapping);
+            mapping.Deactivate();
+            await mutateContext.SaveChangesAsync();
+        }
+
+        using (var secondContext = _db.CreateContext())
+        {
+            var secondResult = await new ServiceabilityValidationService(new ServiceabilityRepository(secondContext), cache)
+                .IsCategoryServiceableAsync(category.Id, city.Id);
+
+            secondResult.Value.Should().BeTrue("the second call must be answered from cache, not by re-querying the now-deactivated mapping");
+        }
     }
 }

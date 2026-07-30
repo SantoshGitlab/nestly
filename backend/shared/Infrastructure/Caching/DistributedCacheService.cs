@@ -130,10 +130,38 @@ public sealed class DistributedCacheService : ICacheService
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(factory);
 
-        T? cached = await GetAsync<T>(key, cancellationToken).ConfigureAwait(false);
-        if (cached is not null)
+        // Deliberately does not delegate to GetAsync<T>: that method signals a
+        // miss by returning default(T), which for a non-nullable value type
+        // (bool, int, ...) is bitwise identical to a legitimately cached
+        // default value. Checking the raw payload's presence here instead
+        // keeps hit/miss detection unambiguous for every T.
+        byte[]? payload;
+        try
         {
-            return cached;
+            payload = await _cache.GetAsync(key, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger.LogWarning(exception, "Cache read failed for key {CacheKey}; treating as a miss.", key);
+            payload = null;
+        }
+
+        if (payload is { Length: > 0 })
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<T>(payload, SerializerOptions)!;
+            }
+            catch (JsonException exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Cached payload for key {CacheKey} could not be deserialized as {CachedType}; evicting.",
+                    key,
+                    typeof(T).Name);
+
+                await RemoveAsync(key, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         T created = await factory(cancellationToken).ConfigureAwait(false);

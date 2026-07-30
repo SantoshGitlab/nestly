@@ -13,7 +13,7 @@ public sealed class SlotAvailabilityServiceTests : IClassFixture<TestDatabase>
 
     private SlotAvailabilityService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context, TimeProvider? timeProvider = null) => new(
         new ServiceabilityRepository(context),
-        new ServiceabilityValidationService(new ServiceabilityRepository(context)),
+        new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
         new SlotWindowRepository(context),
         new SlotBlackoutRepository(context),
         new SlotBookingPolicyRepository(context),
