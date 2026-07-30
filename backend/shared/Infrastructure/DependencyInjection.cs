@@ -84,6 +84,7 @@ public static class DependencyInjection
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
         services.AddScoped<IServiceAddOnRepository, ServiceAddOnRepository>();
+        services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
         services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();
