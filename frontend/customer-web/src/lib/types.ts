@@ -390,3 +390,75 @@ export interface PaymentTransactionResponse {
   createdAtUtc: string;
   updatedAtUtc: string;
 }
+
+/**
+ * Refund shapes mirror the C# records in Nestly.Application.Refunds
+ * (RefundContracts.cs) - see RefundsController.
+ */
+
+/** Mirrors Nestly.Domain.RefundType's declaration order exactly. */
+export enum RefundType {
+  Full = 0,
+  Partial = 1,
+}
+
+/** Mirrors Nestly.Domain.RefundMethod's declaration order exactly. */
+export enum RefundMethod {
+  Gateway = 0,
+  Wallet = 1,
+}
+
+/** Mirrors Nestly.Domain.RefundStatus's declaration order exactly. */
+export enum RefundStatus {
+  Initiated = 0,
+  Processing = 1,
+  Refunded = 2,
+  Failed = 3,
+}
+
+export interface RefundTransactionResponse {
+  id: string;
+  bookingId: string;
+  paymentTransactionId: string;
+  type: RefundType;
+  method: RefundMethod;
+  amount: number;
+  status: RefundStatus;
+  gatewayRefundRef: string | null;
+  reason: string;
+  createdAtUtc: string;
+  processedAtUtc: string | null;
+}
+
+/**
+ * Wallet shapes mirror the C# records in Nestly.Application.Wallet
+ * (WalletContracts.cs) - see WalletController.
+ */
+
+/** Mirrors Nestly.Domain.WalletEntryType's declaration order exactly. */
+export enum WalletEntryType {
+  Credit = 0,
+  Debit = 1,
+}
+
+/** Mirrors Nestly.Domain.WalletSourceType's declaration order exactly. */
+export enum WalletSourceType {
+  Refund = 0,
+  PromotionalCredit = 1,
+  ManualAdjustment = 2,
+}
+
+export interface WalletBalanceResponse {
+  balance: number;
+}
+
+export interface WalletLedgerEntryResponse {
+  id: string;
+  entryType: WalletEntryType;
+  amount: number;
+  balanceAfter: number;
+  sourceType: WalletSourceType;
+  sourceReferenceId: string | null;
+  description: string;
+  createdAtUtc: string;
+}
