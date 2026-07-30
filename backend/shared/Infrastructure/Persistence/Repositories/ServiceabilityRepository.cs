@@ -29,6 +29,18 @@ public class ServiceabilityRepository : IServiceabilityRepository
         return locality?.PincodeId;
     }
 
+    public async Task<(Guid CityId, Guid PincodeId)?> GetCityAndPincodeForLocalityAsync(Guid localityId)
+    {
+        var result = await (
+            from locality in _context.Set<Locality>()
+            join pincode in _context.Set<Pincode>() on locality.PincodeId equals pincode.Id
+            where locality.Id == localityId
+            select new { pincode.CityId, PincodeId = pincode.Id }
+        ).FirstOrDefaultAsync();
+
+        return result is null ? null : (result.CityId, result.PincodeId);
+    }
+
     public Task<bool> IsCategoryActiveInCityAsync(Guid categoryId, Guid cityId) =>
         _context.Set<CategoryCityMapping>()
             .AnyAsync(m => m.CategoryId == categoryId && m.CityId == cityId && m.IsActive);

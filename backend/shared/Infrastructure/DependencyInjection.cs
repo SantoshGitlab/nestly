@@ -11,6 +11,7 @@ using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Catalog;
 using Nestly.Application.Serviceability;
+using Nestly.Application.Slots;
 using Nestly.Domain;
 using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.BackgroundJobs;
@@ -86,6 +87,9 @@ public static class DependencyInjection
         services.AddScoped<IServiceAddOnRepository, ServiceAddOnRepository>();
         services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
         services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
+        services.AddScoped<ISlotWindowRepository, SlotWindowRepository>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
         services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();
