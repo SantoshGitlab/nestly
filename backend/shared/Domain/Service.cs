@@ -1,4 +1,5 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
@@ -25,13 +26,35 @@ public class Service : AggregateRoot<Guid>
         Description = description ?? string.Empty;
         Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
         IsActive = true;
+        RaiseDomainEvent(new ServiceCreatedEvent(Id, CategoryId));
     }
 
     public void SetName(string name) => Name = name ?? throw new ArgumentNullException(nameof(name));
     public void SetDescription(string d) => Description = d ?? string.Empty;
-    public void SetPrice(decimal price) => Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
+
+    public void SetPrice(decimal price)
+    {
+        decimal validated = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
+        if (validated == Price) return;
+        decimal oldPrice = Price;
+        Price = validated;
+        RaiseDomainEvent(new ServicePriceChangedEvent(Id, oldPrice, Price));
+    }
+
     public void SetInclusions(string inclusions) => Inclusions = inclusions ?? string.Empty;
     public void SetExclusions(string exclusions) => Exclusions = exclusions ?? string.Empty;
-    public void Activate() => IsActive = true;
-    public void Deactivate() => IsActive = false;
+
+    public void Activate()
+    {
+        if (IsActive) return;
+        IsActive = true;
+        RaiseDomainEvent(new ServiceActivatedEvent(Id));
+    }
+
+    public void Deactivate()
+    {
+        if (!IsActive) return;
+        IsActive = false;
+        RaiseDomainEvent(new ServiceDeactivatedEvent(Id));
+    }
 }

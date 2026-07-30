@@ -55,12 +55,15 @@ public static class DependencyInjection
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
 
         services.AddSingleton<AuditableEntityInterceptor>();
+        services.AddScoped<DomainEventDispatchInterceptor>();
 
         services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
             options
                 .UseNpgsql(connectionString)
                 .UseSnakeCaseNamingConvention()
-                .AddInterceptors(serviceProvider.GetRequiredService<AuditableEntityInterceptor>()));
+                .AddInterceptors(
+                    serviceProvider.GetRequiredService<AuditableEntityInterceptor>(),
+                    serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>()));
 
         services
             .AddHealthChecks()
