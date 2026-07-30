@@ -10,6 +10,7 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
+using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
 using Nestly.Application.Geography;
 using Nestly.Application.Pricing;
@@ -112,6 +113,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceQueryService, ServiceQueryService>();
         services.AddScoped<ICatalogSearchService, CatalogSearchService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
+        services.AddScoped<IBookingSummaryService, BookingSummaryService>();
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
