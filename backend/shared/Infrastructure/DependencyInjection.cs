@@ -90,6 +90,8 @@ public static class DependencyInjection
         services.AddScoped<ISlotWindowRepository, SlotWindowRepository>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
+        services.AddScoped<IServiceCityPriceRepository, ServiceCityPriceRepository>();
+        services.AddScoped<ICityPricingPolicyRepository, CityPricingPolicyRepository>();
         services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();

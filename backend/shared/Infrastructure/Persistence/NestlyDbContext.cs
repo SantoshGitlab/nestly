@@ -16,6 +16,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<SlotWindowRule> SlotWindowRules { get; set; }
     public DbSet<SlotBlackout> SlotBlackouts { get; set; }
     public DbSet<SlotBookingPolicy> SlotBookingPolicies { get; set; }
+    public DbSet<ServiceCityPrice> ServiceCityPrices { get; set; }
+    public DbSet<CityPricingPolicy> CityPricingPolicies { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

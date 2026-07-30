@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260730161921_AddServiceCityPriceSchema")]
+    partial class AddServiceCityPriceSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -305,39 +308,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_city_state_id_name");
 
                     b.ToTable("city", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.CityPricingPolicy", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("city_id");
-
-                    b.Property<decimal>("PlatformFee")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("platform_fee");
-
-                    b.Property<decimal>("TaxPercentage")
-                        .HasColumnType("decimal(5,2)")
-                        .HasColumnName("tax_percentage");
-
-                    b.Property<decimal>("VisitCharge")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("visit_charge");
-
-                    b.HasKey("Id")
-                        .HasName("pk_city_pricing_policy");
-
-                    b.HasIndex("CityId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_city_pricing_policy_city_id");
-
-                    b.ToTable("city_pricing_policy", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.CustomerAddress", b =>
@@ -1250,16 +1220,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_city_states_state_id");
 
                     b.Navigation("State");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.CityPricingPolicy", b =>
-                {
-                    b.HasOne("Nestly.Domain.City", null)
-                        .WithMany()
-                        .HasForeignKey("CityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_city_pricing_policy_city_city_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.Locality", b =>

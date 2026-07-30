@@ -115,10 +115,10 @@ id,task,status,priority,notes,phase
 47a,Pricing - Base,todo,high,"depends on #40e | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 2 - Catalog & Serviceability
 47b,Pricing - add-on,todo,high,depends on #47a,Phase 2 - Catalog & Serviceability
 47c,Pricing - quantity,todo,high,depends on #47b,Phase 2 - Catalog & Serviceability
-47d,Pricing - city-wise,todo,high,depends on #47c,Phase 2 - Catalog & Serviceability
-47e,Pricing - visit charge,todo,high,depends on #47d,Phase 2 - Catalog & Serviceability
-47f,Pricing - tax/GST,todo,high,depends on #47e,Phase 2 - Catalog & Serviceability
-47g,Pricing - fees per SRS 11.9.1,todo,high,depends on #47f,Phase 2 - Catalog & Serviceability
+47d,Pricing - city-wise,done,high,depends on #47c | completed: ServiceCityPrice entity (unique per service+city) overrides the service's base Price for a given city; falls back to Service.Price when absent,Phase 2 - Catalog & Serviceability
+47e,Pricing - visit charge,done,high,"depends on #47d | completed: folded into CityPricingPolicy.VisitCharge (one row per city) alongside 47f/47g's tax/fee, since all three are simple per-city scalars",Phase 2 - Catalog & Serviceability
+47f,Pricing - tax/GST,done,high,"depends on #47e | completed: CityPricingPolicy.TaxPercentage (0-100), alongside 47e/47g",Phase 2 - Catalog & Serviceability
+47g,Pricing - fees per SRS 11.9.1,done,high,"depends on #47f | completed: CityPricingPolicy.PlatformFee (SRS 11.9.1, optional - zero when unconfigured), alongside 47e/47f",Phase 2 - Catalog & Serviceability
 48,Pricing - Price calculation API: Server-side authoritative calculation producing price breakdown for checkout (SRS 11.9.2),todo,high,"depends on #47g | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 2 - Catalog & Serviceability
 49,Performance - Catalog read caching: Redis caching for categories/services/serviceability with invalidation on admin changes,todo,high,depends on #17d #41,Phase 2 - Catalog & Serviceability
 50,Frontend - Home page: Hero banners; search; category tiles; city selector; trust markers (SRS 11.1),decomposed,high,"depends on #15 #41 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 50a,50b,50c,50d,50e",Phase 2 - Catalog & Serviceability
