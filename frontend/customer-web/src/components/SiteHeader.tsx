@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { CitySelector } from "@/components/CitySelector";
 import { API_V1, apiFetch } from "@/lib/api";
 import {
   clearSession,
@@ -43,12 +44,19 @@ export function SiteHeader() {
 
   return (
     <header className="border-b border-black/10 dark:border-white/15">
-      <nav className="mx-auto flex w-full max-w-2xl items-center justify-between gap-4 px-6 py-4">
-        <Link href="/" className="font-semibold tracking-tight">
-          Nestly
-        </Link>
+      <nav className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+        <div className="flex items-center gap-6">
+          <Link href="/" className="font-semibold tracking-tight">
+            Nestly
+          </Link>
+          <Link href="/categories" className="text-sm hover:underline">
+            Categories
+          </Link>
+        </div>
 
         <div className="flex items-center gap-4 text-sm">
+          <CitySelector />
+
           {authed ? (
             <>
               <Link href="/profile" className="hover:underline">
