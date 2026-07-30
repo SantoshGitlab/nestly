@@ -5,7 +5,11 @@ namespace Nestly.Infrastructure.Persistence;
 
 public sealed class NestlyDbContext : DbContext
 {
+    public DbSet<State> States { get; set; }
     public DbSet<City> Cities { get; set; }
+    public DbSet<Zone> Zones { get; set; }
+    public DbSet<Pincode> Pincodes { get; set; }
+    public DbSet<Locality> Localities { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
