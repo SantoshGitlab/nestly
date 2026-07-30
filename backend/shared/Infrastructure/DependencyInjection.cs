@@ -9,6 +9,7 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
+using Nestly.Application.Serviceability;
 using Nestly.Domain;
 using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.BackgroundJobs;
@@ -80,6 +81,8 @@ public static class DependencyInjection
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
+        services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();
