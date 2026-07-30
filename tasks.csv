@@ -249,10 +249,10 @@ summary-note,"Recently added after comparing Urban.docx (original workflow diagr
 78b,Frontend - ledger entries,todo,high,depends on #78a,Phase 4 - Payments & Financial
 78c,Frontend - refund status per booking (SRS 11.17),todo,high,depends on #78b,Phase 4 - Payments & Financial
 79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,decomposed,critical,"depends on #69c #73 #75d | auto-blocked: depends on blocked task #69 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 79a,79b,79c,79d",Phase 4 - Payments & Financial
-79a,QA - Webhook idempotency,todo,critical,"depends on #69c #73 #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-79b,QA - duplicate callbacks,todo,critical,depends on #79a,Phase 4 - Payments & Financial
-79c,QA - coupon abuse cases,todo,critical,depends on #79b,Phase 4 - Payments & Financial
-79d,QA - refund calculations,todo,critical,depends on #79c,Phase 4 - Payments & Financial
+79a,QA - Webhook idempotency,done,critical,"depends on #69c #73 #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+79b,QA - duplicate callbacks,done,critical,depends on #79a,Phase 4 - Payments & Financial
+79c,QA - coupon abuse cases,done,critical,depends on #79b,Phase 4 - Payments & Financial
+79d,QA - refund calculations,done,critical,depends on #79c,Phase 4 - Payments & Financial
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),decomposed,high,"depends on #60c #75d | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 80a,80b,80c",Phase 5 - Post-Booking
 80a,Cancellation - Eligibility rules,todo,high,"depends on #60c #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 80b,Cancellation - fee/refund computation,todo,high,depends on #80a,Phase 5 - Post-Booking
