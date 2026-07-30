@@ -22,6 +22,12 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<BookingItem> BookingItems { get; set; }
     public DbSet<BookingAddOnItem> BookingAddOnItems { get; set; }
     public DbSet<BookingStatusHistory> BookingStatusHistories { get; set; }
+    public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
+    public DbSet<PaymentAttempt> PaymentAttempts { get; set; }
+    public DbSet<RefundTransaction> RefundTransactions { get; set; }
+    public DbSet<WalletLedgerEntry> WalletLedgerEntries { get; set; }
+    public DbSet<Coupon> Coupons { get; set; }
+    public DbSet<CouponRedemption> CouponRedemptions { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

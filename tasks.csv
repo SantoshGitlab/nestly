@@ -199,12 +199,12 @@ id,task,status,priority,notes,phase
 66b,QA - snapshot immutability,done,high,depends on #66a,Phase 3 - Booking Core
 66c,QA - concurrent slot race cases,done,high,depends on #66b,Phase 3 - Booking Core
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),decomposed,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 67a,67b,67c,67d,67e,67f",Phase 4 - Payments & Financial
-67a,Payments - Tables: payment_transaction,todo,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
-67b,Payments - payment_attempt,todo,high,depends on #67a,Phase 4 - Payments & Financial
-67c,Payments - refund_transaction,todo,high,depends on #67b,Phase 4 - Payments & Financial
-67d,Payments - wallet_ledger,todo,high,depends on #67c,Phase 4 - Payments & Financial
-67e,Payments - coupon,todo,high,depends on #67d,Phase 4 - Payments & Financial
-67f,Payments - coupon_redemption (SRS 23.4),todo,high,depends on #67e,Phase 4 - Payments & Financial
+67a,Payments - Tables: payment_transaction,done,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+67b,Payments - payment_attempt,done,high,depends on #67a,Phase 4 - Payments & Financial
+67c,Payments - refund_transaction,done,high,depends on #67b,Phase 4 - Payments & Financial
+67d,Payments - wallet_ledger,done,high,depends on #67c,Phase 4 - Payments & Financial
+67e,Payments - coupon,done,high,depends on #67d,Phase 4 - Payments & Financial
+67f,Payments - coupon_redemption (SRS 23.4),done,high,depends on #67e,Phase 4 - Payments & Financial
 68a,Payments - Define payment gateway interface (create order),todo,critical,"depends on #67f #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 68b,Payments - Implement sandbox gateway,todo,critical,"depends on #68a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 68c,Payments - Add payment order validation and formatting,todo,high,"depends on #68b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
@@ -467,3 +467,4 @@ id,task,status,priority,notes,phase
 150b,Partner - KYC approval,todo,low,depends on #150a,Phase 8 - Partner (Deferred)
 150c,Partner - performance view + Partner/Payout RBAC modules,todo,low,depends on #150b,Phase 8 - Partner (Deferred)
 151,Partner - Partner-facing UI: Partner portal or app for jobs/availability/earnings (platform TBD),todo,low,"depends on #149c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 8 - Partner (Deferred)
+155,"Support - Dispute resolution workflow: Formalize the valid/invalid branch on a support ticket (SRS 855: wrong charge / pricing dispute) into its own flow: admin marks a ticket disputed, resolves as refund (valid) or close/rework (invalid), tracks resolution outcome",todo,high,depends on #86d #75b,Phase 5 - Post-Booking
