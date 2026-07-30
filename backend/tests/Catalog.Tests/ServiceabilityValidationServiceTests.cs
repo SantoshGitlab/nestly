@@ -83,7 +83,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         var pincode = new Pincode(Guid.NewGuid(), city.Id, Guid.NewGuid().ToString("N")[..6]);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Connaught Place");
         var category = new Category(Guid.NewGuid(), "Electrician", "electrician-" + Guid.NewGuid(), "desc");
-        var svc = new Service(Guid.NewGuid(), category.Id, "Wiring Check", "desc", 299m);
+        var svc = new Service(Guid.NewGuid(), category.Id, "Wiring Check", "wiring-check-" + Guid.NewGuid(), "desc", 299m);
 
         using (var context = _db.CreateContext())
         {
@@ -126,7 +126,7 @@ public sealed class ServiceabilityValidationServiceTests : IClassFixture<TestDat
         var city = new City(Guid.NewGuid(), state.Id, "Chennai");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, Guid.NewGuid().ToString("N")[..6]);
         var category = new Category(Guid.NewGuid(), "Carpentry", "carpentry-" + Guid.NewGuid(), "desc");
-        var svc = new Service(Guid.NewGuid(), category.Id, "Furniture Repair", "desc", 399m);
+        var svc = new Service(Guid.NewGuid(), category.Id, "Furniture Repair", "furniture-repair-" + Guid.NewGuid(), "desc", 399m);
         var mapping = new ServicePincodeMapping(Guid.NewGuid(), svc.Id, pincode.Id);
         mapping.Deactivate();
 

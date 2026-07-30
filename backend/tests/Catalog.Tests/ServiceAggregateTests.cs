@@ -14,7 +14,7 @@ public sealed class ServiceAggregateTests : IClassFixture<TestDatabase>
     public void Inclusions_and_exclusions_round_trip_through_the_database()
     {
         var category = new Category(Guid.NewGuid(), "Appliance Repair", "appliance-repair-" + Guid.NewGuid(), "desc");
-        var service = new Service(Guid.NewGuid(), category.Id, "AC Service", "Deep clean", 499m);
+        var service = new Service(Guid.NewGuid(), category.Id, "AC Service", "ac-service-" + Guid.NewGuid(), "Deep clean", 499m);
         service.SetInclusions("Filter cleaning, gas top-up check");
         service.SetExclusions("Gas refill, part replacement");
 

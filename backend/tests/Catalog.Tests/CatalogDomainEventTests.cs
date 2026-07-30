@@ -38,7 +38,7 @@ public sealed class CatalogDomainEventTests
     public void Changing_a_services_price_raises_ServicePriceChangedEvent_with_old_and_new_price()
     {
         var category = new Category(Guid.NewGuid(), "Repairs", "repairs-" + Guid.NewGuid(), "desc");
-        var service = new Service(Guid.NewGuid(), category.Id, "AC Repair", "desc", 500m);
+        var service = new Service(Guid.NewGuid(), category.Id, "AC Repair", "ac-repair-" + Guid.NewGuid(), "desc", 500m);
         service.ClearDomainEvents();
 
         service.SetPrice(600m);
@@ -53,7 +53,7 @@ public sealed class CatalogDomainEventTests
     public void Setting_the_same_price_again_does_not_raise_an_event()
     {
         var category = new Category(Guid.NewGuid(), "Repairs2", "repairs-2-" + Guid.NewGuid(), "desc");
-        var service = new Service(Guid.NewGuid(), category.Id, "Fridge Repair", "desc", 400m);
+        var service = new Service(Guid.NewGuid(), category.Id, "Fridge Repair", "fridge-repair-" + Guid.NewGuid(), "desc", 400m);
         service.ClearDomainEvents();
 
         service.SetPrice(400m);

@@ -14,7 +14,7 @@ public sealed class ServiceAddOnAggregateTests : IClassFixture<TestDatabase>
     public void New_addon_defaults_to_active_and_persists_description_and_sort_order()
     {
         var category = new Category(Guid.NewGuid(), "Salon", "salon-" + Guid.NewGuid(), "desc");
-        var service = new Service(Guid.NewGuid(), category.Id, "Haircut", "desc", 299m);
+        var service = new Service(Guid.NewGuid(), category.Id, "Haircut", "haircut-" + Guid.NewGuid(), "desc", 299m);
         var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Head Massage", 99m);
         addOn.SetDescription("10-minute relaxing head massage");
         addOn.SetSortOrder(1);
@@ -38,7 +38,7 @@ public sealed class ServiceAddOnAggregateTests : IClassFixture<TestDatabase>
     public void Deactivating_an_addon_persists()
     {
         var category = new Category(Guid.NewGuid(), "Salon2", "salon-2-" + Guid.NewGuid(), "desc");
-        var service = new Service(Guid.NewGuid(), category.Id, "Facial", "desc", 799m);
+        var service = new Service(Guid.NewGuid(), category.Id, "Facial", "facial-" + Guid.NewGuid(), "desc", 799m);
         var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Extra Steam", 49m);
 
         using (var context = _db.CreateContext())
