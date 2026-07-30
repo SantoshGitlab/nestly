@@ -20,4 +20,14 @@ public interface IPaymentService
 
     /// <summary>Full transaction + attempt history for a booking (SRS 11.11.3, task 71).</summary>
     Task<Result<PaymentTransactionResponse>> GetByBookingIdAsync(Guid customerId, Guid bookingId);
+
+    /// <summary>
+    /// Sandbox-only (task 68b): since there is no real gateway to complete
+    /// payment and call our webhook, this simulates that round trip for an
+    /// order the caller owns - determines the deterministic outcome, signs
+    /// it, and runs it through the exact same <see cref="IPaymentWebhookService"/>
+    /// path a genuine callback would take, so nothing about verification or
+    /// idempotency is bypassed.
+    /// </summary>
+    Task<Result> SimulateAsync(Guid customerId, SimulatePaymentRequest request);
 }

@@ -221,9 +221,9 @@ summary-note,"Recently added after comparing Urban.docx (original workflow diagr
 68c,Payments - Add payment order validation and formatting,done,high,"depends on #68b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 68d,Payments - Add idempotency keys and request deduplication,done,critical,"depends on #68c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),decomposed,critical,"depends on #68d | auto-blocked: depends on blocked task #68d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 69a,69b,69c",Phase 4 - Payments & Financial
-69a,Payments - Signed callback verification,todo,critical,"depends on #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-69b,Payments - idempotent duplicate handling,todo,critical,depends on #69a,Phase 4 - Payments & Financial
-69c,Payments - booking-payment mapping (SRS 11.11.3),todo,critical,depends on #69b,Phase 4 - Payments & Financial
+69a,Payments - Signed callback verification,done,critical,"depends on #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+69b,Payments - idempotent duplicate handling,done,critical,depends on #69a,Phase 4 - Payments & Financial
+69c,Payments - booking-payment mapping (SRS 11.11.3),done,critical,depends on #69b,Phase 4 - Payments & Financial
 70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),todo,high,"depends on #69c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),todo,high,"depends on #69c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 72a,Coupons - Define coupon entity and validation rules,todo,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial

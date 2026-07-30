@@ -61,3 +61,19 @@ public record PaymentWebhookRequest(string GatewayOrderId, string GatewayPayment
 /// webhook handler - nothing about verification or idempotency is skipped.
 /// </summary>
 public record SimulatePaymentRequest(string GatewayOrderId);
+
+/// <summary>
+/// The canonical string a webhook signature is computed over (task 69a),
+/// and the two status values this project's webhook understands. Framework-
+/// free and shared by whatever signs a callback (the sandbox gateway) and
+/// whatever verifies one (the webhook handler), so the two can never drift
+/// apart on payload format.
+/// </summary>
+public static class PaymentWebhookPayload
+{
+    public const string SuccessStatus = "success";
+    public const string FailedStatus = "failed";
+
+    public static string Build(string gatewayOrderId, string gatewayPaymentRef, string status) =>
+        $"{gatewayOrderId}|{gatewayPaymentRef}|{status}";
+}

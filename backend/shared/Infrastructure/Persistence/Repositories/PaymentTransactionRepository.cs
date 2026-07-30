@@ -21,31 +21,10 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
 
     public async Task UpdateAsync(PaymentTransaction transaction)
     {
-        // See the identical (and more detailed) comment in
-        // BookingRepository.UpdateAsync: a same-context retry's newly-added
-        // PaymentAttempt (StartAttempt) has a client-generated Guid key that
-        // EF's automatic change detection cannot distinguish from an
-        // existing row once it's only reachable via fixup from an
-        // already-tracked parent, and misclassifies as Modified instead of
-        // Added - turning its INSERT into a spurious no-op UPDATE. Settle
-        // "is this row actually in the database yet" against the database
-        // itself and force the state explicitly, rather than trust EF's
-        // heuristic (which by the time SaveChanges runs has often already
-        // guessed wrong, even if checked just beforehand).
-        var persistedAttemptIds = new HashSet<Guid>(
-            await _context.PaymentAttempts.AsNoTracking()
-                .Where(a => a.PaymentTransactionId == transaction.Id)
-                .Select(a => a.Id)
-                .ToListAsync());
-
-        foreach (var attempt in transaction.Attempts)
-        {
-            if (!persistedAttemptIds.Contains(attempt.Id))
-            {
-                _context.Entry(attempt).State = EntityState.Added;
-            }
-        }
-
+        // Only attach+mark-modified when not already tracked by this
+        // context - see the identical comment in BookingRepository.UpdateAsync.
+        // A same-context retry's newly-added PaymentAttempt is corrected by
+        // NewOwnedChildEntityInterceptor, not here.
         if (_context.Entry(transaction).State == EntityState.Detached)
         {
             _context.PaymentTransactions.Update(transaction);

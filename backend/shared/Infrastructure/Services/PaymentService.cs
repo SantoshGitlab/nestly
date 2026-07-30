@@ -19,12 +19,21 @@ public class PaymentService : IPaymentService
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IPaymentGateway _gateway;
+    private readonly ISandboxPaymentSimulator _simulator;
+    private readonly IPaymentWebhookService _webhookService;
 
-    public PaymentService(IPaymentTransactionRepository paymentRepository, IBookingRepository bookingRepository, IPaymentGateway gateway)
+    public PaymentService(
+        IPaymentTransactionRepository paymentRepository,
+        IBookingRepository bookingRepository,
+        IPaymentGateway gateway,
+        ISandboxPaymentSimulator simulator,
+        IPaymentWebhookService webhookService)
     {
         _paymentRepository = paymentRepository;
         _bookingRepository = bookingRepository;
         _gateway = gateway;
+        _simulator = simulator;
+        _webhookService = webhookService;
     }
 
     public async Task<Result<PaymentOrderResponse>> CreateOrderAsync(Guid customerId, CreatePaymentOrderRequest request)
@@ -76,13 +85,44 @@ public class PaymentService : IPaymentService
             // Retry (task 70): existing.Status is Failed here - reuse the
             // same transaction (preserving the booking-payment mapping and
             // the customer's original booking intent) and just add a new
-            // attempt underneath it.
+            // attempt underneath it. The booking itself moves back to
+            // PaymentPending so it is, once again, "awaiting payment" - and
+            // so the webhook handler's eventual Confirmed/PaymentFailed
+            // transition has a valid PaymentPending state to move from
+            // (BookingLifecycle has no direct PaymentFailed -> Confirmed edge).
             transaction = existing;
             transaction.StartAttempt(Guid.NewGuid(), gatewayResult.GatewayOrderId);
             await _paymentRepository.UpdateAsync(transaction);
+
+            if (booking.Status == BookingStatus.PaymentFailed)
+            {
+                booking.TransitionTo(BookingStatus.PaymentPending, "Retrying payment.");
+                await _bookingRepository.UpdateAsync(booking);
+            }
         }
 
         return Result.Success(ToOrderResponse(transaction, transaction.LatestAttempt!));
+    }
+
+    public async Task<Result> SimulateAsync(Guid customerId, SimulatePaymentRequest request)
+    {
+        var transaction = await _paymentRepository.GetByGatewayOrderIdAsync(request.GatewayOrderId);
+        if (transaction is null || transaction.CustomerId != customerId)
+        {
+            return Result.Failure(Error.NotFound("Payment.OrderNotFound", "No payment attempt exists for this gateway order."));
+        }
+
+        var outcome = _simulator.DetermineOutcome(transaction.Amount);
+        string status = outcome.Succeeded ? PaymentWebhookPayload.SuccessStatus : PaymentWebhookPayload.FailedStatus;
+        // Even a declined sandbox attempt gets a reference - a real gateway
+        // typically assigns one to a failed attempt too, and the webhook's
+        // validator/signature both require a non-empty value here.
+        string gatewayPaymentRef = outcome.Succeeded ? outcome.GatewayPaymentRef : $"sandbox_declined_{Guid.NewGuid():N}";
+
+        string canonicalPayload = PaymentWebhookPayload.Build(request.GatewayOrderId, gatewayPaymentRef, status);
+        string signature = _gateway.SignPayload(canonicalPayload);
+
+        return await _webhookService.HandleCallbackAsync(new PaymentWebhookRequest(request.GatewayOrderId, gatewayPaymentRef, status, signature));
     }
 
     public async Task<Result<PaymentTransactionResponse>> GetByBookingIdAsync(Guid customerId, Guid bookingId)

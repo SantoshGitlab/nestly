@@ -70,6 +70,7 @@ public static class DependencyInjection
 
         services.AddSingleton<AuditableEntityInterceptor>();
         services.AddScoped<DomainEventDispatchInterceptor>();
+        services.AddSingleton<NewOwnedChildEntityInterceptor>();
 
         services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
             options
@@ -77,7 +78,8 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .AddInterceptors(
                     serviceProvider.GetRequiredService<AuditableEntityInterceptor>(),
-                    serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>()));
+                    serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
+                    serviceProvider.GetRequiredService<NewOwnedChildEntityInterceptor>()));
 
         services
             .AddHealthChecks()
@@ -141,6 +143,7 @@ public static class DependencyInjection
         services.AddSingleton<IPaymentGateway>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
         services.AddSingleton<ISandboxPaymentSimulator>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         services.AddScoped<IPaymentService, PaymentService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email

@@ -17,12 +17,23 @@ namespace Nestly.ConsumerApi.Controllers;
 public class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
+    private readonly IPaymentWebhookService _webhookService;
     private readonly IValidator<CreatePaymentOrderRequest> _createOrderValidator;
+    private readonly IValidator<PaymentWebhookRequest> _webhookValidator;
+    private readonly IValidator<SimulatePaymentRequest> _simulateValidator;
 
-    public PaymentsController(IPaymentService paymentService, IValidator<CreatePaymentOrderRequest> createOrderValidator)
+    public PaymentsController(
+        IPaymentService paymentService,
+        IPaymentWebhookService webhookService,
+        IValidator<CreatePaymentOrderRequest> createOrderValidator,
+        IValidator<PaymentWebhookRequest> webhookValidator,
+        IValidator<SimulatePaymentRequest> simulateValidator)
     {
         _paymentService = paymentService;
+        _webhookService = webhookService;
         _createOrderValidator = createOrderValidator;
+        _webhookValidator = webhookValidator;
+        _simulateValidator = simulateValidator;
     }
 
     /// <summary>
@@ -59,6 +70,57 @@ public class PaymentsController : ControllerBase
     {
         var result = await _paymentService.GetByBookingIdAsync(CurrentCustomerId(), bookingId);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// The gateway's payment callback (SRS 30.1, 11.11.3, tasks 69a-c).
+    /// Deliberately not [Authorize] - the caller is the payment gateway, not
+    /// a logged-in customer, and is authenticated by its signature instead
+    /// (SRS 28.3 "payment callback abuse"). Always idempotent (task 69b): a
+    /// redelivered callback for an already-resolved attempt is a no-op 200,
+    /// never re-applied.
+    /// </summary>
+    [HttpPost("webhook")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Webhook([FromBody] PaymentWebhookRequest request)
+    {
+        var validation = await _webhookValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _webhookService.HandleCallbackAsync(request);
+        return result.IsSuccess ? Ok() : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Sandbox-only convenience (task 68b): simulates a gateway completing
+    /// payment for an order the caller owns, deterministically per
+    /// <c>SandboxPaymentGateway</c>'s amount convention, by constructing and
+    /// signing the same callback <see cref="Webhook"/> handles for real.
+    /// There is no equivalent endpoint for a real gateway integration - only
+    /// the gateway itself can decide a payment's outcome.
+    /// </summary>
+    [HttpPost("orders/simulate")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Simulate([FromBody] SimulatePaymentRequest request)
+    {
+        var validation = await _simulateValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _paymentService.SimulateAsync(CurrentCustomerId(), request);
+        return result.IsSuccess ? Ok() : result.ToProblemResult();
     }
 
     private Guid CurrentCustomerId() =>

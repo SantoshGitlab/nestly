@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
@@ -45,8 +46,16 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
         return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context));
     }
 
-    private static PaymentService BuildPaymentService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
-        new(new PaymentTransactionRepository(context), new BookingRepository(context), gateway);
+    private static PaymentService BuildPaymentService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway)
+    {
+        var paymentRepository = new PaymentTransactionRepository(context);
+        var bookingRepository = new BookingRepository(context);
+        var simulator = (ISandboxPaymentSimulator)gateway;
+        var webhookService = new PaymentWebhookService(
+            paymentRepository, bookingRepository, gateway, context, NullLogger<PaymentWebhookService>.Instance);
+
+        return new PaymentService(paymentRepository, bookingRepository, gateway, simulator, webhookService);
+    }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
