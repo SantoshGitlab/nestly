@@ -197,6 +197,101 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
         var reloaded = await new PaymentTransactionRepository(readContext).GetByIdAsync(transactionId);
         reloaded!.Attempts.Should().HaveCount(2);
         reloaded.Status.Should().Be(PaymentTransactionStatus.Pending);
+
+        var reloadedBooking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+        reloadedBooking!.Status.Should().Be(
+            BookingStatus.PaymentPending,
+            "starting a retry must move the booking back to awaiting-payment - BookingLifecycle has no direct PaymentFailed -> Confirmed edge");
+    }
+
+    /// <summary>
+    /// End-to-end task 70 coverage: a failed first attempt, a retry that
+    /// reuses the same transaction/booking (never a second, unrelated
+    /// booking or payment record), and a successful callback on the *retry*
+    /// attempt confirming the original booking - proving the customer's
+    /// original booking intent survives the whole failure/retry cycle.
+    /// </summary>
+    [Fact]
+    public async Task A_retried_payment_that_succeeds_confirms_the_original_booking()
+    {
+        var gateway = BuildGateway();
+        Fixture fixture;
+        Guid transactionId;
+        string secondGatewayOrderId;
+
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = await SeedBookingAsync(seedContext);
+        }
+
+        using (var firstContext = _db.CreateContext())
+        {
+            var first = await BuildPaymentService(firstContext, gateway).CreateOrderAsync(
+                fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, IdempotencyKey: null));
+            transactionId = first.Value.PaymentTransactionId;
+        }
+
+        // The first attempt is declined - webhook-driven, exactly like a real gateway callback would resolve it.
+        using (var firstCallbackContext = _db.CreateContext())
+        {
+            var (_, webhookService) = BuildServicesWithWebhook(firstCallbackContext, gateway);
+            var order = await new PaymentTransactionRepository(firstCallbackContext).GetByIdAsync(transactionId);
+            string payload = PaymentWebhookPayload.Build(order!.Attempts[0].GatewayOrderId, "sandbox_declined_ref", PaymentWebhookPayload.FailedStatus);
+            string signature = gateway.SignPayload(payload);
+            var result = await webhookService.HandleCallbackAsync(
+                new PaymentWebhookRequest(order.Attempts[0].GatewayOrderId, "sandbox_declined_ref", PaymentWebhookPayload.FailedStatus, signature));
+            result.IsSuccess.Should().BeTrue();
+        }
+
+        using (var readAfterFailureContext = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(readAfterFailureContext).GetByIdAsync(fixture.BookingId);
+            booking!.Status.Should().Be(BookingStatus.PaymentFailed);
+        }
+
+        // Customer retries - same booking, same transaction, a fresh attempt.
+        using (var retryContext = _db.CreateContext())
+        {
+            var retry = await BuildPaymentService(retryContext, gateway).CreateOrderAsync(
+                fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, IdempotencyKey: null));
+            retry.IsSuccess.Should().BeTrue();
+            retry.Value.PaymentTransactionId.Should().Be(transactionId, "a retry must never mint a new payment transaction for the same booking");
+            secondGatewayOrderId = retry.Value.GatewayOrderId;
+        }
+
+        // The retried attempt succeeds.
+        using (var secondCallbackContext = _db.CreateContext())
+        {
+            var (_, webhookService) = BuildServicesWithWebhook(secondCallbackContext, gateway);
+            string payload = PaymentWebhookPayload.Build(secondGatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus);
+            string signature = gateway.SignPayload(payload);
+            var result = await webhookService.HandleCallbackAsync(
+                new PaymentWebhookRequest(secondGatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus, signature));
+            result.IsSuccess.Should().BeTrue();
+        }
+
+        using var readContext2 = _db.CreateContext();
+        var finalBooking = await new BookingRepository(readContext2).GetByIdAsync(fixture.BookingId);
+        finalBooking!.Status.Should().Be(BookingStatus.Confirmed);
+        finalBooking.Id.Should().Be(fixture.BookingId, "the original booking is confirmed, not a new one");
+
+        var finalTransaction = await new PaymentTransactionRepository(readContext2).GetByIdAsync(transactionId);
+        finalTransaction!.Status.Should().Be(PaymentTransactionStatus.Success);
+        finalTransaction.Attempts.Should().HaveCount(2);
+        finalTransaction.Attempts[0].Status.Should().Be(PaymentAttemptStatus.Failed);
+        finalTransaction.Attempts[1].Status.Should().Be(PaymentAttemptStatus.Success);
+    }
+
+    private static (PaymentService Payments, PaymentWebhookService Webhook) BuildServicesWithWebhook(
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway)
+    {
+        var paymentRepository = new PaymentTransactionRepository(context);
+        var bookingRepository = new BookingRepository(context);
+        var webhookService = new PaymentWebhookService(
+            paymentRepository, bookingRepository, gateway, context, NullLogger<PaymentWebhookService>.Instance);
+        var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
+
+        return (paymentService, webhookService);
     }
 
     [Fact]
