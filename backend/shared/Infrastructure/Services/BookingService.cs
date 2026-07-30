@@ -67,7 +67,7 @@ public class BookingService : IBookingService
 
         foreach (var addOnLine in summary.Price.AddOnLineItems)
         {
-            item.AddAddOn(Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+            booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
         }
 
         booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);

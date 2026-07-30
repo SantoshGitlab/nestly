@@ -145,6 +145,26 @@ public class Booking : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Adds an add-on to a previously added item (task 59d). Routed through
+    /// the aggregate root - which owns <see cref="EnsureStillMutable"/> - and
+    /// not called as <c>BookingItem.AddAddOn</c> directly, so the same
+    /// Initiated-only lock task 56d put on <see cref="AddItem"/> also covers
+    /// add-ons: SRS 14.1's price/item snapshot must stop moving the instant
+    /// payment starts, and a caller holding a <see cref="BookingItem"/>
+    /// reference from before that moment must not be able to keep appending
+    /// to it afterwards.
+    /// </summary>
+    public BookingAddOnItem AddAddOnToItem(Guid bookingItemId, Guid id, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity)
+    {
+        EnsureStillMutable();
+
+        var item = _items.SingleOrDefault(i => i.Id == bookingItemId)
+            ?? throw new InvalidOperationException($"Booking item {bookingItemId} was not found on this booking.");
+
+        return item.AddAddOn(id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity);
+    }
+
+    /// <summary>
     /// Advances the booking to <paramref name="newStatus"/> if
     /// <see cref="BookingLifecycle"/> allows it from the current status, and
     /// appends a status history row - the only way either ever changes (SRS
