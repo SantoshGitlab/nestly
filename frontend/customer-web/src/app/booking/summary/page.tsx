@@ -57,6 +57,15 @@ function BookingSummaryScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Coupon (task 77, SRS 11.10.3). appliedCouponCode is the code the backend
+  // has confirmed - couponInput is just the text box's draft value, kept
+  // separate so a typo mid-edit doesn't silently change what's charged.
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(null);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+
   const serviceQuery = useQuery({
     queryKey: ["service", serviceSlug],
     queryFn: () => apiFetch<ServiceDetail>(`${API_V1}/services/${serviceSlug}`),
@@ -98,6 +107,11 @@ function BookingSummaryScreen() {
         slotDate: selectedDate,
         quantity,
         addOns: Array.from(selectedAddOnIds, (addOnId) => ({ addOnId, quantity: 1 })),
+        // Keeping the applied coupon on the shared request means every
+        // recompute (quantity/add-on/slot changes) and the eventual booking
+        // creation call all honour it consistently, instead of it being a
+        // display-only side channel that gets dropped at checkout time.
+        couponCode: appliedCouponCode,
       }
     : null;
 
@@ -111,6 +125,36 @@ function BookingSummaryScreen() {
       }),
     enabled: request !== null,
   });
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!request || !code) return;
+    setIsApplyingCoupon(true);
+    setCouponError(null);
+    setCouponMessage(null);
+
+    try {
+      const result = await apiFetch<BookingSummary>(`${API_V1}/coupons/apply`, {
+        method: "POST",
+        authenticated: true,
+        body: JSON.stringify({ ...request, couponCode: code }),
+      });
+      setAppliedCouponCode(code);
+      const discount = result.coupon?.discountAmount ?? 0;
+      setCouponMessage(`${result.coupon?.code ?? code} applied - you saved ₹${discount.toFixed(2)}.`);
+    } catch (err) {
+      setCouponError(describeError(err));
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCouponCode(null);
+    setCouponInput("");
+    setCouponMessage(null);
+    setCouponError(null);
+  };
 
   const handleProceed = async () => {
     if (!request || !service) return;
@@ -295,19 +339,37 @@ function BookingSummaryScreen() {
           )}
         </Card>
 
-        {/* Coupon (task 62d). No coupon module exists yet (Phase 4) - shown
-            as a disabled affordance rather than wired to a fabricated API. */}
+        {/* Coupon (task 62d, 77; SRS 11.10.3). */}
         <Card title="Coupon">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              disabled
-              placeholder="Coupons are coming soon"
-              className="flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-400 outline-none dark:border-white/20"
-            />
-            <Button type="button" variant="secondary" disabled>
-              Apply
-            </Button>
+          <div className="flex flex-col gap-3">
+            {appliedCouponCode ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20">
+                <span className="font-medium">{appliedCouponCode}</span>
+                <Button type="button" variant="secondary" onClick={handleRemoveCoupon}>
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  placeholder="Enter coupon code"
+                  className="flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!request || !couponInput.trim() || isApplyingCoupon}
+                  onClick={handleApplyCoupon}
+                >
+                  {isApplyingCoupon ? "Applying…" : "Apply"}
+                </Button>
+              </div>
+            )}
+            {couponMessage ? <Alert tone="success">{couponMessage}</Alert> : null}
+            {couponError ? <Alert>{couponError}</Alert> : null}
           </div>
         </Card>
       </div>
@@ -346,12 +408,30 @@ function BookingSummaryScreen() {
   );
 }
 
-/** Price breakdown (task 62e) + policy summary (task 62f, SRS 11.7.2). */
+/**
+ * Price breakdown (task 62e) + policy summary (task 62f, SRS 11.7.2), with
+ * the coupon discount and recomputed final payable folded in (task 77) - the
+ * discount line and the total both visibly change whenever a coupon is
+ * applied or removed, satisfying SRS 11.10.3's "recompute" requirement.
+ */
 function BookingSummaryCard({ summary }: { summary: BookingSummary }) {
   return (
     <Card title="Price summary">
       <div className="flex flex-col gap-3">
         <PriceRows breakdown={summary.price} />
+
+        {summary.coupon ? (
+          <dl className="flex flex-col gap-1.5 border-t border-black/10 pt-3 text-sm dark:border-white/15">
+            <div className="flex items-center justify-between text-green-700 dark:text-green-400">
+              <dt>Coupon ({summary.coupon.code})</dt>
+              <dd>-₹{summary.coupon.discountAmount.toFixed(2)}</dd>
+            </div>
+            <div className="flex items-center justify-between font-semibold">
+              <dt>Final payable</dt>
+              <dd>₹{summary.finalPayable.toFixed(2)}</dd>
+            </div>
+          </dl>
+        ) : null}
 
         {summary.cancellationPolicy || summary.reschedulePolicy ? (
           <div className="border-t border-black/10 pt-3 text-xs text-neutral-600 dark:border-white/15 dark:text-neutral-400">

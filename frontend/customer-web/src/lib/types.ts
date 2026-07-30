@@ -219,6 +219,7 @@ export interface BookingSummaryRequestBody {
   slotDate: string;
   quantity: number;
   addOns: AddOnSelection[];
+  couponCode?: string | null;
 }
 
 export interface BookingServiceSummary {
@@ -250,7 +251,15 @@ export interface BookingSlotSummary {
   endTime: string;
 }
 
-/** Booking summary/preview (SRS 11.7). Coupon/wallet are omitted - neither module exists yet (Phase 4). */
+/** Mirrors the C# CouponSummary record returned by CouponsController. */
+export interface CouponSummary {
+  couponId: string;
+  code: string;
+  description: string | null;
+  discountAmount: number;
+}
+
+/** Booking summary/preview (SRS 11.7), with the coupon module wired in (task 77). */
 export interface BookingSummary {
   service: BookingServiceSummary;
   addOns: ServiceAddOnSummary[];
@@ -259,6 +268,9 @@ export interface BookingSummary {
   price: PriceBreakdown;
   cancellationPolicy: string | null;
   reschedulePolicy: string | null;
+  coupon: CouponSummary | null;
+  /** price.totalPayable - coupon.discountAmount when a coupon is applied, else === price.totalPayable. */
+  finalPayable: number;
 }
 
 /**
@@ -306,6 +318,10 @@ export interface BookingDetail {
   statusLabel: string;
   timeline: BookingStatusTimelineEntry[];
   createdAtUtc: string;
+  couponCode: string | null;
+  couponDiscountAmount: number | null;
+  /** Equals price.totalPayable on a persisted booking - both already reflect the discounted amount actually charged. */
+  finalPayable: number;
 }
 
 export interface BookingListItem {
