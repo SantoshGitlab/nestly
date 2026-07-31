@@ -9,19 +9,24 @@ import type { AdminSessionClaims } from "./types";
  * task. Linking to the expected route today means those tasks only need to
  * add `src/app/(admin)/<module>/page.tsx`; nothing here has to change.
  *
- * Permission model: `requiredPermission` follows the `module:action` shape
- * SRS 12.2.3 describes ("configurable at least by module/action"). The
- * real permission matrix (task 96a) has not landed yet, so
- * `AdminSessionClaims.permissions` may legitimately be empty for every admin
- * today - that is not the same thing as "no permissions granted". Until the
- * backend is populating that claim, nav visibility falls back to the
- * `ROLE_MODULE_FALLBACK` matrix below, keyed on the role claim SRS 12.1
- * guarantees exists. This fallback is a UX convenience, not a security
- * boundary: every one of these routes still requires its own valid
- * [Authorize] call server-side, exactly like RequireAdminAuth's client-side
- * guard is not itself the security boundary either. Once task 96a/a
- * permissions claim is present and non-empty, it takes over automatically -
- * no changes needed here.
+ * Permission model: `requiredPermission` is the exact code
+ * `AdminPermissionCatalog.BuildCode` issues on the backend (task 96a) -
+ * `"{module}.read"` or `"{module}.write"`, e.g. `"serviceability.read"` -
+ * carried as one JWT "permission" claim per granted code (task 96c, see
+ * lib/auth.ts's `getSessionClaims`). A module's nav entry only needs Read
+ * (viewing); write-gated actions inside a module's own page check
+ * `.write` themselves.
+ *
+ * This previously used a provisional `module:view` (colon) shape from before
+ * task 96a's real matrix landed, which never matched the real claim values -
+ * every admin with a populated `permissions` claim would have seen an empty
+ * nav. Fixed to match `AdminPermissionCatalog` now that it exists.
+ *
+ * `ROLE_MODULE_FALLBACK` below still backs admins whose token predates the
+ * permission claim (`permissions` empty) - a UX convenience, not a security
+ * boundary: every route still requires its own valid [Authorize] call
+ * server-side, exactly like RequireAdminAuth's client-side guard is not
+ * itself the security boundary either.
  */
 
 export type NavModuleKey =
@@ -51,22 +56,36 @@ export interface NavModule {
 }
 
 export const NAV_MODULES: readonly NavModule[] = [
-  { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard:view" },
-  { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers:view" },
-  { key: "catalog", label: "Catalog", href: "/catalog", srsRef: "SRS 12.5-12.7", requiredPermission: "catalog:view" },
-  { key: "pricing", label: "Pricing", href: "/pricing", srsRef: "SRS 12.8", requiredPermission: "pricing:view" },
-  { key: "serviceability", label: "Serviceability", href: "/serviceability", srsRef: "SRS 12.9", requiredPermission: "serviceability:view" },
-  { key: "slots", label: "Slots & Availability", href: "/slots", srsRef: "SRS 12.10", requiredPermission: "slots:view" },
-  { key: "bookings", label: "Bookings", href: "/bookings", srsRef: "SRS 12.11, 12.13", requiredPermission: "bookings:view" },
-  { key: "coupons", label: "Coupons & Campaigns", href: "/coupons", srsRef: "SRS 12.12", requiredPermission: "coupons:view" },
-  { key: "support", label: "Support Tickets", href: "/support", srsRef: "SRS 12.14", requiredPermission: "support:view" },
-  { key: "reviews", label: "Review Moderation", href: "/reviews", srsRef: "SRS 12.15", requiredPermission: "reviews:view" },
-  { key: "cms", label: "CMS & Content", href: "/cms", srsRef: "SRS 12.16", requiredPermission: "cms:view" },
-  { key: "notifications", label: "Notification Templates", href: "/notifications", srsRef: "SRS 12.17", requiredPermission: "notifications:view" },
-  { key: "reports", label: "Reports & Exports", href: "/reports", srsRef: "SRS 12.18", requiredPermission: "reports:view" },
-  { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3", requiredPermission: "audit:view" },
-  { key: "settings", label: "System Settings", href: "/settings", srsRef: "SRS 12.19", requiredPermission: "settings:view" },
+  { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard.read" },
+  { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers.read" },
+  { key: "catalog", label: "Catalog", href: "/catalog", srsRef: "SRS 12.5-12.7", requiredPermission: "catalog.read" },
+  { key: "pricing", label: "Pricing", href: "/pricing", srsRef: "SRS 12.8", requiredPermission: "pricing.read" },
+  { key: "serviceability", label: "Serviceability", href: "/serviceability", srsRef: "SRS 12.9", requiredPermission: "serviceability.read" },
+  { key: "slots", label: "Slots & Availability", href: "/slots", srsRef: "SRS 12.10", requiredPermission: "slots.read" },
+  { key: "bookings", label: "Bookings", href: "/bookings", srsRef: "SRS 12.11, 12.13", requiredPermission: "bookings.read" },
+  { key: "coupons", label: "Coupons & Campaigns", href: "/coupons", srsRef: "SRS 12.12", requiredPermission: "coupons.read" },
+  { key: "support", label: "Support Tickets", href: "/support", srsRef: "SRS 12.14", requiredPermission: "support.read" },
+  { key: "reviews", label: "Review Moderation", href: "/reviews", srsRef: "SRS 12.15", requiredPermission: "reviews.read" },
+  { key: "cms", label: "CMS & Content", href: "/cms", srsRef: "SRS 12.16", requiredPermission: "cms.read" },
+  { key: "notifications", label: "Notification Templates", href: "/notifications", srsRef: "SRS 12.17", requiredPermission: "notifications.read" },
+  { key: "reports", label: "Reports & Exports", href: "/reports", srsRef: "SRS 12.18", requiredPermission: "reports.read" },
+  { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3", requiredPermission: "audit.read" },
+  { key: "settings", label: "System Settings", href: "/settings", srsRef: "SRS 12.19", requiredPermission: "settings.read" },
 ];
+
+/** Whether the current admin can perform mutating ("write") actions within a module, per AdminPermissionCatalog. */
+export function canWriteModule(claims: AdminSessionClaims | null, moduleKey: NavModuleKey): boolean {
+  if (!claims) return false;
+  if (claims.permissions.length > 0) {
+    return claims.permissions.includes(`${moduleKey}.write`);
+  }
+
+  // Same fallback reasoning as isModuleVisibleByRole: without a populated
+  // permissions claim, fall back to the provisional role matrix - any role
+  // that can see the module at all is treated as able to act on it, since
+  // the fallback matrix does not distinguish read/write.
+  return isModuleVisibleByRole(claims.role, moduleKey);
+}
 
 /**
  * Provisional role -> module matrix, standing in for the real permission
