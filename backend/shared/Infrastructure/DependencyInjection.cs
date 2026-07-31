@@ -11,13 +11,18 @@ using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
+using Nestly.Application.Cancellations;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Escrow;
 using Nestly.Application.Geography;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
+using Nestly.Application.Notifications;
 using Nestly.Application.Refunds;
+using Nestly.Application.Reschedules;
+using Nestly.Application.Reviews;
+using Nestly.Application.Support;
 using Nestly.Application.Wallet;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
@@ -164,6 +169,52 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
+
+        services
+            .AddOptions<CancellationPolicyOptions>()
+            .Bind(configuration.GetSection(CancellationPolicyOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddScoped<ICancellationRepository, BookingCancellationRepository>();
+        services.AddScoped<ICancellationService, CancellationService>();
+
+        services
+            .AddOptions<ReschedulePolicyOptions>()
+            .Bind(configuration.GetSection(ReschedulePolicyOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddScoped<IRescheduleRepository, BookingRescheduleRepository>();
+        services.AddScoped<IRescheduleService, RescheduleService>();
+
+        // Task 84a-d: support/experience schema repositories. The higher-
+        // level services (review submission, ticket workflow, notification
+        // dispatch) register themselves as each lands.
+        services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<ISupportTicketRepository, SupportTicketRepository>();
+        services.AddScoped<INotificationEventRepository, NotificationEventRepository>();
+
+        services
+            .AddOptions<ReviewPolicyOptions>()
+            .Bind(configuration.GetSection(ReviewPolicyOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddScoped<IReviewService, ReviewService>();
+
+        services.AddScoped<ISupportTicketService, SupportTicketService>();
+
+        // Task 155: dispute mark/resolve workflow. No admin-auth gate yet
+        // (Phase 6) - see SupportTicketDisputesController's doc comment.
+        services.AddScoped<IDisputeResolutionService, DisputeResolutionService>();
+
+        // Task 87a-d: notification core. The template set is stateless
+        // (Render/SupportsChannel read only a fixed built-in dictionary),
+        // same reasoning as SandboxPaymentGateway - one shared instance.
+        services.AddSingleton<INotificationTemplateRenderer, NotificationTemplateRenderer>();
+        services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+
+        // Task 156: push channel. Sandbox in every environment for now
+        // (no real FCM/APNs credentials exist), same registration approach
+        // as INotificationProvider above.
+        services.AddScoped<IPushNotificationProvider, SandboxPushNotificationProvider>();
+        services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
+        services.AddScoped<IDeviceTokenService, DeviceTokenService>();
 
         // Task 157/158: commission calculation and the platform escrow
         // ledger. CommissionService is stateless (reads only bound Options),

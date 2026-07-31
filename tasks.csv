@@ -243,50 +243,50 @@ id,task,status,priority,notes,phase
 79c,QA - coupon abuse cases,done,critical,depends on #79b,Phase 4 - Payments & Financial
 79d,QA - refund calculations,done,critical,depends on #79c,Phase 4 - Payments & Financial
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),decomposed,high,"depends on #60c #75d | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 80a,80b,80c",Phase 5 - Post-Booking
-80a,Cancellation - Eligibility rules,todo,high,"depends on #60c #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-80b,Cancellation - fee/refund computation,todo,high,depends on #80a,Phase 5 - Post-Booking
-80c,Cancellation - actor+reason capture (SRS 11.14; 32.2),todo,high,depends on #80b,Phase 5 - Post-Booking
-81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),todo,high,"depends on #80c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+80a,Cancellation - Eligibility rules,done,high,"depends on #60c #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+80b,Cancellation - fee/refund computation,done,high,depends on #80a,Phase 5 - Post-Booking
+80c,Cancellation - actor+reason capture (SRS 11.14; 32.2),done,high,depends on #80b,Phase 5 - Post-Booking
+81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),done,high,"depends on #80c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),decomposed,high,"depends on #60c #46 | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 82a,82b,82c,82d",Phase 5 - Post-Booking
-82a,Reschedule - Eligibility window,todo,high,"depends on #60c #46| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-82b,Reschedule - count limits,todo,high,depends on #82a,Phase 5 - Post-Booking
-82c,Reschedule - slot revalidation via slot engine,todo,high,depends on #82b,Phase 5 - Post-Booking
-82d,Reschedule - fee impact (SRS 11.15; 32.3),todo,high,depends on #82c,Phase 5 - Post-Booking
-83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),todo,high,"depends on #82d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+82a,Reschedule - Eligibility window,done,high,"depends on #60c #46| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+82b,Reschedule - count limits,done,high,depends on #82a,Phase 5 - Post-Booking
+82c,Reschedule - slot revalidation via slot engine,done,high,depends on #82b,Phase 5 - Post-Booking
+82d,Reschedule - fee impact (SRS 11.15; 32.3),done,high,depends on #82c,Phase 5 - Post-Booking
+83,Reschedule - Reschedule API: Get eligible slots + confirm reschedule with history record (SRS 24.6),done,high,"depends on #82d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 84,Support - Experience schema: Tables: review; support_ticket; support_ticket_comment; notification_event (SRS 23.5),decomposed,high,"EF configs for SupportTicket/NotificationEvent salvaged to _salvage/support-notifications/ - the entities themselves still need to be created, configs reference nav properties that don't exist yet; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 84a,84b,84c,84d",Phase 5 - Post-Booking
-84a,Support - Tables: review,todo,high,"EF configs for SupportTicket/NotificationEvent salvaged to _salvage/support-notifications/ - the entities themselves still need to be created, configs reference nav properties that don't exist yet; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
-84b,Support - support_ticket,todo,high,depends on #84a,Phase 5 - Post-Booking
-84c,Support - support_ticket_comment,todo,high,depends on #84b,Phase 5 - Post-Booking
-84d,Support - notification_event (SRS 23.5),todo,high,depends on #84c,Phase 5 - Post-Booking
+84a,Support - Tables: review,done,high,"EF configs for SupportTicket/NotificationEvent salvaged to _salvage/support-notifications/ - the entities themselves still need to be created, configs reference nav properties that don't exist yet; reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
+84b,Support - support_ticket,done,high,depends on #84a,Phase 5 - Post-Booking
+84c,Support - support_ticket_comment,done,high,depends on #84b,Phase 5 - Post-Booking
+84d,Support - notification_event (SRS 23.5),done,high,depends on #84c,Phase 5 - Post-Booking
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),decomposed,high,"depends on #84d #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 85a,85b,85c",Phase 5 - Post-Booking
-85a,Reviews - Completed-booking eligibility,todo,high,"depends on #84d #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-85b,Reviews - one primary review per booking,todo,high,depends on #85a,Phase 5 - Post-Booking
-85c,Reviews - optional time window (SRS 11.16; 17),todo,high,depends on #85b,Phase 5 - Post-Booking
+85a,Reviews - Completed-booking eligibility,done,high,"depends on #84d #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+85b,Reviews - one primary review per booking,done,high,depends on #85a,Phase 5 - Post-Booking
+85c,Reviews - optional time window (SRS 11.16; 17),done,high,depends on #85b,Phase 5 - Post-Booking
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),decomposed,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 86a,86b,86c,86d",Phase 5 - Post-Booking
-86a,Support - Create ticket (categories per SRS 16.1),todo,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
-86b,Support - list,todo,high,depends on #86a,Phase 5 - Post-Booking
-86c,Support - detail,todo,high,depends on #86b,Phase 5 - Post-Booking
-86d,Support - booking-linked and generic tickets (SRS 11.18),todo,high,depends on #86c,Phase 5 - Post-Booking
-87a,Notifications - Define notification entity and types,todo,high,"depends on #31 #84d #18 | auto-blocked: depends on blocked task #31 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-87b,Notifications - Implement template rendering with variables,todo,high,"depends on #87a | auto-blocked: depends on blocked task #87a | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-87c,Notifications - Add channel dispatch (SMS/email),todo,high,"depends on #87b | auto-blocked: depends on blocked task #87b | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-87d,Notifications - Add delivery event logging and tracking,todo,high,"depends on #87c | auto-blocked: depends on blocked task #87c | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+86a,Support - Create ticket (categories per SRS 16.1),done,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
+86b,Support - list,done,high,depends on #86a,Phase 5 - Post-Booking
+86c,Support - detail,done,high,depends on #86b,Phase 5 - Post-Booking
+86d,Support - booking-linked and generic tickets (SRS 11.18),done,high,depends on #86c,Phase 5 - Post-Booking
+87a,Notifications - Define notification entity and types,done,high,"depends on #31 #84d #18 | auto-blocked: depends on blocked task #31 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87b,Notifications - Implement template rendering with variables,done,high,"depends on #87a | auto-blocked: depends on blocked task #87a | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87c,Notifications - Add channel dispatch (SMS/email),done,high,"depends on #87b | auto-blocked: depends on blocked task #87b | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87d,Notifications - Add delivery event logging and tracking,done,high,"depends on #87c | auto-blocked: depends on blocked task #87c | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),decomposed,high,"depends on #87d #81 #83 | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 88a,88b,88c,88d,88e,88f,88g",Phase 5 - Post-Booking
-88a,Notifications - Events: welcome,todo,high,"depends on #87d #81 #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-88b,Notifications - booking confirmed,todo,high,depends on #88a,Phase 5 - Post-Booking
-88c,Notifications - payment success/failure,todo,high,depends on #88b,Phase 5 - Post-Booking
-88d,Notifications - cancellation,todo,high,depends on #88c,Phase 5 - Post-Booking
-88e,Notifications - reschedule,todo,high,depends on #88d,Phase 5 - Post-Booking
-88f,Notifications - refund,todo,high,depends on #88e,Phase 5 - Post-Booking
-88g,Notifications - ticket updates (SRS 19.1),todo,high,depends on #88f,Phase 5 - Post-Booking
+88a,Notifications - Events: welcome,done,high,"depends on #87d #81 #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+88b,Notifications - booking confirmed,done,high,depends on #88a,Phase 5 - Post-Booking
+88c,Notifications - payment success/failure,done,high,depends on #88b,Phase 5 - Post-Booking
+88d,Notifications - cancellation,done,high,depends on #88c,Phase 5 - Post-Booking
+88e,Notifications - reschedule,done,high,depends on #88d,Phase 5 - Post-Booking
+88f,Notifications - refund,done,high,depends on #88e,Phase 5 - Post-Booking
+88g,Notifications - ticket updates (SRS 19.1),done,high,depends on #88f,Phase 5 - Post-Booking
 89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),decomposed,high,"depends on #65c #81 | auto-blocked: depends on blocked task #65 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 89a,89b,89c",Phase 5 - Post-Booking
-89a,Frontend - Policy display,todo,high,"depends on #65c #81| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-89b,Frontend - confirmation,todo,high,depends on #89a,Phase 5 - Post-Booking
-89c,Frontend - refund outcome (SRS 11.14.3),todo,high,depends on #89b,Phase 5 - Post-Booking
-90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),todo,high,"depends on #65c #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),todo,high,"depends on #65c #85c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),todo,high,"depends on #65c #86d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,todo,high,"depends on #81 #83 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+89a,Frontend - Policy display,done,high,"depends on #65c #81| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+89b,Frontend - confirmation,done,high,depends on #89a,Phase 5 - Post-Booking
+89c,Frontend - refund outcome (SRS 11.14.3),done,high,depends on #89b,Phase 5 - Post-Booking
+90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),done,high,"depends on #65c #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),done,high,"depends on #65c #85c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),done,high,"depends on #65c #86d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,done,high,"depends on #81 #83 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),decomposed,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 94a,94b,94c,94d",Phase 6 - Admin Panel
 94a,AdminIdentity - Tables: admin_user,todo,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
 94b,AdminIdentity - admin_role,todo,high,depends on #94a,Phase 6 - Admin Panel
@@ -467,8 +467,8 @@ id,task,status,priority,notes,phase
 150b,Partner - KYC approval,todo,low,depends on #150a,Phase 8 - Partner (Deferred)
 150c,Partner - performance view + Partner/Payout RBAC modules,todo,low,depends on #150b,Phase 8 - Partner (Deferred)
 151,Partner - Partner-facing UI: Partner portal or app for jobs/availability/earnings (platform TBD),todo,low,"depends on #149c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 8 - Partner (Deferred)
-155,"Support - Dispute resolution workflow: Formalize the valid/invalid branch on a support ticket (SRS 855: wrong charge / pricing dispute) into its own flow: admin marks a ticket disputed, resolves as refund (valid) or close/rework (invalid), tracks resolution outcome",todo,high,depends on #86d #75b,Phase 5 - Post-Booking
-156,Notifications - Push notification channel: Register device tokens (FCM/APNs); add push as a dispatch channel alongside SMS/email; wire into existing notification trigger events,todo,high,depends on #87c #88,Phase 5 - Post-Booking
+155,"Support - Dispute resolution workflow: Formalize the valid/invalid branch on a support ticket (SRS 855: wrong charge / pricing dispute) into its own flow: admin marks a ticket disputed, resolves as refund (valid) or close/rework (invalid), tracks resolution outcome",done,high,depends on #86d #75b,Phase 5 - Post-Booking
+156,Notifications - Push notification channel: Register device tokens (FCM/APNs); add push as a dispatch channel alongside SMS/email; wire into existing notification trigger events,done,high,depends on #87c #88,Phase 5 - Post-Booking
 157,Payments - Commission setup and calculation: Admin-configurable commission rate (global/per-category); compute and record platform commission on each completed booking's settlement,done,high,depends on #67f,Phase 4 - Payments & Financial
 158,"Payments - Escrow / platform holding account: Hold customer payment in a platform-owned ledger balance until service completion; release to provider wallet net of commission on completion, or to refund on cancellation",done,high,depends on #67f #157,Phase 4 - Payments & Financial
 159,"Booking - Provider reassignment on rejection: When assigned provider rejects a booking, return it to an assignable pool and let admin (or auto-match) assign a different provider instead of only offering a refund",todo,medium,depends on #147,Phase 8 - Partner (Deferred)

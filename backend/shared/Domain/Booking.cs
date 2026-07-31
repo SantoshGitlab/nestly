@@ -183,6 +183,36 @@ public class Booking : AggregateRoot<Guid>
         RaiseDomainEvent(new BookingStatusChangedEvent(Id, previousStatus, newStatus));
     }
 
+    /// <summary>
+    /// Moves the booking to a new slot (SRS 11.15, tasks 82a-d, 83). Goes
+    /// through the transient <see cref="BookingStatus.Rescheduled"/> status
+    /// on its way to <see cref="BookingStatus.AwaitingFulfilment"/> - both
+    /// hops are recorded in <see cref="StatusHistory"/>, and any provider
+    /// assignment the booking had is implicitly cleared by landing back on
+    /// AwaitingFulfilment rather than Assigned, since that assignment was
+    /// made against the old slot. Eligibility (status/window/count-limit)
+    /// and the new slot's own availability are the caller's
+    /// responsibility (<c>IRescheduleService</c>) - this method only
+    /// enforces the lifecycle transition itself.
+    /// </summary>
+    public void Reschedule(
+        Guid newSlotWindowId, DateOnly newSlotDate, string newSlotWindowName, TimeSpan newSlotStartTime, TimeSpan newSlotEndTime, string? reason)
+    {
+        if (!BookingLifecycle.IsValidTransition(Status, BookingStatus.Rescheduled))
+        {
+            throw new InvalidOperationException($"Cannot reschedule a booking in status {Status}.");
+        }
+
+        SlotWindowId = newSlotWindowId;
+        SlotDate = newSlotDate;
+        SlotWindowNameSnapshot = newSlotWindowName;
+        SlotStartTimeSnapshot = newSlotStartTime;
+        SlotEndTimeSnapshot = newSlotEndTime;
+
+        TransitionTo(BookingStatus.Rescheduled, reason);
+        TransitionTo(BookingStatus.AwaitingFulfilment, "Rescheduled to new slot.");
+    }
+
     private void EnsureStillMutable()
     {
         if (Status != BookingStatus.Initiated)

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Identity;
+using Nestly.Application.Notifications;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
@@ -14,12 +15,19 @@ namespace Nestly.Infrastructure.Services;
 /// <see cref="AccountOptions"/> (an Infrastructure-bound config type), and
 /// Application cannot depend on Infrastructure without inverting the
 /// project's dependency direction.
+///
+/// Also the welcome-notification trigger (SRS 19.1, task 88a): dispatched
+/// directly here rather than through the domain-event/MediatR pattern the
+/// other triggers use, because <see cref="Customer"/> is a plain
+/// <c>Entity&lt;Guid&gt;</c>, not an <c>AggregateRoot</c> - it has no
+/// domain-event mechanism to hook into.
 /// </summary>
 public class CustomerRegistrationService : ICustomerRegistrationService
 {
     private readonly ICustomerRepository _customerRepository;
     private readonly ICustomerAuthIdentityRepository _authIdentityRepository;
     private readonly IOTPService _otpService;
+    private readonly INotificationDispatchService _notificationDispatchService;
     private readonly AccountOptions _options;
     private readonly PasswordHasher<Customer> _passwordHasher = new();
 
@@ -27,11 +35,13 @@ public class CustomerRegistrationService : ICustomerRegistrationService
         ICustomerRepository customerRepository,
         ICustomerAuthIdentityRepository authIdentityRepository,
         IOTPService otpService,
+        INotificationDispatchService notificationDispatchService,
         IOptions<AccountOptions> options)
     {
         _customerRepository = customerRepository;
         _authIdentityRepository = authIdentityRepository;
         _otpService = otpService;
+        _notificationDispatchService = notificationDispatchService;
         _options = options.Value;
     }
 
@@ -104,6 +114,12 @@ public class CustomerRegistrationService : ICustomerRegistrationService
             emailIdentity.SetPasswordHash(_passwordHasher.HashPassword(customer, request.Password));
             await _authIdentityRepository.AddAsync(emailIdentity);
         }
+
+        await _notificationDispatchService.DispatchAsync(
+            customer.Id,
+            NotificationEventType.Welcome,
+            new NotificationRecipient(customer.Mobile, customer.Email),
+            new Dictionary<string, string> { ["CustomerName"] = customer.Name });
 
         return Result.Success(new CustomerSummaryResponse(
             customer.Id, customer.Mobile, customer.Email, customer.Name, customer.Status.ToString()));
