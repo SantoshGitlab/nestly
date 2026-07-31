@@ -52,7 +52,11 @@ export interface NavModule {
 
 export const NAV_MODULES: readonly NavModule[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard:view" },
-  { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers:view" },
+  // "customers.read" matches the real AdminPermissionCatalog code (task 96a)
+  // now that it has landed - every other module below still uses the
+  // pre-96a "module:view" placeholder (see the doc comment above) and is
+  // out of scope for the customer management task this module belongs to.
+  { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers.read" },
   { key: "catalog", label: "Catalog", href: "/catalog", srsRef: "SRS 12.5-12.7", requiredPermission: "catalog:view" },
   { key: "pricing", label: "Pricing", href: "/pricing", srsRef: "SRS 12.8", requiredPermission: "pricing:view" },
   { key: "serviceability", label: "Serviceability", href: "/serviceability", srsRef: "SRS 12.9", requiredPermission: "serviceability:view" },
