@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
@@ -135,6 +136,10 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddScoped<IAuditContextProvider, HttpAuditContextProvider>();
         services.AddScoped<IAuditLogWriter, AuditLogWriter>();
+
+        // Read side of the same audit trail (task 130) - filterable search
+        // behind the admin audit-log-viewer screen.
+        services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();

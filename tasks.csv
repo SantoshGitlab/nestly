@@ -392,7 +392,7 @@ id,task,status,priority,notes,phase
 128c,Reports - Customer segmentation and support reports,todo,medium,"depends on #128b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 128d,Reports - Permission-gated async export queue,todo,medium,"depends on #128c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 129,Reports - Reports UI: Report screens with filters and export actions,todo,medium,"depends on #98d #128d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
-130,Audit - Audit log viewer: Filterable audit trail screen + API (SRS 12.19 audit scope per SRS 21),todo,medium,depends on #96d #20,Phase 6 - Admin Panel
+130,Audit - Audit log viewer: Filterable audit trail screen + API (SRS 12.19 audit scope per SRS 21),done,medium,depends on #96d #20,Phase 6 - Admin Panel
 131,Settings - System configuration: Config/feature-flag management: booking; slot; cancellation; reschedule; tax; wallet; coupon settings; API + UI (SRS 12.19),decomposed,medium,"depends on #96d | superseded: decomposed into subtasks 131a,131b,131c,131d,131e,131f,131g,131h",Phase 6 - Admin Panel
 131a,Settings - Config/feature-flag management: booking,todo,medium,depends on #96d,Phase 6 - Admin Panel
 131b,Settings - slot,todo,medium,depends on #131a,Phase 6 - Admin Panel
