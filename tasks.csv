@@ -394,14 +394,14 @@ id,task,status,priority,notes,phase
 129,Reports - Reports UI: Report screens with filters and export actions,todo,medium,"depends on #98d #128d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 130,Audit - Audit log viewer: Filterable audit trail screen + API (SRS 12.19 audit scope per SRS 21),todo,medium,depends on #96d #20,Phase 6 - Admin Panel
 131,Settings - System configuration: Config/feature-flag management: booking; slot; cancellation; reschedule; tax; wallet; coupon settings; API + UI (SRS 12.19),decomposed,medium,"depends on #96d | superseded: decomposed into subtasks 131a,131b,131c,131d,131e,131f,131g,131h",Phase 6 - Admin Panel
-131a,Settings - Config/feature-flag management: booking,todo,medium,depends on #96d,Phase 6 - Admin Panel
-131b,Settings - slot,todo,medium,depends on #131a,Phase 6 - Admin Panel
-131c,Settings - cancellation,todo,medium,depends on #131b,Phase 6 - Admin Panel
-131d,Settings - reschedule,todo,medium,depends on #131c,Phase 6 - Admin Panel
-131e,Settings - tax,todo,medium,depends on #131d,Phase 6 - Admin Panel
-131f,Settings - wallet,todo,medium,depends on #131e,Phase 6 - Admin Panel
-131g,Settings - coupon settings,todo,medium,depends on #131f,Phase 6 - Admin Panel
-131h,Settings - API + UI (SRS 12.19),todo,medium,depends on #131g,Phase 6 - Admin Panel
+131a,Settings - Config/feature-flag management: booking,done,medium,depends on #96d,Phase 6 - Admin Panel
+131b,Settings - slot,done,medium,depends on #131a,Phase 6 - Admin Panel
+131c,Settings - cancellation,done,medium,depends on #131b,Phase 6 - Admin Panel
+131d,Settings - reschedule,done,medium,depends on #131c,Phase 6 - Admin Panel
+131e,Settings - tax,done,medium,depends on #131d,Phase 6 - Admin Panel
+131f,Settings - wallet,done,medium,depends on #131e,Phase 6 - Admin Panel
+131g,Settings - coupon settings,done,medium,depends on #131f,Phase 6 - Admin Panel
+131h,Settings - API + UI (SRS 12.19),done,medium,depends on #131g,Phase 6 - Admin Panel
 132,QA - Admin and RBAC test suite: Permission matrix coverage; admin workflows; audit assertions,decomposed,medium,"depends on #97d #117c | auto-blocked: depends on blocked task #117 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 132a,132b,132c",Phase 6 - Admin Panel
 132a,QA - Permission matrix coverage,todo,medium,"depends on #97d #117c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 132b,QA - admin workflows,todo,medium,depends on #132a,Phase 6 - Admin Panel
