@@ -382,11 +382,11 @@ id,task,status,priority,notes,phase
 125b,CMS - page,todo,medium,depends on #125a,Phase 6 - Admin Panel
 125c,CMS - FAQ management screens,todo,medium,depends on #125b,Phase 6 - Admin Panel
 126,Notifications - Notification template management: Channel-specific templates with variables; preview/test; change audit; API + UI (SRS 12.17),decomposed,medium,"depends on #96d #87d | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 126a,126b,126c,126d",Phase 6 - Admin Panel
-126a,Notifications - Channel-specific templates with variables,todo,medium,"depends on #96d #87d | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
-126b,Notifications - preview/test,todo,medium,depends on #126a,Phase 6 - Admin Panel
-126c,Notifications - change audit,todo,medium,depends on #126b,Phase 6 - Admin Panel
-126d,Notifications - API + UI (SRS 12.17),todo,medium,depends on #126c,Phase 6 - Admin Panel
-127,Notifications - Notification template UI: Template editor and preview screens,todo,medium,"depends on #98d #126d | auto-blocked: depends on blocked task #126 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
+126a,Notifications - Channel-specific templates with variables,done,medium,"depends on #96d #87d | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
+126b,Notifications - preview/test,done,medium,depends on #126a,Phase 6 - Admin Panel
+126c,Notifications - change audit,done,medium,depends on #126b,Phase 6 - Admin Panel
+126d,Notifications - API + UI (SRS 12.17),done,medium,depends on #126c,Phase 6 - Admin Panel
+127,Notifications - Notification template UI: Template editor and preview screens,done,medium,"depends on #98d #126d | auto-blocked: depends on blocked task #126 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 128a,Reports - Booking and revenue reports with CSV export,todo,medium,"depends on #96d #115d #18| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 128b,Reports - Refund and coupon usage reports,todo,medium,"depends on #128a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 128c,Reports - Customer segmentation and support reports,todo,medium,"depends on #128b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel

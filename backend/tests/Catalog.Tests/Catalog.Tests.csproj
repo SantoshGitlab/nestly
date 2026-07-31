@@ -24,6 +24,8 @@
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
     <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
+    <!-- NotificationTemplateRenderer's IMemoryCache dependency (tasks 126a-d) - a standalone package, not pulled in by FrameworkReference like Infrastructure.csproj has. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
   </ItemGroup>
 
   <ItemGroup>

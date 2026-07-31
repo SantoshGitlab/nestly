@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
@@ -111,13 +112,13 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
     [InlineData(NotificationEventType.BookingRescheduled)]
     [InlineData(NotificationEventType.RefundProcessed)]
     [InlineData(NotificationEventType.SupportTicketUpdate)]
-    public void Every_trigger_event_has_a_template_on_every_channel(NotificationEventType eventType)
+    public async Task Every_trigger_event_has_a_template_on_every_channel(NotificationEventType eventType)
     {
-        var renderer = new NotificationTemplateRenderer();
+        var renderer = new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions()));
 
-        renderer.SupportsChannel(eventType, NotificationChannel.Sms).Should().BeTrue($"{eventType} must reach customers via SMS");
-        renderer.SupportsChannel(eventType, NotificationChannel.Email).Should().BeTrue($"{eventType} must reach customers via email");
-        renderer.SupportsChannel(eventType, NotificationChannel.Push).Should().BeTrue($"{eventType} must reach customers via push");
+        (await renderer.SupportsChannelAsync(eventType, NotificationChannel.Sms)).Should().BeTrue($"{eventType} must reach customers via SMS");
+        (await renderer.SupportsChannelAsync(eventType, NotificationChannel.Email)).Should().BeTrue($"{eventType} must reach customers via email");
+        (await renderer.SupportsChannelAsync(eventType, NotificationChannel.Push)).Should().BeTrue($"{eventType} must reach customers via push");
     }
 
     /// <summary>Booking-lifecycle events (88b-f) map to exactly the notification types SRS 19.1 lists - no silent trigger, no extra one.</summary>

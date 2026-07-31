@@ -304,11 +304,21 @@ public static class DependencyInjection
         services.AddScoped<ICustomerNoteRepository, CustomerNoteRepository>();
         services.AddScoped<ICustomerManagementService, CustomerManagementService>();
 
-        // Task 87a-d: notification core. The template set is stateless
-        // (Render/SupportsChannel read only a fixed built-in dictionary),
-        // same reasoning as SandboxPaymentGateway - one shared instance.
-        services.AddSingleton<INotificationTemplateRenderer, NotificationTemplateRenderer>();
+        // Task 87a-d: notification core. Tasks 126a-d (SRS 12.17) moved the
+        // template set from a fixed built-in dictionary to an admin-managed,
+        // DB-backed store - NotificationTemplateRenderer now depends on the
+        // scoped NestlyDbContext (via INotificationTemplateRepository), so it
+        // can no longer be a singleton; the active-template lookup itself is
+        // still cached (IMemoryCache, a singleton) to keep the DB off the hot
+        // dispatch path.
+        services.AddMemoryCache();
+        services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
+        services.AddScoped<INotificationTemplateRenderer, NotificationTemplateRenderer>();
         services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+
+        // Task 126a-d: admin CRUD, preview and change audit over the template
+        // store above (SRS 12.17).
+        services.AddScoped<INotificationTemplateManagementService, NotificationTemplateManagementService>();
 
         // Task 156: push channel. Sandbox in every environment for now
         // (no real FCM/APNs credentials exist), same registration approach
