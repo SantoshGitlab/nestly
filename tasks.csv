@@ -259,9 +259,9 @@ id,task,status,priority,notes,phase
 84c,Support - support_ticket_comment,done,high,depends on #84b,Phase 5 - Post-Booking
 84d,Support - notification_event (SRS 23.5),done,high,depends on #84c,Phase 5 - Post-Booking
 85,Reviews - Review submission API: Completed-booking eligibility; one primary review per booking; optional time window (SRS 11.16; 17),decomposed,high,"depends on #84d #60c | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 85a,85b,85c",Phase 5 - Post-Booking
-85a,Reviews - Completed-booking eligibility,todo,high,"depends on #84d #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-85b,Reviews - one primary review per booking,todo,high,depends on #85a,Phase 5 - Post-Booking
-85c,Reviews - optional time window (SRS 11.16; 17),todo,high,depends on #85b,Phase 5 - Post-Booking
+85a,Reviews - Completed-booking eligibility,done,high,"depends on #84d #60c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+85b,Reviews - one primary review per booking,done,high,depends on #85a,Phase 5 - Post-Booking
+85c,Reviews - optional time window (SRS 11.16; 17),done,high,depends on #85b,Phase 5 - Post-Booking
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),decomposed,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 86a,86b,86c,86d",Phase 5 - Post-Booking
 86a,Support - Create ticket (categories per SRS 16.1),todo,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
 86b,Support - list,todo,high,depends on #86a,Phase 5 - Post-Booking
