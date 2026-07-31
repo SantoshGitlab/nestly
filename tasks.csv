@@ -267,10 +267,10 @@ id,task,status,priority,notes,phase
 86b,Support - list,done,high,depends on #86a,Phase 5 - Post-Booking
 86c,Support - detail,done,high,depends on #86b,Phase 5 - Post-Booking
 86d,Support - booking-linked and generic tickets (SRS 11.18),done,high,depends on #86c,Phase 5 - Post-Booking
-87a,Notifications - Define notification entity and types,todo,high,"depends on #31 #84d #18 | auto-blocked: depends on blocked task #31 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-87b,Notifications - Implement template rendering with variables,todo,high,"depends on #87a | auto-blocked: depends on blocked task #87a | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-87c,Notifications - Add channel dispatch (SMS/email),todo,high,"depends on #87b | auto-blocked: depends on blocked task #87b | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-87d,Notifications - Add delivery event logging and tracking,todo,high,"depends on #87c | auto-blocked: depends on blocked task #87c | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87a,Notifications - Define notification entity and types,done,high,"depends on #31 #84d #18 | auto-blocked: depends on blocked task #31 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87b,Notifications - Implement template rendering with variables,done,high,"depends on #87a | auto-blocked: depends on blocked task #87a | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87c,Notifications - Add channel dispatch (SMS/email),done,high,"depends on #87b | auto-blocked: depends on blocked task #87b | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+87d,Notifications - Add delivery event logging and tracking,done,high,"depends on #87c | auto-blocked: depends on blocked task #87c | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),decomposed,high,"depends on #87d #81 #83 | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 88a,88b,88c,88d,88e,88f,88g",Phase 5 - Post-Booking
 88a,Notifications - Events: welcome,todo,high,"depends on #87d #81 #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 88b,Notifications - booking confirmed,todo,high,depends on #88a,Phase 5 - Post-Booking

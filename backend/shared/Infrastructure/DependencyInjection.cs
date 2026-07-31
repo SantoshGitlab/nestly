@@ -199,6 +199,12 @@ public static class DependencyInjection
 
         services.AddScoped<ISupportTicketService, SupportTicketService>();
 
+        // Task 87a-d: notification core. The template set is stateless
+        // (Render/SupportsChannel read only a fixed built-in dictionary),
+        // same reasoning as SandboxPaymentGateway - one shared instance.
+        services.AddSingleton<INotificationTemplateRenderer, NotificationTemplateRenderer>();
+        services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+
         // Task 157/158: commission calculation and the platform escrow
         // ledger. CommissionService is stateless (reads only bound Options),
         // same reasoning as SandboxPaymentGateway above.
