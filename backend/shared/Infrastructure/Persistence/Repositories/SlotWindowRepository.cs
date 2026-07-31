@@ -44,4 +44,36 @@ public class SlotWindowRepository : ISlotWindowRepository
         // Ordered client-side: SQLite (test provider) can't ORDER BY an interval/TimeSpan column.
         return windows.OrderBy(w => w.StartTime).ToList();
     }
+
+    public async Task<IReadOnlyList<SlotWindow>> ListAsync(Guid? cityId)
+    {
+        var windows = await _context.Set<SlotWindow>()
+            .Include(w => w.City)
+            .Where(w => cityId == null || w.CityId == cityId)
+            .ToListAsync();
+
+        // Ordered client-side: SQLite (test provider) can't ORDER BY an interval/TimeSpan column.
+        return windows.OrderBy(w => w.City!.Name).ThenBy(w => w.StartTime).ToList();
+    }
+
+    public async Task<IReadOnlyList<DayOfWeek>> ListRuleDaysAsync(Guid slotWindowId) =>
+        await _context.Set<SlotWindowRule>()
+            .Where(r => r.SlotWindowId == slotWindowId)
+            .Select(r => r.DayOfWeek)
+            .ToListAsync();
+
+    public async Task ReplaceRulesAsync(Guid slotWindowId, IReadOnlyList<DayOfWeek> daysOfWeek)
+    {
+        var existingRules = await _context.Set<SlotWindowRule>()
+            .Where(r => r.SlotWindowId == slotWindowId)
+            .ToListAsync();
+        _context.Set<SlotWindowRule>().RemoveRange(existingRules);
+
+        foreach (var dayOfWeek in daysOfWeek.Distinct())
+        {
+            await _context.Set<SlotWindowRule>().AddAsync(new SlotWindowRule(Guid.NewGuid(), slotWindowId, dayOfWeek));
+        }
+
+        await _context.SaveChangesAsync();
+    }
 }

@@ -35,4 +35,16 @@ public class SlotBlackoutRepository : ISlotBlackoutRepository
         await _context.Set<SlotBlackout>()
             .Where(b => b.CityId == cityId && b.StartDate <= to && b.EndDate >= from)
             .ToListAsync();
+
+    public async Task<IReadOnlyList<SlotBlackout>> ListAsync(Guid? cityId) =>
+        await _context.Set<SlotBlackout>()
+            .Where(b => cityId == null || b.CityId == cityId)
+            .OrderByDescending(b => b.StartDate)
+            .ToListAsync();
+
+    public async Task DeleteAsync(SlotBlackout entity)
+    {
+        _context.Set<SlotBlackout>().Remove(entity);
+        await _context.SaveChangesAsync();
+    }
 }

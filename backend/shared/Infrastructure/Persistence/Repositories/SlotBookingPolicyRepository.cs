@@ -33,4 +33,7 @@ public class SlotBookingPolicyRepository : ISlotBookingPolicyRepository
 
     public Task<SlotBookingPolicy?> GetByCityAsync(Guid cityId) =>
         _context.Set<SlotBookingPolicy>().FirstOrDefaultAsync(p => p.CityId == cityId);
+
+    public async Task<IReadOnlyList<SlotBookingPolicy>> ListAsync() =>
+        await _context.Set<SlotBookingPolicy>().ToListAsync();
 }
