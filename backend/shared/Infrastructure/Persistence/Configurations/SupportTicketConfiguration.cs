@@ -35,6 +35,19 @@ public class SupportTicketConfiguration : IEntityTypeConfiguration<SupportTicket
         builder.Property(x => x.IsDisputed).IsRequired();
         builder.Property(x => x.DisputeOutcome).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.DisputeResolvedAtUtc);
+
+        // Tasks 120a/120c: assignment and escalation tracking (SRS 12.14.1,
+        // 12.14.2, 16.3). Restrict, not Cascade, matching CustomerId/BookingId
+        // above - deleting an AdminUser must not silently delete tickets
+        // assigned to them.
+        builder.Property(x => x.AssignedAdminUserId);
+        builder.HasOne<AdminUser>()
+            .WithMany()
+            .HasForeignKey(x => x.AssignedAdminUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.AssignedAtUtc);
+        builder.Property(x => x.EscalatedAtUtc);
+
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.UpdatedAtUtc).IsRequired();
 
@@ -46,5 +59,6 @@ public class SupportTicketConfiguration : IEntityTypeConfiguration<SupportTicket
         builder.HasIndex(x => x.CustomerId);
         builder.HasIndex(x => x.BookingId);
         builder.HasIndex(x => x.Status);
+        builder.HasIndex(x => x.AssignedAdminUserId);
     }
 }

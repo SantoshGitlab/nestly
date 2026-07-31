@@ -31,6 +31,13 @@ public class SupportTicket : AggregateRoot<Guid>
     public DisputeResolutionOutcome? DisputeOutcome { get; private set; }
     public DateTime? DisputeResolvedAtUtc { get; private set; }
 
+    /// <summary>The admin/agent this ticket is currently assigned to (SRS 12.14.1 "Assigned agent" filter, 12.14.2 "Assign to team/user", 16.3 "Assigned admin/support user"). Null when unassigned.</summary>
+    public Guid? AssignedAdminUserId { get; private set; }
+    public DateTime? AssignedAtUtc { get; private set; }
+
+    /// <summary>When this ticket was last moved to <see cref="SupportTicketStatus.Escalated"/> (SRS 12.14.2 "Mark escalated"). Cleared by nothing else - kept as the most recent escalation timestamp even once the ticket later moves on.</summary>
+    public DateTime? EscalatedAtUtc { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
@@ -89,6 +96,50 @@ public class SupportTicket : AggregateRoot<Guid>
 
         UpdatedAtUtc = DateTime.UtcNow;
         RaiseDomainEvent(new SupportTicketStatusChangedEvent(Id, CustomerId, previousStatus, newStatus));
+    }
+
+    /// <summary>Assigns (or reassigns) this ticket to an admin/agent (SRS 12.14.2 "Assign to team/user", task 120a). Callers are responsible for verifying <paramref name="adminUserId"/> refers to a real, active admin - this aggregate only records the assignment itself.</summary>
+    public void AssignTo(Guid adminUserId)
+    {
+        if (SupportTicketLifecycle.IsTerminal(Status))
+        {
+            throw new InvalidOperationException($"Cannot assign a ticket that is already {Status}.");
+        }
+
+        AssignedAdminUserId = adminUserId;
+        AssignedAtUtc = DateTime.UtcNow;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Clears any current assignment, returning the ticket to the unassigned pool.</summary>
+    public void Unassign()
+    {
+        AssignedAdminUserId = null;
+        AssignedAtUtc = null;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>Moves the ticket to <see cref="SupportTicketStatus.Escalated"/> and records when (SRS 12.14.2 "Mark escalated", task 120c) - a thin wrapper over <see cref="ChangeStatus"/> that additionally tracks the escalation invariant <see cref="EscalatedAtUtc"/>.</summary>
+    public void Escalate()
+    {
+        ChangeStatus(SupportTicketStatus.Escalated);
+        EscalatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Attaches (or re-attaches) this ticket to a booking after creation (SRS
+    /// 12.14.2 "Link refund/cancellation/booking action", task 120e) - e.g. a
+    /// generic ticket where the customer only mentions the relevant booking
+    /// later, in a reply. <see cref="BookingId"/> is otherwise immutable
+    /// (constructor-only) since most tickets know their booking, if any, at
+    /// creation time; this is the deliberate exception for admin correction.
+    /// Callers are responsible for verifying <paramref name="bookingId"/>
+    /// refers to a real booking belonging to this ticket's customer.
+    /// </summary>
+    public void LinkBooking(Guid bookingId)
+    {
+        BookingId = bookingId;
+        UpdatedAtUtc = DateTime.UtcNow;
     }
 
     /// <summary>Admin opens a formal dispute investigation on this ticket (task 155). Only meaningful while the ticket is still open.</summary>

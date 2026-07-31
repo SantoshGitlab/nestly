@@ -361,13 +361,13 @@ id,task,status,priority,notes,phase
 118,Coupons - Coupon management APIs: Coupon CRUD with all rule dimensions + redemption reporting (SRS 12.12),done,medium,"Coupon CRUD (Coupon.cs's real field set: discount type/value, max discount cap, min order amount, validity window, global/per-customer usage limits, applicable category, first/repeat-order segment, active status) via ICouponManagementService/CouponManagementService + CouponsController, gated behind coupons.read/coupons.write; redemption reporting aggregates CouponRedemption (redemptions, discount total, unique customers) via GetRedemptionReportAsync. No schema changes - built against the existing Coupon/CouponRedemption entities. Verified via dotnet build (0 errors) + dotnet test (661/661, incl. 11 new CouponManagementServiceTests).",Phase 6 - Admin Panel
 119,Coupons - Coupon management UI: Coupon list/create/edit + redemption stats screens,done,medium,"Coupon list/create/edit + redemption stats screens in frontend/admin-web/src/app/(admin)/coupons/ (page.tsx manage screen, redemptions/page.tsx report screen, _components/CouponForm.tsx, CouponsTable.tsx, CouponsTabs.tsx) plus lib/coupon-api.ts + lib/coupon-types.ts. Gated behind coupons.read/coupons.write via canWriteModule; nav entry already existed in permissions.ts. Verified via npm run build + npm run lint (both clean).",Phase 6 - Admin Panel
 120,Support - Support ticket management: Ticket workflow: assign; respond; escalate; resolve; link booking actions; API + UI (SRS 12.14; 16.2),decomposed,medium,"depends on #96d #86d | superseded: decomposed into subtasks 120a,120b,120c,120d,120e,120f",Phase 6 - Admin Panel
-120a,Support - Ticket workflow: assign,todo,medium,depends on #96d #86d,Phase 6 - Admin Panel
-120b,Support - respond,todo,medium,depends on #120a,Phase 6 - Admin Panel
-120c,Support - escalate,todo,medium,depends on #120b,Phase 6 - Admin Panel
-120d,Support - resolve,todo,medium,depends on #120c,Phase 6 - Admin Panel
-120e,Support - link booking actions,todo,medium,depends on #120d,Phase 6 - Admin Panel
-120f,Support - API + UI (SRS 12.14; 16.2),todo,medium,depends on #120e,Phase 6 - Admin Panel
-121,Support - Support ticket UI: Ticket list/detail workflow screens,todo,medium,depends on #98d #120f,Phase 6 - Admin Panel
+120a,Support - Ticket workflow: assign,done,medium,depends on #96d #86d,Phase 6 - Admin Panel
+120b,Support - respond,done,medium,depends on #120a,Phase 6 - Admin Panel
+120c,Support - escalate,done,medium,depends on #120b,Phase 6 - Admin Panel
+120d,Support - resolve,done,medium,depends on #120c,Phase 6 - Admin Panel
+120e,Support - link booking actions,done,medium,depends on #120d,Phase 6 - Admin Panel
+120f,Support - API + UI (SRS 12.14; 16.2),done,medium,depends on #120e,Phase 6 - Admin Panel
+121,Support - Support ticket UI: Ticket list/detail workflow screens,done,medium,depends on #98d #120f,Phase 6 - Admin Panel
 122,Reviews - Review moderation: Hide/unhide/flag/export reviews retaining originals for audit; API + UI (SRS 12.15 and 17.2),done,medium,"depends on #96d #85c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 123,Reviews - Review moderation UI: Moderation screen with filters,done,medium,"depends on #98d #122| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 124,CMS - CMS schema and APIs: Tables + CRUD: cms_page; banner; faq with draft/publish; scheduling; media; placement (SRS 12.16; 18),decomposed,medium,"depends on #96d #9c | superseded: decomposed into subtasks 124a,124b,124c,124d,124e,124f",Phase 6 - Admin Panel
