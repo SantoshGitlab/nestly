@@ -457,18 +457,18 @@ summary-note,"Phase order changed 2026-07-31: Partner (was Phase 8, deferred) no
 142c,Docs - incident response,todo,medium,depends on #142b,Phase 8 - Hardening & Launch
 142d,Docs - on-call basics,todo,medium,depends on #142c,Phase 8 - Hardening & Launch
 143,Product - Resolve SRS open decisions: Close SRS 34 items (cart model; COD; slot capacity; wallet phase; refund visibility; coupon stacking; tax display; reschedule fees; multilingual),todo,medium,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 8 - Hardening & Launch
-144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),todo,low,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 7 - Partner
+144,Partner - Resolve partner open decisions: Answer PARTNER.md open decisions (assignment model; company vs individual; payout rails; rating impact),done,low,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 7 - Partner
 145,Partner - Partner schema: Identity; KYC; skills; service areas; availability; capacity tables per PARTNER.md,decomposed,low,"depends on #144 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 145a,145b,145c,145d,145e,145f",Phase 7 - Partner
-145a,Partner - Identity,todo,low,"depends on #144 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 7 - Partner
-145b,Partner - KYC,todo,low,depends on #145a,Phase 7 - Partner
-145c,Partner - skills,todo,low,depends on #145b,Phase 7 - Partner
-145d,Partner - service areas,todo,low,depends on #145c,Phase 7 - Partner
-145e,Partner - availability,todo,low,depends on #145d,Phase 7 - Partner
-145f,Partner - capacity tables per PARTNER.md,todo,low,depends on #145e,Phase 7 - Partner
+145a,Partner - Identity,done,low,"depends on #144 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 7 - Partner
+145b,Partner - KYC,done,low,depends on #145a,Phase 7 - Partner
+145c,Partner - skills,done,low,depends on #145b,Phase 7 - Partner
+145d,Partner - service areas,done,low,depends on #145c,Phase 7 - Partner
+145e,Partner - availability,done,low,depends on #145d,Phase 7 - Partner
+145f,Partner - capacity tables per PARTNER.md,done,low,depends on #145e,Phase 7 - Partner
 146,Partner - Partner auth and onboarding: Registration; OTP login; KYC document submission and verification workflow,decomposed,low,"depends on #145f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 146a,146b,146c",Phase 7 - Partner
-146a,Partner - Registration,todo,low,"depends on #145f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 7 - Partner
-146b,Partner - OTP login,todo,low,depends on #146a,Phase 7 - Partner
-146c,Partner - KYC document submission and verification workflow,todo,low,depends on #146b,Phase 7 - Partner
+146a,Partner - Registration,done,low,"depends on #145f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 7 - Partner
+146b,Partner - OTP login,done,low,depends on #146a,Phase 7 - Partner
+146c,Partner - KYC document submission and verification workflow,done,low,depends on #146b,Phase 7 - Partner
 147,Partner - Assignment bridge: booking_partner_assignment + admin assignment API; single nullable AssignedPartnerId on booking,todo,low,"depends on #145f #115d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 7 - Partner
 148,Partner - Partner earnings and payouts: Append-only earning ledger + payout batch processing per PARTNER.md,todo,low,"depends on #147| unblocked: manual reset, dependency gate re-checked at runtime",Phase 7 - Partner
 149,Partner - partner-api scaffold: New backend/partner-api project mirroring existing API structure: jobs; availability; earnings endpoints,decomposed,low,"depends on #146c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 149a,149b,149c",Phase 7 - Partner

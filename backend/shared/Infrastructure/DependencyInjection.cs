@@ -26,6 +26,7 @@ using Nestly.Application.Geography;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Notifications;
+using Nestly.Application.PartnerIdentity;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
@@ -91,6 +92,18 @@ public static class DependencyInjection
         services
             .AddOptions<AdminAccountOptions>()
             .Bind(configuration.GetSection(AdminAccountOptions.SectionName));
+
+        // No ValidateOnStart here either, for the same reason as
+        // AdminJwtOptions: only the future partner-api (task 149) configures
+        // a "PartnerJwt" section - see PartnerJwtOptions' doc comment.
+        services
+            .AddOptions<PartnerJwtOptions>()
+            .Bind(configuration.GetSection(PartnerJwtOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        services
+            .AddOptions<PartnerAccountOptions>()
+            .Bind(configuration.GetSection(PartnerAccountOptions.SectionName));
 
         services
             .AddOptions<SandboxGatewayOptions>()
@@ -209,6 +222,22 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPasswordResetService, CustomerPasswordResetService>();
         services.AddScoped<ICustomerCommunicationPreferenceRepository, CustomerCommunicationPreferenceRepository>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+
+        // Tasks 145a-146c: Partner module foundation (PARTNER.md). Own
+        // repositories/OTP/session/lockout tables throughout, kept
+        // independent of the customer identity registrations above per
+        // PARTNER.md's SCOPE BOUNDARY - see PartnerOtp/PartnerLoginAttempt's
+        // doc comments for why they are not shared with Customer's.
+        services.AddScoped<IPartnerRepository, PartnerRepository>();
+        services.AddScoped<IPartnerAuthIdentityRepository, PartnerAuthIdentityRepository>();
+        services.AddScoped<IPartnerSessionRepository, PartnerSessionRepository>();
+        services.AddScoped<IPartnerLoginAttemptRepository, PartnerLoginAttemptRepository>();
+        services.AddScoped<IPartnerKycDocumentRepository, PartnerKycDocumentRepository>();
+        services.AddScoped<IPartnerOtpService, PartnerOtpService>();
+        services.AddScoped<IPartnerTokenService, PartnerTokenService>();
+        services.AddScoped<IPartnerRegistrationService, PartnerRegistrationService>();
+        services.AddScoped<IPartnerLoginService, PartnerLoginService>();
+        services.AddScoped<IPartnerKycService, PartnerKycService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's
@@ -479,6 +508,48 @@ public static class DependencyInjection
                 options.AddPolicy(code, policy => policy.Requirements.Add(new PermissionRequirement(code)));
             }
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// JWT bearer authentication for partners (task 146b, PARTNER.md API
+    /// surface). A distinct scheme name from the customer/admin ones, same
+    /// reasoning as <see cref="AdminJwtBearerScheme"/>. Not called by either
+    /// existing API's Program.cs - the future partner-api (task 149) will
+    /// call this the same way admin-api calls <see cref="AddAdminJwtAuthentication"/>.
+    /// </summary>
+    public const string PartnerJwtBearerScheme = "PartnerBearer";
+
+    public static IServiceCollection AddPartnerJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwtSection = configuration.GetSection(PartnerJwtOptions.SectionName);
+        var signingKey = jwtSection[nameof(PartnerJwtOptions.SigningKey)] ??
+            throw new InvalidOperationException($"Configuration section '{PartnerJwtOptions.SectionName}:{nameof(PartnerJwtOptions.SigningKey)}' is not configured.");
+        var issuer = jwtSection[nameof(PartnerJwtOptions.Issuer)] ?? "Nestly";
+        var audience = jwtSection[nameof(PartnerJwtOptions.Audience)] ?? "Nestly.Partners";
+
+        services
+            .AddAuthentication(PartnerJwtBearerScheme)
+            .AddJwtBearer(PartnerJwtBearerScheme, options =>
+            {
+                // Same reasoning as AddJwtAuthentication/AddAdminJwtAuthentication:
+                // keep claim types exactly as PartnerTokenService issued them.
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = issuer,
+                    ValidateAudience = true,
+                    ValidAudience = audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(signingKey)),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromSeconds(30)
+                };
+            });
+
+        services.AddAuthorization();
 
         return services;
     }
