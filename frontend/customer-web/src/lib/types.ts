@@ -495,3 +495,36 @@ export interface CancellationOutcomeResponse {
   refundTransactionId: string | null;
   cancelledAtUtc: string;
 }
+
+/**
+ * Reschedule shapes mirror the C# records in Nestly.Application.Reschedules
+ * (RescheduleContracts.cs) - see ReschedulesController.
+ */
+
+export interface RescheduleEligibilityResponse {
+  isEligible: boolean;
+  ineligibilityReason: string | null;
+  reschedulesUsed: number;
+  maxReschedulesPerBooking: number;
+  minHoursBeforeSlot: number;
+}
+
+export interface RescheduleBookingRequestBody {
+  localityId: string;
+  slotWindowId: string;
+  /** .NET DateOnly serialises as "yyyy-MM-dd". */
+  slotDate: string;
+  reason?: string | null;
+}
+
+export interface RescheduleOutcomeResponse {
+  bookingId: string;
+  bookingStatus: BookingStatus;
+  previousSlot: BookingSlotSummary;
+  newSlot: BookingSlotSummary;
+  isLate: boolean;
+  feeAmount: number;
+  reschedulesUsed: number;
+  maxReschedulesPerBooking: number;
+  rescheduledAtUtc: string;
+}
