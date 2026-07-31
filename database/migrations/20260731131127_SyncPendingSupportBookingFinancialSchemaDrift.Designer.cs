@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731131127_SyncPendingSupportBookingFinancialSchemaDrift")]
+    partial class SyncPendingSupportBookingFinancialSchemaDrift
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -102,134 +105,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_customer_mobile");
 
                     b.ToTable("customer", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.AdminPermission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("code");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Module")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("module");
-
-                    b.HasKey("Id")
-                        .HasName("pk_admin_permission");
-
-                    b.HasIndex("Code")
-                        .IsUnique()
-                        .HasDatabaseName("ix_admin_permission_code");
-
-                    b.HasIndex("Module")
-                        .HasDatabaseName("ix_admin_permission_module");
-
-                    b.ToTable("admin_permission", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.AdminRole", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_admin_role");
-
-                    b.HasIndex("Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_admin_role_name");
-
-                    b.ToTable("admin_role", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.AdminUser", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("email");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("full_name");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("password_hash");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_admin_user");
-
-                    b.HasIndex("Email")
-                        .IsUnique()
-                        .HasDatabaseName("ix_admin_user_email");
-
-                    b.ToTable("admin_user", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.AuditLog", b =>
@@ -1960,38 +1835,6 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("review", (string)null);
                 });
 
-            modelBuilder.Entity("Nestly.Domain.RolePermissionMapping", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("PermissionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("permission_id");
-
-                    b.Property<Guid>("RoleId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("role_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_role_permission_mapping");
-
-                    b.HasIndex("PermissionId")
-                        .HasDatabaseName("ix_role_permission_mapping_permission_id");
-
-                    b.HasIndex("RoleId", "PermissionId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_role_permission_mapping_role_id_permission_id");
-
-                    b.ToTable("role_permission_mapping", (string)null);
-                });
-
             modelBuilder.Entity("Nestly.Domain.Service", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2900,23 +2743,6 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_review_service_service_id");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.RolePermissionMapping", b =>
-                {
-                    b.HasOne("Nestly.Domain.AdminPermission", null)
-                        .WithMany()
-                        .HasForeignKey("PermissionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_role_permission_mapping_admin_permission_permission_id");
-
-                    b.HasOne("Nestly.Domain.AdminRole", null)
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_role_permission_mapping_admin_role_role_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.ServiceCityPrice", b =>

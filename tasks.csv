@@ -288,10 +288,10 @@ id,task,status,priority,notes,phase
 92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),done,high,"depends on #65c #86d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,done,high,"depends on #81 #83 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),decomposed,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 94a,94b,94c,94d",Phase 6 - Admin Panel
-94a,AdminIdentity - Tables: admin_user,todo,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
-94b,AdminIdentity - admin_role,todo,high,depends on #94a,Phase 6 - Admin Panel
-94c,AdminIdentity - admin_permission,todo,high,depends on #94b,Phase 6 - Admin Panel
-94d,AdminIdentity - role_permission_mapping (SRS 23.6),todo,high,depends on #94c,Phase 6 - Admin Panel
+94a,AdminIdentity - Tables: admin_user,done,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
+94b,AdminIdentity - admin_role,done,high,depends on #94a,Phase 6 - Admin Panel
+94c,AdminIdentity - admin_permission,done,high,depends on #94b,Phase 6 - Admin Panel
+94d,AdminIdentity - role_permission_mapping (SRS 23.6),done,high,depends on #94c,Phase 6 - Admin Panel
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),decomposed,high,"depends on #94d #20 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 95a,95b,95c,95d,95e,95f,95g",Phase 6 - Admin Panel
 95a,AdminIdentity - Login,todo,high,"depends on #94d #20 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
 95b,AdminIdentity - strong password policy,todo,high,depends on #95a,Phase 6 - Admin Panel
