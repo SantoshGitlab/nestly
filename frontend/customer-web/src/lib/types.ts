@@ -534,11 +534,16 @@ export interface RescheduleOutcomeResponse {
  * (ReviewContracts.cs) - see ReviewsController.
  */
 
-/** Mirrors Nestly.Domain.ReviewStatus's declaration order exactly. */
+/**
+ * Mirrors Nestly.Domain.ReviewStatus's declaration order exactly. Only two
+ * states - admin task 122 split "flagged for abuse" out into its own
+ * independent `Review.IsFlagged` boolean (not modeled here yet, since no
+ * customer-facing screen reads it), so a review that is flagged for
+ * moderation review can still report Visible here.
+ */
 export enum ReviewStatus {
   Visible = 0,
   Hidden = 1,
-  Flagged = 2,
 }
 
 export interface ReviewEligibilityResponse {

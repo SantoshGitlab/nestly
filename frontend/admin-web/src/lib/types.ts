@@ -235,6 +235,52 @@ export interface CustomerNote {
   createdAtUtc: string;
 }
 
+/**
+ * Review moderation shapes (SRS 12.15, task 122) mirror the C# records in
+ * Nestly.Application.Reviews (ReviewModerationContracts.cs) - see
+ * ReviewsController. Same no-JsonStringEnumConverter caveat as CustomerStatus
+ * above: `status` serialises as its ordinal.
+ */
+
+/** Mirrors Nestly.Domain.ReviewStatus's declaration order exactly - only two states; "flagged" is the separate `isFlagged` boolean below, not a third status value. */
+export enum ReviewStatus {
+  Visible = 0,
+  Hidden = 1,
+}
+
+/** One review row on the admin moderation screen (SRS 12.15). */
+export interface ReviewModerationItem {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  customerName: string;
+  serviceId: string;
+  serviceName: string;
+  categoryId: string;
+  categoryName: string;
+  rating: number;
+  reviewText: string | null;
+  issueTags: string | null;
+  status: ReviewStatus;
+  isFlagged: boolean;
+  moderatorNote: string | null;
+  moderatedByAdminUserId: string | null;
+  moderatedAtUtc: string | null;
+  createdAtUtc: string;
+}
+
+export interface ReviewModerationSearchResponse {
+  items: ReviewModerationItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+/** An optional moderator reason attached to a hide/unhide/flag/unflag action. */
+export interface ModerateReviewRequestBody {
+  note: string | null;
+}
+
 /** The customer 360 view (SRS 12.4.2, task 101b). */
 export interface CustomerDetail {
   id: string;

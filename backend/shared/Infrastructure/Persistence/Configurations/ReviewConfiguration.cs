@@ -34,10 +34,18 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
         builder.Property(x => x.ReviewText).HasMaxLength(2000);
         builder.Property(x => x.IssueTags).HasMaxLength(500);
         builder.Property(x => x.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.IsFlagged).IsRequired().HasDefaultValue(false);
+        builder.Property(x => x.ModeratorNote).HasMaxLength(1000);
+        builder.Property(x => x.ModeratedByAdminUserId);
+        builder.Property(x => x.ModeratedAtUtc);
         builder.Property(x => x.CreatedAtUtc).IsRequired();
 
         // One primary review per booking (SRS 11.16.3).
         builder.HasIndex(x => x.BookingId).IsUnique();
         builder.HasIndex(x => x.ServiceId);
+
+        // The admin moderation screen (task 122) filters on status and the
+        // flagged marker together (e.g. "hidden and flagged").
+        builder.HasIndex(x => new { x.Status, x.IsFlagged });
     }
 }
