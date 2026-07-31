@@ -14,17 +14,20 @@ public sealed class SupportTicketNotificationTriggerHandler : INotificationHandl
 {
     private readonly ICustomerRepository _customerRepository;
     private readonly ISupportTicketRepository _ticketRepository;
+    private readonly IDeviceTokenRepository _deviceTokenRepository;
     private readonly INotificationDispatchService _notificationDispatchService;
     private readonly ILogger<SupportTicketNotificationTriggerHandler> _logger;
 
     public SupportTicketNotificationTriggerHandler(
         ICustomerRepository customerRepository,
         ISupportTicketRepository ticketRepository,
+        IDeviceTokenRepository deviceTokenRepository,
         INotificationDispatchService notificationDispatchService,
         ILogger<SupportTicketNotificationTriggerHandler> logger)
     {
         _customerRepository = customerRepository;
         _ticketRepository = ticketRepository;
+        _deviceTokenRepository = deviceTokenRepository;
         _notificationDispatchService = notificationDispatchService;
         _logger = logger;
     }
@@ -55,10 +58,12 @@ public sealed class SupportTicketNotificationTriggerHandler : INotificationHandl
             ["Status"] = domainEvent.ToStatus.ToString()
         };
 
+        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(domainEvent.CustomerId);
+
         await _notificationDispatchService.DispatchAsync(
             domainEvent.CustomerId,
             NotificationEventType.SupportTicketUpdate,
-            new NotificationRecipient(customer.Mobile, customer.Email),
+            new NotificationRecipient(customer.Mobile, customer.Email, deviceTokens.Select(t => t.Token).ToList()),
             variables,
             bookingId: ticket.BookingId,
             supportTicketId: ticket.Id,

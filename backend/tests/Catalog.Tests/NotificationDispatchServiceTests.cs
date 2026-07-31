@@ -9,7 +9,7 @@ using Nestly.Infrastructure.Services;
 
 namespace Nestly.Catalog.Tests;
 
-/// <summary>Covers tasks 87c-d: channel dispatch (SMS/email) and delivery event logging/tracking.</summary>
+/// <summary>Covers tasks 87c-d (channel dispatch SMS/email, delivery event logging/tracking) and 156 (push channel dispatch).</summary>
 public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabase>
 {
     private readonly TestDatabase _db;
@@ -47,6 +47,17 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         }
     }
 
+    private sealed class FakePushNotificationProvider : IPushNotificationProvider
+    {
+        public List<(string DeviceToken, string Title, string Body)> SentPushes { get; } = [];
+
+        public Task<Result> SendPushAsync(string deviceToken, string title, string body, CancellationToken cancellationToken = default)
+        {
+            SentPushes.Add((deviceToken, title, body));
+            return Task.FromResult(Result.Success());
+        }
+    }
+
     private Guid SeedCustomer(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {
         var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active);
@@ -67,7 +78,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com"),
@@ -96,7 +107,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", Email: null),
@@ -118,7 +129,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider { FailSms = true };
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com"),
@@ -142,7 +153,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         await service.DispatchAsync(customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", null), new Dictionary<string, string>());
 
@@ -151,5 +162,52 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
 
         logged.Recipient.Should().NotBe("9876543210");
         logged.Recipient.Should().EndWith("3210");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_sends_one_push_per_registered_device()
+    {
+        Guid customerId;
+        using (var context = _db.CreateContext())
+        {
+            customerId = SeedCustomer(context);
+        }
+
+        var pushProvider = new FakePushNotificationProvider();
+        using var dispatchContext = _db.CreateContext();
+        var service = new NotificationDispatchService(
+            new NotificationTemplateRenderer(), new FakeNotificationProvider(), pushProvider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+
+        var outcomes = await service.DispatchAsync(
+            customerId, NotificationEventType.Welcome, new NotificationRecipient(null, null, ["device-a", "device-b"]),
+            new Dictionary<string, string> { ["CustomerName"] = "Asha" });
+
+        outcomes.Should().HaveCount(2);
+        outcomes.Should().OnlyContain(o => o.Channel == NotificationChannel.Push && o.Status == NotificationDeliveryStatus.Sent);
+        pushProvider.SentPushes.Select(p => p.DeviceToken).Should().BeEquivalentTo(["device-a", "device-b"]);
+        pushProvider.SentPushes.Should().OnlyContain(p => p.Title == "Welcome to Nestly" && p.Body.Contains("Asha"));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_combines_sms_email_and_push_in_one_call()
+    {
+        Guid customerId;
+        using (var context = _db.CreateContext())
+        {
+            customerId = SeedCustomer(context);
+        }
+
+        var smsEmailProvider = new FakeNotificationProvider();
+        var pushProvider = new FakePushNotificationProvider();
+        using var dispatchContext = _db.CreateContext();
+        var service = new NotificationDispatchService(
+            new NotificationTemplateRenderer(), smsEmailProvider, pushProvider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+
+        var outcomes = await service.DispatchAsync(
+            customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com", ["device-a"]),
+            new Dictionary<string, string> { ["CustomerName"] = "Asha" });
+
+        outcomes.Should().HaveCount(3);
+        outcomes.Select(o => o.Channel).Should().BeEquivalentTo([NotificationChannel.Sms, NotificationChannel.Email, NotificationChannel.Push]);
     }
 }

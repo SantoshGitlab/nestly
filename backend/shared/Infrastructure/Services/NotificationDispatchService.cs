@@ -16,17 +16,20 @@ public class NotificationDispatchService : INotificationDispatchService
 {
     private readonly INotificationTemplateRenderer _templateRenderer;
     private readonly INotificationProvider _notificationProvider;
+    private readonly IPushNotificationProvider _pushNotificationProvider;
     private readonly INotificationEventRepository _repository;
     private readonly ILogger<NotificationDispatchService> _logger;
 
     public NotificationDispatchService(
         INotificationTemplateRenderer templateRenderer,
         INotificationProvider notificationProvider,
+        IPushNotificationProvider pushNotificationProvider,
         INotificationEventRepository repository,
         ILogger<NotificationDispatchService> logger)
     {
         _templateRenderer = templateRenderer;
         _notificationProvider = notificationProvider;
+        _pushNotificationProvider = pushNotificationProvider;
         _repository = repository;
         _logger = logger;
     }
@@ -52,6 +55,18 @@ public class NotificationDispatchService : INotificationDispatchService
         {
             outcomes.Add(await DispatchChannelAsync(
                 customerId, eventType, NotificationChannel.Email, recipient.Email, variables, bookingId, supportTicketId, cancellationToken));
+        }
+
+        // Task 156: one dispatch per registered device, not a single send -
+        // a customer may have several (phone + tablet, or a reinstalled app
+        // that registered a fresh token before the old one was revoked).
+        if (recipient.PushDeviceTokens is { Count: > 0 } deviceTokens)
+        {
+            foreach (var deviceToken in deviceTokens)
+            {
+                outcomes.Add(await DispatchChannelAsync(
+                    customerId, eventType, NotificationChannel.Push, deviceToken, variables, bookingId, supportTicketId, cancellationToken));
+            }
         }
 
         return outcomes;
@@ -86,6 +101,7 @@ public class NotificationDispatchService : INotificationDispatchService
         {
             NotificationChannel.Sms => await _notificationProvider.SendSmsAsync(rawRecipient, rendered.Body, cancellationToken),
             NotificationChannel.Email => await _notificationProvider.SendEmailAsync(rawRecipient, rendered.Subject ?? rendered.TemplateKey, rendered.Body, cancellationToken),
+            NotificationChannel.Push => await _pushNotificationProvider.SendPushAsync(rawRecipient, rendered.Subject ?? rendered.TemplateKey, rendered.Body, cancellationToken),
             _ => throw new NotSupportedException($"Notification channel {channel} has no dispatcher wired up yet.")
         };
 

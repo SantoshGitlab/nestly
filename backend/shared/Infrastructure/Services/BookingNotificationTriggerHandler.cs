@@ -35,6 +35,7 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly ICancellationRepository _cancellationRepository;
     private readonly IRefundTransactionRepository _refundRepository;
+    private readonly IDeviceTokenRepository _deviceTokenRepository;
     private readonly INotificationDispatchService _notificationDispatchService;
     private readonly ILogger<BookingNotificationTriggerHandler> _logger;
 
@@ -44,6 +45,7 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
         IPaymentTransactionRepository paymentRepository,
         ICancellationRepository cancellationRepository,
         IRefundTransactionRepository refundRepository,
+        IDeviceTokenRepository deviceTokenRepository,
         INotificationDispatchService notificationDispatchService,
         ILogger<BookingNotificationTriggerHandler> logger)
     {
@@ -52,6 +54,7 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
         _paymentRepository = paymentRepository;
         _cancellationRepository = cancellationRepository;
         _refundRepository = refundRepository;
+        _deviceTokenRepository = deviceTokenRepository;
         _notificationDispatchService = notificationDispatchService;
         _logger = logger;
     }
@@ -85,7 +88,9 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
         }
 
         var customer = await _customerRepository.GetByIdAsync(booking.CustomerId);
-        var recipient = new NotificationRecipient(customer?.Mobile ?? booking.CustomerMobileSnapshot, customer?.Email);
+        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(booking.CustomerId);
+        var recipient = new NotificationRecipient(
+            customer?.Mobile ?? booking.CustomerMobileSnapshot, customer?.Email, deviceTokens.Select(t => t.Token).ToList());
 
         foreach (var eventType in eventTypes)
         {

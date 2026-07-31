@@ -209,6 +209,13 @@ public static class DependencyInjection
         services.AddSingleton<INotificationTemplateRenderer, NotificationTemplateRenderer>();
         services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
 
+        // Task 156: push channel. Sandbox in every environment for now
+        // (no real FCM/APNs credentials exist), same registration approach
+        // as INotificationProvider above.
+        services.AddScoped<IPushNotificationProvider, SandboxPushNotificationProvider>();
+        services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
+        services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+
         // Task 157/158: commission calculation and the platform escrow
         // ledger. CommissionService is stateless (reads only bound Options),
         // same reasoning as SandboxPaymentGateway above.

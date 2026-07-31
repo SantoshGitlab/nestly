@@ -1,0 +1,77 @@
+using System.IdentityModel.Tokens.Jwt;
+using Asp.Versioning;
+using FluentValidation;
+using FluentValidation.Results;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Nestly.Application.Notifications;
+using Nestly.BuildingBlocks.Extensions;
+
+namespace Nestly.ConsumerApi.Controllers;
+
+/// <summary>Push device token registration (SRS 19.1, task 156).</summary>
+[ApiController]
+[ApiVersion(1)]
+[Authorize]
+[Route("api/v{version:apiVersion}/device-tokens")]
+public class DeviceTokensController : ControllerBase
+{
+    private readonly IDeviceTokenService _deviceTokenService;
+    private readonly IValidator<RegisterDeviceTokenRequest> _registerValidator;
+
+    public DeviceTokensController(IDeviceTokenService deviceTokenService, IValidator<RegisterDeviceTokenRequest> registerValidator)
+    {
+        _deviceTokenService = deviceTokenService;
+        _registerValidator = registerValidator;
+    }
+
+    /// <summary>Registers (or re-registers) the caller's device for push notifications.</summary>
+    [HttpPost]
+    [ProducesResponseType(typeof(DeviceTokenResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Register([FromBody] RegisterDeviceTokenRequest request)
+    {
+        var validation = await _registerValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _deviceTokenService.RegisterAsync(CurrentCustomerId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>The caller's active registered devices.</summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<DeviceTokenResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List()
+    {
+        var result = await _deviceTokenService.ListAsync(CurrentCustomerId());
+        return Ok(result.Value);
+    }
+
+    /// <summary>Deactivates a device (e.g. on logout).</summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Revoke(Guid id)
+    {
+        var result = await _deviceTokenService.RevokeAsync(CurrentCustomerId(), id);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
+    private Guid CurrentCustomerId() =>
+        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+
+    private static ModelStateDictionary ToModelState(ValidationResult validation)
+    {
+        var modelState = new ModelStateDictionary();
+        foreach (var error in validation.Errors)
+        {
+            modelState.AddModelError(error.PropertyName, error.ErrorMessage);
+        }
+
+        return modelState;
+    }
+}

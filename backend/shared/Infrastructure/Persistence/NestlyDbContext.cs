@@ -35,6 +35,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketComment> SupportTicketComments { get; set; }
     public DbSet<NotificationEvent> NotificationEvents { get; set; }
+    public DbSet<DeviceToken> DeviceTokens { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

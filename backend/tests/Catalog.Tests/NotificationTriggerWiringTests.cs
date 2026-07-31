@@ -68,14 +68,20 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
             new PaymentTransactionRepository(context),
             new BookingCancellationRepository(context),
             new RefundTransactionRepository(context),
+            new DeviceTokenRepository(context),
             BuildDispatchService(context),
             NullLogger<BookingNotificationTriggerHandler>.Instance);
 
     private static SupportTicketNotificationTriggerHandler BuildTicketHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
-        new(new CustomerRepository(context), new SupportTicketRepository(context), BuildDispatchService(context), NullLogger<SupportTicketNotificationTriggerHandler>.Instance);
+        new(
+            new CustomerRepository(context), new SupportTicketRepository(context), new DeviceTokenRepository(context),
+            BuildDispatchService(context), NullLogger<SupportTicketNotificationTriggerHandler>.Instance);
 
     private static NotificationDispatchService BuildDispatchService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
-        new(new NotificationTemplateRenderer(), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance), new NotificationEventRepository(context), NullLogger<NotificationDispatchService>.Instance);
+        new(
+            new NotificationTemplateRenderer(), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
+            new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(context),
+            NullLogger<NotificationDispatchService>.Instance);
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 

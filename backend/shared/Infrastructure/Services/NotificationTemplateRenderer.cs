@@ -58,6 +58,25 @@ public sealed partial class NotificationTemplateRenderer : INotificationTemplate
             new("support_ticket_update_sms", null, "Update on ticket {{TicketId}}: {{Status}}. - Nestly"),
         [(NotificationEventType.SupportTicketUpdate, NotificationChannel.Email)] =
             new("support_ticket_update_email", "Your support ticket was updated", "Hi {{CustomerName}},\n\nYour support ticket \"{{Subject}}\" is now {{Status}}."),
+
+        // Task 156: push - same "Subject" field doubles as the push
+        // notification's title (see NotificationDispatchService.DispatchChannelAsync).
+        [(NotificationEventType.Welcome, NotificationChannel.Push)] =
+            new("welcome_push", "Welcome to Nestly", "Hi {{CustomerName}}, your account is ready. Book your first service today!"),
+        [(NotificationEventType.BookingConfirmed, NotificationChannel.Push)] =
+            new("booking_confirmed_push", "Booking confirmed", "{{ServiceName}} is scheduled for {{SlotDate}}, {{SlotWindow}}."),
+        [(NotificationEventType.PaymentSuccess, NotificationChannel.Push)] =
+            new("payment_success_push", "Payment received", "We've received your payment of {{Amount}} for booking {{BookingId}}."),
+        [(NotificationEventType.PaymentFailed, NotificationChannel.Push)] =
+            new("payment_failed_push", "Payment failed", "Your payment of {{Amount}} for booking {{BookingId}} failed. Please retry."),
+        [(NotificationEventType.BookingCancelled, NotificationChannel.Push)] =
+            new("booking_cancelled_push", "Booking cancelled", "Booking {{BookingId}} was cancelled. Refund: {{RefundAmount}}."),
+        [(NotificationEventType.BookingRescheduled, NotificationChannel.Push)] =
+            new("booking_rescheduled_push", "Booking rescheduled", "Booking {{BookingId}} moved to {{SlotDate}}, {{SlotWindow}}."),
+        [(NotificationEventType.RefundProcessed, NotificationChannel.Push)] =
+            new("refund_processed_push", "Refund processed", "A refund of {{Amount}} for booking {{BookingId}} was processed via {{Method}}."),
+        [(NotificationEventType.SupportTicketUpdate, NotificationChannel.Push)] =
+            new("support_ticket_update_push", "Ticket updated", "Your ticket \"{{Subject}}\" is now {{Status}}."),
     };
 
     public RenderedNotification Render(NotificationEventType eventType, NotificationChannel channel, IReadOnlyDictionary<string, string> variables)

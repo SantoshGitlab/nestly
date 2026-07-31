@@ -5,7 +5,10 @@ namespace Nestly.Domain;
 public enum NotificationChannel
 {
     Sms,
-    Email
+    Email,
+
+    /// <summary>Push, dispatched via <see cref="IPushNotificationProvider"/> rather than this interface - see its doc comment for why it's separate (task 156).</summary>
+    Push
 }
 
 /// <summary>
