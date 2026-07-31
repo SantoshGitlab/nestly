@@ -4,7 +4,12 @@ Partner / Vendor module specification.
 
 ## STATUS
 
-Not implemented. Out of scope for Phase 1 per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9). This document defines the target design now so that Booking, Database, and API decisions made elsewhere don't accidentally block adding this module later.
+Not implemented. Out of scope for Phase 1 per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9) — this is the SRS's own release-phase terminology, unrelated to the backlog's numbered phases below. This document defines the target design now so that Booking, Database, and API decisions made elsewhere don't accidentally block adding this module later.
+
+In the backlog (`tasks.csv`), Partner is scheduled as **Phase 7**, ahead of
+Hardening & Launch (Phase 8) — moved there explicitly so partner/provider
+work is done before launch, not after it. No longer "deferred" in the sense
+of "after everything else"; only in the sense of "not yet built."
 
 ## PURPOSE
 
