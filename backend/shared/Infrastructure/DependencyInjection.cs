@@ -19,6 +19,7 @@ using Nestly.Application.Geography;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Refunds;
+using Nestly.Application.Reschedules;
 using Nestly.Application.Wallet;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
@@ -172,6 +173,13 @@ public static class DependencyInjection
             .ValidateDataAnnotations();
         services.AddScoped<ICancellationRepository, BookingCancellationRepository>();
         services.AddScoped<ICancellationService, CancellationService>();
+
+        services
+            .AddOptions<ReschedulePolicyOptions>()
+            .Bind(configuration.GetSection(ReschedulePolicyOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddScoped<IRescheduleRepository, BookingRescheduleRepository>();
+        services.AddScoped<IRescheduleService, RescheduleService>();
 
         // Task 157/158: commission calculation and the platform escrow
         // ledger. CommissionService is stateless (reads only bound Options),
