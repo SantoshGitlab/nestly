@@ -562,3 +562,99 @@ export interface ReviewResponse {
   status: ReviewStatus;
   createdAtUtc: string;
 }
+
+/**
+ * Support ticket shapes mirror the C# records in Nestly.Application.Support
+ * (SupportTicketContracts.cs) - see SupportTicketsController,
+ * BookingSupportTicketsController.
+ */
+
+/** Mirrors Nestly.Domain.SupportTicketCategory's declaration order exactly. */
+export enum SupportTicketCategory {
+  BookingIssue = 0,
+  PaymentIssue = 1,
+  RefundIssue = 2,
+  ServiceQuality = 3,
+  ProfessionalConduct = 4,
+  PricingDispute = 5,
+  TechnicalIssue = 6,
+  GeneralInquiry = 7,
+}
+
+/** Mirrors Nestly.Domain.SupportTicketPriority's declaration order exactly. */
+export enum SupportTicketPriority {
+  Low = 0,
+  Normal = 1,
+  High = 2,
+  Urgent = 3,
+}
+
+/** Mirrors Nestly.Domain.SupportTicketStatus's declaration order exactly. */
+export enum SupportTicketStatus {
+  Open = 0,
+  InProgress = 1,
+  WaitingForCustomer = 2,
+  Escalated = 3,
+  Resolved = 4,
+  Closed = 5,
+}
+
+/** Mirrors Nestly.Domain.SupportTicketCommentAuthorType's declaration order exactly. */
+export enum SupportTicketCommentAuthorType {
+  Customer = 0,
+  Support = 1,
+  System = 2,
+}
+
+/** Mirrors Nestly.Domain.DisputeResolutionOutcome's declaration order exactly. */
+export enum DisputeResolutionOutcome {
+  RefundValid = 0,
+  ClosedInvalid = 1,
+}
+
+export interface CreateSupportTicketRequestBody {
+  category: SupportTicketCategory;
+  bookingId?: string | null;
+  subject: string;
+  description: string;
+  priority?: SupportTicketPriority | null;
+}
+
+export interface AddSupportTicketCommentRequestBody {
+  comment: string;
+}
+
+export interface SupportTicketSummaryResponse {
+  id: string;
+  category: SupportTicketCategory;
+  priority: SupportTicketPriority;
+  subject: string;
+  status: SupportTicketStatus;
+  bookingId: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+export interface SupportTicketCommentResponse {
+  id: string;
+  authorType: SupportTicketCommentAuthorType;
+  comment: string;
+  createdAt: string;
+}
+
+export interface SupportTicketDetailResponse {
+  id: string;
+  customerId: string;
+  bookingId: string | null;
+  category: SupportTicketCategory;
+  priority: SupportTicketPriority;
+  subject: string;
+  description: string;
+  status: SupportTicketStatus;
+  resolutionSummary: string | null;
+  isDisputed: boolean;
+  disputeOutcome: DisputeResolutionOutcome | null;
+  comments: SupportTicketCommentResponse[];
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
