@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731152234_AddSupportTicketAssignmentAndEscalation")]
+    partial class AddSupportTicketAssignmentAndEscalation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -320,79 +323,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_audit_log_entity_name_entity_id");
 
                     b.ToTable("audit_log", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.Banner", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("CategoryId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("category_id");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("LinkUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("link_url");
-
-                    b.Property<Guid>("MediaId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("media_id");
-
-                    b.Property<string>("Placement")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("placement");
-
-                    b.Property<DateTime?>("PublishEndUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publish_end_utc");
-
-                    b.Property<DateTime?>("PublishStartUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publish_start_utc");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("sort_order");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at_utc");
-
-                    b.HasKey("Id")
-                        .HasName("pk_banner");
-
-                    b.HasIndex("CategoryId")
-                        .HasDatabaseName("ix_banner_category_id");
-
-                    b.HasIndex("MediaId")
-                        .HasDatabaseName("ix_banner_media_id");
-
-                    b.HasIndex("Placement", "Status", "SortOrder")
-                        .HasDatabaseName("ix_banner_placement_status_sort_order");
-
-                    b.ToTable("banner", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.Booking", b =>
@@ -1023,173 +953,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_city_pricing_policy_city_id");
 
                     b.ToTable("city_pricing_policy", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.CmsFaq", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Answer")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("answer");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("Placement")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("placement");
-
-                    b.Property<DateTime?>("PublishEndUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publish_end_utc");
-
-                    b.Property<DateTime?>("PublishStartUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publish_start_utc");
-
-                    b.Property<string>("Question")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("question");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("sort_order");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at_utc");
-
-                    b.HasKey("Id")
-                        .HasName("pk_cms_faq");
-
-                    b.HasIndex("Placement", "Status", "SortOrder")
-                        .HasDatabaseName("ix_cms_faq_placement_status_sort_order");
-
-                    b.ToTable("cms_faq", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.CmsMedia", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AltText")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("alt_text");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("url");
-
-                    b.HasKey("Id")
-                        .HasName("pk_cms_media");
-
-                    b.ToTable("cms_media", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.CmsPage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("body");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("Placement")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("placement");
-
-                    b.Property<DateTime?>("PublishEndUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publish_end_utc");
-
-                    b.Property<DateTime?>("PublishStartUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publish_start_utc");
-
-                    b.Property<string>("SeoDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("seo_description");
-
-                    b.Property<string>("SeoKeywords")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("seo_keywords");
-
-                    b.Property<string>("SeoTitle")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("seo_title");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("slug");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("title");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at_utc");
-
-                    b.HasKey("Id")
-                        .HasName("pk_cms_page");
-
-                    b.HasIndex("Slug")
-                        .IsUnique()
-                        .HasDatabaseName("ix_cms_page_slug");
-
-                    b.HasIndex("Status", "Placement")
-                        .HasDatabaseName("ix_cms_page_status_placement");
-
-                    b.ToTable("cms_page", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.Coupon", b =>
@@ -3188,22 +2951,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_admin_user_admin_role_role_id");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.Banner", b =>
-                {
-                    b.HasOne("Nestly.Domain.Category", null)
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_banner_category_category_id");
-
-                    b.HasOne("Nestly.Domain.CmsMedia", null)
-                        .WithMany()
-                        .HasForeignKey("MediaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_banner_cms_media_assets_media_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.Booking", b =>

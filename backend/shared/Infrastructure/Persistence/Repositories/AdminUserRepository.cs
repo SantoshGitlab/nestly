@@ -33,4 +33,10 @@ public class AdminUserRepository : IAdminUserRepository
 
     public Task<AdminUser?> GetByEmailAsync(string email) =>
         _context.Set<AdminUser>().FirstOrDefaultAsync(x => x.Email == email);
+
+    public async Task<IReadOnlyList<AdminUser>> ListActiveAsync() =>
+        await _context.Set<AdminUser>()
+            .Where(x => x.Status == AdminUserStatus.Active)
+            .OrderBy(x => x.FullName)
+            .ToListAsync();
 }

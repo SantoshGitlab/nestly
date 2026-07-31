@@ -313,6 +313,11 @@ public static class DependencyInjection
         // "support.write" as of task 96b - see SupportTicketDisputesController's doc comment.
         services.AddScoped<IDisputeResolutionService, DisputeResolutionService>();
 
+        // Tasks 120a-f: the general admin ticket workflow (search/detail,
+        // assign/unassign, respond, escalate, resolve/close, link booking) -
+        // gated behind "support.read"/"support.write" in SupportTicketsController.
+        services.AddScoped<IAdminSupportTicketService, AdminSupportTicketService>();
+
         // Task 99: admin dashboard KPI widgets (SRS 12.3). Reads across the
         // Booking/Payment/Refund/Support aggregates directly - see
         // DashboardQueryService's doc comment for why this has no repository
