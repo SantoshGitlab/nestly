@@ -232,6 +232,12 @@ public static class DependencyInjection
         services.AddScoped<ICouponRepository, CouponRepository>();
         services.AddScoped<ICouponRedemptionRepository, CouponRedemptionRepository>();
         services.AddScoped<ICouponService, CouponService>();
+
+        // Task 118: admin coupon management + redemption reporting (SRS
+        // 12.12), gated behind "coupons.*" (task 96b) in AdminApi's
+        // CouponsController. Distinct from the consumer-facing ICouponService
+        // above - see CouponManagementService's doc comment.
+        services.AddScoped<ICouponManagementService, CouponManagementService>();
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();

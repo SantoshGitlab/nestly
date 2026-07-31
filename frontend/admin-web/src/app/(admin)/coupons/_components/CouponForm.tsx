@@ -1,0 +1,290 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Alert, Button, Field, Select } from "@/components/ui";
+import { describeError } from "@/lib/api";
+import { listApplicableCategories } from "@/lib/coupon-api";
+import {
+  CouponCustomerSegment,
+  CouponDiscountType,
+  type CouponAdminResponse,
+  type CouponCreateRequest,
+  type CouponUpdateRequest,
+} from "@/lib/coupon-types";
+
+/**
+ * Create/edit form for every coupon rule dimension (SRS 12.12.1, task 119):
+ * discount type/value, max discount cap, min order amount, validity window,
+ * usage limits (global + per-customer), applicable category, and the
+ * first/repeat-order segment. One component serves both modes - `coupon`
+ * present means "edit" (the code becomes read-only and is never resubmitted,
+ * matching CouponUpdateRequest's shape - see Coupon.Update's doc comment for
+ * why the code itself cannot be changed after creation).
+ */
+
+const DISCOUNT_TYPE_OPTIONS = [
+  { value: String(CouponDiscountType.Percentage), label: "Percentage" },
+  { value: String(CouponDiscountType.Flat), label: "Flat amount" },
+] as const;
+
+const CUSTOMER_SEGMENT_OPTIONS = [
+  { value: String(CouponCustomerSegment.All), label: "All customers" },
+  { value: String(CouponCustomerSegment.FirstBookingOnly), label: "First booking only" },
+  { value: String(CouponCustomerSegment.RepeatBookingOnly), label: "Repeat customers only" },
+] as const;
+
+const couponFormSchema = z
+  .object({
+    code: z.string().min(1, "Coupon code is required").max(50, "Coupon code must be 50 characters or fewer"),
+    description: z.string().max(300, "Description must be 300 characters or fewer"),
+    // Plain z.number() rather than z.coerce.number(): coerce's input/output
+    // type split (input `unknown`, output `number`) doesn't line up with
+    // useForm<CouponFormValues>'s single type parameter and fails to
+    // typecheck - registering these with `valueAsNumber: true` below already
+    // converts the select's string value to a number before zod ever sees it.
+    discountType: z.number().int(),
+    discountValue: z.number().positive("Discount value must be positive"),
+    maxDiscountAmount: z.number().positive("Max discount amount must be positive").nullable(),
+    minOrderAmount: z.number().min(0, "Minimum order amount cannot be negative"),
+    validFromDate: z.string().min(1, "Start date is required"),
+    validToDate: z.string().min(1, "End date is required"),
+    usageLimitTotal: z.number().int().positive("Usage limit must be positive").nullable(),
+    usageLimitPerCustomer: z.number().int().positive("Per-customer usage limit must be positive").nullable(),
+    applicableCategoryId: z.string(),
+    customerSegment: z.number().int(),
+  })
+  .refine((values) => values.discountType !== CouponDiscountType.Percentage || values.discountValue <= 100, {
+    path: ["discountValue"],
+    message: "A percentage discount cannot exceed 100.",
+  })
+  .refine((values) => values.validToDate > values.validFromDate, {
+    path: ["validToDate"],
+    message: "The end date must be after the start date.",
+  });
+
+type CouponFormValues = z.infer<typeof couponFormSchema>;
+
+/** `<input type="date">` yields "yyyy-mm-dd" - the API stores full UTC instants, so the boundary is pinned to the start/end of that day (same convention lib/audit.ts uses for its date-range filter). */
+function dateInputToStartOfDayUtc(date: string): string {
+  return `${date}T00:00:00.000Z`;
+}
+
+function dateInputToEndOfDayUtc(date: string): string {
+  return `${date}T23:59:59.999Z`;
+}
+
+/** An ISO instant's date portion, for populating a date input when editing. */
+function toDateInputValue(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function emptyStringToNull(value: string): number | null {
+  return value === "" ? null : Number(value);
+}
+
+function nullableNumberToInputValue(value: number | null): string {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function defaultValuesFor(coupon: CouponAdminResponse | null): CouponFormValues {
+  if (!coupon) {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      code: "",
+      description: "",
+      discountType: CouponDiscountType.Percentage,
+      discountValue: 10,
+      maxDiscountAmount: null,
+      minOrderAmount: 0,
+      validFromDate: today,
+      validToDate: today,
+      usageLimitTotal: null,
+      usageLimitPerCustomer: 1,
+      applicableCategoryId: "",
+      customerSegment: CouponCustomerSegment.All,
+    };
+  }
+
+  return {
+    code: coupon.code,
+    description: coupon.description ?? "",
+    discountType: coupon.discountType,
+    discountValue: coupon.discountValue,
+    maxDiscountAmount: coupon.maxDiscountAmount,
+    minOrderAmount: coupon.minOrderAmount,
+    validFromDate: toDateInputValue(coupon.validFromUtc),
+    validToDate: toDateInputValue(coupon.validToUtc),
+    usageLimitTotal: coupon.usageLimitTotal,
+    usageLimitPerCustomer: coupon.usageLimitPerCustomer,
+    applicableCategoryId: coupon.applicableCategoryId ?? "",
+    customerSegment: coupon.customerSegment,
+  };
+}
+
+export function CouponForm({
+  coupon,
+  isSubmitting,
+  submitError,
+  onSubmit,
+  onCancel,
+}: {
+  /** Present in edit mode; null when creating a new coupon. */
+  coupon: CouponAdminResponse | null;
+  isSubmitting: boolean;
+  submitError: string | null;
+  onSubmit: (request: CouponCreateRequest | CouponUpdateRequest) => void;
+  onCancel?: () => void;
+}) {
+  const categoriesQuery = useQuery({ queryKey: ["coupons", "categories"], queryFn: listApplicableCategories });
+
+  const form = useForm<CouponFormValues>({
+    resolver: zodResolver(couponFormSchema),
+    defaultValues: defaultValuesFor(coupon),
+  });
+
+  // Re-seed the form whenever the coupon being edited changes (switching
+  // from "create" to "edit", or between two different rows) - react-hook-form
+  // only applies `defaultValues` once, at mount.
+  useEffect(() => {
+    form.reset(defaultValuesFor(coupon));
+  }, [coupon, form]);
+
+  const isEditing = coupon !== null;
+
+  const submit = form.handleSubmit((values) => {
+    const shared = {
+      description: values.description.trim() === "" ? null : values.description.trim(),
+      discountType: values.discountType as CouponDiscountType,
+      discountValue: values.discountValue,
+      maxDiscountAmount: values.maxDiscountAmount,
+      minOrderAmount: values.minOrderAmount,
+      validFromUtc: dateInputToStartOfDayUtc(values.validFromDate),
+      validToUtc: dateInputToEndOfDayUtc(values.validToDate),
+      usageLimitTotal: values.usageLimitTotal,
+      usageLimitPerCustomer: values.usageLimitPerCustomer,
+      applicableCategoryId: values.applicableCategoryId === "" ? null : values.applicableCategoryId,
+      customerSegment: values.customerSegment as CouponCustomerSegment,
+    };
+
+    onSubmit(isEditing ? shared : { code: values.code, ...shared });
+  });
+
+  const categoryOptions = [
+    { value: "", label: "No restriction (applies to every category)" },
+    ...(categoriesQuery.data ?? []).map((category) => ({ value: category.id, label: category.name })),
+  ];
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+      {submitError ? <Alert>{submitError}</Alert> : null}
+      {categoriesQuery.isError ? <Alert tone="info">{describeError(categoriesQuery.error)}</Alert> : null}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field
+          label="Coupon code"
+          error={form.formState.errors.code?.message}
+          // readOnly, not disabled: a disabled react-hook-form field is
+          // excluded from the submitted values entirely, which would fail
+          // this field's own "required" rule on every edit-mode submit.
+          // readOnly still submits the (unusable) value - harmless, since
+          // CouponUpdateRequest has no `code` property to send it to.
+          readOnly={isEditing}
+          title={isEditing ? "The coupon code cannot be changed after creation." : undefined}
+          {...form.register("code")}
+        />
+        <Field label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Select
+          label="Discount type"
+          error={form.formState.errors.discountType?.message}
+          options={DISCOUNT_TYPE_OPTIONS}
+          {...form.register("discountType", { valueAsNumber: true })}
+        />
+        <Field
+          label="Discount value"
+          type="number"
+          step="0.01"
+          error={form.formState.errors.discountValue?.message}
+          {...form.register("discountValue", { valueAsNumber: true })}
+        />
+        <Field
+          label="Max discount cap (optional)"
+          type="number"
+          step="0.01"
+          error={form.formState.errors.maxDiscountAmount?.message}
+          {...form.register("maxDiscountAmount", { setValueAs: emptyStringToNull })}
+          defaultValue={nullableNumberToInputValue(form.getValues("maxDiscountAmount"))}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field
+          label="Minimum order amount"
+          type="number"
+          step="0.01"
+          error={form.formState.errors.minOrderAmount?.message}
+          {...form.register("minOrderAmount", { valueAsNumber: true })}
+        />
+        <Field
+          label="Valid from"
+          type="date"
+          error={form.formState.errors.validFromDate?.message}
+          {...form.register("validFromDate")}
+        />
+        <Field
+          label="Valid to"
+          type="date"
+          error={form.formState.errors.validToDate?.message}
+          {...form.register("validToDate")}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field
+          label="Global usage limit (optional)"
+          type="number"
+          error={form.formState.errors.usageLimitTotal?.message}
+          {...form.register("usageLimitTotal", { setValueAs: emptyStringToNull })}
+          defaultValue={nullableNumberToInputValue(form.getValues("usageLimitTotal"))}
+        />
+        <Field
+          label="Per-customer usage limit (optional)"
+          type="number"
+          error={form.formState.errors.usageLimitPerCustomer?.message}
+          {...form.register("usageLimitPerCustomer", { setValueAs: emptyStringToNull })}
+          defaultValue={nullableNumberToInputValue(form.getValues("usageLimitPerCustomer"))}
+        />
+        <Select
+          label="Applicable category"
+          error={form.formState.errors.applicableCategoryId?.message}
+          options={categoryOptions}
+          {...form.register("applicableCategoryId")}
+        />
+      </div>
+
+      <Select
+        label="Customer segment"
+        error={form.formState.errors.customerSegment?.message}
+        options={CUSTOMER_SEGMENT_OPTIONS}
+        {...form.register("customerSegment", { valueAsNumber: true })}
+      />
+
+      <div className="flex gap-3">
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create coupon"}
+        </Button>
+        {onCancel ? (
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+            Cancel
+          </Button>
+        ) : null}
+      </div>
+    </form>
+  );
+}
