@@ -67,6 +67,21 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // No ValidateOnStart here (unlike JwtOptions): AddInfrastructure is
+        // shared by both APIs, and consumer-api's configuration has no
+        // reason to ever define an "AdminJwt" section. Validating eagerly
+        // would fail consumer-api's own startup for a section it never
+        // uses; binding lazily means the check only runs when admin-api
+        // actually resolves AdminJwtOptions (i.e. when a token is issued).
+        services
+            .AddOptions<AdminJwtOptions>()
+            .Bind(configuration.GetSection(AdminJwtOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        services
+            .AddOptions<AdminAccountOptions>()
+            .Bind(configuration.GetSection(AdminAccountOptions.SectionName));
+
         services
             .AddOptions<SandboxGatewayOptions>()
             .Bind(configuration.GetSection(SandboxGatewayOptions.SectionName))
@@ -152,6 +167,14 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPasswordResetService, CustomerPasswordResetService>();
         services.AddScoped<ICustomerCommunicationPreferenceRepository, CustomerCommunicationPreferenceRepository>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+
+        // Tasks 95a-95g: admin panel authentication. Separate registrations
+        // from the customer identity services above - see AdminLoginService's
+        // doc comment for why this is its own type rather than shared code.
+        services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+        services.AddScoped<IAdminTokenService, AdminTokenService>();
+        services.AddScoped<IAdminMfaChallengeProvider, NoOpAdminMfaChallengeProvider>();
+        services.AddScoped<IAdminLoginService, AdminLoginService>();
 
         // Stateless - depends only on bound Options - so one shared instance
         // safely serves both interfaces (SandboxPaymentGateway implements
@@ -254,6 +277,48 @@ public static class DependencyInjection
                 // controller reading the customer id would have to know that
                 // translation. Keep claim types exactly as TokenService issued
                 // them (JwtRegisteredClaimNames.Sub, "mobile", ...jti).
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = issuer,
+                    ValidateAudience = true,
+                    ValidAudience = audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(signingKey)),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromSeconds(30)
+                };
+            });
+
+        services.AddAuthorization();
+
+        return services;
+    }
+
+    /// <summary>
+    /// JWT bearer authentication for the admin panel (SRS 12.1, tasks
+    /// 95a/95e). A distinct scheme name from the customer one so a single
+    /// process could in principle host both without one scheme silently
+    /// overriding the other; admin-api registers only this one.
+    /// </summary>
+    public const string AdminJwtBearerScheme = "AdminBearer";
+
+    public static IServiceCollection AddAdminJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwtSection = configuration.GetSection(AdminJwtOptions.SectionName);
+        var signingKey = jwtSection[nameof(AdminJwtOptions.SigningKey)] ??
+            throw new InvalidOperationException($"Configuration section '{AdminJwtOptions.SectionName}:{nameof(AdminJwtOptions.SigningKey)}' is not configured.");
+        var issuer = jwtSection[nameof(AdminJwtOptions.Issuer)] ?? "Nestly";
+        var audience = jwtSection[nameof(AdminJwtOptions.Audience)] ?? "Nestly.AdminUsers";
+
+        services
+            .AddAuthentication(AdminJwtBearerScheme)
+            .AddJwtBearer(AdminJwtBearerScheme, options =>
+            {
+                // Same reasoning as AddJwtAuthentication: keep claim types
+                // exactly as AdminTokenService issued them rather than
+                // letting the default inbound mapping rename "sub".
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {

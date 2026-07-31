@@ -23,6 +23,13 @@ public class AdminUser : Entity<Guid>
     public string PasswordHash { get; private set; } = string.Empty;
     public string FullName { get; private set; } = string.Empty;
     public AdminUserStatus Status { get; private set; }
+
+    /// <summary>Consecutive failed logins since the last success or unlock (SRS 12.1.1, task 95d).</summary>
+    public int FailedLoginAttempts { get; private set; }
+
+    /// <summary>Set once <see cref="FailedLoginAttempts"/> crosses the configured threshold; null when not locked.</summary>
+    public DateTime? LockedUntilUtc { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -81,5 +88,43 @@ public class AdminUser : Entity<Guid>
         if (Status == AdminUserStatus.Inactive) return;
         Status = AdminUserStatus.Inactive;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Whether a login lockout (task 95d) is currently in effect.</summary>
+    public bool IsLockedOut(DateTime nowUtc) => LockedUntilUtc.HasValue && LockedUntilUtc.Value > nowUtc;
+
+    /// <summary>
+    /// Records one failed login attempt. Once <paramref name="maxFailedAttempts"/>
+    /// is reached the account locks for <paramref name="lockoutDuration"/> from
+    /// now — a further failure while already locked pushes the lockout out
+    /// again rather than being ignored, so a continued attack cannot simply
+    /// wait out an in-progress lockout (SRS 12.1.1).
+    /// </summary>
+    public void RegisterFailedLoginAttempt(int maxFailedAttempts, TimeSpan lockoutDuration, DateTime nowUtc)
+    {
+        FailedLoginAttempts++;
+        if (FailedLoginAttempts >= maxFailedAttempts)
+        {
+            LockedUntilUtc = nowUtc.Add(lockoutDuration);
+        }
+
+        UpdatedAt = nowUtc;
+    }
+
+    /// <summary>A successful login clears the failure count and any active lockout.</summary>
+    public void RegisterSuccessfulLogin(DateTime nowUtc) => ResetLockoutState(nowUtc);
+
+    /// <summary>
+    /// Administrative override that clears a lockout immediately instead of
+    /// waiting for it to expire (task 95d's unlock path — e.g. a Super Admin
+    /// confirming the failures were the owner mistyping their own password).
+    /// </summary>
+    public void Unlock(DateTime nowUtc) => ResetLockoutState(nowUtc);
+
+    private void ResetLockoutState(DateTime nowUtc)
+    {
+        FailedLoginAttempts = 0;
+        LockedUntilUtc = null;
+        UpdatedAt = nowUtc;
     }
 }

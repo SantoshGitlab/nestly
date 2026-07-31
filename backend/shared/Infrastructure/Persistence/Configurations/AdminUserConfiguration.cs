@@ -19,6 +19,9 @@ public class AdminUserConfiguration : IEntityTypeConfiguration<AdminUser>
 
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
 
+        builder.Property(x => x.FailedLoginAttempts).IsRequired().HasDefaultValue(0);
+        builder.Property(x => x.LockedUntilUtc);
+
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
     }

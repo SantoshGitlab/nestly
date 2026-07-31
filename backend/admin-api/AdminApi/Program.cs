@@ -1,9 +1,12 @@
+using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
+using Nestly.Infrastructure.Options;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +18,10 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 // Application layers.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Admin panel JWT bearer auth (SRS 12.1, tasks 95a/95e) — its own scheme and
+// signing key, kept deliberately separate from the customer one.
+builder.Services.AddAdminJwtAuthentication(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -29,6 +36,26 @@ builder.Services
     .AddMvc();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Login throttling (SRS 12.1.1, task 95c): partitioned by client IP, same
+// approach as consumer-api's "login" policy. Per-account throttling/lockout
+// (task 95d) is handled separately, inside AdminLoginService itself.
+var rateLimits = builder.Configuration
+    .GetSection(RateLimitOptions.SectionName)
+    .Get<RateLimitOptions>() ?? new RateLimitOptions();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Login.WindowMinutes),
+            PermitLimit = rateLimits.Login.PermitLimit
+        }));
+});
 
 var app = builder.Build();
 
@@ -46,7 +73,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Background-job dashboard (T018) — admin API only, and after authorization so
 // the dashboard's admin-role filter has a populated principal to check.

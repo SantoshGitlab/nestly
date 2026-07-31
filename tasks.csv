@@ -293,13 +293,13 @@ id,task,status,priority,notes,phase
 94c,AdminIdentity - admin_permission,done,high,depends on #94b,Phase 6 - Admin Panel
 94d,AdminIdentity - role_permission_mapping (SRS 23.6),done,high,depends on #94c,Phase 6 - Admin Panel
 95,AdminIdentity - Admin authentication: Login; strong password policy; throttling; lockout; session timeout; MFA hook; login audit (SRS 12.1),decomposed,high,"depends on #94d #20 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 95a,95b,95c,95d,95e,95f,95g",Phase 6 - Admin Panel
-95a,AdminIdentity - Login,todo,high,"depends on #94d #20 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
-95b,AdminIdentity - strong password policy,todo,high,depends on #95a,Phase 6 - Admin Panel
-95c,AdminIdentity - throttling,todo,high,depends on #95b,Phase 6 - Admin Panel
-95d,AdminIdentity - lockout,todo,high,depends on #95c,Phase 6 - Admin Panel
-95e,AdminIdentity - session timeout,todo,high,depends on #95d,Phase 6 - Admin Panel
-95f,AdminIdentity - MFA hook,todo,high,depends on #95e,Phase 6 - Admin Panel
-95g,AdminIdentity - login audit (SRS 12.1),todo,high,depends on #95f,Phase 6 - Admin Panel
+95a,AdminIdentity - Login,done,high,"depends on #94d #20 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
+95b,AdminIdentity - strong password policy,done,high,depends on #95a,Phase 6 - Admin Panel
+95c,AdminIdentity - throttling,done,high,depends on #95b,Phase 6 - Admin Panel
+95d,AdminIdentity - lockout,done,high,depends on #95c,Phase 6 - Admin Panel
+95e,AdminIdentity - session timeout,done,high,depends on #95d,Phase 6 - Admin Panel
+95f,AdminIdentity - MFA hook,done,high,depends on #95e,Phase 6 - Admin Panel
+95g,AdminIdentity - login audit (SRS 12.1),done,high,depends on #95f,Phase 6 - Admin Panel
 96a,"AdminIdentity - Define permission matrix (module, roles)",todo,high,"depends on #95g | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
 96b,AdminIdentity - Implement authorization policies and checks,todo,high,depends on #96a,Phase 6 - Admin Panel
 96c,AdminIdentity - Add role-based permission enforcement middleware,todo,high,depends on #96b,Phase 6 - Admin Panel
