@@ -197,6 +197,8 @@ public static class DependencyInjection
             .ValidateDataAnnotations();
         services.AddScoped<IReviewService, ReviewService>();
 
+        services.AddScoped<ISupportTicketService, SupportTicketService>();
+
         // Task 157/158: commission calculation and the platform escrow
         // ledger. CommissionService is stateless (reads only bound Options),
         // same reasoning as SandboxPaymentGateway above.

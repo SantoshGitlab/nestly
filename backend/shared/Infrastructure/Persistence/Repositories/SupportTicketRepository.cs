@@ -21,7 +21,16 @@ public class SupportTicketRepository : ISupportTicketRepository
 
     public async Task UpdateAsync(SupportTicket ticket)
     {
-        _context.SupportTickets.Update(ticket);
+        // Same guard as BookingRepository.UpdateAsync: only attach+mark-
+        // modified when not already tracked by this context. A same-context
+        // AddComment() call appends a brand-new SupportTicketComment row -
+        // see NewOwnedChildEntityInterceptor for why that needs its own,
+        // centralized correction rather than being handled here.
+        if (_context.Entry(ticket).State == EntityState.Detached)
+        {
+            _context.SupportTickets.Update(ticket);
+        }
+
         await _context.SaveChangesAsync();
     }
 

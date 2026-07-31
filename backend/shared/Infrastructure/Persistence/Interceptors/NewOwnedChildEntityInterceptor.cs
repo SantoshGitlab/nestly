@@ -30,6 +30,11 @@ namespace Nestly.Infrastructure.Persistence.Interceptors;
 /// aggregate's not-yet-corrected new child rows too. It settles the question
 /// the only reliable way available: checking the database for which of the
 /// currently-Modified rows of these known owned-child types actually exist yet.
+///
+/// <see cref="SupportTicketComment"/> (task 86) joined this list for the
+/// same reason: <c>SupportTicket.AddComment</c> appends a fresh, client-keyed
+/// comment to an aggregate that was loaded (and is therefore already
+/// tracked, not Added) by <c>SupportTicketService.AddCommentAsync</c>.
 /// </summary>
 public sealed class NewOwnedChildEntityInterceptor : SaveChangesInterceptor
 {
@@ -42,6 +47,7 @@ public sealed class NewOwnedChildEntityInterceptor : SaveChangesInterceptor
         {
             await ReconcileBookingStatusHistoryAsync(context, cancellationToken);
             await ReconcilePaymentAttemptsAsync(context, cancellationToken);
+            await ReconcileSupportTicketCommentsAsync(context, cancellationToken);
         }
 
         return await base.SavingChangesAsync(eventData, result, cancellationToken);
@@ -90,6 +96,33 @@ public sealed class NewOwnedChildEntityInterceptor : SaveChangesInterceptor
             await context.PaymentAttempts.AsNoTracking()
                 .Where(a => candidateIds.Contains(a.Id))
                 .Select(a => a.Id)
+                .ToListAsync(cancellationToken));
+
+        foreach (var entry in modifiedEntries)
+        {
+            if (!persistedIds.Contains(entry.Entity.Id))
+            {
+                entry.State = EntityState.Added;
+            }
+        }
+    }
+
+    private static async Task ReconcileSupportTicketCommentsAsync(NestlyDbContext context, CancellationToken cancellationToken)
+    {
+        var modifiedEntries = context.ChangeTracker.Entries<SupportTicketComment>()
+            .Where(e => e.State == EntityState.Modified)
+            .ToList();
+
+        if (modifiedEntries.Count == 0)
+        {
+            return;
+        }
+
+        var candidateIds = modifiedEntries.Select(e => e.Entity.Id).ToList();
+        var persistedIds = new HashSet<Guid>(
+            await context.SupportTicketComments.AsNoTracking()
+                .Where(c => candidateIds.Contains(c.Id))
+                .Select(c => c.Id)
                 .ToListAsync(cancellationToken));
 
         foreach (var entry in modifiedEntries)

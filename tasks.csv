@@ -263,10 +263,10 @@ id,task,status,priority,notes,phase
 85b,Reviews - one primary review per booking,done,high,depends on #85a,Phase 5 - Post-Booking
 85c,Reviews - optional time window (SRS 11.16; 17),done,high,depends on #85b,Phase 5 - Post-Booking
 86,Support - Support ticket APIs: Create ticket (categories per SRS 16.1); list; detail; booking-linked and generic tickets (SRS 11.18),decomposed,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 86a,86b,86c,86d",Phase 5 - Post-Booking
-86a,Support - Create ticket (categories per SRS 16.1),todo,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
-86b,Support - list,todo,high,depends on #86a,Phase 5 - Post-Booking
-86c,Support - detail,todo,high,depends on #86b,Phase 5 - Post-Booking
-86d,Support - booking-linked and generic tickets (SRS 11.18),todo,high,depends on #86c,Phase 5 - Post-Booking
+86a,Support - Create ticket (categories per SRS 16.1),done,high,"depends on #84d | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 5 - Post-Booking
+86b,Support - list,done,high,depends on #86a,Phase 5 - Post-Booking
+86c,Support - detail,done,high,depends on #86b,Phase 5 - Post-Booking
+86d,Support - booking-linked and generic tickets (SRS 11.18),done,high,depends on #86c,Phase 5 - Post-Booking
 87a,Notifications - Define notification entity and types,todo,high,"depends on #31 #84d #18 | auto-blocked: depends on blocked task #31 | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 87b,Notifications - Implement template rendering with variables,todo,high,"depends on #87a | auto-blocked: depends on blocked task #87a | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 87c,Notifications - Add channel dispatch (SMS/email),todo,high,"depends on #87b | auto-blocked: depends on blocked task #87b | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
