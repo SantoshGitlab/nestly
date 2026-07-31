@@ -147,6 +147,40 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   );
 });
 
+interface CheckboxFieldProps {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}
+
+/**
+ * Labelled boolean toggle. A controlled checked/onChange pair rather than a
+ * forwardRef input like `Field` - boolean form values are more naturally
+ * driven through react-hook-form's `Controller` than `register`, and this
+ * shape matches that call site directly.
+ */
+export function CheckboxField({ label, description, checked, onChange, disabled }: CheckboxFieldProps) {
+  return (
+    <label className="flex items-start gap-3 rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-black/30 dark:border-white/30"
+      />
+      <span className="flex flex-col">
+        <span className="font-medium">{label}</span>
+        {description ? (
+          <span className="text-xs text-neutral-600 dark:text-neutral-400">{description}</span>
+        ) : null}
+      </span>
+    </label>
+  );
+}
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger";
 }

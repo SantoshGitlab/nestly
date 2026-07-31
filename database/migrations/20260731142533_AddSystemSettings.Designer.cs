@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731142533_AddSystemSettings")]
+    partial class AddSystemSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1304,40 +1307,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_customer_communication_preference_customer_id");
 
                     b.ToTable("customer_communication_preference", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.CustomerNote", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("AuthorAdminUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("author_admin_user_id");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("customer_id");
-
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)")
-                        .HasColumnName("note");
-
-                    b.HasKey("Id")
-                        .HasName("pk_customer_note");
-
-                    b.HasIndex("CustomerId", "CreatedAtUtc")
-                        .HasDatabaseName("ix_customer_note_customer_id_created_at_utc");
-
-                    b.ToTable("customer_note", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.CustomerOtp", b =>
