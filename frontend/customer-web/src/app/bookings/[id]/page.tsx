@@ -229,12 +229,12 @@ function Timeline({ entries }: { entries: BookingStatusTimelineEntry[] }) {
 }
 
 /**
- * Action CTAs (task 65c, SRS 11.13.2). Deliberately does not include a
- * cancel/reschedule button: there is no cancellation or reschedule API yet
- * (SRS 11.14/11.15 are unimplemented - no endpoint exists anywhere in
- * BookingsController), and wiring a button to a non-existent endpoint would
- * fail every time it was pressed. Only CTAs backed by a real route/endpoint
- * are shown.
+ * Action CTAs (task 65c, SRS 11.13.2), now wired to the real post-booking
+ * flows (tasks 89a-c, 90, 91, 92): cancellation, reschedule, review and
+ * support ticketing all have live endpoints, so every CTA here points at a
+ * real route. Cancel/reschedule/review are shown unconditionally - each
+ * target page gates on its own eligibility endpoint and explains why an
+ * action isn't available, the same pattern the review flow requires.
  */
 function ActionCtas({ booking }: { booking: BookingDetail }) {
   const canRebook = !!booking.service.slug;
@@ -248,16 +248,36 @@ function ActionCtas({ booking }: { booking: BookingDetail }) {
           </Button>
         </Link>
       ) : null}
+      <Link href={`/bookings/${booking.id}/reschedule`}>
+        <Button type="button" variant="secondary" className="w-full">
+          Reschedule booking
+        </Button>
+      </Link>
+      <Link href={`/bookings/${booking.id}/cancel`}>
+        <Button type="button" variant="secondary" className="w-full">
+          Cancel booking
+        </Button>
+      </Link>
+      <Link href={`/bookings/${booking.id}/review`}>
+        <Button type="button" variant="secondary" className="w-full">
+          Leave a review
+        </Button>
+      </Link>
       <Link href="/bookings">
         <Button type="button" variant="secondary" className="w-full">
           Back to my bookings
         </Button>
       </Link>
-      {/* No in-app support ticket system exists yet (task 84, Support module
-          is unimplemented) - this is a plain mailto link, not a ticketing flow. */}
+      <Link href={`/support/new?bookingId=${booking.id}`}>
+        <Button type="button" variant="secondary" className="w-full">
+          Raise an issue
+        </Button>
+      </Link>
+      {/* Kept as an unconditional fallback alongside the real ticketing flow
+          above - useful if the in-app flow itself is the thing that's broken. */}
       <a href={`mailto:support@nestly.app?subject=${encodeURIComponent(`Booking ${booking.id}`)}`}>
         <Button type="button" variant="secondary" className="w-full">
-          Contact support
+          Email support
         </Button>
       </a>
     </div>

@@ -462,3 +462,36 @@ export interface WalletLedgerEntryResponse {
   description: string;
   createdAtUtc: string;
 }
+
+/**
+ * Cancellation shapes mirror the C# records in
+ * Nestly.Application.Cancellations (CancellationContracts.cs) - see
+ * CancellationsController.
+ */
+
+export interface CancellationPolicyResponse {
+  isEligible: boolean;
+  ineligibilityReason: string | null;
+  withinFreeCancellationWindow: boolean;
+  cancellationFeeAmount: number;
+  refundAmount: number;
+  refundMethod: RefundMethod;
+  freeCancellationWindowHours: number;
+  lateCancellationFeePercentage: number;
+}
+
+export interface CancelBookingRequestBody {
+  reason: string;
+}
+
+export interface CancellationOutcomeResponse {
+  bookingId: string;
+  bookingStatus: BookingStatus;
+  withinFreeCancellationWindow: boolean;
+  cancellationFeeAmount: number;
+  refundAmount: number;
+  refundStatus: RefundStatus | null;
+  refundMethod: RefundMethod | null;
+  refundTransactionId: string | null;
+  cancelledAtUtc: string;
+}
