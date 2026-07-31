@@ -323,16 +323,16 @@ id,task,status,priority,notes,phase
 101d,CustomerMgmt - notes (SRS 12.4),done,medium,depends on #101c,Phase 6 - Admin Panel
 102,CustomerMgmt - Customer management UI: Customer list and detail screens with authorized actions,done,medium,depends on #98d #101d,Phase 6 - Admin Panel
 103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),decomposed,medium,"depends on #96d #40e #20 | superseded: decomposed into subtasks 103a,103b,103c,103d,103e",Phase 6 - Admin Panel
-103a,Catalog - CRUD,todo,medium,depends on #96d #40e #20,Phase 6 - Admin Panel
-103b,Catalog - ordering,todo,medium,depends on #103a,Phase 6 - Admin Panel
-103c,Catalog - media,todo,medium,depends on #103b,Phase 6 - Admin Panel
-103d,Catalog - SEO fields,todo,medium,depends on #103c,Phase 6 - Admin Panel
-103e,Catalog - activation with audit (SRS 12.5),todo,medium,depends on #103d,Phase 6 - Admin Panel
-104,Catalog - Category management UI: Category list/create/edit screens,todo,medium,depends on #98d #103e,Phase 6 - Admin Panel
-105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),todo,medium,depends on #103e,Phase 6 - Admin Panel
-106,Catalog - Service management UI: Service list/create/edit screens,todo,medium,depends on #104 #105,Phase 6 - Admin Panel
-107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),todo,medium,depends on #105,Phase 6 - Admin Panel
-108,Catalog - Add-on management UI: Add-on list/create/edit screens,todo,medium,depends on #106 #107,Phase 6 - Admin Panel
+103a,Catalog - CRUD,done,medium,depends on #96d #40e #20,Phase 6 - Admin Panel
+103b,Catalog - ordering,done,medium,depends on #103a,Phase 6 - Admin Panel
+103c,Catalog - media,done,medium,depends on #103b,Phase 6 - Admin Panel
+103d,Catalog - SEO fields,done,medium,depends on #103c,Phase 6 - Admin Panel
+103e,Catalog - activation with audit (SRS 12.5),done,medium,depends on #103d,Phase 6 - Admin Panel
+104,Catalog - Category management UI: Category list/create/edit screens,done,medium,depends on #98d #103e,Phase 6 - Admin Panel
+105,Catalog - Service management APIs: Service/package CRUD with full field set and service-level flags (SRS 12.6),done,medium,depends on #103e,Phase 6 - Admin Panel
+106,Catalog - Service management UI: Service list/create/edit screens,done,medium,depends on #104 #105,Phase 6 - Admin Panel
+107,Catalog - Add-on management APIs: Add-on CRUD + service mapping (SRS 12.7),done,medium,depends on #105,Phase 6 - Admin Panel
+108,Catalog - Add-on management UI: Add-on list/create/edit screens,done,medium,depends on #106 #107,Phase 6 - Admin Panel
 109,Pricing - Pricing management APIs: Base/add-on/city/promotional pricing; taxes; fees; effective dates; price change audit (SRS 12.8),decomposed,medium,"depends on #96d #47g #20 | superseded: decomposed into subtasks 109a,109b,109c,109d,109e",Phase 6 - Admin Panel
 109a,Pricing - Base/add-on/city/promotional pricing,todo,medium,depends on #96d #47g #20,Phase 6 - Admin Panel
 109b,Pricing - taxes,todo,medium,depends on #109a,Phase 6 - Admin Panel

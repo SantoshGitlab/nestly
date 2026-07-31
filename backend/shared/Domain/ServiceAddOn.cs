@@ -12,6 +12,12 @@ public class ServiceAddOn : AggregateRoot<Guid>
     public bool IsActive { get; private set; }
     public int SortOrder { get; private set; }
 
+    /// <summary>Whether a customer may attach more than one unit of this add-on (SRS 12.7.2).</summary>
+    public bool IsQuantityAllowed { get; private set; }
+
+    /// <summary>Whether this add-on must be included whenever its service is booked (SRS 12.7.2), vs. optional.</summary>
+    public bool IsMandatory { get; private set; }
+
     protected ServiceAddOn() { }
 
     public ServiceAddOn(Guid id, Guid serviceId, string name, decimal price) : base(id)
@@ -21,6 +27,8 @@ public class ServiceAddOn : AggregateRoot<Guid>
         Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
         IsActive = true;
         SortOrder = 0;
+        IsQuantityAllowed = false;
+        IsMandatory = false;
         RaiseDomainEvent(new ServiceAddOnCreatedEvent(Id, ServiceId));
     }
 
@@ -29,6 +37,8 @@ public class ServiceAddOn : AggregateRoot<Guid>
     public void SetPrice(decimal price) => Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
     public void SetDescription(string? description) => Description = description;
     public void SetSortOrder(int sortOrder) => SortOrder = sortOrder;
+    public void SetQuantityAllowed(bool isQuantityAllowed) => IsQuantityAllowed = isQuantityAllowed;
+    public void SetMandatory(bool isMandatory) => IsMandatory = isMandatory;
 
     public void Activate()
     {

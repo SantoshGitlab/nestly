@@ -178,6 +178,15 @@ public static class DependencyInjection
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();
         services.AddScoped<IServiceQueryService, ServiceQueryService>();
         services.AddScoped<ICatalogSearchService, CatalogSearchService>();
+
+        // Tasks 103a-108: admin catalog management (SRS 12.5-12.7) - category,
+        // service/package and add-on CRUD. Separate from the read-only
+        // I*QueryService above, which back public/consumer-facing catalog
+        // browsing rather than admin create/edit/activate.
+        services.AddScoped<ICategoryManagementService, CategoryManagementService>();
+        services.AddScoped<IServiceMediaRepository, ServiceMediaRepository>();
+        services.AddScoped<IServiceManagementService, ServiceManagementService>();
+        services.AddScoped<IServiceAddOnManagementService, ServiceAddOnManagementService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services.AddScoped<IBookingSummaryService, BookingSummaryService>();
         services.AddScoped<IBookingRepository, BookingRepository>();

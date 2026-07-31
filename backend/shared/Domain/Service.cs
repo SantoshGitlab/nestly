@@ -11,7 +11,12 @@ public class Service : AggregateRoot<Guid>
     /// <summary>SEO-friendly identifier (SRS 12.6.2), globally unique like Category's.</summary>
     public string Slug { get; private set; } = string.Empty;
 
+    /// <summary>Long-form description shown on the service detail page (SRS 12.6.2).</summary>
     public string Description { get; private set; } = string.Empty;
+
+    /// <summary>Short summary shown on listing/search cards (SRS 12.6.2), distinct from the long <see cref="Description"/>.</summary>
+    public string? ShortDescription { get; private set; }
+
     public decimal Price { get; private set; }
     public bool IsActive { get; private set; }
 
@@ -27,6 +32,42 @@ public class Service : AggregateRoot<Guid>
     /// <summary>Reschedule policy summary shown on the detail page (SRS 12.6.2, 11.6.1).</summary>
     public string? ReschedulePolicy { get; private set; }
 
+    /// <summary>Estimated time to perform the service, in minutes (SRS 12.6.2).</summary>
+    public int DurationMinutes { get; private set; }
+
+    /// <summary>Whether this service is highlighted for promotion (SRS 12.6.2), mirrors <see cref="Category.IsFeatured"/>.</summary>
+    public bool IsFeatured { get; private set; }
+
+    /// <summary>Admin-controlled display order within its category (SRS 12.6.2).</summary>
+    public int SortOrder { get; private set; }
+
+    public string? SeoTitle { get; private set; }
+    public string? SeoMetaDescription { get; private set; }
+
+    /// <summary>Fixed package vs. variable/add-on pricing (SRS 12.6.3).</summary>
+    public ServicePricingType PricingType { get; private set; }
+
+    /// <summary>Whether tax is applied on top of <see cref="Price"/> (SRS 12.6.2).</summary>
+    public bool IsTaxApplicable { get; private set; }
+
+    /// <summary>Whether add-ons may be attached to a booking of this service (SRS 12.6.2).</summary>
+    public bool IsAddOnAllowed { get; private set; }
+
+    /// <summary>Whether a customer may book more than one unit of this service (SRS 12.6.2).</summary>
+    public bool IsQuantityAllowed { get; private set; }
+
+    /// <summary>Whether the service requires an inspection visit before it can be scheduled (SRS 12.6.3).</summary>
+    public bool IsInspectionBased { get; private set; }
+
+    /// <summary>Whether booking this service requires picking a slot (SRS 12.6.3).</summary>
+    public bool IsSlotRequired { get; private set; }
+
+    /// <summary>Whether booking this service requires a customer address (SRS 12.6.3).</summary>
+    public bool IsAddressRequired { get; private set; }
+
+    /// <summary>Whether the customer may attach a free-text note when booking (SRS 12.6.3).</summary>
+    public bool IsCustomerNoteAllowed { get; private set; }
+
     protected Service() { }
 
     public Service(Guid id, Guid categoryId, string name, string slug, string description, decimal price) : base(id)
@@ -37,12 +78,25 @@ public class Service : AggregateRoot<Guid>
         Description = description ?? string.Empty;
         Price = price > 0 ? price : throw new ArgumentOutOfRangeException(nameof(price));
         IsActive = true;
+        DurationMinutes = 60;
+        IsFeatured = false;
+        SortOrder = 0;
+        PricingType = ServicePricingType.Fixed;
+        IsTaxApplicable = true;
+        IsAddOnAllowed = true;
+        IsQuantityAllowed = false;
+        IsInspectionBased = false;
+        IsSlotRequired = true;
+        IsAddressRequired = true;
+        IsCustomerNoteAllowed = true;
         RaiseDomainEvent(new ServiceCreatedEvent(Id, CategoryId));
     }
 
     public void SetName(string name) => Name = name ?? throw new ArgumentNullException(nameof(name));
     public void SetSlug(string slug) => Slug = slug ?? throw new ArgumentNullException(nameof(slug));
     public void SetDescription(string d) => Description = d ?? string.Empty;
+    public void SetShortDescription(string? shortDescription) => ShortDescription = shortDescription;
+    public void SetCategoryId(Guid categoryId) => CategoryId = categoryId;
 
     public void SetPrice(decimal price)
     {
@@ -57,6 +111,46 @@ public class Service : AggregateRoot<Guid>
     public void SetExclusions(string exclusions) => Exclusions = exclusions ?? string.Empty;
     public void SetCancellationPolicy(string? policy) => CancellationPolicy = policy;
     public void SetReschedulePolicy(string? policy) => ReschedulePolicy = policy;
+
+    public void SetDuration(int durationMinutes) =>
+        DurationMinutes = durationMinutes > 0 ? durationMinutes : throw new ArgumentOutOfRangeException(nameof(durationMinutes));
+
+    public void SetSortOrder(int sortOrder) => SortOrder = sortOrder;
+
+    public void SetSeo(string? title, string? metaDescription)
+    {
+        SeoTitle = title;
+        SeoMetaDescription = metaDescription;
+    }
+
+    public void SetPricingType(ServicePricingType pricingType) => PricingType = pricingType;
+
+    /// <summary>
+    /// Sets the SRS 12.6.2/12.6.3 service-level option flags together - they
+    /// are configured as one group in the admin edit form, so a single
+    /// setter (mirroring <see cref="SetSeo"/>'s grouping) avoids seven
+    /// separate calls at every call site.
+    /// </summary>
+    public void SetOptions(
+        bool isTaxApplicable,
+        bool isAddOnAllowed,
+        bool isQuantityAllowed,
+        bool isInspectionBased,
+        bool isSlotRequired,
+        bool isAddressRequired,
+        bool isCustomerNoteAllowed)
+    {
+        IsTaxApplicable = isTaxApplicable;
+        IsAddOnAllowed = isAddOnAllowed;
+        IsQuantityAllowed = isQuantityAllowed;
+        IsInspectionBased = isInspectionBased;
+        IsSlotRequired = isSlotRequired;
+        IsAddressRequired = isAddressRequired;
+        IsCustomerNoteAllowed = isCustomerNoteAllowed;
+    }
+
+    public void Feature() => IsFeatured = true;
+    public void Unfeature() => IsFeatured = false;
 
     public void Activate()
     {

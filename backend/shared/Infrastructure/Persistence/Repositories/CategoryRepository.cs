@@ -34,8 +34,14 @@ public class CategoryRepository : ICategoryRepository
     public Task<Category?> GetBySlugAsync(string slug) =>
         _context.Set<Category>().FirstOrDefaultAsync(c => c.Slug == slug);
 
-    public Task<bool> ExistsBySlugAsync(string slug) =>
-        _context.Set<Category>().AnyAsync(c => c.Slug == slug);
+    public Task<bool> ExistsBySlugAsync(string slug, Guid? excludeId = null) =>
+        _context.Set<Category>().AnyAsync(c => c.Slug == slug && (excludeId == null || c.Id != excludeId));
+
+    public async Task<IReadOnlyList<Category>> ListAllAsync() =>
+        await _context.Set<Category>()
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
+            .ToListAsync();
 
     public async Task<IReadOnlyList<Category>> ListServiceableInCityAsync(Guid cityId)
     {

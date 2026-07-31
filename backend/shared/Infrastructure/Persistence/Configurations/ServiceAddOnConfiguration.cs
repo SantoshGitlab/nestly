@@ -17,5 +17,7 @@ public class ServiceAddOnConfiguration : IEntityTypeConfiguration<ServiceAddOn>
         builder.Property(x => x.Description).HasMaxLength(1000);
         builder.Property(x => x.IsActive).IsRequired().HasDefaultValue(true);
         builder.Property(x => x.SortOrder).IsRequired();
+        builder.Property(x => x.IsQuantityAllowed).IsRequired().HasDefaultValue(false);
+        builder.Property(x => x.IsMandatory).IsRequired().HasDefaultValue(false);
     }
 }
