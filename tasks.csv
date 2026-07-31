@@ -317,11 +317,11 @@ id,task,status,priority,notes,phase
 99,Dashboard - Dashboard KPIs: Bookings/revenue/cancellations/refunds/tickets widgets with date-city-category filters; API + UI (SRS 12.3),done,medium,"depends on #96d #60c | verified: dotnet build/test pass (604/604, 0 regressions vs 597 baseline); DashboardController (dashboard.read policy) + DashboardQueryService query Booking/PaymentTransaction/BookingCancellation/RefundTransaction/SupportTicket via NestlyDbContext, filterable by date range/city/category; covered by DashboardQueryServiceTests (7 tests)",Phase 6 - Admin Panel
 100,Dashboard - Dashboard UI: KPI widgets and filters in admin-web,done,medium,"depends on #98d #99 | verified: npm run build and npm run lint both exit 0; dashboard/page.tsx replaced with KPI stat tiles (bookings/revenue/cancellations/refunds/open tickets) + date-range presets/custom range/city/category filters, calling task 99 API; also fixed a pre-existing permission-code mismatch in lib/permissions.ts (module:view placeholder vs the real dashboard.read-style codes task 96a/96c actually issue)",Phase 6 - Admin Panel
 101,CustomerMgmt - Customer management APIs: Search/filter; 360 detail (bookings; wallet; coupons; tickets); block/unblock; notes (SRS 12.4),decomposed,medium,"depends on #96d #28 | superseded: decomposed into subtasks 101a,101b,101c,101d",Phase 6 - Admin Panel
-101a,CustomerMgmt - Search/filter,todo,medium,depends on #96d #28,Phase 6 - Admin Panel
-101b,CustomerMgmt - 360 detail (bookings; wallet; coupons; tickets),todo,medium,depends on #101a,Phase 6 - Admin Panel
-101c,CustomerMgmt - block/unblock,todo,medium,depends on #101b,Phase 6 - Admin Panel
-101d,CustomerMgmt - notes (SRS 12.4),todo,medium,depends on #101c,Phase 6 - Admin Panel
-102,CustomerMgmt - Customer management UI: Customer list and detail screens with authorized actions,todo,medium,depends on #98d #101d,Phase 6 - Admin Panel
+101a,CustomerMgmt - Search/filter,done,medium,depends on #96d #28,Phase 6 - Admin Panel
+101b,CustomerMgmt - 360 detail (bookings; wallet; coupons; tickets),done,medium,depends on #101a,Phase 6 - Admin Panel
+101c,CustomerMgmt - block/unblock,done,medium,depends on #101b,Phase 6 - Admin Panel
+101d,CustomerMgmt - notes (SRS 12.4),done,medium,depends on #101c,Phase 6 - Admin Panel
+102,CustomerMgmt - Customer management UI: Customer list and detail screens with authorized actions,done,medium,depends on #98d #101d,Phase 6 - Admin Panel
 103,Catalog - Category management APIs: CRUD; ordering; media; SEO fields; activation with audit (SRS 12.5),decomposed,medium,"depends on #96d #40e #20 | superseded: decomposed into subtasks 103a,103b,103c,103d,103e",Phase 6 - Admin Panel
 103a,Catalog - CRUD,todo,medium,depends on #96d #40e #20,Phase 6 - Admin Panel
 103b,Catalog - ordering,todo,medium,depends on #103a,Phase 6 - Admin Panel

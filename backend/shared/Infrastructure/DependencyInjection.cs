@@ -17,6 +17,7 @@ using Nestly.Application.Cancellations;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Dashboard;
+using Nestly.Application.Customers;
 using Nestly.Application.Escrow;
 using Nestly.Application.Geography;
 using Nestly.Application.Payments;
@@ -250,6 +251,13 @@ public static class DependencyInjection
         // DashboardQueryService's doc comment for why this has no repository
         // of its own.
         services.AddScoped<IDashboardQueryService, DashboardQueryService>();
+
+        // Tasks 101a-101d: admin customer management (SRS 12.4). Composes the
+        // Booking/Wallet/Coupon/SupportTicket repositories registered above
+        // plus the new CustomerNote repository - gated behind "customers.*"
+        // (task 96b) in AdminApi's CustomersController.
+        services.AddScoped<ICustomerNoteRepository, CustomerNoteRepository>();
+        services.AddScoped<ICustomerManagementService, CustomerManagementService>();
 
         // Task 87a-d: notification core. The template set is stateless
         // (Render/SupportsChannel read only a fixed built-in dictionary),

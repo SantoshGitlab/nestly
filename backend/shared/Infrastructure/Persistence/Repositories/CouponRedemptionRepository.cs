@@ -21,4 +21,10 @@ public class CouponRedemptionRepository : ICouponRedemptionRepository
 
     public Task<int> CountByCouponAndCustomerAsync(Guid couponId, Guid customerId) =>
         _context.CouponRedemptions.CountAsync(r => r.CouponId == couponId && r.CustomerId == customerId);
+
+    public async Task<IReadOnlyList<CouponRedemption>> ListByCustomerAsync(Guid customerId) =>
+        await _context.CouponRedemptions
+            .Where(r => r.CustomerId == customerId)
+            .OrderByDescending(r => r.RedeemedAtUtc)
+            .ToListAsync();
 }

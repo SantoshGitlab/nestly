@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Nestly.CustomerManagement.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!--
+      Pinned to the 7.x line deliberately: FluentAssertions 8.0 moved to a
+      paid licence for commercial use, and Nestly is a commercial product.
+      7.2.0 is the last Apache-2.0 release.
+    -->
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <!--
+      SQLite rather than the EF in-memory provider: same rationale as
+      Identity.Tests/TestDatabase.cs - real relational behaviour (unique
+      indexes, correlated subqueries) rather than the in-memory provider's
+      approximations.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Application\Application.csproj" />
+    <ProjectReference Include="..\..\shared\BuildingBlocks\BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\shared\Domain\Domain.csproj" />
+    <ProjectReference Include="..\..\shared\Infrastructure\Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
