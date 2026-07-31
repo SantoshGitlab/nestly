@@ -300,10 +300,10 @@ id,task,status,priority,notes,phase
 95e,AdminIdentity - session timeout,done,high,depends on #95d,Phase 6 - Admin Panel
 95f,AdminIdentity - MFA hook,done,high,depends on #95e,Phase 6 - Admin Panel
 95g,AdminIdentity - login audit (SRS 12.1),done,high,depends on #95f,Phase 6 - Admin Panel
-96a,"AdminIdentity - Define permission matrix (module, roles)",todo,high,"depends on #95g | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
-96b,AdminIdentity - Implement authorization policies and checks,todo,high,depends on #96a,Phase 6 - Admin Panel
-96c,AdminIdentity - Add role-based permission enforcement middleware,todo,high,depends on #96b,Phase 6 - Admin Panel
-96d,AdminIdentity - Add audit logging for permission checks,todo,high,depends on #96c #20,Phase 6 - Admin Panel
+96a,"AdminIdentity - Define permission matrix (module, roles)",done,high,"depends on #95g | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
+96b,AdminIdentity - Implement authorization policies and checks,done,high,depends on #96a,Phase 6 - Admin Panel
+96c,AdminIdentity - Add role-based permission enforcement middleware,done,high,depends on #96b,Phase 6 - Admin Panel
+96d,AdminIdentity - Add audit logging for permission checks,done,high,depends on #96c #20,Phase 6 - Admin Panel
 97,AdminIdentity - Admin user management APIs: CRUD; role assignment; activate/deactivate; password reset (SRS 12.2.1),decomposed,high,"depends on #96d | superseded: decomposed into subtasks 97a,97b,97c,97d",Phase 6 - Admin Panel
 97a,AdminIdentity - CRUD,todo,high,depends on #96d,Phase 6 - Admin Panel
 97b,AdminIdentity - role assignment,todo,high,depends on #97a,Phase 6 - Admin Panel

@@ -30,6 +30,7 @@ public class AdminLoginService : IAdminLoginService
     private readonly IAdminUserRepository _adminUserRepository;
     private readonly IAdminTokenService _tokenService;
     private readonly IAdminMfaChallengeProvider _mfaChallengeProvider;
+    private readonly IAdminRolePermissionQueryService _rolePermissionQueryService;
     private readonly IAuditLogWriter _auditLogWriter;
     private readonly NestlyDbContext _dbContext;
     private readonly AdminAccountOptions _options;
@@ -39,6 +40,7 @@ public class AdminLoginService : IAdminLoginService
         IAdminUserRepository adminUserRepository,
         IAdminTokenService tokenService,
         IAdminMfaChallengeProvider mfaChallengeProvider,
+        IAdminRolePermissionQueryService rolePermissionQueryService,
         IAuditLogWriter auditLogWriter,
         NestlyDbContext dbContext,
         IOptions<AdminAccountOptions> options)
@@ -46,6 +48,7 @@ public class AdminLoginService : IAdminLoginService
         _adminUserRepository = adminUserRepository;
         _tokenService = tokenService;
         _mfaChallengeProvider = mfaChallengeProvider;
+        _rolePermissionQueryService = rolePermissionQueryService;
         _auditLogWriter = auditLogWriter;
         _dbContext = dbContext;
         _options = options.Value;
@@ -100,7 +103,9 @@ public class AdminLoginService : IAdminLoginService
         adminUser.RegisterSuccessfulLogin(now);
         await _adminUserRepository.UpdateAsync(adminUser);
 
-        var accessToken = _tokenService.GenerateAccessToken(adminUser.Id, adminUser.Email);
+        AdminRolePermissions rolePermissions = await _rolePermissionQueryService.GetPermissionsAsync(adminUser.RoleId);
+        var accessToken = _tokenService.GenerateAccessToken(
+            adminUser.Id, adminUser.Email, rolePermissions.RoleName, rolePermissions.PermissionCodes);
         await RecordAttemptAsync(adminUser.Id.ToString(), "AdminLoginSucceeded");
 
         return Result.Success(new AdminLoginResponse(accessToken.Value, accessToken.ExpiresAtUtc));

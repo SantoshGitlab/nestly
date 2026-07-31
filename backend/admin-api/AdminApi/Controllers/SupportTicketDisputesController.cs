@@ -1,10 +1,13 @@
 using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.Results;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.Support;
 using Nestly.BuildingBlocks.Extensions;
+using Nestly.Domain;
+using Nestly.Infrastructure;
 
 namespace Nestly.AdminApi.Controllers;
 
@@ -12,20 +15,20 @@ namespace Nestly.AdminApi.Controllers;
 /// Admin dispute mark/resolve workflow on a support ticket (SRS 11.18.1
 /// "wrong charge / pricing dispute", task 155).
 ///
-/// Deliberately not <c>[Authorize]</c>-gated: admin authentication/
-/// authorization does not exist anywhere in this codebase yet (that's
-/// Phase 6 - see AGENTS.md's audit notes and AdminApi's own <c>Program.cs</c>,
-/// which has never called <c>AddJwtAuthentication</c> or <c>UseAuthentication</c>).
-/// Rather than block this task on a prerequisite that isn't built, the real
-/// capability lives in <see cref="IDisputeResolutionService"/> and this is a
-/// plain internal endpoint exposing it - Phase 6 wires the admin-role check
-/// in front of this action, not a rewrite of the workflow itself.
+/// Gated behind "support.write" (task 96b/96c) - opening or resolving a
+/// dispute is a mutating support action, same module as the rest of the
+/// ticket workflow. The real capability lives in
+/// <see cref="IDisputeResolutionService"/>; this controller only adds the
+/// permission gate in front of it.
 /// </summary>
 [ApiController]
 [ApiVersion(1)]
 [Route("api/v{version:apiVersion}/support-tickets/{ticketId:guid}/dispute")]
+[Authorize(AuthenticationSchemes = DependencyInjection.AdminJwtBearerScheme, Policy = SupportWritePolicy)]
 public class SupportTicketDisputesController : ControllerBase
 {
+    private const string SupportWritePolicy = AdminModules.Support + ".write";
+
     private readonly IDisputeResolutionService _disputeResolutionService;
     private readonly IValidator<ResolveDisputeRequest> _resolveValidator;
 
@@ -38,6 +41,8 @@ public class SupportTicketDisputesController : ControllerBase
     /// <summary>Admin opens a formal dispute investigation on a ticket.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(SupportTicketDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> MarkDisputed(Guid ticketId)
@@ -50,6 +55,8 @@ public class SupportTicketDisputesController : ControllerBase
     [HttpPost("resolve")]
     [ProducesResponseType(typeof(DisputeResolutionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> Resolve(Guid ticketId, [FromBody] ResolveDisputeRequest request)

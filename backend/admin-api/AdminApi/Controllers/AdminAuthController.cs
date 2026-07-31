@@ -1,11 +1,14 @@
 using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.Results;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application.Identity;
 using Nestly.BuildingBlocks.Extensions;
+using Nestly.Domain;
+using Nestly.Infrastructure;
 
 namespace Nestly.AdminApi.Controllers;
 
@@ -15,6 +18,8 @@ namespace Nestly.AdminApi.Controllers;
 [Route("api/v{version:apiVersion}/admin/auth")]
 public class AdminAuthController : ControllerBase
 {
+    private const string SettingsWritePolicy = AdminModules.Settings + ".write";
+
     private readonly IAdminLoginService _loginService;
     private readonly IValidator<AdminLoginRequest> _loginValidator;
 
@@ -53,14 +58,17 @@ public class AdminAuthController : ControllerBase
     /// lockout also clears itself automatically once its window elapses;
     /// this only clears it sooner.
     ///
-    /// Deliberately not <c>[Authorize]</c>-gated yet - the same situation as
-    /// <c>SupportTicketDisputesController</c>: admin authorization
-    /// enforcement (role/permission checks) is tasks 96b/96c, not built yet.
-    /// Phase 6 wires a Super-Admin-only policy in front of this action
-    /// rather than this task rebuilding authorization early.
+    /// Gated behind "settings.write" (task 96b/96c) - unlocking someone
+    /// else's account is admin-user administration (SRS 12.2.1), the same
+    /// module as assigning roles or deactivating an account. Only Super
+    /// Admin holds this permission in the seeded matrix (task 96a).
     /// </summary>
+    [Authorize(AuthenticationSchemes = DependencyInjection.AdminJwtBearerScheme,
+        Policy = SettingsWritePolicy)]
     [HttpPost("unlock/{adminUserId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Unlock(Guid adminUserId)
     {

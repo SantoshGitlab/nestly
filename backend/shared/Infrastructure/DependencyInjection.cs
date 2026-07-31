@@ -1,6 +1,7 @@
 using System.Text;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Domain;
 using Nestly.Infrastructure.Auditing;
+using Nestly.Infrastructure.Authorization;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Caching;
 using Nestly.Infrastructure.Options;
@@ -176,6 +178,17 @@ public static class DependencyInjection
         services.AddScoped<IAdminMfaChallengeProvider, NoOpAdminMfaChallengeProvider>();
         services.AddScoped<IAdminLoginService, AdminLoginService>();
 
+        // Task 96c: role -> permission-code lookup at login time, embedded
+        // into the JWT as claims (see AdminTokenService).
+        services.AddScoped<IAdminRolePermissionQueryService, AdminRolePermissionQueryService>();
+
+        // Task 96b/96d: evaluates one PermissionRequirement per admin
+        // permission-code policy (registered in AddAdminJwtAuthentication
+        // below) and audits denials/sensitive grants. Registered here rather
+        // than there so it's discoverable alongside the rest of this file's
+        // service registrations.
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
         // Stateless - depends only on bound Options - so one shared instance
         // safely serves both interfaces (SandboxPaymentGateway implements
         // IPaymentGateway and the sandbox-only ISandboxPaymentSimulator).
@@ -222,8 +235,8 @@ public static class DependencyInjection
 
         services.AddScoped<ISupportTicketService, SupportTicketService>();
 
-        // Task 155: dispute mark/resolve workflow. No admin-auth gate yet
-        // (Phase 6) - see SupportTicketDisputesController's doc comment.
+        // Task 155: dispute mark/resolve workflow. Gated behind
+        // "support.write" as of task 96b - see SupportTicketDisputesController's doc comment.
         services.AddScoped<IDisputeResolutionService, DisputeResolutionService>();
 
         // Task 87a-d: notification core. The template set is stateless
@@ -333,7 +346,19 @@ public static class DependencyInjection
                 };
             });
 
-        services.AddAuthorization();
+        // Task 96b: one authorization policy per permission code in the
+        // matrix (AdminPermissionCatalog), so controllers can write
+        // [Authorize(AuthenticationSchemes = AdminJwtBearerScheme, Policy = "catalog.write")]
+        // rather than hand-rolling a role check. Every policy shares the
+        // same PermissionAuthorizationHandler (registered in
+        // AddInfrastructure) - only the requirement's permission code differs.
+        services.AddAuthorization(options =>
+        {
+            foreach (string code in AdminPermissionCatalog.Permissions.Select(p => p.Code))
+            {
+                options.AddPolicy(code, policy => policy.Requirements.Add(new PermissionRequirement(code)));
+            }
+        });
 
         return services;
     }

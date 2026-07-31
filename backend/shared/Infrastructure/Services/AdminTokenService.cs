@@ -15,10 +15,13 @@ namespace Nestly.Infrastructure.Services;
 /// customer key cannot be replayed against the admin API and vice versa, and
 /// the admin session lifetime can be tuned independently.
 ///
-/// No role claims yet: <c>AdminUser</c>-to-<c>AdminRole</c> assignment does
-/// not exist until task 97b, so this token only proves identity for now —
-/// authorization (task 96b/96c) adds to this once roles can actually be
-/// assigned.
+/// Carries RBAC claims (task 96c): a generic <see cref="ClaimTypes.Role"/> of
+/// "Admin" (the same marker <c>HttpAuditContextProvider</c> checks to tell an
+/// admin actor from a customer one in the audit trail), <see cref="ClaimTypes.NameIdentifier"/>
+/// (so that same audit attribution can resolve an actor id), and one
+/// <see cref="AdminClaimTypes.Permission"/> claim per permission code the
+/// caller resolved from the account's role — this type itself makes no DB
+/// call, it only encodes what it is given.
 /// </summary>
 public class AdminTokenService : IAdminTokenService
 {
@@ -29,16 +32,28 @@ public class AdminTokenService : IAdminTokenService
         _options = options.Value;
     }
 
-    public AdminAccessToken GenerateAccessToken(Guid adminUserId, string email)
+    public AdminAccessToken GenerateAccessToken(Guid adminUserId, string email, string? roleName, IReadOnlyList<string> permissionCodes)
     {
         var expiresAt = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, adminUserId.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, email),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Sub, adminUserId.ToString()),
+            new(ClaimTypes.NameIdentifier, adminUserId.ToString()),
+            new(JwtRegisteredClaimNames.Email, email),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(ClaimTypes.Role, "Admin")
         };
+
+        if (!string.IsNullOrWhiteSpace(roleName))
+        {
+            claims.Add(new Claim(AdminClaimTypes.AdminRoleName, roleName));
+        }
+
+        foreach (string permissionCode in permissionCodes)
+        {
+            claims.Add(new Claim(AdminClaimTypes.Permission, permissionCode));
+        }
 
         var signingCredentials = new SigningCredentials(
             new SymmetricSecurityKey(Convert.FromBase64String(_options.SigningKey)),
