@@ -1,4 +1,5 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
@@ -79,6 +80,7 @@ public class SupportTicket : AggregateRoot<Guid>
             throw new InvalidOperationException($"Cannot transition a support ticket from {Status} to {newStatus}.");
         }
 
+        var previousStatus = Status;
         Status = newStatus;
         if (resolutionSummary is not null)
         {
@@ -86,6 +88,7 @@ public class SupportTicket : AggregateRoot<Guid>
         }
 
         UpdatedAtUtc = DateTime.UtcNow;
+        RaiseDomainEvent(new SupportTicketStatusChangedEvent(Id, CustomerId, previousStatus, newStatus));
     }
 
     /// <summary>Admin opens a formal dispute investigation on this ticket (task 155). Only meaningful while the ticket is still open.</summary>

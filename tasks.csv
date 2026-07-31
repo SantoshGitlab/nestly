@@ -272,13 +272,13 @@ id,task,status,priority,notes,phase
 87c,Notifications - Add channel dispatch (SMS/email),done,high,"depends on #87b | auto-blocked: depends on blocked task #87b | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 87d,Notifications - Add delivery event logging and tracking,done,high,"depends on #87c | auto-blocked: depends on blocked task #87c | unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 88,Notifications - Notification trigger wiring: Events: welcome; booking confirmed; payment success/failure; cancellation; reschedule; refund; ticket updates (SRS 19.1),decomposed,high,"depends on #87d #81 #83 | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 88a,88b,88c,88d,88e,88f,88g",Phase 5 - Post-Booking
-88a,Notifications - Events: welcome,todo,high,"depends on #87d #81 #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-88b,Notifications - booking confirmed,todo,high,depends on #88a,Phase 5 - Post-Booking
-88c,Notifications - payment success/failure,todo,high,depends on #88b,Phase 5 - Post-Booking
-88d,Notifications - cancellation,todo,high,depends on #88c,Phase 5 - Post-Booking
-88e,Notifications - reschedule,todo,high,depends on #88d,Phase 5 - Post-Booking
-88f,Notifications - refund,todo,high,depends on #88e,Phase 5 - Post-Booking
-88g,Notifications - ticket updates (SRS 19.1),todo,high,depends on #88f,Phase 5 - Post-Booking
+88a,Notifications - Events: welcome,done,high,"depends on #87d #81 #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+88b,Notifications - booking confirmed,done,high,depends on #88a,Phase 5 - Post-Booking
+88c,Notifications - payment success/failure,done,high,depends on #88b,Phase 5 - Post-Booking
+88d,Notifications - cancellation,done,high,depends on #88c,Phase 5 - Post-Booking
+88e,Notifications - reschedule,done,high,depends on #88d,Phase 5 - Post-Booking
+88f,Notifications - refund,done,high,depends on #88e,Phase 5 - Post-Booking
+88g,Notifications - ticket updates (SRS 19.1),done,high,depends on #88f,Phase 5 - Post-Booking
 89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),decomposed,high,"depends on #65c #81 | auto-blocked: depends on blocked task #65 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 89a,89b,89c",Phase 5 - Post-Booking
 89a,Frontend - Policy display,todo,high,"depends on #65c #81| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 89b,Frontend - confirmation,todo,high,depends on #89a,Phase 5 - Post-Booking
