@@ -9,19 +9,23 @@ import type { AdminSessionClaims } from "./types";
  * task. Linking to the expected route today means those tasks only need to
  * add `src/app/(admin)/<module>/page.tsx`; nothing here has to change.
  *
- * Permission model: `requiredPermission` follows the `module:action` shape
- * SRS 12.2.3 describes ("configurable at least by module/action"). The
- * real permission matrix (task 96a) has not landed yet, so
- * `AdminSessionClaims.permissions` may legitimately be empty for every admin
- * today - that is not the same thing as "no permissions granted". Until the
- * backend is populating that claim, nav visibility falls back to the
- * `ROLE_MODULE_FALLBACK` matrix below, keyed on the role claim SRS 12.1
- * guarantees exists. This fallback is a UX convenience, not a security
- * boundary: every one of these routes still requires its own valid
+ * Permission model: `requiredPermission` is the exact permission code the
+ * real permission matrix (task 96a, `AdminPermissionCatalog.BuildCode`) uses -
+ * `"<module>.read"`, one code per `AdminModules` constant, embedded in the JWT
+ * as a `permission` claim per code the admin's role grants (task 96c,
+ * `AdminTokenService`). It is deliberately `module.read`, not `module:view`:
+ * an earlier draft of this file predated task 96a landing and used a
+ * `module:view` placeholder that never matched anything real once the actual
+ * claims arrived - every nav entry would have silently vanished for every
+ * genuinely authenticated admin. `AdminSessionClaims.permissions` may still
+ * legitimately be empty (e.g. a token issued before this fix, or a role with
+ * no grants at all), which is not the same thing as "no permissions granted"
+ * - nav visibility falls back to the `ROLE_MODULE_FALLBACK` matrix below,
+ * keyed on the role claim SRS 12.1 guarantees exists, whenever the
+ * permissions claim is empty. This fallback is a UX convenience, not a
+ * security boundary: every one of these routes still requires its own valid
  * [Authorize] call server-side, exactly like RequireAdminAuth's client-side
- * guard is not itself the security boundary either. Once task 96a/a
- * permissions claim is present and non-empty, it takes over automatically -
- * no changes needed here.
+ * guard is not itself the security boundary either.
  */
 
 export type NavModuleKey =
@@ -51,21 +55,21 @@ export interface NavModule {
 }
 
 export const NAV_MODULES: readonly NavModule[] = [
-  { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard:view" },
-  { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers:view" },
-  { key: "catalog", label: "Catalog", href: "/catalog", srsRef: "SRS 12.5-12.7", requiredPermission: "catalog:view" },
-  { key: "pricing", label: "Pricing", href: "/pricing", srsRef: "SRS 12.8", requiredPermission: "pricing:view" },
-  { key: "serviceability", label: "Serviceability", href: "/serviceability", srsRef: "SRS 12.9", requiredPermission: "serviceability:view" },
-  { key: "slots", label: "Slots & Availability", href: "/slots", srsRef: "SRS 12.10", requiredPermission: "slots:view" },
-  { key: "bookings", label: "Bookings", href: "/bookings", srsRef: "SRS 12.11, 12.13", requiredPermission: "bookings:view" },
-  { key: "coupons", label: "Coupons & Campaigns", href: "/coupons", srsRef: "SRS 12.12", requiredPermission: "coupons:view" },
-  { key: "support", label: "Support Tickets", href: "/support", srsRef: "SRS 12.14", requiredPermission: "support:view" },
-  { key: "reviews", label: "Review Moderation", href: "/reviews", srsRef: "SRS 12.15", requiredPermission: "reviews:view" },
-  { key: "cms", label: "CMS & Content", href: "/cms", srsRef: "SRS 12.16", requiredPermission: "cms:view" },
-  { key: "notifications", label: "Notification Templates", href: "/notifications", srsRef: "SRS 12.17", requiredPermission: "notifications:view" },
-  { key: "reports", label: "Reports & Exports", href: "/reports", srsRef: "SRS 12.18", requiredPermission: "reports:view" },
-  { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3", requiredPermission: "audit:view" },
-  { key: "settings", label: "System Settings", href: "/settings", srsRef: "SRS 12.19", requiredPermission: "settings:view" },
+  { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard.read" },
+  { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers.read" },
+  { key: "catalog", label: "Catalog", href: "/catalog", srsRef: "SRS 12.5-12.7", requiredPermission: "catalog.read" },
+  { key: "pricing", label: "Pricing", href: "/pricing", srsRef: "SRS 12.8", requiredPermission: "pricing.read" },
+  { key: "serviceability", label: "Serviceability", href: "/serviceability", srsRef: "SRS 12.9", requiredPermission: "serviceability.read" },
+  { key: "slots", label: "Slots & Availability", href: "/slots", srsRef: "SRS 12.10", requiredPermission: "slots.read" },
+  { key: "bookings", label: "Bookings", href: "/bookings", srsRef: "SRS 12.11, 12.13", requiredPermission: "bookings.read" },
+  { key: "coupons", label: "Coupons & Campaigns", href: "/coupons", srsRef: "SRS 12.12", requiredPermission: "coupons.read" },
+  { key: "support", label: "Support Tickets", href: "/support", srsRef: "SRS 12.14", requiredPermission: "support.read" },
+  { key: "reviews", label: "Review Moderation", href: "/reviews", srsRef: "SRS 12.15", requiredPermission: "reviews.read" },
+  { key: "cms", label: "CMS & Content", href: "/cms", srsRef: "SRS 12.16", requiredPermission: "cms.read" },
+  { key: "notifications", label: "Notification Templates", href: "/notifications", srsRef: "SRS 12.17", requiredPermission: "notifications.read" },
+  { key: "reports", label: "Reports & Exports", href: "/reports", srsRef: "SRS 12.18", requiredPermission: "reports.read" },
+  { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3", requiredPermission: "audit.read" },
+  { key: "settings", label: "System Settings", href: "/settings", srsRef: "SRS 12.19", requiredPermission: "settings.read" },
 ];
 
 /**

@@ -39,3 +39,34 @@ export interface AdminSessionClaims {
   role: string | null;
   permissions: string[];
 }
+
+/**
+ * Dashboard KPI filters (SRS 12.3.2), sent as query-string parameters to
+ * `GET {API_V1}/dashboard/kpis`. Every field is optional - `dateFrom`/`dateTo`
+ * are `yyyy-MM-dd` (what an `<input type="date">` produces, and what
+ * ASP.NET Core's `DateOnly` model binder parses directly); an unset pair
+ * makes the API default to today, and an unset `city`/`category` applies no
+ * restriction on that dimension.
+ */
+export interface DashboardKpiFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  city?: string;
+  category?: string;
+}
+
+/**
+ * SRS 12.3.1's KPI widget set, mirroring the Admin API's `DashboardKpiResponse`
+ * (task 99). `dateFrom`/`dateTo` echo back the window the API actually
+ * resolved - relevant when the caller left them unset and the API defaulted
+ * to today.
+ */
+export interface DashboardKpiResponse {
+  dateFrom: string;
+  dateTo: string;
+  bookingsCount: number;
+  revenueTotal: number;
+  cancellationsCount: number;
+  refundAmountTotal: number;
+  openSupportTicketsCount: number;
+}
