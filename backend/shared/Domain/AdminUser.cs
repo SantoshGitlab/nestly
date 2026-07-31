@@ -24,6 +24,15 @@ public class AdminUser : Entity<Guid>
     public string FullName { get; private set; } = string.Empty;
     public AdminUserStatus Status { get; private set; }
 
+    /// <summary>
+    /// The <see cref="AdminRole"/> this account's permissions are drawn from
+    /// (SRS 12.2.1 "Assign role(s)", task 96c). Null until a Super Admin
+    /// assigns one (full role-assignment CRUD is task 97b) — an unassigned
+    /// account authenticates but carries no permission claims, so it can act
+    /// on nothing until a role is set.
+    /// </summary>
+    public Guid? RoleId { get; private set; }
+
     /// <summary>Consecutive failed logins since the last success or unlock (SRS 12.1.1, task 95d).</summary>
     public int FailedLoginAttempts { get; private set; }
 
@@ -73,6 +82,13 @@ public class AdminUser : Entity<Guid>
         PasswordHash = string.IsNullOrWhiteSpace(passwordHash)
             ? throw new ArgumentException("Password hash is required.", nameof(passwordHash))
             : passwordHash;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Assigns (or clears, with null) the role this account's permissions come from.</summary>
+    public void AssignRole(Guid? roleId)
+    {
+        RoleId = roleId;
         UpdatedAt = DateTime.UtcNow;
     }
 

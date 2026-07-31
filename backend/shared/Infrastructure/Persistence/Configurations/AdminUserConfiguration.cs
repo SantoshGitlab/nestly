@@ -22,6 +22,18 @@ public class AdminUserConfiguration : IEntityTypeConfiguration<AdminUser>
         builder.Property(x => x.FailedLoginAttempts).IsRequired().HasDefaultValue(0);
         builder.Property(x => x.LockedUntilUtc);
 
+        // Nullable: an account authenticates before a Super Admin ever
+        // assigns it a role (task 96c). SetNull on delete rather than
+        // Restrict — unlike role_permission_mapping's FKs, deleting a role
+        // should not be blocked by accounts that merely reference it; it
+        // should just leave them unassigned.
+        builder.Property(x => x.RoleId);
+        builder.HasOne<AdminRole>()
+            .WithMany()
+            .HasForeignKey(x => x.RoleId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.RoleId);
+
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
     }

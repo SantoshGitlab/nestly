@@ -62,6 +62,7 @@ public class AdminLoginServiceTests : IDisposable
                 AccessTokenMinutes = 10
             })),
             _mfaChallengeProvider.Object,
+            new AdminRolePermissionQueryService(context),
             new AuditLogWriter(context, new StubAuditContextProvider()),
             context,
             Options.Create(options));
