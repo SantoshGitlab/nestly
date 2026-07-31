@@ -8,6 +8,7 @@ using Nestly.Application.Refunds;
 using Nestly.Application.Reschedules;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -20,6 +21,21 @@ namespace Nestly.Infrastructure.Services;
 /// responsible only for the admin-facing shape, the generic status
 /// transition, and the audit trail (<see cref="IAuditLogWriter"/>).
 /// </summary>
+/// <remarks>
+/// Task 132c gap fix: every action here stages its audit row only after the
+/// underlying domain service (<see cref="ICancellationService"/>,
+/// <see cref="IRescheduleService"/>, <see cref="IRefundService"/>, or this
+/// class's own <see cref="IBookingRepository.UpdateAsync"/> call for
+/// <see cref="UpdateStatusAsync"/>) has already committed its own
+/// <c>SaveChangesAsync</c> - so without an explicit save afterward, the
+/// staged <see cref="AuditLog"/> row was silently dropped once the
+/// request-scoped <see cref="NestlyDbContext"/> was disposed, despite this
+/// class's own doc comment (and SRS 12.13.2/117c) promising every one of
+/// these actions is audited. <see cref="_dbContext"/> exists solely to
+/// commit that staged row, the same way <c>AdminUserManagementService</c>
+/// and <c>PermissionAuthorizationHandler</c> already do for their own
+/// audit-only writes.
+/// </remarks>
 public class BookingManagementService : IBookingManagementService
 {
     /// <summary>
@@ -45,6 +61,7 @@ public class BookingManagementService : IBookingManagementService
     private readonly IRescheduleService _rescheduleService;
     private readonly IRefundService _refundService;
     private readonly IAuditLogWriter _auditLogWriter;
+    private readonly NestlyDbContext _dbContext;
 
     public BookingManagementService(
         IBookingRepository bookingRepository,
@@ -55,7 +72,8 @@ public class BookingManagementService : IBookingManagementService
         ICancellationService cancellationService,
         IRescheduleService rescheduleService,
         IRefundService refundService,
-        IAuditLogWriter auditLogWriter)
+        IAuditLogWriter auditLogWriter,
+        NestlyDbContext dbContext)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
@@ -66,6 +84,7 @@ public class BookingManagementService : IBookingManagementService
         _rescheduleService = rescheduleService;
         _refundService = refundService;
         _auditLogWriter = auditLogWriter;
+        _dbContext = dbContext;
     }
 
     public async Task<Result<AdminBookingSearchResponse>> SearchAsync(AdminBookingSearchRequest request)
@@ -133,6 +152,7 @@ public class BookingManagementService : IBookingManagementService
             "Booking", bookingId.ToString(), "AdminStatusUpdate",
             JsonSerializer.Serialize(new { Status = previousStatus.ToString() }),
             JsonSerializer.Serialize(new { Status = request.NewStatus.ToString(), request.Reason })));
+        await _dbContext.SaveChangesAsync();
 
         return await BuildDetailAsync(booking);
     }
@@ -155,6 +175,7 @@ public class BookingManagementService : IBookingManagementService
                 outcome.Value.RefundAmount,
                 Reason = request.Reason
             })));
+        await _dbContext.SaveChangesAsync();
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         return booking is null
@@ -175,6 +196,7 @@ public class BookingManagementService : IBookingManagementService
             "Booking", bookingId.ToString(), "AdminReschedule",
             JsonSerializer.Serialize(outcome.Value.PreviousSlot),
             JsonSerializer.Serialize(outcome.Value.NewSlot)));
+        await _dbContext.SaveChangesAsync();
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         return booking is null
@@ -208,6 +230,7 @@ public class BookingManagementService : IBookingManagementService
                 refundResult.Value.Status,
                 Reason = request.Reason
             })));
+        await _dbContext.SaveChangesAsync();
 
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         return booking is null

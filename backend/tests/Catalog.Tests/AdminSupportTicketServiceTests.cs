@@ -1,7 +1,9 @@
 using FluentAssertions;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Support;
 using Nestly.Domain;
+using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
 
@@ -15,7 +17,17 @@ public sealed class AdminSupportTicketServiceTests : IClassFixture<TestDatabase>
     public AdminSupportTicketServiceTests(TestDatabase db) => _db = db;
 
     private static AdminSupportTicketService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
-        new(new SupportTicketRepository(context), new AdminUserRepository(context), new BookingRepository(context));
+        new(
+            new SupportTicketRepository(context),
+            new AdminUserRepository(context),
+            new BookingRepository(context),
+            new AuditLogWriter(context, new StubAuditContextProvider()));
+
+    private sealed class StubAuditContextProvider : IAuditContextProvider
+    {
+        public AuditContext GetCurrent() =>
+            new(AuditActorType.AdminUser, Guid.NewGuid(), IpAddress: "127.0.0.1", CorrelationId: "test-correlation-id");
+    }
 
     private Guid SeedCustomer(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {

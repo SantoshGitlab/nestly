@@ -1,4 +1,5 @@
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Bookings;
 using Nestly.Application.Support;
 using Nestly.BuildingBlocks.Results;
@@ -16,18 +17,31 @@ namespace Nestly.Infrastructure.Services;
 /// escalation timestamp), this service only adds the admin-facing lookups
 /// (assignee existence, booking ownership) around them.
 /// </summary>
+/// <remarks>
+/// Writes an audit entry for every mutation (task 132c gap fix): assigning,
+/// escalating and resolving a ticket are exactly the SRS 12.14.2 admin
+/// actions the audit trail is meant to cover, the same reasoning
+/// <c>AdminUserManagementService</c>'s doc comment gives for its own writes.
+/// The entry is staged before the repository call so the repository's own
+/// <c>SaveChangesAsync</c> commits both in one transaction.
+/// </remarks>
 public class AdminSupportTicketService : IAdminSupportTicketService
 {
     private readonly ISupportTicketRepository _ticketRepository;
     private readonly IAdminUserRepository _adminUserRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public AdminSupportTicketService(
-        ISupportTicketRepository ticketRepository, IAdminUserRepository adminUserRepository, IBookingRepository bookingRepository)
+        ISupportTicketRepository ticketRepository,
+        IAdminUserRepository adminUserRepository,
+        IBookingRepository bookingRepository,
+        IAuditLogWriter auditLogWriter)
     {
         _ticketRepository = ticketRepository;
         _adminUserRepository = adminUserRepository;
         _bookingRepository = bookingRepository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<Result<AdminSupportTicketSearchResponse>> SearchAsync(AdminSupportTicketSearchRequest request)
@@ -79,6 +93,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
             return Error.Business("SupportTicket.CannotAssign", ex.Message);
         }
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "Assigned", NewValues: request.AdminUserId.ToString()));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(new AdminSupportTicketRow(row.Ticket, row.CustomerName, admin.FullName)));
     }
@@ -92,6 +107,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
         }
 
         row.Ticket.Unassign();
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "Unassigned"));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(new AdminSupportTicketRow(row.Ticket, row.CustomerName, null)));
     }
@@ -118,6 +134,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
         }
 
         row.Ticket.AddComment(Guid.NewGuid(), SupportTicketCommentAuthorType.Support, request.Comment);
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "Responded"));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(row));
     }
@@ -139,6 +156,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
             return Error.Business("SupportTicket.CannotEscalate", ex.Message);
         }
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "Escalated"));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(row));
     }
@@ -160,6 +178,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
             return Error.Business("SupportTicket.CannotResolve", ex.Message);
         }
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "Resolved"));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(row));
     }
@@ -181,6 +200,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
             return Error.Business("SupportTicket.CannotClose", ex.Message);
         }
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "Closed"));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(row));
     }
@@ -207,6 +227,7 @@ public class AdminSupportTicketService : IAdminSupportTicketService
         }
 
         row.Ticket.LinkBooking(request.BookingId);
+        await _auditLogWriter.WriteAsync(new AuditEntry("SupportTicket", ticketId.ToString(), "BookingLinked", NewValues: request.BookingId.ToString()));
         await _ticketRepository.UpdateAsync(row.Ticket);
         return Result.Success(await ToDetailResponseAsync(row));
     }

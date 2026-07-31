@@ -1,3 +1,4 @@
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Cms;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -5,14 +6,24 @@ using Nestly.Infrastructure.Persistence.Repositories;
 
 namespace Nestly.Infrastructure.Services;
 
-/// <summary>Admin CRUD plus draft/publish workflow over static pages (SRS 12.16, task 124a/124c/124d/124f).</summary>
+/// <summary>
+/// Admin CRUD plus draft/publish workflow over static pages (SRS 12.16, task
+/// 124a/124c/124d/124f). Writes an audit entry for every mutation (task 132c
+/// gap fix): publishing/unpublishing changes public-facing content, the same
+/// audit reasoning <c>ReviewModerationService</c>'s doc comment gives for its
+/// own moderation actions. The entry is staged before the repository call so
+/// the repository's own <c>SaveChangesAsync</c> commits both in one
+/// transaction.
+/// </summary>
 public class CmsPageService : ICmsPageService
 {
     private readonly ICmsPageRepository _pageRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
-    public CmsPageService(ICmsPageRepository pageRepository)
+    public CmsPageService(ICmsPageRepository pageRepository, IAuditLogWriter auditLogWriter)
     {
         _pageRepository = pageRepository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<CmsPageAdminSearchResponse> SearchAsync(CmsPageAdminSearchRequest request)
@@ -53,6 +64,7 @@ public class CmsPageService : ICmsPageService
             request.PublishStartUtc,
             request.PublishEndUtc);
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsPage", page.Id.ToString(), "Created"));
         await _pageRepository.AddAsync(page);
         return CmsPageRepository.ToResponse(page);
     }
@@ -81,6 +93,7 @@ public class CmsPageService : ICmsPageService
             request.PublishStartUtc,
             request.PublishEndUtc);
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsPage", page.Id.ToString(), "Updated"));
         await _pageRepository.UpdateAsync(page);
         return CmsPageRepository.ToResponse(page);
     }
@@ -94,6 +107,7 @@ public class CmsPageService : ICmsPageService
         }
 
         page.Publish();
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsPage", page.Id.ToString(), "Published"));
         await _pageRepository.UpdateAsync(page);
         return Result.Success();
     }
@@ -107,6 +121,7 @@ public class CmsPageService : ICmsPageService
         }
 
         page.Unpublish();
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsPage", page.Id.ToString(), "Unpublished"));
         await _pageRepository.UpdateAsync(page);
         return Result.Success();
     }

@@ -1,8 +1,10 @@
 using FluentAssertions;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Coupons;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -17,7 +19,17 @@ public sealed class CouponManagementServiceTests : IClassFixture<TestDatabase>
     public CouponManagementServiceTests(TestDatabase db) => _db = db;
 
     private static CouponManagementService BuildService(NestlyDbContext context) =>
-        new(new CouponRepository(context), new CategoryRepository(context), context);
+        new(
+            new CouponRepository(context),
+            new CategoryRepository(context),
+            context,
+            new AuditLogWriter(context, new StubAuditContextProvider()));
+
+    private sealed class StubAuditContextProvider : IAuditContextProvider
+    {
+        public AuditContext GetCurrent() =>
+            new(AuditActorType.AdminUser, Guid.NewGuid(), IpAddress: "127.0.0.1", CorrelationId: "test-correlation-id");
+    }
 
     private static CouponCreateRequest ValidCreateRequest(string? code = null, Guid? categoryId = null) =>
         new(

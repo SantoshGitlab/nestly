@@ -416,9 +416,9 @@ summary-note,"Phase order changed 2026-07-31: Partner (was Phase 8, deferred) no
 131g,Settings - coupon settings,done,medium,depends on #131f,Phase 6 - Admin Panel
 131h,Settings - API + UI (SRS 12.19),done,medium,depends on #131g,Phase 6 - Admin Panel
 132,QA - Admin and RBAC test suite: Permission matrix coverage; admin workflows; audit assertions,decomposed,medium,"depends on #97d #117c | auto-blocked: depends on blocked task #117 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 132a,132b,132c",Phase 6 - Admin Panel
-132a,QA - Permission matrix coverage,todo,medium,"depends on #97d #117c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
-132b,QA - admin workflows,todo,medium,depends on #132a,Phase 6 - Admin Panel
-132c,QA - audit assertions,todo,medium,depends on #132b,Phase 6 - Admin Panel
+132a,QA - Permission matrix coverage,done,medium,"depends on #97d #117c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
+132b,QA - admin workflows,done,medium,depends on #132a,Phase 6 - Admin Panel
+132c,QA - audit assertions,done,medium,depends on #132b,Phase 6 - Admin Panel
 133,Security - Application security review: OWASP pass: injection; XSS; CSRF; IDOR; broken access control; payment callback abuse; OTP brute force (SRS 28.3),decomposed,critical,"depends on #79d #132c | auto-blocked: depends on blocked task #132 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 133a,133b,133c,133d,133e,133f,133g",Phase 8 - Hardening & Launch
 133a,Security - OWASP pass: injection,todo,critical,"depends on #79d #132c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
 133b,Security - XSS,todo,critical,depends on #133a,Phase 8 - Hardening & Launch

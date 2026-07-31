@@ -1,3 +1,4 @@
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Cms;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -5,14 +6,23 @@ using Nestly.Infrastructure.Persistence.Repositories;
 
 namespace Nestly.Infrastructure.Services;
 
-/// <summary>Admin CRUD plus draft/publish workflow over site-level FAQs (SRS 12.16, task 124c/124d/124f).</summary>
+/// <summary>
+/// Admin CRUD plus draft/publish workflow over site-level FAQs (SRS 12.16,
+/// task 124c/124d/124f). Writes an audit entry for every mutation (task 132c
+/// gap fix), consistent with <see cref="CmsPageService"/> and
+/// <see cref="CmsMediaService"/>. The entry is staged before the repository
+/// call so the repository's own <c>SaveChangesAsync</c> commits both in one
+/// transaction.
+/// </summary>
 public class CmsFaqService : ICmsFaqService
 {
     private readonly ICmsFaqRepository _faqRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
-    public CmsFaqService(ICmsFaqRepository faqRepository)
+    public CmsFaqService(ICmsFaqRepository faqRepository, IAuditLogWriter auditLogWriter)
     {
         _faqRepository = faqRepository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<CmsFaqAdminSearchResponse> SearchAsync(CmsFaqAdminSearchRequest request)
@@ -45,6 +55,7 @@ public class CmsFaqService : ICmsFaqService
             request.PublishStartUtc,
             request.PublishEndUtc);
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsFaq", faq.Id.ToString(), "Created"));
         await _faqRepository.AddAsync(faq);
         return CmsFaqRepository.ToResponse(faq);
     }
@@ -58,6 +69,7 @@ public class CmsFaqService : ICmsFaqService
         }
 
         faq.Update(request.Question, request.Answer, request.Placement, request.SortOrder, request.PublishStartUtc, request.PublishEndUtc);
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsFaq", faq.Id.ToString(), "Updated"));
         await _faqRepository.UpdateAsync(faq);
         return CmsFaqRepository.ToResponse(faq);
     }
@@ -71,6 +83,7 @@ public class CmsFaqService : ICmsFaqService
         }
 
         faq.Publish();
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsFaq", faq.Id.ToString(), "Published"));
         await _faqRepository.UpdateAsync(faq);
         return Result.Success();
     }
@@ -84,6 +97,7 @@ public class CmsFaqService : ICmsFaqService
         }
 
         faq.Unpublish();
+        await _auditLogWriter.WriteAsync(new AuditEntry("CmsFaq", faq.Id.ToString(), "Unpublished"));
         await _faqRepository.UpdateAsync(faq);
         return Result.Success();
     }

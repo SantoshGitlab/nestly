@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Coupons;
 using Nestly.Application.Serviceability;
 using Nestly.BuildingBlocks.Results;
@@ -17,20 +18,32 @@ namespace Nestly.Infrastructure.Services;
 /// business doing itself, the same split <c>CouponService</c>'s doc comment
 /// describes for the consumer-facing validate/reserve flow.
 /// </summary>
+/// <remarks>
+/// Writes an audit entry for every mutation (task 132c gap fix): coupons are
+/// directly financial (discount amounts, usage limits) - the same "every
+/// write is audited" reasoning <c>PricingManagementService</c>'s doc comment
+/// gives for price changes applies here. The entry is staged before the
+/// repository call so the repository's own <c>SaveChangesAsync</c> commits
+/// both in one transaction, matching <c>ServiceManagementService</c>'s
+/// pattern.
+/// </remarks>
 public class CouponManagementService : ICouponManagementService
 {
     private readonly ICouponRepository _couponRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly NestlyDbContext _context;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public CouponManagementService(
         ICouponRepository couponRepository,
         ICategoryRepository categoryRepository,
-        NestlyDbContext context)
+        NestlyDbContext context,
+        IAuditLogWriter auditLogWriter)
     {
         _couponRepository = couponRepository;
         _categoryRepository = categoryRepository;
         _context = context;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<IReadOnlyList<CategoryLookupResponse>> ListApplicableCategoriesAsync()
@@ -101,6 +114,7 @@ public class CouponManagementService : ICouponManagementService
             request.ApplicableCategoryId,
             request.CustomerSegment);
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("Coupon", coupon.Id.ToString(), "Created"));
         await _couponRepository.AddAsync(coupon);
         return await ToResponseAsync(coupon);
     }
@@ -135,6 +149,7 @@ public class CouponManagementService : ICouponManagementService
             request.ApplicableCategoryId,
             request.CustomerSegment);
 
+        await _auditLogWriter.WriteAsync(new AuditEntry("Coupon", coupon.Id.ToString(), "Updated"));
         await _couponRepository.UpdateAsync(coupon);
         return await ToResponseAsync(coupon);
     }
@@ -148,6 +163,7 @@ public class CouponManagementService : ICouponManagementService
         }
 
         coupon.Activate();
+        await _auditLogWriter.WriteAsync(new AuditEntry("Coupon", coupon.Id.ToString(), "Activated"));
         await _couponRepository.UpdateAsync(coupon);
         return Result.Success();
     }
@@ -161,6 +177,7 @@ public class CouponManagementService : ICouponManagementService
         }
 
         coupon.Deactivate();
+        await _auditLogWriter.WriteAsync(new AuditEntry("Coupon", coupon.Id.ToString(), "Deactivated"));
         await _couponRepository.UpdateAsync(coupon);
         return Result.Success();
     }
