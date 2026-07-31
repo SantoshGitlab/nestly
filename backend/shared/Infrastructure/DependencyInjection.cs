@@ -26,7 +26,9 @@ using Nestly.Application.Geography;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Notifications;
+using Nestly.Application.PartnerAvailability;
 using Nestly.Application.PartnerIdentity;
+using Nestly.Application.PartnerProfile;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
@@ -238,6 +240,18 @@ public static class DependencyInjection
         services.AddScoped<IPartnerRegistrationService, PartnerRegistrationService>();
         services.AddScoped<IPartnerLoginService, PartnerLoginService>();
         services.AddScoped<IPartnerKycService, PartnerKycService>();
+
+        // Task 149a: profile/service-area/skill management, reading and
+        // writing the entities above through the partner-api's own
+        // controllers. Task 149b: availability windows and blackout dates -
+        // own repositories since neither is shared with any other module's
+        // service.
+        services.AddScoped<IPartnerServiceAreaRepository, PartnerServiceAreaRepository>();
+        services.AddScoped<IPartnerSkillMappingRepository, PartnerSkillMappingRepository>();
+        services.AddScoped<IPartnerProfileService, PartnerProfileService>();
+        services.AddScoped<IPartnerAvailabilityWindowRepository, PartnerAvailabilityWindowRepository>();
+        services.AddScoped<IPartnerBlackoutDateRepository, PartnerBlackoutDateRepository>();
+        services.AddScoped<IPartnerAvailabilityService, PartnerAvailabilityService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's
