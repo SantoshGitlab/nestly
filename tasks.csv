@@ -371,16 +371,16 @@ id,task,status,priority,notes,phase
 122,Reviews - Review moderation: Hide/unhide/flag/export reviews retaining originals for audit; API + UI (SRS 12.15 and 17.2),done,medium,"depends on #96d #85c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 123,Reviews - Review moderation UI: Moderation screen with filters,done,medium,"depends on #98d #122| unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 124,CMS - CMS schema and APIs: Tables + CRUD: cms_page; banner; faq with draft/publish; scheduling; media; placement (SRS 12.16; 18),decomposed,medium,"depends on #96d #9c | superseded: decomposed into subtasks 124a,124b,124c,124d,124e,124f",Phase 6 - Admin Panel
-124a,CMS - Tables + CRUD: cms_page,todo,medium,depends on #96d #9c,Phase 6 - Admin Panel
-124b,CMS - banner,todo,medium,depends on #124a,Phase 6 - Admin Panel
-124c,CMS - faq with draft/publish,todo,medium,depends on #124b,Phase 6 - Admin Panel
-124d,CMS - scheduling,todo,medium,depends on #124c,Phase 6 - Admin Panel
-124e,CMS - media,todo,medium,depends on #124d,Phase 6 - Admin Panel
-124f,CMS - placement (SRS 12.16; 18),todo,medium,depends on #124e,Phase 6 - Admin Panel
+124a,CMS - Tables + CRUD: cms_page,done,medium,depends on #96d #9c,Phase 6 - Admin Panel
+124b,CMS - banner,done,medium,depends on #124a,Phase 6 - Admin Panel
+124c,CMS - faq with draft/publish,done,medium,depends on #124b,Phase 6 - Admin Panel
+124d,CMS - scheduling,done,medium,depends on #124c,Phase 6 - Admin Panel
+124e,CMS - media,done,medium,depends on #124d,Phase 6 - Admin Panel
+124f,CMS - placement (SRS 12.16; 18),done,medium,depends on #124e,Phase 6 - Admin Panel
 125,CMS - CMS management UI: Banner; page; FAQ management screens,decomposed,medium,"depends on #98d #124f | superseded: decomposed into subtasks 125a,125b,125c",Phase 6 - Admin Panel
-125a,CMS - Banner,todo,medium,depends on #98d #124f,Phase 6 - Admin Panel
-125b,CMS - page,todo,medium,depends on #125a,Phase 6 - Admin Panel
-125c,CMS - FAQ management screens,todo,medium,depends on #125b,Phase 6 - Admin Panel
+125a,CMS - Banner,done,medium,depends on #98d #124f,Phase 6 - Admin Panel
+125b,CMS - page,done,medium,depends on #125a,Phase 6 - Admin Panel
+125c,CMS - FAQ management screens,done,medium,depends on #125b,Phase 6 - Admin Panel
 126,Notifications - Notification template management: Channel-specific templates with variables; preview/test; change audit; API + UI (SRS 12.17),decomposed,medium,"depends on #96d #87d | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 126a,126b,126c,126d",Phase 6 - Admin Panel
 126a,Notifications - Channel-specific templates with variables,todo,medium,"depends on #96d #87d | auto-blocked: depends on blocked task #87d | unblocked: manual reset, dependency gate re-checked at runtime",Phase 6 - Admin Panel
 126b,Notifications - preview/test,todo,medium,depends on #126a,Phase 6 - Admin Panel

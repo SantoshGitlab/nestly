@@ -39,6 +39,10 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<NotificationEvent> NotificationEvents { get; set; }
     public DbSet<DeviceToken> DeviceTokens { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
+    public DbSet<CmsPage> CmsPages { get; set; }
+    public DbSet<Banner> Banners { get; set; }
+    public DbSet<CmsFaq> CmsFaqs { get; set; }
+    public DbSet<CmsMedia> CmsMediaAssets { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
