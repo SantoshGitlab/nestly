@@ -11,6 +11,7 @@ using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
+using Nestly.Application.Cancellations;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Escrow;
@@ -164,6 +165,13 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
+
+        services
+            .AddOptions<CancellationPolicyOptions>()
+            .Bind(configuration.GetSection(CancellationPolicyOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddScoped<ICancellationRepository, BookingCancellationRepository>();
+        services.AddScoped<ICancellationService, CancellationService>();
 
         // Task 157/158: commission calculation and the platform escrow
         // ledger. CommissionService is stateless (reads only bound Options),

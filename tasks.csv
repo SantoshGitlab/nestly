@@ -243,10 +243,10 @@ id,task,status,priority,notes,phase
 79c,QA - coupon abuse cases,done,critical,depends on #79b,Phase 4 - Payments & Financial
 79d,QA - refund calculations,done,critical,depends on #79c,Phase 4 - Payments & Financial
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),decomposed,high,"depends on #60c #75d | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 80a,80b,80c",Phase 5 - Post-Booking
-80a,Cancellation - Eligibility rules,todo,high,"depends on #60c #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-80b,Cancellation - fee/refund computation,todo,high,depends on #80a,Phase 5 - Post-Booking
-80c,Cancellation - actor+reason capture (SRS 11.14; 32.2),todo,high,depends on #80b,Phase 5 - Post-Booking
-81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),todo,high,"depends on #80c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+80a,Cancellation - Eligibility rules,done,high,"depends on #60c #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+80b,Cancellation - fee/refund computation,done,high,depends on #80a,Phase 5 - Post-Booking
+80c,Cancellation - actor+reason capture (SRS 11.14; 32.2),done,high,depends on #80b,Phase 5 - Post-Booking
+81,Cancellation - Cancellation API: Customer cancellation with policy summary and refund outcome (SRS 24.6),done,high,"depends on #80c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 82,Reschedule - Reschedule engine: Eligibility window; count limits; slot revalidation via slot engine; fee impact (SRS 11.15; 32.3),decomposed,high,"depends on #60c #46 | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 82a,82b,82c,82d",Phase 5 - Post-Booking
 82a,Reschedule - Eligibility window,todo,high,"depends on #60c #46| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 82b,Reschedule - count limits,todo,high,depends on #82a,Phase 5 - Post-Booking

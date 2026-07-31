@@ -29,6 +29,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PlatformEscrowLedger> PlatformEscrowLedgers { get; set; }
     public DbSet<Coupon> Coupons { get; set; }
     public DbSet<CouponRedemption> CouponRedemptions { get; set; }
+    public DbSet<BookingCancellation> BookingCancellations { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
