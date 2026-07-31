@@ -116,6 +116,25 @@ export function Button({ variant = "primary", className = "", ...props }: Button
   );
 }
 
+/**
+ * A single KPI number (SRS 12.3.1's dashboard widgets): a sentence-case
+ * label, no trailing colon, and a semibold value in the default proportional
+ * figures (reserving `tabular-nums` for columns of aligned numbers, not a
+ * standalone tile). The value always renders in the same text tokens as
+ * everything else - the tile's border/background carries no meaning of its
+ * own, so nothing here is colored by data the way a chart mark would be.
+ */
+export function StatTile({ label, value, title }: { label: string; value: string; title?: string }) {
+  return (
+    <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/15 dark:bg-neutral-900">
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight" title={title}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export function PageHeading({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <header className="mb-6">

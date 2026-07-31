@@ -16,6 +16,7 @@ using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
+using Nestly.Application.Dashboard;
 using Nestly.Application.Escrow;
 using Nestly.Application.Geography;
 using Nestly.Application.Payments;
@@ -243,6 +244,12 @@ public static class DependencyInjection
         // Task 155: dispute mark/resolve workflow. Gated behind
         // "support.write" as of task 96b - see SupportTicketDisputesController's doc comment.
         services.AddScoped<IDisputeResolutionService, DisputeResolutionService>();
+
+        // Task 99: admin dashboard KPI widgets (SRS 12.3). Reads across the
+        // Booking/Payment/Refund/Support aggregates directly - see
+        // DashboardQueryService's doc comment for why this has no repository
+        // of its own.
+        services.AddScoped<IDashboardQueryService, DashboardQueryService>();
 
         // Task 87a-d: notification core. The template set is stateless
         // (Render/SupportsChannel read only a fixed built-in dictionary),
