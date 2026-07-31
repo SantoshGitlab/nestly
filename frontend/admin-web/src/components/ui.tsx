@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef } from "react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 /**
  * The shared primitives every admin screen is built from. Mirrors
@@ -81,6 +81,42 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         {...props}
         id={inputId}
         ref={ref}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+      />
+      {error ? (
+        <p id={errorId} className="text-xs text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+});
+
+interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label: string;
+  error?: string;
+}
+
+/** Multi-line counterpart to `Field`, for the long free-text fields catalog entities carry (description, inclusions/exclusions). */
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+  { label, error, id, rows = 3, ...props },
+  ref,
+) {
+  const textareaId = id ?? `field-${props.name ?? label.toLowerCase().replace(/\s+/g, "-")}`;
+  const errorId = `${textareaId}-error`;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={textareaId} className="text-sm font-medium">
+        {label}
+      </label>
+      <textarea
+        {...props}
+        id={textareaId}
+        ref={ref}
+        rows={rows}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"

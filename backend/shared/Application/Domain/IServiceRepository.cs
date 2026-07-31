@@ -9,6 +9,15 @@ public interface IServiceRepository : IRepository<Service>
 
     Task<Service?> GetBySlugAsync(string slug);
 
+    /// <summary>Whether any service (other than <paramref name="excludeId"/>, when updating) already uses this slug.</summary>
+    Task<bool> ExistsBySlugAsync(string slug, Guid? excludeId = null);
+
     /// <summary>Active services whose name contains the query, case-insensitively (SRS 24.3 search).</summary>
     Task<IReadOnlyList<Service>> SearchActiveAsync(string query);
+
+    /// <summary>
+    /// Every service regardless of active status, optionally filtered to one
+    /// category, ordered for the admin management screen (SRS 12.6.1).
+    /// </summary>
+    Task<IReadOnlyList<Service>> ListAllAsync(Guid? categoryId);
 }

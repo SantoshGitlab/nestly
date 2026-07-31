@@ -40,6 +40,9 @@ public class ServiceRepository : IServiceRepository
     public Task<Service?> GetBySlugAsync(string slug) =>
         _context.Set<Service>().FirstOrDefaultAsync(s => s.Slug == slug);
 
+    public Task<bool> ExistsBySlugAsync(string slug, Guid? excludeId = null) =>
+        _context.Set<Service>().AnyAsync(s => s.Slug == slug && (excludeId == null || s.Id != excludeId));
+
     public async Task<IReadOnlyList<Service>> SearchActiveAsync(string query)
     {
         string normalized = query.ToLowerInvariant();
@@ -47,5 +50,16 @@ public class ServiceRepository : IServiceRepository
             .Where(s => s.IsActive && s.Name.ToLower().Contains(normalized))
             .OrderBy(s => s.Name)
             .ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<Service>> ListAllAsync(Guid? categoryId)
+    {
+        IQueryable<Service> query = _context.Set<Service>();
+        if (categoryId is not null)
+        {
+            query = query.Where(s => s.CategoryId == categoryId);
+        }
+
+        return await query.OrderBy(s => s.SortOrder).ThenBy(s => s.Name).ToListAsync();
     }
 }
