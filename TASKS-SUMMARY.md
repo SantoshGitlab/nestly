@@ -10,10 +10,15 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 3 - Booking Core | 47 | 0 | 9 | 0 | 56 |
 | Phase 4 - Payments & Financial | 40 | 0 | 6 | 0 | 46 |
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
-| Phase 6 - Admin Panel | 0 | 104 | 15 | 0 | 119 |
-| Phase 7 - Hardening & Launch | 0 | 32 | 6 | 0 | 38 |
-| Phase 8 - Partner (Deferred) | 0 | 21 | 4 | 0 | 25 |
-| **Overall** | **265** | **157** | **50** | **2** | **474** |
+| Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
+| Phase 7 - Partner | 0 | 21 | 4 | 0 | 25 |
+| Phase 8 - Hardening & Launch | 0 | 32 | 6 | 0 | 38 |
+| Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
+| Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
+| **Overall** | **369** | **91** | **50** | **2** | **512** |
 
-Last updated: 2026-07-31, after merging `phase-5-post-booking` into `main`.
+Last updated: 2026-08-01, after merging `phase-6-admin-panel` into `main`. Phase
+order changed 2026-07-31: Partner now runs as Phase 7 (before Hardening &
+Launch, now Phase 8); Phase 9 (Referral & Growth) and Phase 10 (Product
+Enhancements) were added.
 
