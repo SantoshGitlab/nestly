@@ -199,49 +199,49 @@ id,task,status,priority,notes,phase
 66b,QA - snapshot immutability,done,high,depends on #66a,Phase 3 - Booking Core
 66c,QA - concurrent slot race cases,done,high,depends on #66b,Phase 3 - Booking Core
 67,Payments - Financial schema: Tables: payment_transaction; payment_attempt; refund_transaction; wallet_ledger; coupon; coupon_redemption (SRS 23.4),decomposed,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 67a,67b,67c,67d,67e,67f",Phase 4 - Payments & Financial
-67a,Payments - Tables: payment_transaction,todo,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
-67b,Payments - payment_attempt,todo,high,depends on #67a,Phase 4 - Payments & Financial
-67c,Payments - refund_transaction,todo,high,depends on #67b,Phase 4 - Payments & Financial
-67d,Payments - wallet_ledger,todo,high,depends on #67c,Phase 4 - Payments & Financial
-67e,Payments - coupon,todo,high,depends on #67d,Phase 4 - Payments & Financial
-67f,Payments - coupon_redemption (SRS 23.4),todo,high,depends on #67e,Phase 4 - Payments & Financial
-68a,Payments - Define payment gateway interface (create order),todo,critical,"depends on #67f #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-68b,Payments - Implement sandbox gateway,todo,critical,"depends on #68a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-68c,Payments - Add payment order validation and formatting,todo,high,"depends on #68b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-68d,Payments - Add idempotency keys and request deduplication,todo,critical,"depends on #68c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+67a,Payments - Tables: payment_transaction,done,high,"depends on #9c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+67b,Payments - payment_attempt,done,high,depends on #67a,Phase 4 - Payments & Financial
+67c,Payments - refund_transaction,done,high,depends on #67b,Phase 4 - Payments & Financial
+67d,Payments - wallet_ledger,done,high,depends on #67c,Phase 4 - Payments & Financial
+67e,Payments - coupon,done,high,depends on #67d,Phase 4 - Payments & Financial
+67f,Payments - coupon_redemption (SRS 23.4),done,high,depends on #67e,Phase 4 - Payments & Financial
+68a,Payments - Define payment gateway interface (create order),done,critical,"depends on #67f #58f| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68b,Payments - Implement sandbox gateway,done,critical,"depends on #68a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68c,Payments - Add payment order validation and formatting,done,high,"depends on #68b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+68d,Payments - Add idempotency keys and request deduplication,done,critical,"depends on #68c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 69,Payments - Payment verification and webhook: Signed callback verification; idempotent duplicate handling; booking-payment mapping (SRS 11.11.3),decomposed,critical,"depends on #68d | auto-blocked: depends on blocked task #68d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 69a,69b,69c",Phase 4 - Payments & Financial
-69a,Payments - Signed callback verification,todo,critical,"depends on #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-69b,Payments - idempotent duplicate handling,todo,critical,depends on #69a,Phase 4 - Payments & Financial
-69c,Payments - booking-payment mapping (SRS 11.11.3),todo,critical,depends on #69b,Phase 4 - Payments & Financial
-70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),todo,high,"depends on #69c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),todo,high,"depends on #69c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-72a,Coupons - Define coupon entity and validation rules,todo,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
-72b,Coupons - Implement validity window checks (date range),todo,high,"depends on #72a | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
-72c,Coupons - Implement usage cap and redemption cap enforcement,todo,high,depends on #72b,Phase 4 - Payments & Financial
-72d,"Coupons - Add applicability rules (category, first/repeat)",todo,high,"depends on #72c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
-73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),todo,high,"depends on #72d #48 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+69a,Payments - Signed callback verification,done,critical,"depends on #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+69b,Payments - idempotent duplicate handling,done,critical,depends on #69a,Phase 4 - Payments & Financial
+69c,Payments - booking-payment mapping (SRS 11.11.3),done,critical,depends on #69b,Phase 4 - Payments & Financial
+70,Payments - Payment retry flow: Failed payment retry preserving booking intent per configured booking pattern (SRS 11.11.2),done,high,"depends on #69c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+71,Payments - Payment reconciliation support: Transaction records queryable for booking-payment reconciliation (SRS 14.3),done,high,"depends on #69c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+72a,Coupons - Define coupon entity and validation rules,done,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+72b,Coupons - Implement validity window checks (date range),done,high,"depends on #72a | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+72c,Coupons - Implement usage cap and redemption cap enforcement,done,high,depends on #72b,Phase 4 - Payments & Financial
+72d,"Coupons - Add applicability rules (category, first/repeat)",done,high,"depends on #72c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+73,Coupons - Coupon apply/remove APIs: Server-side validation + recompute; redemption linked to customer and booking (SRS 14.2),done,high,"depends on #72d #48 | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
 74,Wallet - Wallet ledger: Append-only ledger; every entry references source event; balance API (SRS 14.5; 11.17),decomposed,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 74a,74b,74c",Phase 4 - Payments & Financial
-74a,Wallet - Append-only ledger,todo,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
-74b,Wallet - every entry references source event,todo,high,depends on #74a,Phase 4 - Payments & Financial
-74c,Wallet - balance API (SRS 14.5; 11.17),todo,high,depends on #74b,Phase 4 - Payments & Financial
-75a,Refunds - Define refund entity and refund types (full/partial),todo,high,"depends on #69c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-75b,Refunds - Implement full refund logic (gateway or wallet),todo,high,"depends on #75a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-75c,Refunds - Implement partial refund calculation and policy rules,todo,high,"depends on #75b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-75d,Refunds - Add refund status lifecycle and tracking,todo,high,"depends on #75c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+74a,Wallet - Append-only ledger,done,high,"depends on #67f | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 4 - Payments & Financial
+74b,Wallet - every entry references source event,done,high,depends on #74a,Phase 4 - Payments & Financial
+74c,Wallet - balance API (SRS 14.5; 11.17),done,high,depends on #74b,Phase 4 - Payments & Financial
+75a,Refunds - Define refund entity and refund types (full/partial),done,high,"depends on #69c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75b,Refunds - Implement full refund logic (gateway or wallet),done,high,"depends on #75a| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75c,Refunds - Implement partial refund calculation and policy rules,done,high,"depends on #75b| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+75d,Refunds - Add refund status lifecycle and tracking,done,high,"depends on #75c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 76,Frontend - Checkout and payment page: Payment initiation; result handling; retry UX (SRS 25.1),decomposed,high,"depends on #62f #68d | auto-blocked: depends on blocked task #68d | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 76a,76b,76c",Phase 4 - Payments & Financial
-76a,Frontend - Payment initiation,todo,high,"depends on #62f #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-76b,Frontend - result handling,todo,high,depends on #76a,Phase 4 - Payments & Financial
-76c,Frontend - retry UX (SRS 25.1),todo,high,depends on #76b,Phase 4 - Payments & Financial
-77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),todo,high,"depends on #76c #73| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+76a,Frontend - Payment initiation,done,high,"depends on #62f #68d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+76b,Frontend - result handling,done,high,depends on #76a,Phase 4 - Payments & Financial
+76c,Frontend - retry UX (SRS 25.1),done,high,depends on #76b,Phase 4 - Payments & Financial
+77,Frontend - Coupon UI: Apply/remove at checkout with success/error messaging; recomputed totals (SRS 11.10.3),done,high,"depends on #76c #73| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
 78,Frontend - Wallet and refund pages: Balance; ledger entries; refund status per booking (SRS 11.17),decomposed,high,"depends on #65c #74c | auto-blocked: depends on blocked task #65 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 78a,78b,78c",Phase 4 - Payments & Financial
-78a,Frontend - Balance,todo,high,"depends on #65c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-78b,Frontend - ledger entries,todo,high,depends on #78a,Phase 4 - Payments & Financial
-78c,Frontend - refund status per booking (SRS 11.17),todo,high,depends on #78b,Phase 4 - Payments & Financial
+78a,Frontend - Balance,done,high,"depends on #65c #74c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+78b,Frontend - ledger entries,done,high,depends on #78a,Phase 4 - Payments & Financial
+78c,Frontend - refund status per booking (SRS 11.17),done,high,depends on #78b,Phase 4 - Payments & Financial
 79,QA - Financial flows test suite: Webhook idempotency; duplicate callbacks; coupon abuse cases; refund calculations,decomposed,critical,"depends on #69c #73 #75d | auto-blocked: depends on blocked task #69 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 79a,79b,79c,79d",Phase 4 - Payments & Financial
-79a,QA - Webhook idempotency,todo,critical,"depends on #69c #73 #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
-79b,QA - duplicate callbacks,todo,critical,depends on #79a,Phase 4 - Payments & Financial
-79c,QA - coupon abuse cases,todo,critical,depends on #79b,Phase 4 - Payments & Financial
-79d,QA - refund calculations,todo,critical,depends on #79c,Phase 4 - Payments & Financial
+79a,QA - Webhook idempotency,done,critical,"depends on #69c #73 #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 4 - Payments & Financial
+79b,QA - duplicate callbacks,done,critical,depends on #79a,Phase 4 - Payments & Financial
+79c,QA - coupon abuse cases,done,critical,depends on #79b,Phase 4 - Payments & Financial
+79d,QA - refund calculations,done,critical,depends on #79c,Phase 4 - Payments & Financial
 80,Cancellation - Cancellation engine: Eligibility rules; fee/refund computation; actor+reason capture (SRS 11.14; 32.2),decomposed,high,"depends on #60c #75d | auto-blocked: depends on blocked task #60 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 80a,80b,80c",Phase 5 - Post-Booking
 80a,Cancellation - Eligibility rules,todo,high,"depends on #60c #75d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 80b,Cancellation - fee/refund computation,todo,high,depends on #80a,Phase 5 - Post-Booking
@@ -467,3 +467,9 @@ id,task,status,priority,notes,phase
 150b,Partner - KYC approval,todo,low,depends on #150a,Phase 8 - Partner (Deferred)
 150c,Partner - performance view + Partner/Payout RBAC modules,todo,low,depends on #150b,Phase 8 - Partner (Deferred)
 151,Partner - Partner-facing UI: Partner portal or app for jobs/availability/earnings (platform TBD),todo,low,"depends on #149c | reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 8 - Partner (Deferred)
+155,"Support - Dispute resolution workflow: Formalize the valid/invalid branch on a support ticket (SRS 855: wrong charge / pricing dispute) into its own flow: admin marks a ticket disputed, resolves as refund (valid) or close/rework (invalid), tracks resolution outcome",todo,high,depends on #86d #75b,Phase 5 - Post-Booking
+156,Notifications - Push notification channel: Register device tokens (FCM/APNs); add push as a dispatch channel alongside SMS/email; wire into existing notification trigger events,todo,high,depends on #87c #88,Phase 5 - Post-Booking
+157,Payments - Commission setup and calculation: Admin-configurable commission rate (global/per-category); compute and record platform commission on each completed booking's settlement,done,high,depends on #67f,Phase 4 - Payments & Financial
+158,"Payments - Escrow / platform holding account: Hold customer payment in a platform-owned ledger balance until service completion; release to provider wallet net of commission on completion, or to refund on cancellation",done,high,depends on #67f #157,Phase 4 - Payments & Financial
+159,"Booking - Provider reassignment on rejection: When assigned provider rejects a booking, return it to an assignable pool and let admin (or auto-match) assign a different provider instead of only offering a refund",todo,medium,depends on #147,Phase 8 - Partner (Deferred)
+160,"Partner - Background verification: Distinct post-KYC background/reference check step (police verification, prior work history) with its own status feeding into admin approval, separate from KYC document validation",todo,medium,depends on #146c,Phase 8 - Partner (Deferred)

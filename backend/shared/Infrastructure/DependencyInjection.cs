@@ -12,8 +12,13 @@ using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
+using Nestly.Application.Coupons;
+using Nestly.Application.Escrow;
 using Nestly.Application.Geography;
+using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
+using Nestly.Application.Refunds;
+using Nestly.Application.Wallet;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Domain;
@@ -57,12 +62,27 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services
+            .AddOptions<SandboxGatewayOptions>()
+            .Bind(configuration.GetSection(SandboxGatewayOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Task 157: not a secret, so (unlike the options above) this is safe
+        // to fall back to CommissionOptions' own defaults when a deployment
+        // environment hasn't set the section at all - no ValidateOnStart.
+        services
+            .AddOptions<CommissionOptions>()
+            .Bind(configuration.GetSection(CommissionOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
 
         services.AddSingleton<AuditableEntityInterceptor>();
         services.AddScoped<DomainEventDispatchInterceptor>();
+        services.AddSingleton<NewOwnedChildEntityInterceptor>();
 
         services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
             options
@@ -70,7 +90,8 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .AddInterceptors(
                     serviceProvider.GetRequiredService<AuditableEntityInterceptor>(),
-                    serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>()));
+                    serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
+                    serviceProvider.GetRequiredService<NewOwnedChildEntityInterceptor>()));
 
         services
             .AddHealthChecks()
@@ -126,6 +147,30 @@ public static class DependencyInjection
         services.AddScoped<ICustomerPasswordResetService, CustomerPasswordResetService>();
         services.AddScoped<ICustomerCommunicationPreferenceRepository, CustomerCommunicationPreferenceRepository>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+
+        // Stateless - depends only on bound Options - so one shared instance
+        // safely serves both interfaces (SandboxPaymentGateway implements
+        // IPaymentGateway and the sandbox-only ISandboxPaymentSimulator).
+        services.AddSingleton<SandboxPaymentGateway>();
+        services.AddSingleton<IPaymentGateway>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
+        services.AddSingleton<ISandboxPaymentSimulator>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
+        services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
+        services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<ICouponRepository, CouponRepository>();
+        services.AddScoped<ICouponRedemptionRepository, CouponRedemptionRepository>();
+        services.AddScoped<ICouponService, CouponService>();
+        services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
+        services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
+        services.AddScoped<IRefundService, RefundService>();
+
+        // Task 157/158: commission calculation and the platform escrow
+        // ledger. CommissionService is stateless (reads only bound Options),
+        // same reasoning as SandboxPaymentGateway above.
+        services.AddSingleton<ICommissionService, CommissionService>();
+        services.AddScoped<IPlatformEscrowLedgerRepository, PlatformEscrowLedgerRepository>();
+        services.AddScoped<IEscrowService, EscrowService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email
         // vendor is configured yet. Swap this registration, not the callers,

@@ -1,6 +1,7 @@
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
+using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
 using Nestly.Application.Slots;
 using Nestly.BuildingBlocks.Results;
@@ -21,19 +22,22 @@ public class BookingSummaryService : IBookingSummaryService
     private readonly ICustomerAddressRepository _addressRepository;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IPriceCalculationService _priceCalculationService;
+    private readonly ICouponService _couponService;
 
     public BookingSummaryService(
         IServiceRepository serviceRepository,
         IServiceAddOnRepository addOnRepository,
         ICustomerAddressRepository addressRepository,
         ISlotAvailabilityService slotAvailabilityService,
-        IPriceCalculationService priceCalculationService)
+        IPriceCalculationService priceCalculationService,
+        ICouponService couponService)
     {
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
         _addressRepository = addressRepository;
         _slotAvailabilityService = slotAvailabilityService;
         _priceCalculationService = priceCalculationService;
+        _couponService = couponService;
     }
 
     public async Task<Result<BookingSummaryResponse>> GetSummaryAsync(Guid customerId, BookingSummaryRequest request)
@@ -91,6 +95,27 @@ public class BookingSummaryService : IBookingSummaryService
             return priceResult.Error;
         }
 
+        CouponSummaryResponse? coupon = null;
+        decimal finalPayable = priceResult.Value.TotalPayable;
+
+        if (!string.IsNullOrWhiteSpace(request.CouponCode))
+        {
+            // Discount is calculated against the pre-tax Subtotal (SRS
+            // 11.10.2's "min order amount" and percentage-discount rules
+            // read most naturally against the goods/service value, not tax
+            // and platform fees), then subtracted from TotalPayable (SRS
+            // 14.1: "... + tax – discounts" - the discount comes off the
+            // fully-loaded total, not the pre-tax subtotal).
+            var couponResult = await _couponService.ValidateAsync(customerId, request.CouponCode, service.CategoryId, priceResult.Value.Subtotal);
+            if (couponResult.IsFailure)
+            {
+                return couponResult.Error;
+            }
+
+            coupon = couponResult.Value;
+            finalPayable = Math.Max(0, priceResult.Value.TotalPayable - coupon.DiscountAmount);
+        }
+
         var response = new BookingSummaryResponse(
             new BookingServiceSummary(service.Id, service.Name, service.Slug),
             addOnSummaries,
@@ -101,7 +126,9 @@ public class BookingSummaryService : IBookingSummaryService
             new BookingSlotSummary(slot.SlotWindowId, slot.Name, request.SlotDate, slot.StartTime, slot.EndTime),
             priceResult.Value,
             service.CancellationPolicy,
-            service.ReschedulePolicy);
+            service.ReschedulePolicy,
+            coupon,
+            finalPayable);
 
         return Result.Success(response);
     }

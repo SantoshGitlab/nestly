@@ -1,5 +1,6 @@
 using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.Coupons;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -14,12 +15,15 @@ public class BookingService : IBookingService
     private readonly IBookingSummaryService _summaryService;
     private readonly IBookingRepository _bookingRepository;
     private readonly ICustomerRepository _customerRepository;
+    private readonly ICouponService _couponService;
 
-    public BookingService(IBookingSummaryService summaryService, IBookingRepository bookingRepository, ICustomerRepository customerRepository)
+    public BookingService(
+        IBookingSummaryService summaryService, IBookingRepository bookingRepository, ICustomerRepository customerRepository, ICouponService couponService)
     {
         _summaryService = summaryService;
         _bookingRepository = bookingRepository;
         _customerRepository = customerRepository;
+        _couponService = couponService;
     }
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
@@ -41,6 +45,21 @@ public class BookingService : IBookingService
 
         var summary = summaryResult.Value;
 
+        // Reserve the coupon's usage slot before the booking exists (task
+        // 72c/73): CouponRedemption has a foreign key to the booking, so it
+        // cannot be inserted until the booking is, but the atomic usage-cap
+        // check must happen before persisting anything - otherwise a lost
+        // race would create a booking with a discount that was never really
+        // available.
+        if (summary.Coupon is not null)
+        {
+            var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId);
+            if (reserveResult.IsFailure)
+            {
+                return reserveResult.Error;
+            }
+        }
+
         var booking = new Booking(
             Guid.NewGuid(),
             customerId,
@@ -55,7 +74,9 @@ public class BookingService : IBookingService
             new PriceSnapshot(
                 summary.Price.BasePrice, summary.Price.Quantity, summary.Price.BaseTotal, summary.Price.AddOnTotal,
                 summary.Price.VisitCharge, summary.Price.Subtotal, summary.Price.TaxPercentage,
-                summary.Price.TaxAmount, summary.Price.PlatformFee, summary.Price.TotalPayable));
+                summary.Price.TaxAmount, summary.Price.PlatformFee, summary.FinalPayable),
+            summary.Coupon?.Code,
+            summary.Coupon?.DiscountAmount);
 
         // Add-on line items come from the price breakdown, not summary.AddOns:
         // the breakdown already carries each selection's quantity and
@@ -73,6 +94,11 @@ public class BookingService : IBookingService
         booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
 
         await _bookingRepository.AddAsync(booking);
+
+        if (summary.Coupon is not null)
+        {
+            await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
+        }
 
         return Result.Success(ToDetailResponse(booking));
     }
@@ -139,6 +165,9 @@ public class BookingService : IBookingService
                 .OrderBy(h => h.ChangedAtUtc)
                 .Select(h => new BookingStatusTimelineEntry(h.FromStatus, h.ToStatus, BookingStatusMapper.LabelFor(h.ToStatus), h.Reason, h.ChangedAtUtc))
                 .ToList(),
-            booking.CreatedAtUtc);
+            booking.CreatedAtUtc,
+            booking.CouponCodeSnapshot,
+            booking.CouponDiscountAmountSnapshot,
+            booking.TotalPayableSnapshot);
     }
 }

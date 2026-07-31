@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Nestly.Infrastructure.Persistence;
+using Nestly.Infrastructure.Persistence.Interceptors;
 
 namespace Nestly.Catalog.Tests;
 
@@ -27,6 +28,11 @@ public sealed class TestDatabase : IDisposable
         Options = new DbContextOptionsBuilder<NestlyDbContext>()
             .UseSqlite(_connection)
             .UseSnakeCaseNamingConvention()
+            // Same fix DependencyInjection.AddInfrastructure wires up for
+            // the real app - see NewOwnedChildEntityInterceptor's doc
+            // comment. Tests build their DbContextOptions directly rather
+            // than through DI, so it has to be added here too.
+            .AddInterceptors(new NewOwnedChildEntityInterceptor())
             .Options;
 
         using var context = new NestlyDbContext(Options);

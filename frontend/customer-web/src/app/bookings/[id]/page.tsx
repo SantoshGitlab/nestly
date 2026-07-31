@@ -6,8 +6,13 @@ import { useParams } from "next/navigation";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { BookingStatus } from "@/lib/types";
-import type { BookingDetail, BookingStatusTimelineEntry, PriceBreakdown } from "@/lib/types";
+import { BookingStatus, RefundMethod, RefundStatus, RefundType } from "@/lib/types";
+import type {
+  BookingDetail,
+  BookingStatusTimelineEntry,
+  PriceBreakdown,
+  RefundTransactionResponse,
+} from "@/lib/types";
 
 /** Both reachable only via RefundPending/Refunded in BookingLifecycle - see BookingStatusMapper.cs. */
 const REFUND_STATUSES: BookingStatus[] = [BookingStatus.RefundPending, BookingStatus.Refunded];
@@ -88,27 +93,115 @@ function BookingDetailScreen() {
   );
 }
 
-/** Refund details (task 65b, SRS 11.13.2 "refund details if any"). */
+/**
+ * Refund details (task 65b, 78c, SRS 11.13.2 "refund details if any"). Now
+ * backed by the real refund transaction(s) (GET /bookings/{id}/refunds)
+ * instead of fabricating an amount from the booking's total.
+ */
 function RefundInfoCard({ booking }: { booking: BookingDetail }) {
-  // The schema doesn't record a distinct refund amount or refund mode
-  // (SRS 11.14.2 fields don't exist anywhere in Booking/BookingContracts
-  // yet) - the only figure available is the booking's own total, shown as
-  // the amount under refund rather than inventing a partial-refund figure
-  // the backend has no way to compute yet.
+  const refundsQuery = useQuery({
+    queryKey: ["booking-refunds", booking.id],
+    queryFn: () =>
+      apiFetch<RefundTransactionResponse[]>(`${API_V1}/bookings/${booking.id}/refunds`, {
+        authenticated: true,
+      }),
+  });
+
+  if (refundsQuery.isPending) {
+    return (
+      <Card title="Refund">
+        <p className="text-sm text-neutral-500">Loading refund details…</p>
+      </Card>
+    );
+  }
+
+  if (refundsQuery.isError) {
+    return (
+      <Card title="Refund">
+        <Alert>{describeError(refundsQuery.error)}</Alert>
+      </Card>
+    );
+  }
+
+  const refunds = refundsQuery.data;
+
+  if (refunds.length === 0) {
+    // The booking reached a refund-related status but no refund transaction
+    // has been recorded yet - a reasonable "still processing" fallback
+    // rather than rendering nothing.
+    return (
+      <Card title="Refund">
+        <dl className="flex flex-col gap-2 text-sm">
+          <div className="flex items-center justify-between">
+            <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
+            <dd className="font-medium">{booking.statusLabel}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+          Your refund is being processed. We&apos;ll update this page once it&apos;s initiated.
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <Card title="Refund">
-      <dl className="flex flex-col gap-2 text-sm">
-        <div className="flex items-center justify-between">
-          <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
-          <dd className="font-medium">{booking.statusLabel}</dd>
-        </div>
-        <div className="flex items-center justify-between">
-          <dt className="text-neutral-600 dark:text-neutral-400">Amount</dt>
-          <dd className="font-medium">₹{booking.price.totalPayable.toFixed(2)}</dd>
-        </div>
-      </dl>
+      <div className="flex flex-col gap-4">
+        {refunds.map((refund) => (
+          <dl
+            key={refund.id}
+            className="flex flex-col gap-2 border-t border-black/10 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-white/15"
+          >
+            <div className="flex items-center justify-between">
+              <dt className="text-neutral-600 dark:text-neutral-400">Amount</dt>
+              <dd className="font-medium">₹{refund.amount.toFixed(2)}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-neutral-600 dark:text-neutral-400">Type</dt>
+              <dd className="font-medium">{refundTypeLabel(refund.type)}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-neutral-600 dark:text-neutral-400">Method</dt>
+              <dd className="font-medium">{refundMethodLabel(refund.method)}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
+              <dd className="font-medium">{refundStatusLabel(refund.status)}</dd>
+            </div>
+            {refund.gatewayRefundRef ? (
+              <div className="flex items-center justify-between">
+                <dt className="text-neutral-600 dark:text-neutral-400">Reference</dt>
+                <dd className="font-medium">{refund.gatewayRefundRef}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ))}
+      </div>
     </Card>
   );
+}
+
+function refundTypeLabel(type: RefundType): string {
+  return type === RefundType.Full ? "Full refund" : "Partial refund";
+}
+
+function refundMethodLabel(method: RefundMethod): string {
+  return method === RefundMethod.Gateway ? "Original payment method" : "Wallet credit";
+}
+
+function refundStatusLabel(status: RefundStatus): string {
+  switch (status) {
+    case RefundStatus.Initiated:
+      return "Initiated";
+    case RefundStatus.Processing:
+      return "Processing";
+    case RefundStatus.Refunded:
+      return "Refunded";
+    case RefundStatus.Failed:
+      return "Failed";
+    default:
+      return "Unknown";
+  }
 }
 
 function Timeline({ entries }: { entries: BookingStatusTimelineEntry[] }) {

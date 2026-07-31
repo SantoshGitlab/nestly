@@ -177,6 +177,332 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("audit_log", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Booking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AddOnTotalSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("add_on_total_snapshot");
+
+                    b.Property<string>("AddressCitySnapshot")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("address_city_snapshot");
+
+                    b.Property<string>("AddressContactMobileSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("address_contact_mobile_snapshot");
+
+                    b.Property<string>("AddressContactNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("address_contact_name_snapshot");
+
+                    b.Property<string>("AddressLabelSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("address_label_snapshot");
+
+                    b.Property<string>("AddressLandmarkSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("address_landmark_snapshot");
+
+                    b.Property<decimal>("AddressLatitudeSnapshot")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("address_latitude_snapshot");
+
+                    b.Property<string>("AddressLine1Snapshot")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("address_line1snapshot");
+
+                    b.Property<string>("AddressLine2Snapshot")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("address_line2snapshot");
+
+                    b.Property<decimal>("AddressLongitudeSnapshot")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("address_longitude_snapshot");
+
+                    b.Property<string>("AddressPincodeSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("address_pincode_snapshot");
+
+                    b.Property<string>("AddressStateSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("address_state_snapshot");
+
+                    b.Property<decimal>("BasePriceSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("base_price_snapshot");
+
+                    b.Property<decimal>("BaseTotalSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("base_total_snapshot");
+
+                    b.Property<string>("CouponCodeSnapshot")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("coupon_code_snapshot");
+
+                    b.Property<decimal?>("CouponDiscountAmountSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("coupon_discount_amount_snapshot");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("CustomerMobileSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("customer_mobile_snapshot");
+
+                    b.Property<string>("CustomerNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("customer_name_snapshot");
+
+                    b.Property<decimal>("PlatformFeeSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("platform_fee_snapshot");
+
+                    b.Property<int>("QuantitySnapshot")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity_snapshot");
+
+                    b.Property<DateOnly>("SlotDate")
+                        .HasColumnType("date")
+                        .HasColumnName("slot_date");
+
+                    b.Property<TimeSpan>("SlotEndTimeSnapshot")
+                        .HasColumnType("interval")
+                        .HasColumnName("slot_end_time_snapshot");
+
+                    b.Property<TimeSpan>("SlotStartTimeSnapshot")
+                        .HasColumnType("interval")
+                        .HasColumnName("slot_start_time_snapshot");
+
+                    b.Property<Guid>("SlotWindowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("slot_window_id");
+
+                    b.Property<string>("SlotWindowNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("slot_window_name_snapshot");
+
+                    b.Property<Guid?>("SourceAddressId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_address_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("SubtotalSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("subtotal_snapshot");
+
+                    b.Property<decimal>("TaxAmountSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("tax_amount_snapshot");
+
+                    b.Property<decimal>("TaxPercentageSnapshot")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tax_percentage_snapshot");
+
+                    b.Property<decimal>("TotalPayableSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_payable_snapshot");
+
+                    b.Property<decimal>("VisitChargeSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("visit_charge_snapshot");
+
+                    b.HasKey("Id")
+                        .HasName("pk_booking");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasDatabaseName("ix_booking_created_at_utc");
+
+                    b.HasIndex("CustomerId", "Status")
+                        .HasDatabaseName("ix_booking_customer_id_status");
+
+                    b.ToTable("booking", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingAddOnItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_item_id");
+
+                    b.Property<decimal>("LineTotalSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("line_total_snapshot");
+
+                    b.Property<string>("NameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name_snapshot");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid>("ServiceAddOnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_add_on_id");
+
+                    b.Property<decimal>("UnitPriceSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("unit_price_snapshot");
+
+                    b.HasKey("Id")
+                        .HasName("pk_booking_addon_item");
+
+                    b.HasIndex("BookingItemId")
+                        .HasDatabaseName("ix_booking_addon_item_booking_item_id");
+
+                    b.ToTable("booking_addon_item", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<decimal>("LineTotalSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("line_total_snapshot");
+
+                    b.Property<string>("NameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name_snapshot");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<string>("SlugSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("slug_snapshot");
+
+                    b.Property<decimal>("UnitPriceSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("unit_price_snapshot");
+
+                    b.HasKey("Id")
+                        .HasName("pk_booking_item");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_booking_item_booking_id");
+
+                    b.ToTable("booking_item", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at_utc");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("from_status");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_booking_status_history");
+
+                    b.HasIndex("BookingId", "ChangedAtUtc")
+                        .HasDatabaseName("ix_booking_status_history_booking_id_changed_at_utc");
+
+                    b.ToTable("booking_status_history", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -340,6 +666,143 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("city_pricing_policy", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Coupon", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ApplicableCategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("applicable_category_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("CustomerSegment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("customer_segment");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_type");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_value");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal?>("MaxDiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("max_discount_amount");
+
+                    b.Property<decimal>("MinOrderAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("min_order_amount");
+
+                    b.Property<int>("RedemptionCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("redemption_count");
+
+                    b.Property<int?>("UsageLimitPerCustomer")
+                        .HasColumnType("integer")
+                        .HasColumnName("usage_limit_per_customer");
+
+                    b.Property<int?>("UsageLimitTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("usage_limit_total");
+
+                    b.Property<DateTime>("ValidFromUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_from_utc");
+
+                    b.Property<DateTime>("ValidToUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_to_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_coupon");
+
+                    b.HasIndex("ApplicableCategoryId")
+                        .HasDatabaseName("ix_coupon_applicable_category_id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_coupon_code");
+
+                    b.HasIndex("ValidFromUtc", "ValidToUtc")
+                        .HasDatabaseName("ix_coupon_valid_from_utc_valid_to_utc");
+
+                    b.ToTable("coupon", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CouponRedemption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid>("CouponId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coupon_id");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<DateTime>("RedeemedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("redeemed_at_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_coupon_redemption");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_coupon_redemption_booking_id");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("ix_coupon_redemption_customer_id");
+
+                    b.HasIndex("CouponId", "CustomerId")
+                        .HasDatabaseName("ix_coupon_redemption_coupon_id_customer_id");
+
+                    b.ToTable("coupon_redemption", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.CustomerAddress", b =>
                 {
                     b.Property<Guid>("Id")
@@ -403,6 +866,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("line2");
 
+                    b.Property<Guid?>("LocalityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("locality_id");
+
                     b.Property<decimal>("Longitude")
                         .HasColumnType("decimal(9,6)")
                         .HasColumnName("longitude");
@@ -412,6 +879,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasMaxLength(12)
                         .HasColumnType("character varying(12)")
                         .HasColumnName("pincode");
+
+                    b.Property<Guid?>("PincodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pincode_id");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -425,6 +896,12 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_customer_address");
+
+                    b.HasIndex("LocalityId")
+                        .HasDatabaseName("ix_customer_address_locality_id");
+
+                    b.HasIndex("PincodeId")
+                        .HasDatabaseName("ix_customer_address_pincode_id");
 
                     b.HasIndex(new[] { "CustomerId" }, "ix_customer_address_all")
                         .HasDatabaseName("ix_customer_address_customer_id");
@@ -720,6 +1197,128 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("login_attempt", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.PaymentAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_number");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<string>("GatewayOrderId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_order_id");
+
+                    b.Property<string>("GatewayPaymentRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_payment_ref");
+
+                    b.Property<Guid>("PaymentTransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_transaction_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_attempt");
+
+                    b.HasIndex("GatewayOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_attempt_gateway_order_id");
+
+                    b.HasIndex("PaymentTransactionId", "AttemptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_attempt_payment_transaction_id_attempt_number");
+
+                    b.ToTable("payment_attempt", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_transaction");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_transaction_booking_id");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("ix_payment_transaction_customer_id");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_transaction_idempotency_key");
+
+                    b.ToTable("payment_transaction", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.Pincode", b =>
                 {
                     b.Property<Guid>("Id")
@@ -752,6 +1351,75 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_pincode_code");
 
                     b.ToTable("pincode", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.RefundTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("GatewayRefundRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_refund_ref");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("method");
+
+                    b.Property<Guid>("PaymentTransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_transaction_id");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at_utc");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_refund_transaction");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_refund_transaction_booking_id");
+
+                    b.HasIndex("PaymentTransactionId")
+                        .HasDatabaseName("ix_refund_transaction_payment_transaction_id");
+
+                    b.ToTable("refund_transaction", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.Service", b =>
@@ -1192,6 +1860,62 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("support_ticket_comment", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.WalletLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("balance_after");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EntryType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("entry_type");
+
+                    b.Property<Guid?>("SourceReferenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_reference_id");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("source_type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wallet_ledger");
+
+                    b.HasIndex("CustomerId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_wallet_ledger_customer_id_created_at_utc");
+
+                    b.ToTable("wallet_ledger", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.Zone", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1221,6 +1945,46 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_zone_city_id_name");
 
                     b.ToTable("zone", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Booking", b =>
+                {
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_customer_customer_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingAddOnItem", b =>
+                {
+                    b.HasOne("Nestly.Domain.BookingItem", null)
+                        .WithMany("AddOns")
+                        .HasForeignKey("BookingItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_addon_item_booking_items_booking_item_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingItem", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany("Items")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_item_booking_booking_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingStatusHistory", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany("StatusHistory")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_status_history_booking_booking_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.CategoryCityMapping", b =>
@@ -1262,6 +2026,54 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_city_pricing_policy_city_city_id");
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Coupon", b =>
+                {
+                    b.HasOne("Nestly.Domain.Category", null)
+                        .WithMany()
+                        .HasForeignKey("ApplicableCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_coupon_category_applicable_category_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CouponRedemption", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_coupon_redemption_booking_booking_id");
+
+                    b.HasOne("Nestly.Domain.Coupon", null)
+                        .WithMany()
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_coupon_redemption_coupon_coupon_id");
+
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_coupon_redemption_customer_customer_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CustomerAddress", b =>
+                {
+                    b.HasOne("Nestly.Domain.Locality", null)
+                        .WithMany()
+                        .HasForeignKey("LocalityId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_customer_address_localities_locality_id");
+
+                    b.HasOne("Nestly.Domain.Pincode", null)
+                        .WithMany()
+                        .HasForeignKey("PincodeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_customer_address_pincodes_pincode_id");
+                });
+
             modelBuilder.Entity("Nestly.Domain.Locality", b =>
                 {
                     b.HasOne("Nestly.Domain.Pincode", "Pincode")
@@ -1283,6 +2095,33 @@ namespace Nestly.Infrastructure.Migrations
                     b.Navigation("Zone");
                 });
 
+            modelBuilder.Entity("Nestly.Domain.PaymentAttempt", b =>
+                {
+                    b.HasOne("Nestly.Domain.PaymentTransaction", null)
+                        .WithMany("Attempts")
+                        .HasForeignKey("PaymentTransactionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_attempt_payment_transactions_payment_transaction_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_transaction_booking_booking_id");
+
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_transaction_customer_customer_id");
+                });
+
             modelBuilder.Entity("Nestly.Domain.Pincode", b =>
                 {
                     b.HasOne("Nestly.Domain.City", "City")
@@ -1293,6 +2132,23 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_pincode_city_city_id");
 
                     b.Navigation("City");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.RefundTransaction", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_refund_transaction_booking_booking_id");
+
+                    b.HasOne("Nestly.Domain.PaymentTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_refund_transaction_payment_transaction_payment_transaction_");
                 });
 
             modelBuilder.Entity("Nestly.Domain.ServiceCityPrice", b =>
@@ -1373,6 +2229,16 @@ namespace Nestly.Infrastructure.Migrations
                     b.Navigation("SlotWindow");
                 });
 
+            modelBuilder.Entity("Nestly.Domain.WalletLedgerEntry", b =>
+                {
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_wallet_ledger_customer_customer_id");
+                });
+
             modelBuilder.Entity("Nestly.Domain.Zone", b =>
                 {
                     b.HasOne("Nestly.Domain.City", "City")
@@ -1383,6 +2249,23 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_zone_city_city_id");
 
                     b.Navigation("City");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Booking", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("StatusHistory");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.BookingItem", b =>
+                {
+                    b.Navigation("AddOns");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
+                {
+                    b.Navigation("Attempts");
                 });
 #pragma warning restore 612, 618
         }

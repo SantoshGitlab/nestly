@@ -21,7 +21,20 @@ public class BookingRepository : IBookingRepository
 
     public async Task UpdateAsync(Booking booking)
     {
-        _context.Bookings.Update(booking);
+        // Only attach+mark-modified when the booking isn't already tracked
+        // by this context - the common case (loaded via this same context,
+        // e.g. Payment/Refund services that load, transition, and save
+        // within one request-scoped context) needs no attach at all;
+        // ordinary change detection handles its modified scalar properties
+        // correctly on its own. A same-context TransitionTo() call also
+        // appends a brand-new BookingStatusHistory row - see
+        // NewOwnedChildEntityInterceptor for why that needs its own,
+        // centralized correction rather than being handled here.
+        if (_context.Entry(booking).State == EntityState.Detached)
+        {
+            _context.Bookings.Update(booking);
+        }
+
         await _context.SaveChangesAsync();
     }
 

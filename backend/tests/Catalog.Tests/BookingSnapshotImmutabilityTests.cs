@@ -30,6 +30,12 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
 
     private BookingService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {
+        var couponService = new CouponService(
+            new CouponRepository(context),
+            new CouponRedemptionRepository(context),
+            new BookingRepository(context),
+            TimeProvider.System);
+
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
             new ServiceAddOnRepository(context),
@@ -46,9 +52,10 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context)));
+                new CityPricingPolicyRepository(context)),
+            couponService);
 
-        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context));
+        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
     }
 
     private sealed record Fixture(

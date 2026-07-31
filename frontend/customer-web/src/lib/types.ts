@@ -219,6 +219,7 @@ export interface BookingSummaryRequestBody {
   slotDate: string;
   quantity: number;
   addOns: AddOnSelection[];
+  couponCode?: string | null;
 }
 
 export interface BookingServiceSummary {
@@ -250,7 +251,15 @@ export interface BookingSlotSummary {
   endTime: string;
 }
 
-/** Booking summary/preview (SRS 11.7). Coupon/wallet are omitted - neither module exists yet (Phase 4). */
+/** Mirrors the C# CouponSummary record returned by CouponsController. */
+export interface CouponSummary {
+  couponId: string;
+  code: string;
+  description: string | null;
+  discountAmount: number;
+}
+
+/** Booking summary/preview (SRS 11.7), with the coupon module wired in (task 77). */
 export interface BookingSummary {
   service: BookingServiceSummary;
   addOns: ServiceAddOnSummary[];
@@ -259,6 +268,9 @@ export interface BookingSummary {
   price: PriceBreakdown;
   cancellationPolicy: string | null;
   reschedulePolicy: string | null;
+  coupon: CouponSummary | null;
+  /** price.totalPayable - coupon.discountAmount when a coupon is applied, else === price.totalPayable. */
+  finalPayable: number;
 }
 
 /**
@@ -306,6 +318,10 @@ export interface BookingDetail {
   statusLabel: string;
   timeline: BookingStatusTimelineEntry[];
   createdAtUtc: string;
+  couponCode: string | null;
+  couponDiscountAmount: number | null;
+  /** Equals price.totalPayable on a persisted booking - both already reflect the discounted amount actually charged. */
+  finalPayable: number;
 }
 
 export interface BookingListItem {
@@ -315,5 +331,134 @@ export interface BookingListItem {
   totalPayable: number;
   status: BookingStatus;
   statusLabel: string;
+  createdAtUtc: string;
+}
+
+/**
+ * Payment shapes mirror the C# records in Nestly.Application.Payments
+ * (PaymentContracts.cs) - see PaymentsController.
+ */
+
+/**
+ * Mirrors Nestly.Domain.PaymentTransactionStatus's declaration order exactly
+ * (no JsonStringEnumConverter is registered - see BookingStatus's doc comment
+ * above for the same pattern).
+ */
+export enum PaymentTransactionStatus {
+  Pending = 0,
+  Success = 1,
+  Failed = 2,
+  Cancelled = 3,
+}
+
+/** Mirrors Nestly.Domain.PaymentAttemptStatus's declaration order exactly. */
+export enum PaymentAttemptStatus {
+  Created = 0,
+  Success = 1,
+  Failed = 2,
+}
+
+export interface PaymentOrderResponse {
+  paymentTransactionId: string;
+  attemptId: string;
+  gatewayOrderId: string;
+  amount: number;
+  currency: string;
+  attemptNumber: number;
+  createdAtUtc: string;
+}
+
+export interface PaymentAttemptResponse {
+  id: string;
+  attemptNumber: number;
+  gatewayOrderId: string;
+  gatewayPaymentRef: string | null;
+  status: PaymentAttemptStatus;
+  failureReason: string | null;
+  createdAtUtc: string;
+  completedAtUtc: string | null;
+}
+
+export interface PaymentTransactionResponse {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  amount: number;
+  currency: string;
+  status: PaymentTransactionStatus;
+  attempts: PaymentAttemptResponse[];
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+/**
+ * Refund shapes mirror the C# records in Nestly.Application.Refunds
+ * (RefundContracts.cs) - see RefundsController.
+ */
+
+/** Mirrors Nestly.Domain.RefundType's declaration order exactly. */
+export enum RefundType {
+  Full = 0,
+  Partial = 1,
+}
+
+/** Mirrors Nestly.Domain.RefundMethod's declaration order exactly. */
+export enum RefundMethod {
+  Gateway = 0,
+  Wallet = 1,
+}
+
+/** Mirrors Nestly.Domain.RefundStatus's declaration order exactly. */
+export enum RefundStatus {
+  Initiated = 0,
+  Processing = 1,
+  Refunded = 2,
+  Failed = 3,
+}
+
+export interface RefundTransactionResponse {
+  id: string;
+  bookingId: string;
+  paymentTransactionId: string;
+  type: RefundType;
+  method: RefundMethod;
+  amount: number;
+  status: RefundStatus;
+  gatewayRefundRef: string | null;
+  reason: string;
+  createdAtUtc: string;
+  processedAtUtc: string | null;
+}
+
+/**
+ * Wallet shapes mirror the C# records in Nestly.Application.Wallet
+ * (WalletContracts.cs) - see WalletController.
+ */
+
+/** Mirrors Nestly.Domain.WalletEntryType's declaration order exactly. */
+export enum WalletEntryType {
+  Credit = 0,
+  Debit = 1,
+}
+
+/** Mirrors Nestly.Domain.WalletSourceType's declaration order exactly. */
+export enum WalletSourceType {
+  Refund = 0,
+  PromotionalCredit = 1,
+  ManualAdjustment = 2,
+}
+
+export interface WalletBalanceResponse {
+  balance: number;
+}
+
+export interface WalletLedgerEntryResponse {
+  id: string;
+  entryType: WalletEntryType;
+  amount: number;
+  balanceAfter: number;
+  sourceType: WalletSourceType;
+  sourceReferenceId: string | null;
+  description: string;
   createdAtUtc: string;
 }

@@ -17,5 +17,6 @@ public class BookingSummaryRequestValidator : AbstractValidator<BookingSummaryRe
             addOn.RuleFor(a => a.AddOnId).NotEmpty();
             addOn.RuleFor(a => a.Quantity).GreaterThan(0);
         });
+        RuleFor(x => x.CouponCode).MaximumLength(50).When(x => x.CouponCode is not null);
     }
 }
