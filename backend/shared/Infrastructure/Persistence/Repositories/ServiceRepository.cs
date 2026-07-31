@@ -48,4 +48,7 @@ public class ServiceRepository : IServiceRepository
             .OrderBy(s => s.Name)
             .ToListAsync();
     }
+
+    public async Task<IReadOnlyList<Service>> ListAllAsync() =>
+        await _context.Set<Service>().OrderBy(s => s.Name).ToListAsync();
 }

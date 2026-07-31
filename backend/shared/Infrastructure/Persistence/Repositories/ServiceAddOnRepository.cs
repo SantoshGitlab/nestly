@@ -37,4 +37,11 @@ public class ServiceAddOnRepository : IServiceAddOnRepository
             .OrderBy(a => a.SortOrder)
             .ThenBy(a => a.Name)
             .ToListAsync();
+
+    public async Task<IReadOnlyList<ServiceAddOn>> ListAllAsync(Guid? serviceId) =>
+        await _context.Set<ServiceAddOn>()
+            .Where(a => serviceId == null || a.ServiceId == serviceId)
+            .OrderBy(a => a.SortOrder)
+            .ThenBy(a => a.Name)
+            .ToListAsync();
 }

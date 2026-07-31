@@ -33,4 +33,11 @@ public class ServiceCityPriceRepository : IServiceCityPriceRepository
 
     public Task<ServiceCityPrice?> GetForServiceAndCityAsync(Guid serviceId, Guid cityId) =>
         _context.Set<ServiceCityPrice>().FirstOrDefaultAsync(p => p.ServiceId == serviceId && p.CityId == cityId);
+
+    public async Task<IReadOnlyList<ServiceCityPrice>> ListAsync(Guid? serviceId, Guid? cityId) =>
+        await _context.Set<ServiceCityPrice>()
+            .Where(p => serviceId == null || p.ServiceId == serviceId)
+            .Where(p => cityId == null || p.CityId == cityId)
+            .OrderByDescending(p => p.EffectiveStartDate)
+            .ToListAsync();
 }

@@ -11,6 +11,10 @@ public class ServiceCityPriceConfiguration : IEntityTypeConfiguration<ServiceCit
         builder.ToTable("service_city_price");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Price).HasColumnType("decimal(18,2)").IsRequired();
+        // HasDefaultValueSql so the migration backfills any pre-existing rows
+        // instead of failing a NOT NULL constraint on deployment.
+        builder.Property(x => x.EffectiveStartDate).IsRequired().HasDefaultValueSql("CURRENT_DATE");
+        builder.Property(x => x.EffectiveEndDate);
 
         builder.Property(x => x.ServiceId).IsRequired();
         builder.HasOne<Service>()
