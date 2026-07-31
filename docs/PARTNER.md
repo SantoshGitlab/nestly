@@ -4,7 +4,12 @@ Partner / Vendor module specification.
 
 ## STATUS
 
-Not implemented. Out of scope for Phase 1 per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9) — this is the SRS's own release-phase terminology, unrelated to the backlog's numbered phases below. This document defines the target design now so that Booking, Database, and API decisions made elsewhere don't accidentally block adding this module later.
+**In implementation.** The open decisions below are resolved (task 144); the
+data model (tasks 145a-145f) and partner auth/onboarding foundation (tasks
+146a-146c) are being built against those decisions. Out of scope for Phase 1
+per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9)
+— this is the SRS's own release-phase terminology, unrelated to the
+backlog's numbered phases below.
 
 In the backlog (`tasks.csv`), Partner is scheduled as **Phase 7**, ahead of
 Hardening & Launch (Phase 8) — moved there explicitly so partner/provider
@@ -111,22 +116,54 @@ backend/
 
 Booking domain changes are minimal: one nullable `AssignedPartnerId` field for display; no other structural change.
 
-## OPEN DECISIONS
+## OPEN DECISIONS — RESOLVED (task 144)
 
-These must be resolved before this module moves from documented to implemented:
+All five decisions below are resolved for v1. Each pick is the simplest option
+that does not block extending the model later — every decision keeps the door
+open for the richer option (automatic assignment, company partners, gateway
+payouts, rating-weighted assignment, multi-partner bookings) without a
+breaking schema change, so a future phase can extend rather than migrate.
 
-1. Is partner assignment manual (admin-driven) or automatic (system-driven) in the first release?
-2. Is a partner always an individual, or can it be a company with sub-technicians?
-3. Are payouts gateway-initiated or manual bank transfer in Phase 1?
-4. Does partner rating affect assignment priority?
-5. Is multiple partners per booking supported, or exactly one partner per booking?
+1. **Assignment: manual (admin-driven) in v1.** An admin explicitly assigns a
+   partner to a booking via `booking_partner_assignment` (task 147). No
+   auto-dispatch/matching engine is built now — that requires ranking logic
+   (distance, skill, capacity, rating) that doesn't exist yet and would be
+   premature to guess at. The bridge table's `assigned_by` column already
+   distinguishes `admin` from `system`, so an automatic assignment engine can
+   be added later purely as a new writer of that same table.
+
+2. **Partner type: always an individual in v1.** `partner_type` is modeled as
+   an enum with both `Individual` and `Company` values (matching this
+   document's DATA MODEL), but the domain entity's public constructor only
+   accepts `Individual` for now and rejects `Company` — there is no
+   sub-technician concept, roster, or company-level auth in this phase. This
+   keeps the column/enum shape ready for company partners later without
+   implementing the (materially larger) multi-user-per-partner auth and
+   assignment model now.
+
+3. **Payouts: manual bank transfer in v1.** `partner_payout.status`
+   (pending/processing/paid/failed) and `payout_reference` are free-text/
+   admin-updated rather than driven by a payment-gateway webhook — an admin
+   runs a payout batch and records the bank transfer reference by hand. No
+   new gateway integration is added. (Note: `partner_payout` itself is part
+   of the Financial Domain, scheduled beyond task 146c — this decision
+   governs its eventual implementation, not something built in this pass.)
+
+4. **Rating does not affect assignment in v1.** `partner_rating_summary`
+   exists for display (partner performance views, admin partner detail) but
+   the manual assignment flow (decision 1) does not read it to rank or
+   restrict candidates. Once automatic assignment exists, rating becomes a
+   natural input to that ranking — deferred, not discarded.
+
+5. **Exactly one partner per booking.** `booking_partner_assignment` models a
+   single current assignment per booking (reassignment replaces it, tracked
+   via the `reassigned` status rather than a second concurrent row). No
+   multi-partner/crew booking support in v1.
 
 ## NEXT STEPS
 
-When this module is greenlit for implementation:
-
-1. Resolve the open decisions above.
+1. ~~Resolve the open decisions above.~~ Done (task 144).
 2. Add table-by-table schema to DATABASE.md.
 3. Add endpoint contracts to API.md.
-4. Create `backend/partner-api`, mirroring the existing `admin-api`/`consumer-api` structure.
-5. Extend the RBAC permission matrix and admin UI for partner management.
+4. Create `backend/partner-api`, mirroring the existing `admin-api`/`consumer-api` structure (task 149).
+5. Extend the RBAC permission matrix and admin UI for partner management (task 150).

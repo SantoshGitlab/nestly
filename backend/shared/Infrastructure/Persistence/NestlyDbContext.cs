@@ -45,6 +45,17 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<CmsMedia> CmsMediaAssets { get; set; }
     public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
     public DbSet<ExportJob> ExportJobs { get; set; }
+    public DbSet<Partner> Partners { get; set; }
+    public DbSet<PartnerAuthIdentity> PartnerAuthIdentities { get; set; }
+    public DbSet<PartnerOtp> PartnerOtps { get; set; }
+    public DbSet<PartnerSession> PartnerSessions { get; set; }
+    public DbSet<PartnerLoginAttempt> PartnerLoginAttempts { get; set; }
+    public DbSet<PartnerKycDocument> PartnerKycDocuments { get; set; }
+    public DbSet<PartnerSkillMapping> PartnerSkillMappings { get; set; }
+    public DbSet<PartnerServiceArea> PartnerServiceAreas { get; set; }
+    public DbSet<PartnerAvailabilityWindow> PartnerAvailabilityWindows { get; set; }
+    public DbSet<PartnerBlackoutDate> PartnerBlackoutDates { get; set; }
+    public DbSet<PartnerCapacity> PartnerCapacities { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
