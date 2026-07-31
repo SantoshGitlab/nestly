@@ -23,6 +23,7 @@ Every topic has exactly **one authoritative document**.
 | [../.claude/CLAUDE.md](../.claude/CLAUDE.md) | AI behavior, workflow, reasoning and response rules |
 | [PROJECT.md](PROJECT.md) | Business domain, project vision, goals, users and modules |
 | [SRS.md](SRS.md) | Full Software Requirements Specification (v2) — functional, workflow, validation, RBAC, screen, API, and operational requirements |
+| [WORKFLOW.md](WORKFLOW.md) | Visual (Mermaid) workflow diagrams for project understanding — not authoritative, defers to SRS.md on conflict |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, layers, module boundaries and dependencies |
 | [CODING-STANDARDS.md](CODING-STANDARDS.md) | Naming, code style, readability and general coding conventions |
 | [DOTNET.md](DOTNET.md) | .NET 8, ASP.NET Core and framework-specific development standards |
