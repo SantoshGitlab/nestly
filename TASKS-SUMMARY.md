@@ -9,11 +9,11 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 2 - Catalog & Serviceability | 67 | 0 | 3 | 2 | 72 |
 | Phase 3 - Booking Core | 47 | 0 | 9 | 0 | 56 |
 | Phase 4 - Payments & Financial | 40 | 0 | 6 | 0 | 46 |
-| Phase 5 - Post-Booking | 0 | 40 | 7 | 0 | 47 |
+| Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 0 | 104 | 15 | 0 | 119 |
 | Phase 7 - Hardening & Launch | 0 | 32 | 6 | 0 | 38 |
 | Phase 8 - Partner (Deferred) | 0 | 21 | 4 | 0 | 25 |
-| **Overall** | **225** | **197** | **50** | **2** | **474** |
+| **Overall** | **265** | **157** | **50** | **2** | **474** |
 
-Last updated: 2026-07-31, after merging `phase-4-payments-financial` into `main`.
+Last updated: 2026-07-31, after merging `phase-5-post-booking` into `main`.
 
