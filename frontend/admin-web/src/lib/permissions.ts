@@ -48,7 +48,8 @@ export type NavModuleKey =
   | "notifications"
   | "reports"
   | "audit"
-  | "settings";
+  | "settings"
+  | "admin-users";
 
 export interface NavModule {
   key: NavModuleKey;
@@ -75,6 +76,7 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "reports", label: "Reports & Exports", href: "/reports", srsRef: "SRS 12.18", requiredPermission: "reports.read" },
   { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3, 21", requiredPermission: "audit.read" },
   { key: "settings", label: "System Settings", href: "/settings", srsRef: "SRS 12.19", requiredPermission: "settings.read" },
+  { key: "admin-users", label: "Admin Users", href: "/admin-users", srsRef: "SRS 12.2", requiredPermission: "settings.read" },
 ];
 
 /** Whether the current admin can perform mutating ("write") actions within a module, per AdminPermissionCatalog. */
