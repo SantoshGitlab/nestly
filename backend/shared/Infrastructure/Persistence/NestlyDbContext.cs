@@ -43,6 +43,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<Banner> Banners { get; set; }
     public DbSet<CmsFaq> CmsFaqs { get; set; }
     public DbSet<CmsMedia> CmsMediaAssets { get; set; }
+    public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

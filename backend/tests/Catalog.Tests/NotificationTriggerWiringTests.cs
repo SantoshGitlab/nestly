@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
@@ -79,7 +80,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
 
     private static NotificationDispatchService BuildDispatchService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(
-            new NotificationTemplateRenderer(), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(context),
             NullLogger<NotificationDispatchService>.Instance);
 

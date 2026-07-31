@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nestly.Application;
 using Nestly.Application.Notifications;
@@ -78,7 +79,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com"),
@@ -107,7 +108,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", Email: null),
@@ -129,7 +130,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider { FailSms = true };
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com"),
@@ -153,7 +154,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         await service.DispatchAsync(customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", null), new Dictionary<string, string>());
 
@@ -176,7 +177,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var pushProvider = new FakePushNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), new FakeNotificationProvider(), pushProvider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new FakeNotificationProvider(), pushProvider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient(null, null, ["device-a", "device-b"]),
@@ -201,7 +202,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var pushProvider = new FakePushNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(), smsEmailProvider, pushProvider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), smsEmailProvider, pushProvider, new NotificationEventRepository(dispatchContext), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com", ["device-a"]),

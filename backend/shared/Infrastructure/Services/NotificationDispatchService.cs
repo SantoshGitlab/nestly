@@ -84,7 +84,7 @@ public class NotificationDispatchService : INotificationDispatchService
     {
         string payloadJson = JsonSerializer.Serialize(variables);
 
-        if (!_templateRenderer.SupportsChannel(eventType, channel))
+        if (!await _templateRenderer.SupportsChannelAsync(eventType, channel, cancellationToken))
         {
             _logger.LogWarning("No notification template registered for {EventType}/{Channel} - skipping dispatch.", eventType, channel);
             var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
@@ -93,7 +93,7 @@ public class NotificationDispatchService : INotificationDispatchService
             return new NotificationDispatchOutcome(untemplated.Id, channel, untemplated.Status, untemplated.ErrorReason);
         }
 
-        var rendered = _templateRenderer.Render(eventType, channel, variables);
+        var rendered = await _templateRenderer.RenderAsync(eventType, channel, variables, cancellationToken);
         var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId);
         await _repository.AddAsync(notification);
 
