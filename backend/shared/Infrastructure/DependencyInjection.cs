@@ -199,6 +199,10 @@ public static class DependencyInjection
 
         services.AddScoped<ISupportTicketService, SupportTicketService>();
 
+        // Task 155: dispute mark/resolve workflow. No admin-auth gate yet
+        // (Phase 6) - see SupportTicketDisputesController's doc comment.
+        services.AddScoped<IDisputeResolutionService, DisputeResolutionService>();
+
         // Task 87a-d: notification core. The template set is stateless
         // (Render/SupportsChannel read only a fixed built-in dictionary),
         // same reasoning as SandboxPaymentGateway - one shared instance.
