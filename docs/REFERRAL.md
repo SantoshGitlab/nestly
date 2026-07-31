@@ -152,21 +152,26 @@ read of `IReferralRepository` to check for a pending referral, the same
 shape as the existing notification-trigger check — no new field on `Booking`
 itself.
 
+## DECISIONS
+
+1. **Resolved** — the referee's reward requires their *own* qualifying
+   booking to complete; it is not credited on registration alone. Both sides
+   of the referral are rewarded on the same event (the referee's qualifying
+   completion), which closes the "create a throwaway account for the signup
+   bonus, never book" loophole and is what task #165 (reward disbursement)
+   and #164 (qualifying hook) are built against.
+
 ## OPEN DECISIONS
 
-These should be resolved before implementation, same convention as
-PARTNER.md's open-decisions list:
+Still to resolve before implementation, same convention as PARTNER.md's
+open-decisions list:
 
 1. Is the default reward wallet credit, a coupon, or admin's choice per
    campaign? (This doc assumes admin's choice, via `RewardType` on
    `referral_program_config`.)
-2. Does the referee's reward require their *own* qualifying booking to
-   complete, or is it credited immediately on registration? (This doc
-   assumes on qualifying completion, matching the referrer's timing and
-   closing the "create throwaway accounts for signup bonus" loophole.)
-3. Can a customer redeem their own referral code as a referee if somehow
+2. Can a customer redeem their own referral code as a referee if somehow
    generated in error? (This doc assumes no — self-referral block covers it.)
-4. Should `fraud_flagged` referrals pause only the payout, or also suspend
+3. Should `fraud_flagged` referrals pause only the payout, or also suspend
    the referrer's ability to keep referring while under review?
 
 ## NEXT STEPS
