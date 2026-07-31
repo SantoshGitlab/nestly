@@ -280,12 +280,12 @@ id,task,status,priority,notes,phase
 88f,Notifications - refund,done,high,depends on #88e,Phase 5 - Post-Booking
 88g,Notifications - ticket updates (SRS 19.1),done,high,depends on #88f,Phase 5 - Post-Booking
 89,Frontend - Cancellation flow UI: Policy display; confirmation; refund outcome (SRS 11.14.3),decomposed,high,"depends on #65c #81 | auto-blocked: depends on blocked task #65 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 89a,89b,89c",Phase 5 - Post-Booking
-89a,Frontend - Policy display,todo,high,"depends on #65c #81| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-89b,Frontend - confirmation,todo,high,depends on #89a,Phase 5 - Post-Booking
-89c,Frontend - refund outcome (SRS 11.14.3),todo,high,depends on #89b,Phase 5 - Post-Booking
-90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),todo,high,"depends on #65c #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),todo,high,"depends on #65c #85c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
-92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),todo,high,"depends on #65c #86d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+89a,Frontend - Policy display,done,high,"depends on #65c #81| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+89b,Frontend - confirmation,done,high,depends on #89a,Phase 5 - Post-Booking
+89c,Frontend - refund outcome (SRS 11.14.3),done,high,depends on #89b,Phase 5 - Post-Booking
+90,Frontend - Reschedule flow UI: Eligible slot picker + confirmation with immediate detail update (SRS 11.15.3),done,high,"depends on #65c #83| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+91,Frontend - Review submission UI: Rating + review form for completed bookings (SRS 25.1),done,high,"depends on #65c #85c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
+92,Frontend - Support ticket UI: Raise issue + ticket status view (SRS 11.18),done,high,"depends on #65c #86d| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 93,QA - Post-booking test suite: Cancellation/reschedule eligibility matrices; notification event coverage,done,high,"depends on #81 #83 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 5 - Post-Booking
 94,AdminIdentity - Admin RBAC schema: Tables: admin_user; admin_role; admin_permission; role_permission_mapping (SRS 23.6),decomposed,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 94a,94b,94c,94d",Phase 6 - Admin Panel
 94a,AdminIdentity - Tables: admin_user,todo,high,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 6 - Admin Panel
