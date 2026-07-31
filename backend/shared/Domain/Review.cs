@@ -21,6 +21,18 @@ public class Review : Entity<Guid>
     public string? IssueTags { get; private set; }
 
     public ReviewStatus Status { get; private set; }
+
+    /// <summary>Marked for abusive/inappropriate content (SRS 12.15 "Flag abusive content", task 122) - independent of <see cref="Status"/>, so a flagged review can still be visible while awaiting a moderator's decision.</summary>
+    public bool IsFlagged { get; private set; }
+
+    /// <summary>The moderator's most recent reason/context for the last hide/unhide/flag/unflag action (task 122). The full history of every action lives in the audit trail (<c>IAuditLogWriter</c>); this is only the current note shown on the moderation screen.</summary>
+    public string? ModeratorNote { get; private set; }
+
+    /// <summary>Admin user who performed the most recent moderation action, if any - traceability only, not a foreign key any other aggregate depends on (same rationale as <see cref="CustomerNote.AuthorAdminUserId"/>).</summary>
+    public Guid? ModeratedByAdminUserId { get; private set; }
+
+    public DateTime? ModeratedAtUtc { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     protected Review() { }
@@ -40,13 +52,43 @@ public class Review : Entity<Guid>
         ReviewText = reviewText;
         IssueTags = issueTags;
         Status = ReviewStatus.Visible;
+        IsFlagged = false;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
-    /// <summary>Admin moderation (SRS 12.15, 17.2) - the original record is retained, only its visibility changes.</summary>
-    public void Hide() => Status = ReviewStatus.Hidden;
+    /// <summary>
+    /// Admin moderation (SRS 12.15, 17.2, task 122). These are purely additive
+    /// state changes - the original <see cref="Rating"/>, <see cref="ReviewText"/>
+    /// and <see cref="IssueTags"/> the customer submitted are never mutated,
+    /// so the source review always remains available for audit even after it
+    /// is hidden, flagged, or annotated.
+    /// </summary>
+    public void Hide(Guid moderatorAdminUserId, string? note) => ApplyModeration(moderatorAdminUserId, note, status: ReviewStatus.Hidden);
 
-    public void Flag() => Status = ReviewStatus.Flagged;
+    public void MakeVisible(Guid moderatorAdminUserId, string? note) => ApplyModeration(moderatorAdminUserId, note, status: ReviewStatus.Visible);
 
-    public void MakeVisible() => Status = ReviewStatus.Visible;
+    public void Flag(Guid moderatorAdminUserId, string? note) => ApplyModeration(moderatorAdminUserId, note, isFlagged: true);
+
+    public void Unflag(Guid moderatorAdminUserId, string? note) => ApplyModeration(moderatorAdminUserId, note, isFlagged: false);
+
+    private void ApplyModeration(Guid moderatorAdminUserId, string? note, ReviewStatus? status = null, bool? isFlagged = null)
+    {
+        if (status.HasValue)
+        {
+            Status = status.Value;
+        }
+
+        if (isFlagged.HasValue)
+        {
+            IsFlagged = isFlagged.Value;
+        }
+
+        if (note is not null)
+        {
+            ModeratorNote = note;
+        }
+
+        ModeratedByAdminUserId = moderatorAdminUserId;
+        ModeratedAtUtc = DateTime.UtcNow;
+    }
 }

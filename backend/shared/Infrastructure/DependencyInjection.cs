@@ -264,6 +264,10 @@ public static class DependencyInjection
             .ValidateDataAnnotations();
         services.AddScoped<IReviewService, ReviewService>();
 
+        // Task 122: admin review moderation (SRS 12.15) - search/hide/unhide/
+        // flag/unflag/export over the same IReviewRepository above.
+        services.AddScoped<IReviewModerationService, ReviewModerationService>();
+
         services.AddScoped<ISupportTicketService, SupportTicketService>();
 
         // Task 155: dispute mark/resolve workflow. Gated behind

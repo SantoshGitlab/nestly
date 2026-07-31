@@ -38,8 +38,6 @@ function reviewStatusLabel(status: ReviewStatus): string {
       return "Visible";
     case ReviewStatus.Hidden:
       return "Hidden";
-    case ReviewStatus.Flagged:
-      return "Flagged for moderation";
     default:
       return "Unknown";
   }

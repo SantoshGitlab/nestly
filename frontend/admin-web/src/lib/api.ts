@@ -90,14 +90,17 @@ export interface ApiFetchOptions extends RequestInit {
   authenticated?: boolean;
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init?: ApiFetchOptions,
-): Promise<T> {
+/**
+ * Shared request/error-handling core behind both `apiFetch` (JSON) and
+ * `apiFetchBlob` (raw bytes, e.g. a CSV export) - everything except how the
+ * successful body is read back is identical, so that part alone is left to
+ * each caller.
+ */
+async function performFetch(path: string, init: ApiFetchOptions | undefined, defaultHeaders: Record<string, string>): Promise<Response> {
   const { authenticated, ...requestInit } = init ?? {};
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...defaultHeaders,
     ...(requestInit.headers as Record<string, string> | undefined),
   };
 
@@ -136,9 +139,28 @@ export async function apiFetch<T>(
     throw new ApiError(response.status, problem);
   }
 
+  return response;
+}
+
+export async function apiFetch<T>(
+  path: string,
+  init?: ApiFetchOptions,
+): Promise<T> {
+  const response = await performFetch(path, init, { "Content-Type": "application/json" });
+
   if (response.status === 204) {
     return undefined as T;
   }
 
   return (await response.json()) as T;
+}
+
+/**
+ * Fetches a raw binary response (e.g. the review moderation CSV export,
+ * task 122) rather than parsing it as JSON - the caller is responsible for
+ * turning the blob into a download (see reviews/page.tsx).
+ */
+export async function apiFetchBlob(path: string, init?: ApiFetchOptions): Promise<Blob> {
+  const response = await performFetch(path, init, {});
+  return response.blob();
 }
