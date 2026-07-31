@@ -1,0 +1,64 @@
+/**
+ * Typed client for the Admin API's booking-management surface (SRS 12.11,
+ * 12.13.2-3; tasks 115a-117c): `BookingsController` - filterable search,
+ * full detail/timeline, general status updates, and the cancel/reschedule/
+ * refund actions. Every call is authenticated - these are admin-only
+ * endpoints gated behind the "bookings" permission module server-side.
+ */
+import { API_V1, apiFetch } from "./api";
+import type {
+  AdminBookingDetail,
+  AdminBookingSearchParams,
+  AdminBookingSearchResponse,
+  AdminBookingStatusUpdateRequest,
+  AdminCancelBookingRequest,
+  AdminRefundRequest,
+  AdminRescheduleBookingRequest,
+} from "./bookings-types";
+
+const BOOKINGS_BASE = `${API_V1}/bookings`;
+
+// Parameter typed as `object` (not `Record<string, ...>`) so that named
+// interfaces like AdminBookingSearchParams - which have no index signature
+// of their own - can be passed in without a cast; matches coupon-api.ts's
+// query() helper.
+function query(params: object): string {
+  const entries = Object.entries(params as Record<string, string | number | boolean | undefined>)
+    .filter(([, value]) => value !== undefined);
+  if (entries.length === 0) return "";
+  return `?${new URLSearchParams(entries.map(([key, value]) => [key, String(value)])).toString()}`;
+}
+
+export const searchBookings = (params: AdminBookingSearchParams) =>
+  apiFetch<AdminBookingSearchResponse>(`${BOOKINGS_BASE}${query(params)}`, { authenticated: true });
+
+export const getBookingDetail = (bookingId: string) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}`, { authenticated: true });
+
+export const updateBookingStatus = (bookingId: string, request: AdminBookingStatusUpdateRequest) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}/status`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const cancelBooking = (bookingId: string, request: AdminCancelBookingRequest) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}/cancel`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const rescheduleBooking = (bookingId: string, request: AdminRescheduleBookingRequest) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}/reschedule`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const refundBooking = (bookingId: string, request: AdminRefundRequest) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}/refund`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });

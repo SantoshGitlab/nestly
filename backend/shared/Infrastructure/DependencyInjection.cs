@@ -13,6 +13,7 @@ using Nestly.Application.Auditing;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
+using Nestly.Application.BookingManagement;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
@@ -267,6 +268,13 @@ public static class DependencyInjection
             .ValidateDataAnnotations();
         services.AddScoped<IRescheduleRepository, BookingRescheduleRepository>();
         services.AddScoped<IRescheduleService, RescheduleService>();
+
+        // Tasks 115a-117c: admin booking management (SRS 12.11, 12.13.2-3) -
+        // composes IBookingRepository plus the Cancellation/Reschedule/Refund
+        // services already registered above, so it needs no repositories of
+        // its own beyond the read-side history repositories (Cancellation/
+        // Reschedule/RefundTransaction) already registered above too.
+        services.AddScoped<IBookingManagementService, BookingManagementService>();
 
         // Task 84a-d: support/experience schema repositories. The higher-
         // level services (review submission, ticket workflow, notification

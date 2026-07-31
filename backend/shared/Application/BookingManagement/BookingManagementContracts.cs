@@ -1,0 +1,135 @@
+using Nestly.Domain;
+
+namespace Nestly.Application.BookingManagement;
+
+// ---- List (SRS 12.11.1, task 115a) ----
+
+/// <summary>Admin booking-list request. Mirrors <see cref="Bookings.BookingSearchFilter"/> - see its doc comment for the two SRS filters deliberately omitted.</summary>
+public sealed record AdminBookingSearchRequest(
+    Guid? BookingId,
+    string? CustomerName,
+    string? CustomerMobile,
+    BookingStatus? Status,
+    string? City,
+    DateOnly? SlotDateFrom,
+    DateOnly? SlotDateTo,
+    DateTime? CreatedFromUtc,
+    DateTime? CreatedToUtc,
+    Guid? ServiceId,
+    Guid? CategoryId,
+    string? CouponCode,
+    int Page = 1,
+    int PageSize = 20);
+
+/// <summary>One row of the admin booking list - a lighter shape than the detail (SRS 12.11.1).</summary>
+public sealed record AdminBookingListItemResponse(
+    Guid Id,
+    string CustomerName,
+    string CustomerMobile,
+    string ServiceName,
+    string City,
+    DateOnly SlotDate,
+    BookingStatus Status,
+    string StatusLabel,
+    decimal TotalPayable,
+    string? CouponCode,
+    DateTime CreatedAtUtc);
+
+public sealed record AdminBookingSearchResponse(IReadOnlyList<AdminBookingListItemResponse> Items, int TotalCount, int Page, int PageSize);
+
+// ---- Detail (SRS 12.11.2, tasks 115b-115c) ----
+
+public sealed record AdminBookingCustomerSnapshot(Guid CustomerId, string Name, string Mobile);
+
+public sealed record AdminBookingAddressSnapshot(
+    string Label, string Line1, string? Line2, string? Landmark, string Pincode, string City, string State,
+    string ContactName, string ContactMobile);
+
+public sealed record AdminBookingSlotSnapshot(Guid SlotWindowId, DateOnly Date, string WindowName, TimeSpan StartTime, TimeSpan EndTime);
+
+public sealed record AdminBookingAddOnResponse(Guid Id, Guid ServiceAddOnId, string Name, decimal UnitPrice, int Quantity, decimal LineTotal);
+
+public sealed record AdminBookingItemResponse(
+    Guid Id, Guid ServiceId, string Name, decimal UnitPrice, int Quantity, decimal LineTotal, IReadOnlyList<AdminBookingAddOnResponse> AddOns);
+
+public sealed record AdminBookingPriceResponse(
+    decimal BasePrice, int Quantity, decimal BaseTotal, decimal AddOnTotal, decimal VisitCharge, decimal Subtotal,
+    decimal TaxPercentage, decimal TaxAmount, decimal PlatformFee, decimal TotalPayable,
+    string? CouponCode, decimal? CouponDiscountAmount, decimal FinalPayable);
+
+/// <summary>One entry in a booking's status timeline (SRS 12.11.2/12.11.3, task 115c), mirroring <see cref="Nestly.Domain.BookingStatusHistory"/>.</summary>
+public sealed record AdminBookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatus ToStatus, string ToStatusLabel, string? Reason, DateTime ChangedAtUtc);
+
+/// <summary>Payment summary for the booking's detail view (SRS 12.13.1).</summary>
+public sealed record AdminBookingPaymentSummary(
+    Guid Id, PaymentTransactionStatus Status, decimal Amount, string Currency, string? GatewayPaymentRef, DateTime CreatedAtUtc, DateTime UpdatedAtUtc);
+
+public sealed record AdminBookingCancellationResponse(
+    Guid Id, CancellationActor Actor, string Reason, bool WithinFreeCancellationWindow,
+    decimal CancellationFeeAmount, decimal RefundAmount, RefundMethod? RefundMethod, Guid? RefundTransactionId,
+    string? InternalNotes, DateTime CreatedAtUtc);
+
+public sealed record AdminBookingRescheduleResponse(
+    Guid Id, RescheduleActor Actor, string? Reason,
+    DateOnly FromSlotDate, TimeSpan FromSlotStartTime, DateOnly ToSlotDate, TimeSpan ToSlotStartTime,
+    bool IsLate, decimal FeeAmount, DateTime CreatedAtUtc);
+
+public sealed record AdminBookingRefundResponse(
+    Guid Id, RefundType Type, RefundMethod Method, decimal Amount, RefundStatus Status,
+    string? GatewayRefundRef, string Reason, DateTime CreatedAtUtc, DateTime? ProcessedAtUtc);
+
+/// <summary>
+/// Full admin booking detail (SRS 12.11.2). Deliberately does not include
+/// linked support tickets, free-form internal notes, or an embedded audit
+/// summary - those SRS 12.11.2 bullets need domain concepts (a
+/// booking-scoped note entity; a ticket-to-booking join, which belongs to the
+/// separate Support vertical) this task's scope (115a-117c) does not cover;
+/// the existing audit-log-viewer (task 130, SRS 21, <c>AuditLogController</c>)
+/// remains the source for a booking's audit trail in the meantime, filtered
+/// by EntityName="Booking".
+/// </summary>
+public sealed record AdminBookingDetailResponse(
+    Guid Id,
+    AdminBookingCustomerSnapshot Customer,
+    AdminBookingAddressSnapshot Address,
+    AdminBookingSlotSnapshot Slot,
+    IReadOnlyList<AdminBookingItemResponse> Items,
+    AdminBookingPriceResponse Price,
+    BookingStatus Status,
+    string StatusLabel,
+    IReadOnlyList<AdminBookingStatusTimelineEntry> Timeline,
+    AdminBookingPaymentSummary? Payment,
+    AdminBookingCancellationResponse? Cancellation,
+    IReadOnlyList<AdminBookingRescheduleResponse> Reschedules,
+    IReadOnlyList<AdminBookingRefundResponse> Refunds,
+    DateTime CreatedAtUtc);
+
+// ---- Actions (SRS 12.11.3, tasks 115d, 117a-c) ----
+
+/// <summary>
+/// General admin-driven status transition (task 115d). Restricted to
+/// operational statuses - <see cref="BookingStatus.CancelledByCustomer"/>,
+/// <see cref="BookingStatus.CancelledByAdmin"/>, <see cref="BookingStatus.Rescheduled"/>,
+/// <see cref="BookingStatus.RefundPending"/> and <see cref="BookingStatus.Refunded"/>
+/// are rejected here (see <c>BookingManagementService.DisallowedGenericTransitionTargets</c>)
+/// - those five must go through the dedicated cancel/reschedule/refund
+/// actions below, which also raise the correct history rows and refunds;
+/// letting this generic endpoint flip straight to them would silently skip
+/// that bookkeeping while still passing <see cref="BookingLifecycle"/>'s own
+/// transition check.
+/// </summary>
+public sealed record AdminBookingStatusUpdateRequest(BookingStatus NewStatus, string? Reason);
+
+public sealed record AdminCancelBookingRequest(string Reason, string? InternalNotes);
+
+public sealed record AdminRescheduleBookingRequest(Guid LocalityId, Guid SlotWindowId, DateOnly SlotDate, string? Reason);
+
+/// <summary>
+/// Admin refund request (SRS 12.11.3, 12.13.2-3, task 117c).
+/// <paramref name="Amount"/> is required (and must be positive) for a
+/// partial refund, and ignored for a full one - <see cref="IRefundService.InitiateFullRefundAsync"/>
+/// always refunds whatever remains on the payment. Full and partial refunds
+/// are both gated behind "bookings.write" - see <c>BookingsController</c>'s
+/// doc comment for why this does not split into two permission tiers.
+/// </summary>
+public sealed record AdminRefundRequest(bool IsFullRefund, decimal? Amount, string Reason, RefundMethod Method);

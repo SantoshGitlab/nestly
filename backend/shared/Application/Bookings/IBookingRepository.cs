@@ -13,4 +13,7 @@ public interface IBookingRepository
 
     /// <summary><paramref name="statuses"/> is the expansion of a <see cref="BookingStatusBucket"/> via <see cref="BookingStatusMapper.StatusesInBucket"/>.</summary>
     Task<IReadOnlyList<Booking>> ListByCustomerAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses);
+
+    /// <summary>Filterable, paginated admin search across every booking (SRS 12.11.1, task 115a).</summary>
+    Task<BookingSearchResult> SearchAsync(BookingSearchFilter filter);
 }

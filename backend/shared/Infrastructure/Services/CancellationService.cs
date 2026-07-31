@@ -107,9 +107,46 @@ public class CancellationService : ICancellationService
                 $"A booking in status '{booking.Status}' can no longer be cancelled by the customer.");
         }
 
+        return await ExecuteCancellationAsync(booking, BookingStatus.CancelledByCustomer, CancellationActor.Customer, request.Reason, internalNotes: null);
+    }
+
+    public async Task<Result<CancellationOutcomeResponse>> AdminCancelAsync(Guid bookingId, string reason, string? internalNotes = null)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return Error.Validation("Cancellation.ReasonRequired", "A cancellation reason is required.");
+        }
+
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("Cancellation.BookingNotFound", "The specified booking does not exist.");
+        }
+
+        if (!BookingLifecycle.IsValidTransition(booking.Status, BookingStatus.CancelledByAdmin))
+        {
+            return Error.Business(
+                "Cancellation.NotEligible",
+                $"A booking in status '{booking.Status}' can no longer be cancelled.");
+        }
+
+        return await ExecuteCancellationAsync(booking, BookingStatus.CancelledByAdmin, CancellationActor.Admin, reason, internalNotes);
+    }
+
+    /// <summary>
+    /// Shared confirmation path for both <see cref="CancelAsync"/> and
+    /// <see cref="AdminCancelAsync"/>: computes the fee/refund outcome via
+    /// <see cref="CancellationFeeCalculator"/> (same policy math for either
+    /// actor - task 117a composes this rather than reimplementing it),
+    /// transitions the booking, raises a refund if one is owed, and records
+    /// the <see cref="BookingCancellation"/> history row.
+    /// </summary>
+    private async Task<Result<CancellationOutcomeResponse>> ExecuteCancellationAsync(
+        Booking booking, BookingStatus targetStatus, CancellationActor actor, string reason, string? internalNotes)
+    {
         var outcome = await ComputeOutcomeAsync(booking);
 
-        booking.TransitionTo(BookingStatus.CancelledByCustomer, request.Reason);
+        booking.TransitionTo(targetStatus, reason);
         await _bookingRepository.UpdateAsync(booking);
 
         Guid? refundTransactionId = null;
@@ -119,8 +156,8 @@ public class CancellationService : ICancellationService
         if (outcome.RefundAmount > 0)
         {
             var refundResult = outcome.FeeAmount > 0
-                ? await _refundService.InitiatePartialRefundAsync(bookingId, outcome.RefundAmount, request.Reason)
-                : await _refundService.InitiateFullRefundAsync(bookingId, request.Reason);
+                ? await _refundService.InitiatePartialRefundAsync(booking.Id, outcome.RefundAmount, reason)
+                : await _refundService.InitiateFullRefundAsync(booking.Id, reason);
 
             if (refundResult.IsFailure)
             {
@@ -134,24 +171,26 @@ public class CancellationService : ICancellationService
 
         var cancellation = new BookingCancellation(
             Guid.NewGuid(),
-            bookingId,
-            CancellationActor.Customer,
-            request.Reason,
+            booking.Id,
+            actor,
+            reason,
             outcome.WithinFreeWindow,
             outcome.FeeAmount,
             outcome.RefundAmount,
             refundMethod,
-            refundTransactionId);
+            refundTransactionId,
+            internalNotes);
 
         await _cancellationRepository.AddAsync(cancellation);
 
         // Re-fetch to report the booking's true post-refund status: a full
         // refund with nothing owed moves the booking straight past
-        // CancelledByCustomer to RefundPending/Refunded inside IRefundService.
-        var finalBooking = await _bookingRepository.GetByIdAsync(bookingId) ?? booking;
+        // CancelledByCustomer/CancelledByAdmin to RefundPending/Refunded
+        // inside IRefundService.
+        var finalBooking = await _bookingRepository.GetByIdAsync(booking.Id) ?? booking;
 
         return Result.Success(new CancellationOutcomeResponse(
-            bookingId,
+            booking.Id,
             finalBooking.Status,
             outcome.WithinFreeWindow,
             outcome.FeeAmount,

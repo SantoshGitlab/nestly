@@ -93,9 +93,43 @@ public class RescheduleService : IRescheduleService
             return Error.Business("Reschedule.NotEligible", eligibility.IneligibilityReason!);
         }
 
+        return await ExecuteRescheduleAsync(booking, request, RescheduleActor.Customer);
+    }
+
+    public async Task<Result<RescheduleOutcomeResponse>> AdminRescheduleAsync(Guid bookingId, RescheduleBookingRequest request)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("Reschedule.BookingNotFound", "The specified booking does not exist.");
+        }
+
+        // Only the state-machine invariant is enforced here - the count-limit
+        // and min-hours-before-slot policy checks in EvaluateEligibilityAsync
+        // are deliberately skipped, see this method's doc comment on
+        // IRescheduleService.
+        if (!BookingLifecycle.IsValidTransition(booking.Status, BookingStatus.Rescheduled))
+        {
+            return Error.Business("Reschedule.NotEligible", $"A booking in status '{booking.Status}' cannot be rescheduled.");
+        }
+
+        return await ExecuteRescheduleAsync(booking, request, RescheduleActor.Admin);
+    }
+
+    /// <summary>
+    /// Shared confirmation path for both <see cref="ConfirmRescheduleAsync"/>
+    /// and <see cref="AdminRescheduleAsync"/>: revalidates the chosen slot
+    /// through the slot engine (task 82c - never trusted from an earlier
+    /// lookup, for either actor), computes the late-reschedule fee via
+    /// <see cref="RescheduleFeeCalculator"/>, applies the booking-level
+    /// transition, and records the <see cref="BookingReschedule"/> history
+    /// row attributed to <paramref name="actor"/>.
+    /// </summary>
+    private async Task<Result<RescheduleOutcomeResponse>> ExecuteRescheduleAsync(Booking booking, RescheduleBookingRequest request, RescheduleActor actor)
+    {
         Guid serviceId = booking.Items.Count > 0
             ? booking.Items[0].ServiceId
-            : throw new InvalidOperationException($"Booking {bookingId} has no items to resolve a service from.");
+            : throw new InvalidOperationException($"Booking {booking.Id} has no items to resolve a service from.");
 
         // Slot revalidation via the slot engine (task 82c): the exact same
         // computation RevalidateSlotAsync performs, but this also returns
@@ -114,7 +148,7 @@ public class RescheduleService : IRescheduleService
 
         var previousSlot = new BookingSlotSummary(booking.SlotWindowId, booking.SlotWindowNameSnapshot, booking.SlotDate, booking.SlotStartTimeSnapshot, booking.SlotEndTimeSnapshot);
 
-        decimal payableAmount = await ResolvePayableAmountAsync(bookingId);
+        decimal payableAmount = await ResolvePayableAmountAsync(booking.Id);
         DateTime currentSlotStartUtc = booking.SlotDate.ToDateTime(TimeOnly.MinValue).Add(booking.SlotStartTimeSnapshot);
         DateTime now = _timeProvider.GetUtcNow().DateTime;
         var feeOutcome = RescheduleFeeCalculator.Compute(
@@ -125,8 +159,8 @@ public class RescheduleService : IRescheduleService
 
         var history = new BookingReschedule(
             Guid.NewGuid(),
-            bookingId,
-            RescheduleActor.Customer,
+            booking.Id,
+            actor,
             request.Reason,
             previousSlot.SlotWindowId,
             previousSlot.Date,
@@ -141,10 +175,10 @@ public class RescheduleService : IRescheduleService
 
         await _rescheduleRepository.AddAsync(history);
 
-        int reschedulesUsed = await _rescheduleRepository.CountByBookingAsync(bookingId);
+        int reschedulesUsed = await _rescheduleRepository.CountByBookingAsync(booking.Id);
 
         return Result.Success(new RescheduleOutcomeResponse(
-            bookingId,
+            booking.Id,
             booking.Status,
             previousSlot,
             new BookingSlotSummary(chosenSlot.SlotWindowId, chosenSlot.Name, request.SlotDate, chosenSlot.StartTime, chosenSlot.EndTime),
