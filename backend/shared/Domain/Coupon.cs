@@ -113,6 +113,64 @@ public class Coupon : Entity<Guid>
         IsActive && nowUtc >= ValidFromUtc && nowUtc <= ValidToUtc;
 
     /// <summary>
+    /// Applies admin edits to every mutable rule dimension (SRS 12.12.1,
+    /// task 118). <see cref="Code"/> is deliberately excluded - it is the
+    /// identifier customers type in at checkout and other rows (e.g.
+    /// <see cref="CouponRedemption"/>) key off the coupon's id, not its code,
+    /// so nothing downstream breaks if it changed, but silently swapping a
+    /// code an admin has already shared/printed out from under them is a
+    /// support-desk problem this entity has no business creating. Same
+    /// validation as the constructor - an edit must leave the coupon in a
+    /// state the constructor itself would have accepted.
+    /// </summary>
+    public void Update(
+        string? description,
+        CouponDiscountType discountType,
+        decimal discountValue,
+        decimal? maxDiscountAmount,
+        decimal minOrderAmount,
+        DateTime validFromUtc,
+        DateTime validToUtc,
+        int? usageLimitTotal,
+        int? usageLimitPerCustomer,
+        Guid? applicableCategoryId,
+        CouponCustomerSegment customerSegment)
+    {
+        if (discountValue <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(discountValue), "Discount value must be positive.");
+        }
+
+        if (discountType == CouponDiscountType.Percentage && discountValue > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(discountValue), "A percentage discount cannot exceed 100.");
+        }
+
+        if (validToUtc <= validFromUtc)
+        {
+            throw new ArgumentException("Coupon valid-to date must be after the valid-from date.", nameof(validToUtc));
+        }
+
+        Description = description;
+        DiscountType = discountType;
+        DiscountValue = discountValue;
+        MaxDiscountAmount = maxDiscountAmount;
+        MinOrderAmount = minOrderAmount < 0 ? 0 : minOrderAmount;
+        ValidFromUtc = validFromUtc;
+        ValidToUtc = validToUtc;
+        UsageLimitTotal = usageLimitTotal;
+        UsageLimitPerCustomer = usageLimitPerCustomer;
+        ApplicableCategoryId = applicableCategoryId;
+        CustomerSegment = customerSegment;
+    }
+
+    /// <summary>Re-enables a coupon for redemption (SRS 12.12.1 "Active status").</summary>
+    public void Activate() => IsActive = true;
+
+    /// <summary>Suspends a coupon without deleting it - existing redemptions are untouched, no further ones can be reserved (SRS 12.12.1 "Active status").</summary>
+    public void Deactivate() => IsActive = false;
+
+    /// <summary>
     /// Computes the discount for an order of <paramref name="orderAmount"/>,
     /// or a business error if the order does not meet the minimum. The
     /// result is clamped so it can never exceed either the configured cap or

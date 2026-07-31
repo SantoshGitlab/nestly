@@ -18,4 +18,16 @@ public interface ICouponRepository
     /// already been reached.
     /// </summary>
     Task<bool> TryReserveRedemptionAsync(Guid couponId);
+
+    // ---- Admin management (SRS 12.12.1, task 118) ----
+
+    Task AddAsync(Coupon coupon);
+
+    Task UpdateAsync(Coupon coupon);
+
+    /// <summary>Whether a coupon already exists with this code (normalized the same way as <see cref="GetByCodeAsync"/>) - used to reject duplicate codes on create.</summary>
+    Task<bool> CodeExistsAsync(string code);
+
+    /// <summary>Filtered, paginated admin coupon list (SRS 12.12.1's "manage coupons" screen).</summary>
+    Task<CouponSearchResult> SearchAsync(CouponSearchFilter filter);
 }
