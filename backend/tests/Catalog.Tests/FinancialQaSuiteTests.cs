@@ -56,6 +56,17 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
     }
 
+    private static EscrowService BuildEscrowService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
+        new(new PlatformEscrowLedgerRepository(context));
+
+    private static PaymentWebhookService BuildWebhookService(
+        IPaymentTransactionRepository paymentRepository, IBookingRepository bookingRepository,
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
+        new(
+            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
+            new CommissionService(Options.Create(new CommissionOptions())), BuildEscrowService(context),
+            context, NullLogger<PaymentWebhookService>.Instance);
+
     private sealed record Fixture(Customer Customer, City City, CustomerAddress Address, Locality Locality, Service Service, Guid BookingId, decimal Total);
 
     private async Task<Fixture> SeedAndBookAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal servicePrice, string? couponCode = null)
@@ -121,7 +132,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         {
             var paymentRepository = new PaymentTransactionRepository(context);
             var bookingRepository = new BookingRepository(context);
-            var webhookService = new PaymentWebhookService(paymentRepository, bookingRepository, gateway, context, NullLogger<PaymentWebhookService>.Instance);
+            var webhookService = BuildWebhookService(paymentRepository, bookingRepository, context, gateway);
             var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
 
             var first = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
@@ -146,7 +157,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         {
             var paymentRepository = new PaymentTransactionRepository(lateContext);
             var bookingRepository = new BookingRepository(lateContext);
-            var webhookService = new PaymentWebhookService(paymentRepository, bookingRepository, gateway, lateContext, NullLogger<PaymentWebhookService>.Instance);
+            var webhookService = BuildWebhookService(paymentRepository, bookingRepository, lateContext, gateway);
 
             string latePayload = PaymentWebhookPayload.Build(firstOrderId, "ref1-late", PaymentWebhookPayload.SuccessStatus);
             var lateResult = await webhookService.HandleCallbackAsync(new PaymentWebhookRequest(firstOrderId, "ref1-late", PaymentWebhookPayload.SuccessStatus, gateway.SignPayload(latePayload)));
@@ -241,7 +252,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(orderContext);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                new PaymentWebhookService(paymentRepository, bookingRepository, gateway, orderContext, NullLogger<PaymentWebhookService>.Instance));
+                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway));
             var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
             gatewayOrderId = order.Value.GatewayOrderId;
         }
@@ -250,7 +261,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         {
             var paymentRepository = new PaymentTransactionRepository(callbackContext);
             var bookingRepository = new BookingRepository(callbackContext);
-            var webhookService = new PaymentWebhookService(paymentRepository, bookingRepository, gateway, callbackContext, NullLogger<PaymentWebhookService>.Instance);
+            var webhookService = BuildWebhookService(paymentRepository, bookingRepository, callbackContext, gateway);
             string payload = PaymentWebhookPayload.Build(gatewayOrderId, "ref", PaymentWebhookPayload.SuccessStatus);
             var callback = await webhookService.HandleCallbackAsync(new PaymentWebhookRequest(gatewayOrderId, "ref", PaymentWebhookPayload.SuccessStatus, gateway.SignPayload(payload)));
             callback.IsSuccess.Should().BeTrue();
@@ -266,7 +277,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
 
         RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context)), gateway, context);
+            new WalletService(new WalletLedgerRepository(context)), BuildEscrowService(context), gateway, context);
 
         // 600 via gateway, then an over-ask of 500 (only 400 remains) must be rejected...
         using (var partialGatewayContext = _db.CreateContext())

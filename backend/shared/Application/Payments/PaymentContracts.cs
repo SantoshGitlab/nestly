@@ -32,7 +32,12 @@ public record PaymentAttemptResponse(
     DateTime CreatedAtUtc,
     DateTime? CompletedAtUtc);
 
-/// <summary>Full transaction detail (SRS 11.11.3 "payment transaction history shall be available to admin"; SRS 14.3 reconciliation, task 71).</summary>
+/// <summary>
+/// Full transaction detail (SRS 11.11.3 "payment transaction history shall
+/// be available to admin"; SRS 14.3 reconciliation, task 71).
+/// <paramref name="CommissionRatePercentage"/>/<paramref name="CommissionAmount"/>
+/// are null until the payment succeeds and settlement is recorded (task 157).
+/// </summary>
 public record PaymentTransactionResponse(
     Guid Id,
     Guid BookingId,
@@ -42,7 +47,9 @@ public record PaymentTransactionResponse(
     PaymentTransactionStatus Status,
     IReadOnlyList<PaymentAttemptResponse> Attempts,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    decimal? CommissionRatePercentage,
+    decimal? CommissionAmount);
 
 /// <summary>
 /// The sandbox's webhook callback shape (task 69a). <paramref name="Signature"/>

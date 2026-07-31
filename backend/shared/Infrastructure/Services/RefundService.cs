@@ -1,4 +1,5 @@
 using Nestly.Application.Bookings;
+using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
 using Nestly.Application.Wallet;
@@ -15,6 +16,12 @@ namespace Nestly.Infrastructure.Services;
 /// atomically - a refund that "succeeded" but left the booking in the wrong
 /// state (or vice versa) is exactly the kind of inconsistency SRS 29.3
 /// ("critical workflows should support reconciliation") exists to prevent.
+///
+/// Also keeps the platform escrow ledger honest (task 158): a refunded
+/// booking's hold - if any is still held, i.e. it wasn't already released to
+/// a provider on completion - is released back out in the same transaction,
+/// without changing how the refund itself is actually paid out (still
+/// <see cref="IWalletService"/> or the gateway, exactly as before).
 /// </summary>
 public class RefundService : IRefundService
 {
@@ -27,6 +34,7 @@ public class RefundService : IRefundService
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly IRefundTransactionRepository _refundRepository;
     private readonly IWalletService _walletService;
+    private readonly IEscrowService _escrowService;
     private readonly IPaymentGateway _gateway;
     private readonly NestlyDbContext _context;
 
@@ -35,6 +43,7 @@ public class RefundService : IRefundService
         IPaymentTransactionRepository paymentRepository,
         IRefundTransactionRepository refundRepository,
         IWalletService walletService,
+        IEscrowService escrowService,
         IPaymentGateway gateway,
         NestlyDbContext context)
     {
@@ -42,6 +51,7 @@ public class RefundService : IRefundService
         _paymentRepository = paymentRepository;
         _refundRepository = refundRepository;
         _walletService = walletService;
+        _escrowService = escrowService;
         _gateway = gateway;
         _context = context;
     }
@@ -148,6 +158,11 @@ public class RefundService : IRefundService
 
             await _refundRepository.AddAsync(refund);
             await _bookingRepository.UpdateAsync(booking);
+
+            // Task 158: release this refund's amount back out of escrow -
+            // a no-op if the booking's hold was already released to its
+            // provider on completion before this refund was issued.
+            await _escrowService.ReleaseForRefundAsync(bookingId, refund.Id, amount);
 
             await dbTransaction.CommitAsync();
         }

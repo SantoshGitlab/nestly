@@ -35,6 +35,10 @@ public class PaymentTransactionConfiguration : IEntityTypeConfiguration<PaymentT
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.UpdatedAtUtc).IsRequired();
 
+        // Task 157: null until RecordCommission runs at settlement time.
+        builder.Property(x => x.CommissionRatePercentage).HasPrecision(5, 2);
+        builder.Property(x => x.CommissionAmount).HasPrecision(12, 2);
+
         builder.HasMany(x => x.Attempts)
             .WithOne()
             .HasForeignKey(x => x.PaymentTransactionId)

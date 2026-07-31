@@ -26,6 +26,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PaymentAttempt> PaymentAttempts { get; set; }
     public DbSet<RefundTransaction> RefundTransactions { get; set; }
     public DbSet<WalletLedgerEntry> WalletLedgerEntries { get; set; }
+    public DbSet<PlatformEscrowLedger> PlatformEscrowLedgers { get; set; }
     public DbSet<Coupon> Coupons { get; set; }
     public DbSet<CouponRedemption> CouponRedemptions { get; set; }
 

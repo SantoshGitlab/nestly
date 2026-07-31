@@ -151,5 +151,7 @@ public class PaymentService : IPaymentService
             .Select(a => new PaymentAttemptResponse(a.Id, a.AttemptNumber, a.GatewayOrderId, a.GatewayPaymentRef, a.Status, a.FailureReason, a.CreatedAtUtc, a.CompletedAtUtc))
             .ToList(),
         transaction.CreatedAtUtc,
-        transaction.UpdatedAtUtc);
+        transaction.UpdatedAtUtc,
+        transaction.CommissionRatePercentage,
+        transaction.CommissionAmount);
 }

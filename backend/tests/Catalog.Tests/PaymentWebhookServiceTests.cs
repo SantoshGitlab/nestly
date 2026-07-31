@@ -59,7 +59,9 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var webhookService = new PaymentWebhookService(
-            paymentRepository, bookingRepository, gateway, context, NullLogger<PaymentWebhookService>.Instance);
+            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
+            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context, NullLogger<PaymentWebhookService>.Instance);
         var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
 
         return (paymentService, webhookService);

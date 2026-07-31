@@ -13,6 +13,7 @@ using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
+using Nestly.Application.Escrow;
 using Nestly.Application.Geography;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
@@ -66,6 +67,14 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(SandboxGatewayOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // Task 157: not a secret, so (unlike the options above) this is safe
+        // to fall back to CommissionOptions' own defaults when a deployment
+        // environment hasn't set the section at all - no ValidateOnStart.
+        services
+            .AddOptions<CommissionOptions>()
+            .Bind(configuration.GetSection(CommissionOptions.SectionName))
+            .ValidateDataAnnotations();
 
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
@@ -155,6 +164,13 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
+
+        // Task 157/158: commission calculation and the platform escrow
+        // ledger. CommissionService is stateless (reads only bound Options),
+        // same reasoning as SandboxPaymentGateway above.
+        services.AddSingleton<ICommissionService, CommissionService>();
+        services.AddScoped<IPlatformEscrowLedgerRepository, PlatformEscrowLedgerRepository>();
+        services.AddScoped<IEscrowService, EscrowService>();
 
         // Sandbox in every environment for now (SRS 30.2): no real SMS/email
         // vendor is configured yet. Swap this registration, not the callers,

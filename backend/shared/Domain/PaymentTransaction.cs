@@ -36,6 +36,16 @@ public class PaymentTransaction : AggregateRoot<Guid>
 
     public DateTime UpdatedAtUtc { get; private set; }
 
+    /// <summary>
+    /// The platform commission rate applied at settlement (task 157) -
+    /// null until <see cref="RecordCommission"/> is called, which only
+    /// happens once, right after the payment succeeds.
+    /// </summary>
+    public decimal? CommissionRatePercentage { get; private set; }
+
+    /// <summary><see cref="CommissionCalculator.Calculate"/> applied to <see cref="Amount"/> at <see cref="CommissionRatePercentage"/> (task 157).</summary>
+    public decimal? CommissionAmount { get; private set; }
+
     public IReadOnlyList<PaymentAttempt> Attempts => _attempts;
 
     /// <summary>The attempt currently in flight or most recently resolved.</summary>
@@ -98,6 +108,34 @@ public class PaymentTransaction : AggregateRoot<Guid>
 
         attempt.MarkFailed(reason);
         Status = PaymentTransactionStatus.Failed;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Records the platform's computed commission for this transaction's
+    /// settlement (task 157). Only valid once, on a successfully paid
+    /// transaction - there is exactly one settlement per booking-payment
+    /// mapping, same as the mapping itself (SRS 11.11.3).
+    /// </summary>
+    public void RecordCommission(decimal ratePercentage, decimal commissionAmount)
+    {
+        if (Status != PaymentTransactionStatus.Success)
+        {
+            throw new InvalidOperationException("Commission can only be recorded once a payment has succeeded.");
+        }
+
+        if (CommissionAmount is not null)
+        {
+            throw new InvalidOperationException("Commission has already been recorded for this transaction.");
+        }
+
+        if (commissionAmount < 0 || commissionAmount > Amount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(commissionAmount), "Commission amount must be between 0 and the transaction amount.");
+        }
+
+        CommissionRatePercentage = ratePercentage;
+        CommissionAmount = commissionAmount;
         UpdatedAtUtc = DateTime.UtcNow;
     }
 }

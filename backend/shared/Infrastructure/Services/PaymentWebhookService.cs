@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
+using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -17,25 +19,40 @@ namespace Nestly.Infrastructure.Services;
 /// single atomic unit: a crash between the two SaveChanges calls a plain
 /// repository-per-aggregate approach would make must never leave a booking
 /// Confirmed with no successful payment recorded, or vice versa.
+///
+/// A successful callback also settles two more things in the same
+/// transaction (tasks 157-158): the platform's commission on this booking is
+/// computed and recorded on the transaction, and the paid amount moves into
+/// the platform escrow ledger, where it stays held until the booking is
+/// completed or refunded.
 /// </summary>
 public class PaymentWebhookService : IPaymentWebhookService
 {
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IServiceRepository _serviceRepository;
     private readonly IPaymentGateway _gateway;
+    private readonly ICommissionService _commissionService;
+    private readonly IEscrowService _escrowService;
     private readonly NestlyDbContext _context;
     private readonly ILogger<PaymentWebhookService> _logger;
 
     public PaymentWebhookService(
         IPaymentTransactionRepository paymentRepository,
         IBookingRepository bookingRepository,
+        IServiceRepository serviceRepository,
         IPaymentGateway gateway,
+        ICommissionService commissionService,
+        IEscrowService escrowService,
         NestlyDbContext context,
         ILogger<PaymentWebhookService> logger)
     {
         _paymentRepository = paymentRepository;
         _bookingRepository = bookingRepository;
+        _serviceRepository = serviceRepository;
         _gateway = gateway;
+        _commissionService = commissionService;
+        _escrowService = escrowService;
         _context = context;
         _logger = logger;
     }
@@ -90,15 +107,36 @@ public class PaymentWebhookService : IPaymentWebhookService
             {
                 transaction.MarkAttemptSucceeded(attempt.Id, request.GatewayPaymentRef);
                 booking.TransitionTo(BookingStatus.Confirmed, "Payment succeeded.");
+
+                // Task 157: compute and record the platform's commission for
+                // this settlement, resolving a per-category override when
+                // the booking's (single, today) service has one configured.
+                Guid? categoryId = null;
+                var firstItem = booking.Items.FirstOrDefault();
+                if (firstItem is not null)
+                {
+                    var service = await _serviceRepository.GetByIdAsync(firstItem.ServiceId);
+                    categoryId = service?.CategoryId;
+                }
+
+                var commission = _commissionService.Calculate(transaction.Amount, categoryId);
+                transaction.RecordCommission(commission.RatePercentage, commission.CommissionAmount);
+
+                await _paymentRepository.UpdateAsync(transaction);
+                await _bookingRepository.UpdateAsync(booking);
+
+                // Task 158: hold the paid amount in the platform escrow
+                // ledger until the booking is completed or refunded.
+                await _escrowService.HoldAsync(booking.Id, transaction.Id, transaction.Amount);
             }
             else
             {
                 transaction.MarkAttemptFailed(attempt.Id, request.Status);
                 booking.TransitionTo(BookingStatus.PaymentFailed, "Payment failed.");
-            }
 
-            await _paymentRepository.UpdateAsync(transaction);
-            await _bookingRepository.UpdateAsync(booking);
+                await _paymentRepository.UpdateAsync(transaction);
+                await _bookingRepository.UpdateAsync(booking);
+            }
 
             await dbTransaction.CommitAsync();
         }

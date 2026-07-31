@@ -61,6 +61,14 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
         return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
     }
 
+    private static PaymentWebhookService BuildWebhookService(
+        IPaymentTransactionRepository paymentRepository, IBookingRepository bookingRepository,
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
+        new(
+            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
+            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance);
+
     private sealed record SeededBooking(Guid CustomerId, Guid BookingId);
 
     private async Task<SeededBooking> SeedPayableBookingAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal price)
@@ -120,7 +128,7 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(context);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                new PaymentWebhookService(paymentRepository, bookingRepository, gateway, context, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance));
+                BuildWebhookService(paymentRepository, bookingRepository, context, gateway));
 
             await paymentService.CreateOrderAsync(pending.CustomerId, new CreatePaymentOrderRequest(pending.BookingId, null));
             var succeededOrder = await paymentService.CreateOrderAsync(succeeded.CustomerId, new CreatePaymentOrderRequest(succeeded.BookingId, null));
@@ -128,7 +136,7 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
 
             string payload = PaymentWebhookPayload.Build(succeededOrder.Value.GatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus);
             string signature = gateway.SignPayload(payload);
-            var webhookService = new PaymentWebhookService(paymentRepository, bookingRepository, gateway, context, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance);
+            var webhookService = BuildWebhookService(paymentRepository, bookingRepository, context, gateway);
             var callback = await webhookService.HandleCallbackAsync(
                 new PaymentWebhookRequest(succeededOrder.Value.GatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus, signature));
             callback.IsSuccess.Should().BeTrue();

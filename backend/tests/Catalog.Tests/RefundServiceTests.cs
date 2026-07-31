@@ -56,8 +56,17 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
             new PaymentTransactionRepository(context),
             new RefundTransactionRepository(context),
             new WalletService(new WalletLedgerRepository(context)),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
             gateway,
             context);
+
+    private static PaymentWebhookService BuildWebhookService(
+        IPaymentTransactionRepository paymentRepository, IBookingRepository bookingRepository,
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
+        new(
+            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
+            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context, NullLogger<PaymentWebhookService>.Instance);
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
@@ -116,7 +125,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(orderContext);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                new PaymentWebhookService(paymentRepository, bookingRepository, gateway, orderContext, NullLogger<PaymentWebhookService>.Instance));
+                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway));
             var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
             gatewayOrderId = order.Value.GatewayOrderId;
         }
@@ -125,7 +134,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         {
             var paymentRepository = new PaymentTransactionRepository(callbackContext);
             var bookingRepository = new BookingRepository(callbackContext);
-            var webhookService = new PaymentWebhookService(paymentRepository, bookingRepository, gateway, callbackContext, NullLogger<PaymentWebhookService>.Instance);
+            var webhookService = BuildWebhookService(paymentRepository, bookingRepository, callbackContext, gateway);
             string payload = PaymentWebhookPayload.Build(gatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus);
             string signature = gateway.SignPayload(payload);
             var callback = await webhookService.HandleCallbackAsync(new PaymentWebhookRequest(gatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus, signature));
