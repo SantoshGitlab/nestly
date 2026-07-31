@@ -9,7 +9,8 @@ public interface IServiceAddOnRepository : IRepository<ServiceAddOn>
 
     /// <summary>
     /// Every add-on regardless of active status, optionally filtered to one
-    /// service, ordered for the admin management screen (SRS 12.7.1).
+    /// service, ordered for the admin add-on management (SRS 12.7.1) and
+    /// add-on pricing (SRS 12.8.1) screens.
     /// </summary>
     Task<IReadOnlyList<ServiceAddOn>> ListAllAsync(Guid? serviceId);
 }

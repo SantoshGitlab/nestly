@@ -19,6 +19,47 @@ public sealed class PricingSchemaTests : IClassFixture<TestDatabase>
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    /// <summary>Covers task 109d: effective-date support on a city price override.</summary>
+    [Fact]
+    public void ServiceCityPrice_defaults_effective_start_date_to_today_when_not_specified()
+    {
+        var cityPrice = new ServiceCityPrice(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 599m);
+
+        cityPrice.EffectiveStartDate.Should().Be(DateOnly.FromDateTime(DateTime.UtcNow));
+        cityPrice.EffectiveEndDate.Should().BeNull();
+    }
+
+    [Fact]
+    public void ServiceCityPrice_rejects_an_effective_start_date_after_the_effective_end_date()
+    {
+        Action act = () => new ServiceCityPrice(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 599m,
+            effectiveStartDate: new DateOnly(2026, 2, 1), effectiveEndDate: new DateOnly(2026, 1, 1));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void IsEffectiveOn_reflects_the_configured_effective_window()
+    {
+        var cityPrice = new ServiceCityPrice(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 599m,
+            effectiveStartDate: new DateOnly(2026, 3, 1), effectiveEndDate: new DateOnly(2026, 3, 31));
+
+        cityPrice.IsEffectiveOn(new DateOnly(2026, 2, 28)).Should().BeFalse();
+        cityPrice.IsEffectiveOn(new DateOnly(2026, 3, 15)).Should().BeTrue();
+        cityPrice.IsEffectiveOn(new DateOnly(2026, 4, 1)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsEffectiveOn_has_no_upper_bound_when_effective_end_date_is_null()
+    {
+        var cityPrice = new ServiceCityPrice(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 599m, effectiveStartDate: new DateOnly(2026, 1, 1));
+
+        cityPrice.IsEffectiveOn(new DateOnly(2030, 1, 1)).Should().BeTrue();
+    }
+
     [Fact]
     public async Task GetForServiceAndCityAsync_returns_the_override_when_configured()
     {

@@ -20,4 +20,7 @@ public interface IServiceRepository : IRepository<Service>
     /// category, ordered for the admin management screen (SRS 12.6.1).
     /// </summary>
     Task<IReadOnlyList<Service>> ListAllAsync(Guid? categoryId);
+
+    /// <summary>Every service regardless of category or active status, for the admin base-price management screen (SRS 12.8.1).</summary>
+    Task<IReadOnlyList<Service>> ListAllAsync();
 }

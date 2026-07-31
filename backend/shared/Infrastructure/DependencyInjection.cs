@@ -157,7 +157,9 @@ public static class DependencyInjection
         services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
         services.AddScoped<IServiceCityPriceRepository, ServiceCityPriceRepository>();
         services.AddScoped<ICityPricingPolicyRepository, CityPricingPolicyRepository>();
+        services.AddScoped<IPromotionalPriceRepository, PromotionalPriceRepository>();
         services.AddScoped<IPriceCalculationService, PriceCalculationService>();
+        services.AddScoped<IPricingManagementService, PricingManagementService>();
         services.AddScoped<IServiceabilityRepository, ServiceabilityRepository>();
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<IGeographyRepository, GeographyRepository>();

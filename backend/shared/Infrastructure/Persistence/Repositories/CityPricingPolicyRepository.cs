@@ -33,4 +33,7 @@ public class CityPricingPolicyRepository : ICityPricingPolicyRepository
 
     public Task<CityPricingPolicy?> GetByCityAsync(Guid cityId) =>
         _context.Set<CityPricingPolicy>().FirstOrDefaultAsync(p => p.CityId == cityId);
+
+    public async Task<IReadOnlyList<CityPricingPolicy>> ListAsync() =>
+        await _context.Set<CityPricingPolicy>().ToListAsync();
 }

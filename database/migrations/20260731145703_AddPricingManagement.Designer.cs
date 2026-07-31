@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731145703_AddPricingManagement")]
+    partial class AddPricingManagement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2016,29 +2019,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
-                    b.Property<bool>("IsFlagged")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_flagged");
-
                     b.Property<string>("IssueTags")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("issue_tags");
-
-                    b.Property<DateTime?>("ModeratedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("moderated_at_utc");
-
-                    b.Property<Guid?>("ModeratedByAdminUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("moderated_by_admin_user_id");
-
-                    b.Property<string>("ModeratorNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("moderator_note");
 
                     b.Property<int>("Rating")
                         .HasColumnType("integer")
@@ -2071,9 +2055,6 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId")
                         .HasDatabaseName("ix_review_service_id");
-
-                    b.HasIndex("Status", "IsFlagged")
-                        .HasDatabaseName("ix_review_status_is_flagged");
 
                     b.ToTable("review", (string)null);
                 });
@@ -2132,12 +2113,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("description");
 
-                    b.Property<int>("DurationMinutes")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(60)
-                        .HasColumnName("duration_minutes");
-
                     b.Property<string>("Exclusions")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -2158,54 +2133,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
-                    b.Property<bool>("IsAddOnAllowed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_add_on_allowed");
-
-                    b.Property<bool>("IsAddressRequired")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_address_required");
-
-                    b.Property<bool>("IsCustomerNoteAllowed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_customer_note_allowed");
-
-                    b.Property<bool>("IsFeatured")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_featured");
-
-                    b.Property<bool>("IsInspectionBased")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_inspection_based");
-
-                    b.Property<bool>("IsQuantityAllowed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_quantity_allowed");
-
-                    b.Property<bool>("IsSlotRequired")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_slot_required");
-
-                    b.Property<bool>("IsTaxApplicable")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_tax_applicable");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -2216,45 +2143,16 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("price");
 
-                    b.Property<string>("PricingType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Fixed")
-                        .HasColumnName("pricing_type");
-
                     b.Property<string>("ReschedulePolicy")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("reschedule_policy");
-
-                    b.Property<string>("SeoMetaDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("seo_meta_description");
-
-                    b.Property<string>("SeoTitle")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("seo_title");
-
-                    b.Property<string>("ShortDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("short_description");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("slug");
-
-                    b.Property<int>("SortOrder")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("sort_order");
 
                     b.HasKey("Id")
                         .HasName("pk_service");
@@ -2286,18 +2184,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
-
-                    b.Property<bool>("IsMandatory")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_mandatory");
-
-                    b.Property<bool>("IsQuantityAllowed")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_quantity_allowed");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2456,57 +2342,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_service_pincode_mapping_service_id_pincode_id");
 
                     b.ToTable("service_pincode_mapping", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.SlotAvailabilityOverride", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("CategoryId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("category_id");
-
-                    b.Property<Guid>("CityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("city_id");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("date")
-                        .HasColumnName("date");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("reason");
-
-                    b.Property<Guid?>("ServiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("service_id");
-
-                    b.Property<Guid?>("SlotWindowId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("slot_window_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_slot_availability_override");
-
-                    b.HasIndex("CategoryId")
-                        .HasDatabaseName("ix_slot_availability_override_category_id");
-
-                    b.HasIndex("ServiceId")
-                        .HasDatabaseName("ix_slot_availability_override_service_id");
-
-                    b.HasIndex("SlotWindowId")
-                        .HasDatabaseName("ix_slot_availability_override_slot_window_id");
-
-                    b.HasIndex("CityId", "Date")
-                        .HasDatabaseName("ix_slot_availability_override_city_id_date");
-
-                    b.ToTable("slot_availability_override", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.SlotBlackout", b =>
@@ -3290,42 +3125,6 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_service_pincode_mapping_service_service_id");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.SlotAvailabilityOverride", b =>
-                {
-                    b.HasOne("Nestly.Domain.Category", "Category")
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_slot_availability_override_category_category_id");
-
-                    b.HasOne("Nestly.Domain.City", "City")
-                        .WithMany()
-                        .HasForeignKey("CityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_slot_availability_override_city_city_id");
-
-                    b.HasOne("Nestly.Domain.Service", "Service")
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_slot_availability_override_service_service_id");
-
-                    b.HasOne("Nestly.Domain.SlotWindow", "SlotWindow")
-                        .WithMany()
-                        .HasForeignKey("SlotWindowId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_slot_availability_override_slot_windows_slot_window_id");
-
-                    b.Navigation("Category");
-
-                    b.Navigation("City");
-
-                    b.Navigation("Service");
-
-                    b.Navigation("SlotWindow");
                 });
 
             modelBuilder.Entity("Nestly.Domain.SlotBlackout", b =>
