@@ -161,6 +161,35 @@ itself.
    bonus, never book" loophole and is what task #165 (reward disbursement)
    and #164 (qualifying hook) are built against.
 
+## FUTURE ENHANCEMENTS (tasks #174–176)
+
+Queued after the base loop (#161–173), not before it — each depends on the
+base pieces existing first:
+
+- **Milestone rewards** (#174) — a bonus on top of the per-referral reward
+  when a referrer's qualified-referral count crosses an admin-set threshold
+  (5th, 10th, ...). New `referral_milestone` table; disbursed through the
+  same reward-disbursement path as a normal referral reward, not a second one.
+- **Expiring wallet credit** (#175) — referral credit that expires unused
+  instead of sitting on the books indefinitely. This is **not** a small
+  addition: `WalletLedgerEntry` today is a single running-balance ledger
+  (SRS 14.5) with no concept of tracking how much of *one specific* credit
+  entry remains unspent once other debits have drawn against the balance.
+  The sweep job must not be built before that consumption-tracking (FIFO
+  allocation) model is designed — task #175 says this explicitly so it
+  isn't skipped under time pressure.
+- **Contextual prompts** (#176) — surface Refer & Earn right after a
+  completed booking or a 4–5★ review, not only as a static screen a customer
+  has to go find. Reuses the existing notification trigger framework; no new
+  delivery mechanism.
+
+**Explicitly not queued**: a public referrer leaderboard. It's a
+gamification feature, not a conversion lever — it requires its own
+privacy/opt-in decision (ranking exposes a customer's referral activity
+publicly) and, worse, incentivizes exactly the fake-account behavior the
+fraud review queue (#166) exists to catch, before that queue has been
+proven out. Revisit only after the base loop and fraud queue are live.
+
 ## OPEN DECISIONS
 
 Still to resolve before implementation, same convention as PARTNER.md's
