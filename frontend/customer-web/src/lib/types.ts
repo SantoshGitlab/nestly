@@ -528,3 +528,37 @@ export interface RescheduleOutcomeResponse {
   maxReschedulesPerBooking: number;
   rescheduledAtUtc: string;
 }
+
+/**
+ * Review shapes mirror the C# records in Nestly.Application.Reviews
+ * (ReviewContracts.cs) - see ReviewsController.
+ */
+
+/** Mirrors Nestly.Domain.ReviewStatus's declaration order exactly. */
+export enum ReviewStatus {
+  Visible = 0,
+  Hidden = 1,
+  Flagged = 2,
+}
+
+export interface ReviewEligibilityResponse {
+  isEligible: boolean;
+  ineligibilityReason: string | null;
+}
+
+export interface SubmitReviewRequestBody {
+  rating: number;
+  reviewText?: string | null;
+  issueTags?: string | null;
+}
+
+export interface ReviewResponse {
+  id: string;
+  bookingId: string;
+  serviceId: string;
+  rating: number;
+  reviewText: string | null;
+  issueTags: string | null;
+  status: ReviewStatus;
+  createdAtUtc: string;
+}
