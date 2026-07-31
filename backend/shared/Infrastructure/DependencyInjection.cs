@@ -159,6 +159,21 @@ public static class DependencyInjection
         services.AddScoped<IServiceabilityValidationService, ServiceabilityValidationService>();
         services.AddScoped<IGeographyRepository, GeographyRepository>();
         services.AddScoped<IGeographyQueryService, GeographyQueryService>();
+
+        // Task 111: admin geography master CRUD + serviceability mapping
+        // management (SRS 12.9). Separate repositories from the read-only
+        // IGeographyRepository/IServiceabilityRepository above - those back
+        // public lookups and validation, these back admin create/rename/
+        // activate-deactivate.
+        services.AddScoped<IStateRepository, StateRepository>();
+        services.AddScoped<ICityRepository, CityRepository>();
+        services.AddScoped<IZoneRepository, ZoneRepository>();
+        services.AddScoped<ILocalityRepository, LocalityRepository>();
+        services.AddScoped<IPincodeRepository, PincodeRepository>();
+        services.AddScoped<IGeographyManagementService, GeographyManagementService>();
+        services.AddScoped<ICategoryCityMappingRepository, CategoryCityMappingRepository>();
+        services.AddScoped<IServicePincodeMappingRepository, ServicePincodeMappingRepository>();
+        services.AddScoped<IServiceabilityMappingManagementService, ServiceabilityMappingManagementService>();
         services.AddScoped<ICategoryQueryService, CategoryQueryService>();
         services.AddScoped<IServiceQueryService, ServiceQueryService>();
         services.AddScoped<ICatalogSearchService, CatalogSearchService>();

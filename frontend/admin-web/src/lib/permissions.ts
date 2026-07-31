@@ -14,7 +14,9 @@ import type { AdminSessionClaims } from "./types";
  * - "{module}.read", one per `AdminModules` constant. Read is the correct
  * tier to gate nav visibility on: a role holding "{module}.write" always
  * holds "{module}.read" too (AdminPermissionCatalog's grant-building rule),
- * so this never hides a module from a role that can also edit it.
+ * so this never hides a module from a role that can also edit it; write-gated
+ * actions inside a module's own page check `.write` via `canWriteModule`
+ * below instead.
  *
  * Task 96a has since landed and `AdminTokenService` now issues one
  * `AdminClaimTypes.Permission` ("permission") claim per granted code, so
@@ -74,6 +76,20 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3, 21", requiredPermission: "audit.read" },
   { key: "settings", label: "System Settings", href: "/settings", srsRef: "SRS 12.19", requiredPermission: "settings.read" },
 ];
+
+/** Whether the current admin can perform mutating ("write") actions within a module, per AdminPermissionCatalog. */
+export function canWriteModule(claims: AdminSessionClaims | null, moduleKey: NavModuleKey): boolean {
+  if (!claims) return false;
+  if (claims.permissions.length > 0) {
+    return claims.permissions.includes(`${moduleKey}.write`);
+  }
+
+  // Same fallback reasoning as isModuleVisibleByRole: without a populated
+  // permissions claim, fall back to the provisional role matrix - any role
+  // that can see the module at all is treated as able to act on it, since
+  // the fallback matrix does not distinguish read/write.
+  return isModuleVisibleByRole(claims.role, moduleKey);
+}
 
 /**
  * Provisional role -> module matrix, standing in for the real permission

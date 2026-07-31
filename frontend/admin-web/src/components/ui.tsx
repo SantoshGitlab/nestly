@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef } from "react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
 /**
  * The shared primitives every admin screen is built from. Mirrors
@@ -85,6 +85,59 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         aria-describedby={error ? errorId : undefined}
         className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
       />
+      {error ? (
+        <p id={errorId} className="text-xs text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+});
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label: string;
+  error?: string;
+  options: readonly SelectOption[];
+  /** Shown as a disabled first option, e.g. "Select a state…" - selecting it keeps the field empty. */
+  placeholder?: string;
+}
+
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  { label, error, id, options, placeholder, ...props },
+  ref,
+) {
+  const selectId = id ?? `field-${props.name ?? label.toLowerCase().replace(/\s+/g, "-")}`;
+  const errorId = `${selectId}-error`;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={selectId} className="text-sm font-medium">
+        {label}
+      </label>
+      <select
+        {...props}
+        id={selectId}
+        ref={ref}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+      >
+        {placeholder ? (
+          <option value="" disabled>
+            {placeholder}
+          </option>
+        ) : null}
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
       {error ? (
         <p id={errorId} className="text-xs text-red-600 dark:text-red-400">
           {error}
