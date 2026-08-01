@@ -2101,22 +2101,62 @@ Optional for:
 - Historical booking data remains consistent.
 - Security, logging, and audit requirements are implemented.
 
-## 34. OPEN DECISIONS / IMPLEMENTATION CLARIFICATIONS
+## 34. OPEN DECISIONS / IMPLEMENTATION CLARIFICATIONS (CLOSED)
 
-The following items must be finalized before database and API design are frozen:
+Closed 2026-08-01, task 143. Each item below reflects the decision actually
+embodied in the shipped implementation (Phases 1-7), not a new choice made
+in isolation — resolving via "what the code already does" rather than
+re-litigating settled ground, consistent with how ambiguity has been
+handled throughout this backlog.
 
-1. Can one booking contain multiple services or only one service package?
-1. Is COD allowed, and for which categories?
-1. Is slot inventory rule-based only or capacity-linked?
-1. Are wallet and promotional credits enabled in Phase 1?
-1. Are partial refunds supported in customer-visible flow or admin-only?
-1. Are coupons stackable?
-1. Is tax inclusive or exclusive in displayed prices?
-1. Is reschedule free, fee-based, or category-specific?
-1. Is partner/professional assignment part of Phase 1 admin workflow?
-1. Will support tickets be exposed to customer with full timeline or only summary?
-1. Are reviews public immediately or moderated before publish?
-1. Do we need multilingual content in Phase 1?
+1. **Multi-service bookings.** A booking is not a single-service package: it
+   holds a `BookingItem` collection (one per service line) plus
+   `BookingAddOnItem`s per line (`Booking`, `BookingItem`,
+   `BookingAddOnItem` in `Nestly.Domain`). Multiple services per booking is
+   supported.
+1. **COD.** Not implemented — no `PaymentMethod`/gateway code path exists
+   for cash/offline collection anywhere in `backend/`. Payment is
+   online-gateway-only (Razorpay-style) for all categories.
+1. **Slot inventory.** Capacity-linked, not rule-based-only:
+   `SlotWindow.MaxBookingsPerSlot` is enforced via an atomic
+   conditional-update reservation (`SlotCapacityRepository`, task 135c),
+   on top of the existing cutoff/blackout rule checks.
+1. **Wallet/promotional credits.** Enabled, not deferred: `WalletLedgerEntry`
+   (append-only, `WalletSourceType`-tagged) and `WalletEntryType` shipped in
+   Phase 4 (tasks 67, 74), with a customer-facing balance/ledger API and
+   frontend page (task 78).
+1. **Partial refunds.** Both. `IRefundService.InitiatePartialRefundAsync`
+   is used by admin-initiated refunds (task 117) and refund status
+   (including partial `RefundType`) is exposed read-only to the customer
+   via `RefundsController` per booking (SRS 11.17.2, task 78c) — full
+   transaction detail stays admin-only, status/amount is customer-visible.
+1. **Coupon stacking.** Configurable, default off:
+   `SettingsContracts.AllowCouponStacking` (Coupon settings group, task
+   131) — platform-wide toggle rather than a fixed rule, defaulting to one
+   coupon per booking.
+1. **Tax display.** Configurable, default inclusive:
+   `SettingsContracts.TaxInclusivePricing` (System Configuration, task 131)
+   — avoids hardcoding a choice that varies by market/category.
+1. **Reschedule fee.** Category-specific and policy-driven, not a flat
+   free/paid switch: `ReschedulePolicyOptions` + `RescheduleFeeCalculator`
+   (Phase 5, task 82) compute the fee from the configured policy window and
+   category.
+1. **Partner assignment.** Deferred out of the Phase 1 admin workflow, then
+   delivered as its own phase: reordered 2026-07-31 to run as Phase 7
+   (`docs/PARTNER.md`), landed 2026-08-01 — `BookingPartnerAssignment`,
+   admin assignment/reassignment (task 159), partner-api.
+1. **Support ticket visibility.** Full timeline, not summary-only:
+   `SupportTicketComment` history is returned to the customer via
+   `SupportTicketsController` (consumer-api), matching the same
+   assign/respond/escalate/resolve trail admin sees (task 120).
+1. **Review publish.** Immediate, with post-publish moderation: `Review`
+   defaults to `ReviewStatus.Visible` on submission; admins can `Hide` /
+   `MakeVisible` / `Flag` afterward (`ReviewModerationService`, task 122) —
+   pre-publish moderation queue was not built.
+1. **Multilingual content.** Not implemented — no culture/locale
+   infrastructure (`IStringLocalizer`, resource files, `Accept-Language`
+   handling) exists anywhere in `backend/` or `frontend/`. English-only for
+   the scope delivered through Phase 10.
 
 ## 35. NEXT DELIVERABLES
 
