@@ -9,7 +9,13 @@ The rest of the documentation suite describes how things *should* be built
 is the only one that describes **the current state of the repository** — so
 treat the others as the specification and this one as the map.
 
-Last verified: 2026-07-28, at the completion of Phase 1.
+Last verified: 2026-08-01. Phase numbering changed since the previous
+verification: Partner moved from Phase 8 (deferred, after everything) to
+Phase 7 (before Hardening & Launch, now Phase 8) — see PARTNER.md's STATUS
+section. Two new phases were added: 9 (Referral & Growth) and 10 (Product
+Enhancements — subscriptions, recurring bookings, in-app chat, service
+completion verification). See TASKS-SUMMARY.md for authoritative current
+counts; the table below is a snapshot and will drift.
 
 ---
 
@@ -267,25 +273,29 @@ exists.
 |---|---|---|
 | 0 | Foundation — solution, persistence, caching, jobs, audit, DevOps | 25/25 |
 | 1 | Identity & Customer — registration, JWT, profile, addresses, tests | 46/46 |
-| 2 | Catalog & Serviceability | 2/26 |
-| 3 | Booking Core | 0/15 |
-| 4 | Payments & Financial | 0/22 |
-| 5 | Post-Booking — reviews, support, notifications | 0/17 |
-| 6 | Admin Panel | 0/48 |
-| 7 | Hardening & Launch | 0/14 |
-| 8 | Partner module (deferred) | 0/8 |
+| 2 | Catalog & Serviceability | 67/72 |
+| 3 | Booking Core | 47/56 |
+| 4 | Payments & Financial | 40/46 |
+| 5 | Post-Booking — reviews, support, notifications | 40/47 |
+| 6 | Admin Panel | 104/119 |
+| 7 | Partner — service-provider identity, onboarding, assignment, earnings (PARTNER.md) | 21/25 |
+| 8 | Hardening & Launch | 22/38 |
+| 9 | Referral & Growth — refer-and-earn, milestones, expiring wallet credit (REFERRAL.md) | 0/16 |
+| 10 | Product Enhancements — subscriptions, recurring bookings, in-app chat, completion verification (PRODUCT-ENHANCEMENTS.md) | 0/22 |
 
-Per-phase task counts grew during Phase 1 as several tasks were decomposed
-into subtasks by an automated worker (e.g. `#35` → `#35a`..`#35d` →
-`#35ba`..`#35bx4`); the done/total ratio for a phase is only meaningful
-relative to its *current* total, not the number originally planned.
+Per-phase task counts grew as several tasks were decomposed into subtasks by
+an automated worker (e.g. `#35` → `#35a`..`#35d` → `#35ba`..`#35bx4`); the
+done/total ratio for a phase is only meaningful relative to its *current*
+total, not the number originally planned. **Partner was moved from Phase 8
+to Phase 7 on 2026-07-31** — it now runs before Hardening & Launch, not after
+everything else — see PARTNER.md's STATUS section for why.
 
-**Phase 2 (Catalog & Serviceability) is the current focus.** There is now an
-authenticated principal throughout the system — every `[Authorize]`-protected
-endpoint (profile, addresses) requires a JWT issued by the Phase 1 login
-flow, and the admin-only Hangfire dashboard's authorization filter has real
-identities to evaluate against, even though nothing has been granted admin
-access yet (Phase 6).
+**Phase 8 (Hardening & Launch) and Phase 7 (Partner) are both active**, with
+Phases 0–6 fully or substantially complete. There is an authenticated
+principal throughout the system, RBAC is in place for the admin panel
+(Phase 6), and the payment/wallet/coupon infrastructure Phases 9 and 10
+depend on (referral rewards, subscription billing) already exists and is
+largely done.
 
 ---
 

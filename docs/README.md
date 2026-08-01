@@ -36,6 +36,7 @@ Every topic has exactly **one authoritative document**.
 | [RUNBOOK-BACKUP-RESTORE.md](RUNBOOK-BACKUP-RESTORE.md) | Tested PostgreSQL backup/restore procedure (companion to DEVOPS.md's backup requirement) |
 | [PARTNER.md](PARTNER.md) | Partner / Vendor module specification (Phase 7 — scheduled before launch) |
 | [REFERRAL.md](REFERRAL.md) | Referral (Refer & Earn) module specification (Phase 9) |
+| [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md) | Subscription, Recurring Bookings, In-App Chat, Completion Verification specification (Phase 10) |
 | [tasks.csv](tasks.csv) | Development backlog — phased tasks, priorities and dependencies |
 | [archive/](archive/) | Original Word-format versions of these documents (historical) |
 
