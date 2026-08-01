@@ -19,6 +19,35 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         await _context.SaveChangesAsync();
     }
 
+    public async Task<bool> TryAddAsync(PaymentTransaction transaction)
+    {
+        // BookingId's unique index (PaymentTransactionConfiguration) is what
+        // actually makes this safe under concurrency (task 135b): two
+        // requests that both read "no existing transaction yet" for the same
+        // booking and both try to insert the first one can't both win here.
+        await _context.PaymentTransactions.AddAsync(transaction);
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the race - detach the failed entity (and its owned
+            // PaymentAttempt child) so a later SaveChangesAsync on this same
+            // request-scoped context doesn't try to re-submit it and throw
+            // again. Mirrors SlotCapacityRepository.TryReserveAsync's
+            // identical cleanup for the same reason.
+            foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return false;
+        }
+    }
+
     public async Task UpdateAsync(PaymentTransaction transaction)
     {
         // Only attach+mark-modified when not already tracked by this

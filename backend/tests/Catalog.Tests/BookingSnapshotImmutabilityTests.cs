@@ -46,6 +46,7 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
                 new SlotWindowRepository(context),
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
                 TimeProvider.System),
             new PriceCalculationService(
                 new ServiceRepository(context),
@@ -55,7 +56,19 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
                 new CityPricingPolicyRepository(context)),
             couponService);
 
-        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
+        return new BookingService(
+            summaryService,
+            new BookingRepository(context),
+            new CustomerRepository(context),
+            couponService,
+            new SlotAvailabilityService(
+                new ServiceabilityRepository(context),
+                new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
+                new SlotWindowRepository(context),
+                new SlotBlackoutRepository(context),
+                new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
+                TimeProvider.System));
     }
 
     private sealed record Fixture(

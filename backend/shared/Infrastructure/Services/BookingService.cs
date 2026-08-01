@@ -1,6 +1,7 @@
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
+using Nestly.Application.Slots;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -16,14 +17,20 @@ public class BookingService : IBookingService
     private readonly IBookingRepository _bookingRepository;
     private readonly ICustomerRepository _customerRepository;
     private readonly ICouponService _couponService;
+    private readonly ISlotAvailabilityService _slotAvailabilityService;
 
     public BookingService(
-        IBookingSummaryService summaryService, IBookingRepository bookingRepository, ICustomerRepository customerRepository, ICouponService couponService)
+        IBookingSummaryService summaryService,
+        IBookingRepository bookingRepository,
+        ICustomerRepository customerRepository,
+        ICouponService couponService,
+        ISlotAvailabilityService slotAvailabilityService)
     {
         _summaryService = summaryService;
         _bookingRepository = bookingRepository;
         _customerRepository = customerRepository;
         _couponService = couponService;
+        _slotAvailabilityService = slotAvailabilityService;
     }
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
@@ -44,6 +51,18 @@ public class BookingService : IBookingService
         }
 
         var summary = summaryResult.Value;
+
+        // Reserve the slot's per-day capacity (SRS 12.10.1, task 135c)
+        // before anything else: an atomic conditional update, same shape as
+        // the coupon reservation below, so two customers racing for the
+        // last seat on a promoted slot cannot both succeed. Checked first
+        // because under promotion-level traffic the slot - not the coupon -
+        // is the more likely contended resource.
+        var slotReservation = await _slotAvailabilityService.ReserveSlotAsync(summary.Slot.SlotWindowId, summary.Slot.Date);
+        if (slotReservation.IsFailure)
+        {
+            return slotReservation.Error;
+        }
 
         // Reserve the coupon's usage slot before the booking exists (task
         // 72c/73): CouponRedemption has a foreign key to the booking, so it

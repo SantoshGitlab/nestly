@@ -12,8 +12,15 @@ public interface IServiceRepository : IRepository<Service>
     /// <summary>Whether any service (other than <paramref name="excludeId"/>, when updating) already uses this slug.</summary>
     Task<bool> ExistsBySlugAsync(string slug, Guid? excludeId = null);
 
-    /// <summary>Active services whose name contains the query, case-insensitively (SRS 24.3 search).</summary>
-    Task<IReadOnlyList<Service>> SearchActiveAsync(string query);
+    /// <summary>
+    /// Active services whose name contains the query, case-insensitively
+    /// (SRS 24.3 search). <paramref name="limit"/> is null (unbounded) by
+    /// default because ServiceabilityMappingManagementService/
+    /// SlotManagementService deliberately call this with an empty query as a
+    /// "list every active service" idiom and need the full set - only pass a
+    /// limit for a genuine free-text search result (task 136c).
+    /// </summary>
+    Task<IReadOnlyList<Service>> SearchActiveAsync(string query, int? limit = null);
 
     /// <summary>
     /// Every service regardless of active status, optionally filtered to one

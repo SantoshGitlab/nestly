@@ -17,6 +17,7 @@ public sealed class SlotAvailabilityServiceTests : IClassFixture<TestDatabase>
         new SlotWindowRepository(context),
         new SlotBlackoutRepository(context),
         new SlotBookingPolicyRepository(context),
+        new SlotCapacityRepository(context),
         timeProvider ?? TimeProvider.System);
 
     public SlotAvailabilityServiceTests(TestDatabase db) => _db = db;

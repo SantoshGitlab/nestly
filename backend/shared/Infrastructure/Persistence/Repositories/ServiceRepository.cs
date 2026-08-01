@@ -31,8 +31,14 @@ public class ServiceRepository : IServiceRepository
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Service>().AnyAsync(s => s.Id == id);
 
+    // AsNoTracking (task 136a): both queries below back read-only catalog
+    // browse/search paths (ServiceQueryService/CategoryQueryService's cached
+    // listings, CatalogSearchService's search) - nothing downstream mutates
+    // and saves these entities.
+
     public async Task<IReadOnlyList<Service>> ListActiveByCategoryAsync(Guid categoryId) =>
         await _context.Set<Service>()
+            .AsNoTracking()
             .Where(s => s.CategoryId == categoryId && s.IsActive)
             .OrderBy(s => s.Name)
             .ToListAsync();
@@ -43,13 +49,21 @@ public class ServiceRepository : IServiceRepository
     public Task<bool> ExistsBySlugAsync(string slug, Guid? excludeId = null) =>
         _context.Set<Service>().AnyAsync(s => s.Slug == slug && (excludeId == null || s.Id != excludeId));
 
-    public async Task<IReadOnlyList<Service>> SearchActiveAsync(string query)
+    public async Task<IReadOnlyList<Service>> SearchActiveAsync(string query, int? limit = null)
     {
         string normalized = query.ToLowerInvariant();
-        return await _context.Set<Service>()
+        var results = _context.Set<Service>()
+            .AsNoTracking()
             .Where(s => s.IsActive && s.Name.ToLower().Contains(normalized))
             .OrderBy(s => s.Name)
-            .ToListAsync();
+            .AsQueryable();
+
+        if (limit is not null)
+        {
+            results = results.Take(limit.Value);
+        }
+
+        return await results.ToListAsync();
     }
 
     public async Task<IReadOnlyList<Service>> ListAllAsync(Guid? categoryId)

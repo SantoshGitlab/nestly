@@ -174,6 +174,7 @@ public static class DependencyInjection
         services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
         services.AddScoped<ISlotWindowRepository, SlotWindowRepository>();
         services.AddScoped<ISlotAvailabilityOverrideRepository, SlotAvailabilityOverrideRepository>();
+        services.AddScoped<ISlotCapacityRepository, SlotCapacityRepository>();
         services.AddScoped<ISlotManagementService, SlotManagementService>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();

@@ -67,11 +67,21 @@ public class CategoryQueryService : ICategoryQueryService
             async _ =>
             {
                 var services = await _serviceRepository.ListActiveByCategoryAsync(category.Id);
+
+                // Batched (task 136a fix): this used to call
+                // ListActiveByServiceAsync once per service inside the loop
+                // below - an N+1 that fired on every cache miss for a
+                // category detail page. One query for every service's
+                // add-ons, then grouped in memory, replaces N.
+                var addOnsByService = (await _addOnRepository.ListActiveByServiceIdsAsync(services.Select(s => s.Id).ToList()))
+                    .GroupBy(a => a.ServiceId)
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<ServiceAddOn>)g.ToList());
+
                 var serviceResponses = new List<ServiceSummaryResponse>(services.Count);
 
                 foreach (var service in services)
                 {
-                    var addOns = await _addOnRepository.ListActiveByServiceAsync(service.Id);
+                    var addOns = addOnsByService.TryGetValue(service.Id, out var found) ? found : [];
                     serviceResponses.Add(new ServiceSummaryResponse(
                         service.Id,
                         service.Name,

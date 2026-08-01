@@ -43,6 +43,12 @@ public class CategoryRepository : ICategoryRepository
             .ThenBy(c => c.Name)
             .ToListAsync();
 
+    // AsNoTracking (task 136a): both queries below are read-only call paths
+    // (CategoryQueryService's cached city listing, CatalogSearchService's
+    // search) - nothing downstream ever mutates and saves these entities, so
+    // there is no reason to pay for EF Core's change-tracking snapshot on a
+    // possibly-large result set.
+
     public async Task<IReadOnlyList<Category>> ListServiceableInCityAsync(Guid cityId)
     {
         var categoryIds = _context.Set<CategoryCityMapping>()
@@ -50,19 +56,28 @@ public class CategoryRepository : ICategoryRepository
             .Select(m => m.CategoryId);
 
         return await _context.Set<Category>()
+            .AsNoTracking()
             .Where(c => c.IsActive && categoryIds.Contains(c.Id))
             .OrderBy(c => c.SortOrder)
             .ThenBy(c => c.Name)
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<Category>> SearchActiveAsync(string query)
+    public async Task<IReadOnlyList<Category>> SearchActiveAsync(string query, int? limit = null)
     {
         string normalized = query.ToLowerInvariant();
-        return await _context.Set<Category>()
+        var results = _context.Set<Category>()
+            .AsNoTracking()
             .Where(c => c.IsActive && c.Name.ToLower().Contains(normalized))
             .OrderBy(c => c.SortOrder)
             .ThenBy(c => c.Name)
-            .ToListAsync();
+            .AsQueryable();
+
+        if (limit is not null)
+        {
+            results = results.Take(limit.Value);
+        }
+
+        return await results.ToListAsync();
     }
 }

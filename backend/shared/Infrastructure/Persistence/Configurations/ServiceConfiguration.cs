@@ -11,7 +11,14 @@ public class ServiceConfiguration : IEntityTypeConfiguration<Service>
         builder.ToTable("service");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.CategoryId).IsRequired();
-        builder.HasIndex(x => x.CategoryId);
+        // Composite, not a plain CategoryId index (task 136b): every hot-path
+        // read (ServiceRepository.ListActiveByCategoryAsync/SearchActiveAsync)
+        // filters on CategoryId + IsActive together, and this composite still
+        // serves the few admin queries that filter on CategoryId alone
+        // (ListAllAsync) since it's the leading column - a separate
+        // single-column index would be redundant overhead (DATABASE.md:
+        // "Avoid excessive indexing").
+        builder.HasIndex(x => new { x.CategoryId, x.IsActive });
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Slug).IsRequired().HasMaxLength(200);
         builder.HasIndex(x => x.Slug).IsUnique();

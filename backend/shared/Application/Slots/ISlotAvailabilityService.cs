@@ -14,4 +14,15 @@ public interface ISlotAvailabilityService
     /// since the customer picked it.
     /// </summary>
     Task<Result<SlotRevalidationResponse>> RevalidateSlotAsync(Guid serviceId, Guid localityId, Guid slotWindowId, DateOnly date);
+
+    /// <summary>
+    /// Atomically reserves one seat against the window's per-day capacity
+    /// (SlotWindow.MaxBookingsPerSlot, SRS 12.10.1, task 135c). Must be
+    /// called once, immediately before a booking is persisted for that
+    /// window+date - never treat a prior <see cref="RevalidateSlotAsync"/>
+    /// success as proof capacity is still available, since another booking
+    /// may have taken the last seat in between. A window with no configured
+    /// capacity (null) always succeeds without reserving anything.
+    /// </summary>
+    Task<Result> ReserveSlotAsync(Guid slotWindowId, DateOnly date);
 }

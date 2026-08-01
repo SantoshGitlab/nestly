@@ -429,13 +429,13 @@ summary-note,"Phase order changed 2026-07-31: Partner (was Phase 8, deferred) no
 133g,Security - OTP brute force (SRS 28.3),done,critical,depends on #133f,Phase 8 - Hardening & Launch
 134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),done,critical,"depends on #133g | draft rate_limiting_service.cs salvaged to _salvage/auth-otp-drafts/| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),decomposed,medium,"depends on #66c | auto-blocked: depends on blocked task #66 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 135a,135b,135c",Phase 8 - Hardening & Launch
-135a,Performance - Catalog browse,todo,medium,"depends on #66c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
-135b,Performance - checkout,todo,medium,depends on #135a,Phase 8 - Hardening & Launch
-135c,Performance - concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),todo,medium,depends on #135b,Phase 8 - Hardening & Launch
+135a,Performance - Catalog browse,done,medium,"depends on #66c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
+135b,Performance - checkout,done,medium,depends on #135a,Phase 8 - Hardening & Launch
+135c,Performance - concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),done,medium,depends on #135b,Phase 8 - Hardening & Launch
 136,Performance - Query optimization pass: Execution plan review; index tuning; pagination audits on hot paths (DATABASE.md),decomposed,medium,"depends on #135c | auto-blocked: depends on blocked task #135 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 136a,136b,136c",Phase 8 - Hardening & Launch
-136a,Performance - Execution plan review,todo,medium,"depends on #135c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
-136b,Performance - index tuning,todo,medium,depends on #136a,Phase 8 - Hardening & Launch
-136c,Performance - pagination audits on hot paths (DATABASE.md),todo,medium,depends on #136b,Phase 8 - Hardening & Launch
+136a,Performance - Execution plan review,done,medium,"depends on #135c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
+136b,Performance - index tuning,done,medium,depends on #136a,Phase 8 - Hardening & Launch
+136c,Performance - pagination audits on hot paths (DATABASE.md),done,medium,depends on #136b,Phase 8 - Hardening & Launch
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),decomposed,medium,"depends on #10 #88g | auto-blocked: depends on blocked task #88 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 137a,137b,137c",Phase 8 - Hardening & Launch
 137a,Observability - Metrics export + alerts for payment,todo,medium,"depends on #10 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
 137b,Observability - booking,todo,medium,depends on #137a,Phase 8 - Hardening & Launch

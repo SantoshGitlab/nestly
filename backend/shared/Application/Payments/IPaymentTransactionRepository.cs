@@ -6,6 +6,16 @@ public interface IPaymentTransactionRepository
 {
     Task AddAsync(PaymentTransaction transaction);
 
+    /// <summary>
+    /// Inserts a brand-new transaction, but returns <c>false</c> instead of
+    /// throwing if another concurrent request already created one for the
+    /// same booking (task 135b - BookingId's unique index is the guard).
+    /// Callers must not retry with the same instance; on a <c>false</c>
+    /// return, re-read via <see cref="GetByBookingIdAsync"/> to get the
+    /// transaction that actually won.
+    /// </summary>
+    Task<bool> TryAddAsync(PaymentTransaction transaction);
+
     Task UpdateAsync(PaymentTransaction transaction);
 
     /// <summary>Loaded with its attempts - a transaction is never useful partially loaded.</summary>
