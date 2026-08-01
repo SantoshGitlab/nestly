@@ -67,7 +67,8 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
             couponService);
 
         return new BookingService(
-            summaryService, new BookingRepository(context), new CustomerRepository(context), couponService, slotAvailabilityService);
+            summaryService, new BookingRepository(context), new CustomerRepository(context), couponService, slotAvailabilityService,
+            new NoOpMetricsService());
     }
 
     private static PaymentService BuildPaymentService(NestlyDbContext context, IPaymentGateway gateway)
@@ -78,7 +79,7 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
         var webhookService = new PaymentWebhookService(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
         return new PaymentService(paymentRepository, bookingRepository, gateway, simulator, webhookService);
     }

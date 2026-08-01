@@ -64,7 +64,8 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System));
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private static PaymentWebhookService BuildWebhookService(
@@ -73,7 +74,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         new(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private static BookingNotificationTriggerHandler BuildBookingHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(
@@ -95,7 +96,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         new(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(context),
-            NullLogger<NotificationDispatchService>.Instance);
+            new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 

@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
@@ -35,6 +37,7 @@ public class PaymentWebhookService : IPaymentWebhookService
     private readonly ICommissionService _commissionService;
     private readonly IEscrowService _escrowService;
     private readonly NestlyDbContext _context;
+    private readonly IMetricsService _metricsService;
     private readonly ILogger<PaymentWebhookService> _logger;
 
     public PaymentWebhookService(
@@ -45,6 +48,7 @@ public class PaymentWebhookService : IPaymentWebhookService
         ICommissionService commissionService,
         IEscrowService escrowService,
         NestlyDbContext context,
+        IMetricsService metricsService,
         ILogger<PaymentWebhookService> logger)
     {
         _paymentRepository = paymentRepository;
@@ -54,11 +58,21 @@ public class PaymentWebhookService : IPaymentWebhookService
         _commissionService = commissionService;
         _escrowService = escrowService;
         _context = context;
+        _metricsService = metricsService;
         _logger = logger;
     }
 
     public async Task<Result> HandleCallbackAsync(PaymentWebhookRequest request)
     {
+        // Task 137a: measures the whole callback-processing path below,
+        // including the DB transaction commit - the latency a real payment
+        // failure/success takes to become durable, not just gateway/signature
+        // checks. Only recorded on the two branches that produce a genuine
+        // payment outcome (succeeded/failed inside the try block) - an
+        // invalid signature or an already-resolved duplicate redelivery is
+        // not a new payment outcome, so neither should skew the metric.
+        var stopwatch = Stopwatch.StartNew();
+
         string canonicalPayload = PaymentWebhookPayload.Build(request.GatewayOrderId, request.GatewayPaymentRef, request.Status);
         if (!_gateway.VerifyWebhookSignature(canonicalPayload, request.Signature))
         {
@@ -145,6 +159,9 @@ public class PaymentWebhookService : IPaymentWebhookService
             await dbTransaction.RollbackAsync();
             throw;
         }
+
+        stopwatch.Stop();
+        _metricsService.RecordPaymentOutcome(succeeded, stopwatch.Elapsed, succeeded ? null : request.Status);
 
         return Result.Success();
     }

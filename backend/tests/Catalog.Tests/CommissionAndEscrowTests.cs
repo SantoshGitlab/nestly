@@ -48,7 +48,7 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         new(
             new PaymentTransactionRepository(context), new BookingRepository(context), new ServiceRepository(context), gateway,
             commissionService ?? BuildCommissionService(), BuildEscrowService(context),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private static RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
         new(
@@ -90,7 +90,8 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System));
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, Guid CategoryId, decimal Total);

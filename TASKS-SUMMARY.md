@@ -12,12 +12,51 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 14 | 18 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 17 | 15 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **404** | **56** | **50** | **2** | **512** |
+| **Overall** | **407** | **53** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 135a-135c and 136a-136c
+Last updated: 2026-08-01, after completing tasks 137a-137c (Phase 8
+observability: metrics export + alerts for payment, booking, and
+notification failures) on `phase-8-hardening-launch`. Task 10 (Serilog +
+health checks) was already in place with no metrics abstraction, so this
+adds one: `IMetricsService` (`Nestly.Application.Abstractions.Observability`)
+implemented by `NestlyMetricsService`
+(`Nestly.Infrastructure.Observability`) over `System.Diagnostics.Metrics`
+(Counter/Histogram on a `"Nestly"` Meter), exported via
+`OpenTelemetry.Extensions.Hosting` + `OpenTelemetry.Exporter.Prometheus.AspNetCore`
+on a self-hosted, unauthenticated `/metrics` scrape endpoint on all three
+APIs (consumer/admin/partner) - a scrape endpoint rather than an OTLP push
+since DEVOPS.md's OPEN DECISIONS still lists the monitoring/alerting stack
+as unresolved and no OTel collector exists anywhere in this repo yet; the
+Prometheus AspNetCore exporter package is still versioned as beta upstream
+(no stable release exists), accepted here as the least-new-infra option the
+task explicitly called out. Wired into `PaymentWebhookService` (payment
+outcome counter + processing-latency histogram, 137a),
+`BookingService.CreateAsync` (creation success/failure counter + a
+dedicated slot-conflict counter for "Booking.SlotCapacityReached", 137b)
+plus a new `BookingMetricsHandler` reacting to every
+`BookingStatusChangedEvent` for status-transition tracking (137b), and
+`NotificationDispatchService` (per-channel SMS/email/push send outcome
+counter, 137c). DEVOPS.md names no alerting destination (Slack/PagerDuty/
+email) yet, so "alerting" is implemented as a rolling, per-category
+failure-rate monitor (`FailureRateAlertMonitor`, config in the new
+`MetricsOptions`/`"Metrics"` section) that raises a distinctly-tagged,
+error-level structured log event (own `EventId` + an `AlertCode` property
+per category: `Payment.FailureRateAlert`, `Booking.FailureRateAlert`,
+`Notification.FailureRateAlert`, the last tracked independently per
+channel) an external alert rule can match on once DEVOPS.md's monitoring
+stack is decided - scoped deliberately short of a fabricated webhook
+integration. DEVOPS.md's OBSERVABILITY section also lists booking among the
+"critical failures" needing alerting, so booking creation got the same
+failure-rate-alert treatment as payment/notification even though the 137b
+task text only asked for counters/transition-tracking/slot-conflict-rate -
+noted here as the conventional call taken on that ambiguity. All 3 rows now
+`done`; Phase 8 is 17/38 done, 15 `todo`, 6 `decomposed` parent
+placeholders remain.
+
+Previously, 2026-08-01: completed tasks 135a-135c and 136a-136c
 (Phase 8 performance work) on `phase-8-hardening-launch`: established a new
 `backend/tests/Performance.Tests` project (matching this repo's existing
 per-project TestDatabase.cs pattern, but on a file-based SQLite database so

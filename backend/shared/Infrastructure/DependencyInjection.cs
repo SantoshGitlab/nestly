@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
 using Nestly.Application.Identity;
@@ -46,11 +47,13 @@ using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Authorization;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Caching;
+using Nestly.Infrastructure.Observability;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
+using OpenTelemetry.Metrics;
 
 namespace Nestly.Infrastructure;
 
@@ -124,6 +127,14 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(CommissionOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): not a secret and
+        // has safe production-sensible defaults, same reasoning as
+        // CommissionOptions above - no ValidateOnStart.
+        services
+            .AddOptions<MetricsOptions>()
+            .Bind(configuration.GetSection(MetricsOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
@@ -144,6 +155,21 @@ public static class DependencyInjection
         services
             .AddHealthChecks()
             .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+
+        // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): singleton so the
+        // underlying Meter and rolling failure-rate windows accumulate across
+        // the whole process lifetime, not per request/scope. The OpenTelemetry
+        // SDK collects from NestlyMetricsService.MeterName and exposes it on a
+        // self-hosted Prometheus scrape endpoint (see each API's Program.cs
+        // MapPrometheusScrapingEndpoint call) - no OTel collector exists
+        // anywhere in this repo yet, so a scrape endpoint is the smallest
+        // infrastructure footprint that is still useful once DEVOPS.md's
+        // "Monitoring/alerting stack" open decision is resolved.
+        services.AddSingleton<IMetricsService, NestlyMetricsService>();
+        services.AddOpenTelemetry()
+            .WithMetrics(metrics => metrics
+                .AddMeter(NestlyMetricsService.MeterName)
+                .AddPrometheusExporter());
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);

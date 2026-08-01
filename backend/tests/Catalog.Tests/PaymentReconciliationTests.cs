@@ -71,7 +71,8 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System));
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private static PaymentWebhookService BuildWebhookService(
@@ -80,7 +81,7 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
         new(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance);
 
     private sealed record SeededBooking(Guid CustomerId, Guid BookingId);
 

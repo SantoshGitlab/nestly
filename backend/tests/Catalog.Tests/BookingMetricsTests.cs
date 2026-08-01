@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
@@ -9,14 +10,20 @@ using Nestly.Infrastructure.Services;
 
 namespace Nestly.Catalog.Tests;
 
-/// <summary>Covers tasks 58-61: booking creation orchestration, snapshot persistence, customer APIs, status mapping.</summary>
-public sealed class BookingServiceTests : IClassFixture<TestDatabase>
+/// <summary>
+/// Covers task 137b: BookingService.CreateAsync's IMetricsService wiring -
+/// success/failure counters and, specifically, that a slot-capacity rejection
+/// (SlotAvailabilityService.ReserveSlotAsync's "Booking.SlotCapacityReached"
+/// error) is reported through both RecordSlotConflict and RecordBookingCreated,
+/// not just folded silently into the generic failure count.
+/// </summary>
+public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
 {
     private readonly TestDatabase _db;
 
-    public BookingServiceTests(TestDatabase db) => _db = db;
+    public BookingMetricsTests(TestDatabase db) => _db = db;
 
-    private BookingService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    private static BookingService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IMetricsService metricsService)
     {
         var couponService = new CouponService(
             new CouponRepository(context),
@@ -57,14 +64,13 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            metricsService);
     }
 
-    private sealed record Fixture(
-        Customer Customer, CustomerAddress Address, City City, Pincode Pincode,
-        Locality Locality, Service Service, ServiceAddOn AddOn, SlotWindow Window, DateOnly Date);
+    private sealed record Fixture(Customer Customer, CustomerAddress Address, City City, Locality Locality, Service Service, SlotWindow Window, DateOnly Date);
 
-    private Fixture Seed(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    /// <summary>Same shape as BookingServiceTests.Seed, plus an optional per-day capacity on the slot window so the conflict path is reachable.</summary>
+    private Fixture Seed(Nestly.Infrastructure.Persistence.NestlyDbContext context, int? slotCapacity = null)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];
@@ -79,8 +85,12 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 500m);
-        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Sofa Cleaning", 150m);
         var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+        if (slotCapacity is not null)
+        {
+            window.SetCapacity(slotCapacity.Value);
+        }
+
         var rule = new SlotWindowRule(Guid.NewGuid(), window.Id, futureDate.DayOfWeek);
 
         context.Add(customer);
@@ -92,20 +102,19 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         context.Localities.Add(locality);
         context.Add(category);
         context.Add(service);
-        context.Add(addOn);
         context.ServicePincodeMappings.Add(new ServicePincodeMapping(Guid.NewGuid(), service.Id, pincode.Id));
         context.SlotWindows.Add(window);
         context.SlotWindowRules.Add(rule);
         context.SaveChanges();
 
-        return new Fixture(customer, address, city, pincode, locality, service, addOn, window, futureDate);
+        return new Fixture(customer, address, city, locality, service, window, futureDate);
     }
 
-    private static BookingSummaryRequest RequestFor(Fixture f, IReadOnlyList<AddOnSelection>? addOns = null) => new(
-        f.Service.Id, f.City.Id, f.Address.Id, f.Locality.Id, f.Window.Id, f.Date, Quantity: 1, addOns ?? []);
+    private static BookingSummaryRequest RequestFor(Fixture f) => new(
+        f.Service.Id, f.City.Id, f.Address.Id, f.Locality.Id, f.Window.Id, f.Date, Quantity: 1, []);
 
     [Fact]
-    public async Task CreateAsync_persists_a_booking_in_PaymentPending_with_a_two_entry_timeline()
+    public async Task CreateAsync_records_a_successful_outcome_on_the_happy_path()
     {
         Fixture fixture;
         using (var context = _db.CreateContext())
@@ -113,90 +122,64 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
             fixture = Seed(context);
         }
 
+        var recorder = new RecordingMetricsService();
         using var createContext = _db.CreateContext();
-        var created = await BuildService(createContext).CreateAsync(
-            fixture.Customer.Id, RequestFor(fixture, [new AddOnSelection(fixture.AddOn.Id, 2)]));
+        var result = await BuildService(createContext, recorder).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
 
-        created.IsSuccess.Should().BeTrue();
-        created.Value.Status.Should().Be(BookingStatus.PaymentPending);
-        created.Value.StatusLabel.Should().Be("Awaiting Payment");
-        created.Value.Timeline.Should().HaveCount(2);
-        created.Value.Timeline[0].ToStatus.Should().Be(BookingStatus.Initiated);
-        created.Value.Timeline[1].ToStatus.Should().Be(BookingStatus.PaymentPending);
-        created.Value.AddOns.Should().ContainSingle(a => a.Id == fixture.AddOn.Id);
-        created.Value.Price.TotalPayable.Should().Be(800m);
-
-        using var readContext = _db.CreateContext();
-        var reloaded = await new BookingRepository(readContext).GetByIdAsync(created.Value.Id);
-        reloaded.Should().NotBeNull();
-        reloaded!.Items.Should().ContainSingle();
-        reloaded.Items[0].AddOns.Should().ContainSingle(a => a.LineTotalSnapshot == 300m);
+        result.IsSuccess.Should().BeTrue();
+        recorder.BookingOutcomes.Should().ContainSingle(o => o.Succeeded);
+        recorder.SlotConflicts.Should().Be(0);
     }
 
     [Fact]
-    public async Task CreateAsync_rejects_the_same_invalid_input_the_summary_would_reject()
+    public async Task CreateAsync_records_a_slot_conflict_and_a_failure_outcome_when_the_slot_is_at_capacity()
     {
         Fixture fixture;
         using (var context = _db.CreateContext())
         {
-            fixture = Seed(context);
+            // Capacity of 1: the first booking below consumes the only seat,
+            // so the second request must be rejected with
+            // Booking.SlotCapacityReached.
+            fixture = Seed(context, slotCapacity: 1);
         }
 
-        using var context2 = _db.CreateContext();
-        var request = RequestFor(fixture) with { SlotWindowId = Guid.NewGuid() };
-        var result = await BuildService(context2).CreateAsync(fixture.Customer.Id, request);
+        using (var firstBookingContext = _db.CreateContext())
+        {
+            var firstResult = await BuildService(firstBookingContext, new RecordingMetricsService()).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            firstResult.IsSuccess.Should().BeTrue("the fixture's single slot seat should still be free for the first booking");
+        }
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Booking.SlotNotAvailable");
+        var recorder = new RecordingMetricsService();
+        using var secondBookingContext = _db.CreateContext();
+        var secondResult = await BuildService(secondBookingContext, recorder).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        secondResult.IsFailure.Should().BeTrue();
+        secondResult.Error.Code.Should().Be("Booking.SlotCapacityReached");
+        recorder.SlotConflicts.Should().Be(1);
+        recorder.BookingOutcomes.Should().ContainSingle(o => !o.Succeeded && o.FailureReason == "Booking.SlotCapacityReached");
     }
 
-    [Fact]
-    public async Task GetDetailAsync_returns_not_found_for_another_customers_booking()
+    /// <summary>Records every call made through it, for assertions Verify-based mocking would otherwise need a library for.</summary>
+    private sealed class RecordingMetricsService : IMetricsService
     {
-        Fixture fixture;
-        Guid bookingId;
-        using (var context = _db.CreateContext())
+        public List<(bool Succeeded, string? FailureReason)> BookingOutcomes { get; } = [];
+
+        public int SlotConflicts { get; private set; }
+
+        public void RecordPaymentOutcome(bool succeeded, TimeSpan processingDuration, string? failureReason = null)
         {
-            fixture = Seed(context);
         }
 
-        using (var createContext = _db.CreateContext())
+        public void RecordBookingCreated(bool succeeded, string? failureReason = null) => BookingOutcomes.Add((succeeded, failureReason));
+
+        public void RecordBookingStatusTransition(string fromStatus, string toStatus)
         {
-            var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
-            bookingId = created.Value.Id;
         }
 
-        using var readContext = _db.CreateContext();
-        var result = await BuildService(readContext).GetDetailAsync(Guid.NewGuid(), bookingId);
+        public void RecordSlotConflict() => SlotConflicts++;
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Booking.NotFound");
-    }
-
-    [Fact]
-    public async Task ListAsync_filters_by_bucket()
-    {
-        Fixture fixture;
-        using (var context = _db.CreateContext())
+        public void RecordNotificationOutcome(string channel, bool succeeded, string? failureReason = null)
         {
-            fixture = Seed(context);
         }
-
-        using (var createContext = _db.CreateContext())
-        {
-            await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
-        }
-
-        using var readContext = _db.CreateContext();
-        var service = BuildService(readContext);
-
-        var upcoming = await service.ListAsync(fixture.Customer.Id, BookingStatusBucket.Upcoming);
-        upcoming.Value.Should().ContainSingle();
-
-        var completed = await service.ListAsync(fixture.Customer.Id, BookingStatusBucket.Completed);
-        completed.Value.Should().BeEmpty();
-
-        var all = await service.ListAsync(fixture.Customer.Id, bucket: null);
-        all.Value.Should().ContainSingle();
     }
 }

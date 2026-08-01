@@ -59,7 +59,8 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System));
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private static PaymentWebhookService BuildWebhookService(
@@ -68,7 +69,7 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
         new(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private static DisputeResolutionService BuildDisputeService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
         new(

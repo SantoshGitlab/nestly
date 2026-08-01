@@ -202,7 +202,8 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System));
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private async Task<(Customer Customer, Guid BookingId)> SeedBookingAsync(BookingStatus finalStatus)

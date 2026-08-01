@@ -87,4 +87,11 @@ app.MapControllers();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
+// Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): Prometheus scrape
+// endpoint for the payment/booking/notification counters and histograms
+// registered in AddInfrastructure - unauthenticated, same as the health
+// endpoints above, since this is meant for an internal scraper behind the
+// network boundary rather than a public consumer.
+app.MapPrometheusScrapingEndpoint("/metrics");
+
 app.Run();

@@ -437,9 +437,9 @@ summary-note,"Phase order changed 2026-07-31: Partner (was Phase 8, deferred) no
 136b,Performance - index tuning,done,medium,depends on #136a,Phase 8 - Hardening & Launch
 136c,Performance - pagination audits on hot paths (DATABASE.md),done,medium,depends on #136b,Phase 8 - Hardening & Launch
 137,Observability - Metrics and alerting: Metrics export + alerts for payment; booking; notification failures (SRS 29.6; DEVOPS.md),decomposed,medium,"depends on #10 #88g | auto-blocked: depends on blocked task #88 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 137a,137b,137c",Phase 8 - Hardening & Launch
-137a,Observability - Metrics export + alerts for payment,todo,medium,"depends on #10 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
-137b,Observability - booking,todo,medium,depends on #137a,Phase 8 - Hardening & Launch
-137c,Observability - notification failures (SRS 29.6; DEVOPS.md),todo,medium,depends on #137b,Phase 8 - Hardening & Launch
+137a,Observability - Metrics export + alerts for payment,done,medium,"depends on #10 #88g| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
+137b,Observability - booking,done,medium,depends on #137a,Phase 8 - Hardening & Launch
+137c,Observability - notification failures (SRS 29.6; DEVOPS.md),done,medium,depends on #137b,Phase 8 - Hardening & Launch
 138,DevOps - CD pipeline and environments: Staging auto-deploy from develop; production deploy from main with approval; migration step; rollback (DEVOPS.md),decomposed,medium,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification | superseded: decomposed into subtasks 138a,138b,138c,138d",Phase 8 - Hardening & Launch
 138a,DevOps - Staging auto-deploy from develop,todo,medium,"reset: previously auto-marked done by unverified local-model automation (build verification was broken - npm run build on a .NET repo, always failed); needs real implementation + dotnet build/test verification",Phase 8 - Hardening & Launch
 138b,DevOps - production deploy from main with approval,todo,medium,depends on #138a,Phase 8 - Hardening & Launch

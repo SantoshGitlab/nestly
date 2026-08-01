@@ -66,7 +66,8 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System));
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private static EscrowService BuildEscrowService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
@@ -78,7 +79,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         new(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), BuildEscrowService(context),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private sealed record Fixture(Customer Customer, City City, CustomerAddress Address, Locality Locality, Service Service, Guid BookingId, decimal Total);
 
