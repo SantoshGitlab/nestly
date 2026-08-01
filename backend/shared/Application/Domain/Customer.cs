@@ -19,6 +19,9 @@ namespace Nestly.Application
         public DateTime UpdatedAt { get; private set; }
         public CustomerStatus Status { get; private set; }
 
+        /// <summary>This customer's own shareable referral code (REFERRAL.md, task 162). Null until first requested - generated lazily, not at signup, since most customers never share it.</summary>
+        public string? ReferralCode { get; private set; }
+
         // Mobile+OTP is the always-available registration path (SRS 11.2.1)
         // and collects only mobile/name/email at signup; date of birth and
         // address are optional and, for address, superseded entirely by the
@@ -108,6 +111,28 @@ namespace Nestly.Application
             Email = string.IsNullOrWhiteSpace(newEmail)
                 ? throw new ArgumentException("Email is required.", nameof(newEmail))
                 : newEmail;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Assigns this customer's referral code (REFERRAL.md, task 162).
+        /// Set-once: a customer's code is stable for life once generated, so
+        /// links already shared never break. Uniqueness is the caller's
+        /// responsibility (the generating service checks against
+        /// <c>ICustomerRepository</c> before calling this) - the entity only
+        /// enforces its own invariant (idempotent identity, not global
+        /// uniqueness, which needs a repository read this entity can't do).
+        /// </summary>
+        public void SetReferralCode(string code)
+        {
+            if (ReferralCode is not null)
+            {
+                throw new InvalidOperationException("Referral code is already assigned and cannot be changed.");
+            }
+
+            ReferralCode = string.IsNullOrWhiteSpace(code)
+                ? throw new ArgumentException("Referral code is required.", nameof(code))
+                : code;
             UpdatedAt = DateTime.UtcNow;
         }
 

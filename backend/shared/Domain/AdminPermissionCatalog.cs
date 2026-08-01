@@ -148,12 +148,16 @@ public static class AdminPermissionCatalog
 
             // Marketing Admin: campaigns — coupons, push/SMS/email
             // notifications, and CMS content; read-only into reviews as
-            // customer-sentiment context.
+            // customer-sentiment context. Referral=true added (task 173):
+            // the referral program (config, fraud review, funnel/cost
+            // reports) is a growth campaign in the same cluster as coupons
+            // and notifications, both of which this role already owns.
             [AdminRoleNames.MarketingAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Coupons, true),
                 (AdminModules.Notifications, true), (AdminModules.Cms, true),
-                (AdminModules.Reviews, false), (AdminModules.Reports, false)
+                (AdminModules.Reviews, false), (AdminModules.Reports, false),
+                (AdminModules.Referral, true)
             ],
 
             // Finance Admin: financial reporting and the audit trail behind
@@ -163,12 +167,16 @@ public static class AdminPermissionCatalog
             // operations work, the same tier as Reports; Partner is
             // read-only context (who is being paid), not full partner
             // management, which stays with Operations Admin above.
+            // Referral=false added (task 173): read-only visibility into
+            // program cost (the referral funnel/cost report is one of this
+            // role's Reports), not configuration or fraud-review authority,
+            // which stays with Marketing Admin above.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
                 (AdminModules.Coupons, false), (AdminModules.Reports, true),
                 (AdminModules.Audit, false), (AdminModules.Partner, false),
-                (AdminModules.Payout, true)
+                (AdminModules.Payout, true), (AdminModules.Referral, false)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

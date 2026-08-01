@@ -61,6 +61,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PartnerEarningLedgerEntry> PartnerEarningLedgerEntries { get; set; }
     public DbSet<PartnerPayout> PartnerPayouts { get; set; }
     public DbSet<PartnerBackgroundCheck> PartnerBackgroundChecks { get; set; }
+    public DbSet<Referral> Referrals { get; set; }
+    public DbSet<ReferralProgramConfig> ReferralProgramConfigs { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

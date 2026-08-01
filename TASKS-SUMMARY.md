@@ -13,11 +13,60 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
 | Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
+| Phase 9 - Referral & Growth | 2 | 14 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **422** | **38** | **50** | **2** | **512** |
+| **Overall** | **424** | **36** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing task 141 (Phase 8 UAT execution)
+Last updated: 2026-08-01, after completing tasks 161 and 173 (Phase 9
+Referral domain schema + RBAC) on `phase-8-hardening-launch`. First real
+Phase 9 work: closed `docs/REFERRAL.md`'s three OPEN DECISIONS ahead of
+implementation (same convention as task 143/144) - reward type stays
+admin's-choice-per-campaign, self-redemption is blocked (free consequence of
+the existing self-referral check), and a fraud flag pauses only that
+referral's payout, not the referrer's ongoing eligibility (the per-customer
+cap plus the existing customer block/unblock tool already cover the real
+risk, so a second suspension mechanism would just duplicate one that
+exists). Added `Referral`/`ReferralProgramConfig` entities,
+`ReferralStatus`/`ReferralRewardType` enums, `Customer.ReferralCode`
+(nullable, set-once), `WalletSourceType.ReferralReward`, and
+`NotificationEventType.ReferralRegistered`/`ReferralRewardCredited`.
+`ReferralProgramConfig` intentionally has no `effective_from`/`effective_to`
+versioning despite REFERRAL.md naming those columns - reward terms are
+snapshotted onto `Referral` at registration instead, reusing the exact
+"snapshot at creation, never re-read mutable config later" pattern `Booking`
+already relies on, which achieves the same non-retroactivity with less
+machinery (documented as a deliberate deviation in the entity's doc
+comment). Migration `20260801150457_AddReferralSchema` (schema + one seeded
+default config row, mirroring how `system_setting` rows are pre-seeded
+since `SystemSettingsService`-style get/update pipelines error on a missing
+row rather than lazily default) applied and verified against the local dev
+DB. Task 173 (RBAC) landed bundled into 161 rather than after tasks 167/170
+as `tasks.csv`'s dependency notation implied - `AdminModules`/
+`AdminPermissionCatalog` have to exist before any future controller can
+declare `[Authorize(Policy = "referral.write")]`, the same ordering task
+96a and 150c already established for every other module. Added
+`AdminModules.Referral` and role grants (Marketing Admin=write, Finance
+Admin=read, Super Admin=full - referral sits with the coupon/notification
+campaign cluster Marketing Admin already owns), migration
+`20260801150655_SeedReferralPermissions` (mirrors
+`20260731233627_SeedPartnerPayoutPermissions`'s incremental-seed pattern
+exactly), and collapsed REFERRAL.md's requested four permission tiers
+(View/Configure/Approve-Fraud/Export) to this codebase's existing two
+(Read/Write) - `AdminPermissionAction`'s own doc comment explicitly
+anticipates and endorses exactly this for a module with no controller
+distinguishing finer tiers yet, which nothing does, including this one.
+Verified live, not just by inspection: re-logged in as the seeded Super
+Admin after the migration and confirmed `referral.read`/`referral.write`
+appear in the issued JWT's `permission` claims. `dotnet build Nestly.sln`
+clean, full suite 882/882 passing (unchanged - no existing code touched
+beyond the additive fields/enums above). Next: task 162 (referral code
+generation), then the registration-wiring/qualifying-hook/reward-disbursement
+chain (163-165), which task 161's Explore-agent research flagged has a real
+prerequisite gap of its own - `Coupon` has no customer-scoping field, so a
+referral coupon reward meant for exactly one referee needs a new field
+before task 165 can issue one correctly.
+
+Previously, 2026-08-01: completed task 141 (Phase 8 UAT execution)
 on `phase-8-hardening-launch`. `docs/UAT-REPORT.md` runs all 16 SRS §33
 acceptance criteria (customer/admin/platform) against real evidence rather
 than code inspection: the task 140a-140d E2E suite's actual runs, live

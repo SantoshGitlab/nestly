@@ -14,5 +14,8 @@ public enum WalletSourceType
     PromotionalCredit,
 
     /// <summary>Manual adjustment (support/admin correction), no source aggregate.</summary>
-    ManualAdjustment
+    ManualAdjustment,
+
+    /// <summary>Credited from a qualifying <see cref="Referral"/>'s reward disbursement (REFERRAL.md, task 165). SourceReferenceId is the Referral id.</summary>
+    ReferralReward
 }

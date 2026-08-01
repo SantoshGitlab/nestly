@@ -34,11 +34,26 @@ public static class AdminModules
     /// <summary>Partner payout batches: view, process (mark processing/paid/failed), approve (PARTNER.md RBAC ADDITIONS, task 150c).</summary>
     public const string Payout = "payout";
 
-    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner module additions (task 150c).</summary>
+    /// <summary>
+    /// Referral program config, referral list/fraud-review, and referral
+    /// reports (REFERRAL.md RBAC ADDITIONS, task 173). REFERRAL.md asks for
+    /// four permission tiers (View/Configure/Approve-Fraud/Export); this
+    /// catalog only has two (Read/Write, see <see cref="AdminPermissionAction"/>'s
+    /// doc comment, which explicitly anticipates exactly this situation and
+    /// calls extending it "a mechanical, backward-compatible extension...
+    /// once a controller actually needs that distinction" - no controller
+    /// does yet, including this one, so Referral collapses to the existing
+    /// two tiers like every other module: Read = View, Write = Configure +
+    /// Approve-Fraud + Export, rather than introducing four-tier support for
+    /// a single module speculatively.
+    /// </summary>
+    public const string Referral = "referral";
+
+    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner and Phase 9 Referral module additions (tasks 150c, 173).</summary>
     public static readonly IReadOnlyList<string> All =
     [
         Dashboard, Customers, Catalog, Pricing, Serviceability, Slots, Bookings,
         Coupons, Support, Reviews, Cms, Notifications, Reports, Audit, Settings,
-        Partner, Payout
+        Partner, Payout, Referral
     ];
 }

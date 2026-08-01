@@ -40,6 +40,12 @@ public class CustomerRepository : ICustomerRepository
     public Task<Customer?> GetByMobileAsync(string mobile) =>
         _context.Set<Customer>().FirstOrDefaultAsync(c => c.Mobile == mobile);
 
+    public Task<bool> ExistsByReferralCodeAsync(string referralCode) =>
+        _context.Set<Customer>().AnyAsync(c => c.ReferralCode == referralCode);
+
+    public Task<Customer?> GetByReferralCodeAsync(string referralCode) =>
+        _context.Set<Customer>().FirstOrDefaultAsync(c => c.ReferralCode == referralCode);
+
     /// <summary>
     /// Search/filter with pagination (SRS 12.4.1, task 101a). Booking count
     /// is computed as a per-row correlated subquery against Bookings rather

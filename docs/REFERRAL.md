@@ -190,18 +190,36 @@ publicly) and, worse, incentivizes exactly the fake-account behavior the
 fraud review queue (#166) exists to catch, before that queue has been
 proven out. Revisit only after the base loop and fraud queue are live.
 
-## OPEN DECISIONS
+## OPEN DECISIONS (CLOSED)
 
-Still to resolve before implementation, same convention as PARTNER.md's
-open-decisions list:
+Closed 2026-08-01, ahead of task 161, same convention as SRS §34 (`docs/SRS.md`)
+and PARTNER.md's open-decisions lists — resolved with a documented rationale
+rather than re-litigated per task.
 
-1. Is the default reward wallet credit, a coupon, or admin's choice per
-   campaign? (This doc assumes admin's choice, via `RewardType` on
-   `referral_program_config`.)
-2. Can a customer redeem their own referral code as a referee if somehow
-   generated in error? (This doc assumes no — self-referral block covers it.)
-3. Should `fraud_flagged` referrals pause only the payout, or also suspend
-   the referrer's ability to keep referring while under review?
+1. **Reward type default: admin's choice per campaign**, via `RewardType` on
+   `referral_program_config` (confirms this doc's working assumption). A
+   fixed platform-wide choice would prevent running a coupon-based campaign
+   for slow categories and a cash-like wallet-credit campaign for
+   high-value ones at the same time — the config-driven shape this doc
+   already specifies is strictly more capable at no extra cost, so there's
+   no reason to narrow it.
+2. **Self-redemption of one's own code: blocked** (confirms this doc's
+   working assumption). The self-referral block already required for
+   registration-time abuse prevention (mobile/email match, task 163) covers
+   this for free — a customer's own code fails the same check a stranger's
+   attempted double-identity would.
+3. **`fraud_flagged` pauses only that referral's payout, not the referrer's
+   ability to keep referring.** A flagged row is a *soft* signal (same
+   device/payment method as the referrer, a suspiciously-timed
+   post-reward cancellation) — not a confirmed finding. Suspending
+   referral eligibility on a soft signal punishes false positives (a
+   household sharing a device/card is common and legitimate) before a
+   human has reviewed anything. The per-customer referral cap
+   (`max_referrals_per_customer`) already bounds one referrer's exposure
+   while a flag sits in the queue; if a pattern is confirmed abusive, the
+   existing customer block/unblock action (task 101c) is the right,
+   already-audited tool to actually stop them — not a second,
+   referral-specific suspension mechanism duplicating it.
 
 ## NEXT STEPS
 
