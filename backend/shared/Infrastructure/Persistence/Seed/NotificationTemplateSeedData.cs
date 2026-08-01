@@ -91,7 +91,21 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.SupportTicketUpdate, NotificationChannel.Email, "support_ticket_update_email", "Your support ticket was updated",
             "Hi {{CustomerName}},\n\nYour support ticket \"{{Subject}}\" is now {{Status}}."),
         Row(NotificationEventType.SupportTicketUpdate, NotificationChannel.Push, "support_ticket_update_push", "Ticket updated",
-            "Your ticket \"{{Subject}}\" is now {{Status}}.")
+            "Your ticket \"{{Subject}}\" is now {{Status}}."),
+
+        Row(NotificationEventType.ReferralRegistered, NotificationChannel.Sms, "referral_registered_sms", null,
+            "{{RefereeName}} just signed up with your referral code! You'll be rewarded once they complete a qualifying booking. - Nestly"),
+        Row(NotificationEventType.ReferralRegistered, NotificationChannel.Email, "referral_registered_email", "Your referral just signed up",
+            "Hi there,\n\n{{RefereeName}} just registered using your referral code. You'll receive your reward once they complete a qualifying booking."),
+        Row(NotificationEventType.ReferralRegistered, NotificationChannel.Push, "referral_registered_push", "Referral signed up",
+            "{{RefereeName}} just signed up with your referral code!"),
+
+        Row(NotificationEventType.ReferralRewardCredited, NotificationChannel.Sms, "referral_reward_credited_sms", null,
+            "Your referral reward of {{RewardValue}} has landed! Check your wallet or coupons. - Nestly"),
+        Row(NotificationEventType.ReferralRewardCredited, NotificationChannel.Email, "referral_reward_credited_email", "Your referral reward has landed",
+            "Hi there,\n\nYour referral reward of {{RewardValue}} has been credited. Thanks for spreading the word about Nestly!"),
+        Row(NotificationEventType.ReferralRewardCredited, NotificationChannel.Push, "referral_reward_credited_push", "Referral reward credited",
+            "Your referral reward of {{RewardValue}} has landed!")
     ];
 
     private static SeedRow Row(NotificationEventType eventType, NotificationChannel channel, string templateKey, string? subject, string body) =>

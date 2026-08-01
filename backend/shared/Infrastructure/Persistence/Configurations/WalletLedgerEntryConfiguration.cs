@@ -28,5 +28,14 @@ public class WalletLedgerEntryConfiguration : IEntityTypeConfiguration<WalletLed
 
         // Balance-as-of-latest-entry reads filter/order by this pair.
         builder.HasIndex(x => new { x.CustomerId, x.CreatedAtUtc });
+
+        // Task 175: expiring wallet credit.
+        builder.Property(x => x.ExpiresAtUtc);
+        builder.Property(x => x.RemainingAmount).HasPrecision(12, 2);
+
+        // The sweep scans for expired-unconsumed credits across every
+        // customer; FIFO consumption scans one customer's unexpired credits
+        // oldest-expiry-first - both filter/order by this pair.
+        builder.HasIndex(x => new { x.ExpiresAtUtc, x.RemainingAmount });
     }
 }

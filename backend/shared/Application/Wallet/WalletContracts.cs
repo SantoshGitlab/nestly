@@ -14,4 +14,5 @@ public record WalletLedgerEntryResponse(
     WalletSourceType SourceType,
     Guid? SourceReferenceId,
     string Description,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    DateTime? ExpiresAtUtc);

@@ -379,11 +379,17 @@ public static class DependencyInjection
         services.AddScoped<ICouponManagementService, CouponManagementService>();
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IReferralCodeService, ReferralCodeService>();
         services.AddScoped<IReferralRepository, ReferralRepository>();
         services.AddScoped<IReferralProgramConfigRepository, ReferralProgramConfigRepository>();
         services.AddScoped<IReferralRewardService, ReferralRewardService>();
         services.AddScoped<IReferralFraudReviewService, ReferralFraudReviewService>();
+        services.AddScoped<IReferralMilestoneRepository, ReferralMilestoneRepository>();
+        services.AddScoped<IReferralMilestoneAwardRepository, ReferralMilestoneAwardRepository>();
+        services.AddScoped<IReferralProgramConfigAdminService, ReferralProgramConfigAdminService>();
+        services.AddScoped<IReferralCustomerService, ReferralCustomerService>();
+        services.AddScoped<IReferralAdminService, ReferralAdminService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 

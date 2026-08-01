@@ -16,9 +16,30 @@ public interface IWalletService
 
     Task<Result<IReadOnlyList<WalletLedgerEntryResponse>>> GetLedgerAsync(Guid customerId);
 
-    /// <summary>Appends a credit entry, referencing its source event (SRS 14.5 "every credit/debit must reference source event").</summary>
-    Task<WalletLedgerEntry> CreditAsync(Guid customerId, decimal amount, WalletSourceType sourceType, Guid? sourceReferenceId, string description);
+    /// <summary>
+    /// Appends a credit entry, referencing its source event (SRS 14.5 "every
+    /// credit/debit must reference source event"). <paramref name="expiresAtUtc"/>
+    /// is task 175's expiring wallet credit - omit for a credit that never
+    /// expires (every credit type before task 175).
+    /// </summary>
+    Task<WalletLedgerEntry> CreditAsync(Guid customerId, decimal amount, WalletSourceType sourceType, Guid? sourceReferenceId, string description, DateTime? expiresAtUtc = null);
 
-    /// <summary>Appends a debit entry. Fails rather than letting the balance go negative.</summary>
+    /// <summary>
+    /// Appends a debit entry. Fails rather than letting the balance go
+    /// negative. Draws first against any not-yet-expired expiring credit
+    /// (soonest-to-expire first, task 175's FIFO consumption), so a customer
+    /// who has both expiring and non-expiring balance never wastes the
+    /// expiring portion while it's still spendable.
+    /// </summary>
     Task<Result<WalletLedgerEntry>> DebitAsync(Guid customerId, decimal amount, WalletSourceType sourceType, Guid? sourceReferenceId, string description);
+
+    /// <summary>
+    /// Task 175's expiry sweep: writes off <paramref name="amount"/> (the
+    /// unconsumed portion of one specific expiring credit, identified by
+    /// <paramref name="expiredEntryId"/>) as a debit. Distinct from
+    /// <see cref="DebitAsync"/> - this never re-runs FIFO consumption against
+    /// other credits, since the amount being written off already belongs to
+    /// the one credit that just expired, not to a customer-initiated spend.
+    /// </summary>
+    Task<WalletLedgerEntry?> ExpireCreditAsync(Guid customerId, Guid expiredEntryId, decimal amount);
 }
