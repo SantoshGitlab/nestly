@@ -13,11 +13,36 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
 | Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 3 | 13 | 0 | 0 | 16 |
+| Phase 9 - Referral & Growth | 4 | 12 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **425** | **35** | **50** | **2** | **512** |
+| **Overall** | **426** | **34** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing task 162 (Phase 9 referral code
+Last updated: 2026-08-01, after completing task 163 (Phase 9 registration
+wiring) on `phase-8-hardening-launch`. `RegisterCustomerRequest` gained an
+optional `ReferralCode`; `CustomerRegistrationService.TryCreateReferralAsync`
+resolves the referrer by code, best-effort (an invalid/unknown code or a
+self-referral attempt only skips creating a `Referral` row, never fails
+registration itself - a bad code shouldn't block a legitimate signup).
+`IReferralRepository`/`IReferralProgramConfigRepository` added. Notable
+finding, not a bug: the self-referral mobile/email guard turns out to be
+currently unreachable through the public registration flow -
+`Customer.Mobile`/`Email` are both unconditionally DB-unique regardless of
+the app-level `RequireUniqueEmail` toggle (confirmed experimentally, a
+duplicate-email insert throws a raw unique-constraint violation even with
+that flag off), so a genuine self-referral attempt already fails earlier on
+`Registration.MobileAlreadyRegistered`/`EmailAlreadyRegistered` - a
+strictly stronger protection than the referral-specific check would have
+been alone. Kept as defense-in-depth per REFERRAL.md's explicit "checked at
+registration, not just at reward time" ask, documented honestly in both the
+code and its test rather than presented as independently exercisable. 3 new
+tests (`ReferralRegistrationTests`), all driving real OTP generate/validate
+through `OtpService` (not mocked) - the same standard this codebase's
+existing registration tests already use, since OTP codes can't be retrieved
+through the live HTTP API by design. Full suite 889/889. Next: tasks 164-165
+(qualifying-booking hook + reward disbursement), which will need the
+`Coupon.CustomerId`-scoping gap task 161's research flagged, resolved first.
+
+Previously, 2026-08-01: completed task 162 (Phase 9 referral code
 generation) on `phase-8-hardening-launch`. `IReferralCodeService`
 (`backend/shared/Application/Referral`, `Infrastructure/Services`): 8-char
 codes from a 31-symbol alphabet excluding visually ambiguous characters

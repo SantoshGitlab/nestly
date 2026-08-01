@@ -38,5 +38,9 @@ public class RegisterCustomerRequestValidator : AbstractValidator<RegisterCustom
 
         RuleFor(x => x.ConsentAccepted)
             .Equal(true).WithMessage("Consent to Terms & Privacy is required");
+
+        RuleFor(x => x.ReferralCode)
+            .MaximumLength(20).WithMessage("Referral code is not valid")
+            .When(x => !string.IsNullOrWhiteSpace(x.ReferralCode));
     }
 }

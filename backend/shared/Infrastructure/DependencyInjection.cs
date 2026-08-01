@@ -379,6 +379,8 @@ public static class DependencyInjection
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IReferralCodeService, ReferralCodeService>();
+        services.AddScoped<IReferralRepository, ReferralRepository>();
+        services.AddScoped<IReferralProgramConfigRepository, ReferralProgramConfigRepository>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 

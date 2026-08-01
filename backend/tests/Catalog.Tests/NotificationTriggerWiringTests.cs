@@ -194,7 +194,8 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         {
             var registrationService = new CustomerRegistrationService(
                 new CustomerRepository(context), new CustomerAuthIdentityRepository(context), new OtpService(context, otpProvider),
-                BuildDispatchService(context), Options.Create(new AccountOptions()));
+                BuildDispatchService(context), new ReferralRepository(context), new ReferralProgramConfigRepository(context),
+                NullLogger<CustomerRegistrationService>.Instance, Options.Create(new AccountOptions()));
 
             var result = await registrationService.RegisterAsync(new RegisterCustomerRequest(mobile, otpCode, "Asha Rao", $"asha-{Guid.NewGuid():N}@example.com", null, true));
             result.IsSuccess.Should().BeTrue();
