@@ -144,6 +144,13 @@ public class BookingRepository : IBookingRepository
         return new BookingSearchResult(rows, totalCount);
     }
 
+    /// <summary>Bookings currently assigned to a partner (task 150c performance view).</summary>
+    public async Task<IReadOnlyList<Booking>> ListByAssignedPartnerAsync(Guid partnerId) =>
+        await FullyLoaded()
+            .Where(b => b.AssignedPartnerId == partnerId)
+            .OrderByDescending(b => b.CreatedAtUtc)
+            .ToListAsync();
+
     private IQueryable<Booking> FullyLoaded() =>
         _context.Bookings
             .Include(b => b.Items).ThenInclude(i => i.AddOns)

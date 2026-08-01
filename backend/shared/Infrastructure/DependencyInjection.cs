@@ -28,6 +28,7 @@ using Nestly.Application.Pricing;
 using Nestly.Application.Notifications;
 using Nestly.Application.PartnerAvailability;
 using Nestly.Application.PartnerIdentity;
+using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
@@ -252,6 +253,22 @@ public static class DependencyInjection
         services.AddScoped<IPartnerAvailabilityWindowRepository, PartnerAvailabilityWindowRepository>();
         services.AddScoped<IPartnerBlackoutDateRepository, PartnerBlackoutDateRepository>();
         services.AddScoped<IPartnerAvailabilityService, PartnerAvailabilityService>();
+
+        // Tasks 147, 148, 150a-c, 159, 160: admin-facing Partner management
+        // (PARTNER.md "Admin-Facing Additions") - assignment bridge, earning
+        // ledger/payouts, CRUD, KYC approval and the background-check
+        // activation gate, and the performance view. Kept apart from the
+        // partner-identity registrations above, which are the partner's own
+        // self-service auth/onboarding (tasks 145a-146c).
+        services.AddScoped<IBookingPartnerAssignmentRepository, BookingPartnerAssignmentRepository>();
+        services.AddScoped<IBookingPartnerAssignmentService, BookingPartnerAssignmentService>();
+        services.AddScoped<IPartnerEarningLedgerRepository, PartnerEarningLedgerRepository>();
+        services.AddScoped<IPartnerEarningLedgerService, PartnerEarningLedgerService>();
+        services.AddScoped<IPartnerPayoutRepository, PartnerPayoutRepository>();
+        services.AddScoped<IPartnerPayoutService, PartnerPayoutService>();
+        services.AddScoped<IPartnerBackgroundCheckRepository, PartnerBackgroundCheckRepository>();
+        services.AddScoped<IPartnerManagementService, PartnerManagementService>();
+        services.AddScoped<IPartnerKycApprovalService, PartnerKycApprovalService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's

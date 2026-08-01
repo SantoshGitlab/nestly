@@ -15,6 +15,14 @@ namespace Nestly.Catalog.Tests;
 /// source at test-write time reflectively) so this suite actually catches a
 /// future accidental edit to that table - a test that just replayed
 /// BookingLifecycle's own dictionary back at itself would always pass.
+///
+/// One intentional addition beyond the original SRS 13.1 matrix: Assigned
+/// -&gt; AwaitingFulfilment (task 159). SRS 31.1's transition list is
+/// explicitly "Examples", not exhaustive, so this does not contradict it -
+/// when the partner assigned to a booking rejects the job,
+/// <c>IBookingPartnerAssignmentService.RejectAsync</c> returns the booking to
+/// AwaitingFulfilment so it re-enters the assignable pool for manual admin
+/// reassignment (PARTNER.md OPEN DECISIONS #1).
 /// </summary>
 public sealed class BookingLifecycleTransitionTests
 {
@@ -26,7 +34,7 @@ public sealed class BookingLifecycleTransitionTests
             [BookingStatus.PaymentFailed] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.Confirmed] = [BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.AwaitingFulfilment] = [BookingStatus.Assigned, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
-            [BookingStatus.Assigned] = [BookingStatus.InProgress, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+            [BookingStatus.Assigned] = [BookingStatus.InProgress, BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.InProgress] = [BookingStatus.Completed, BookingStatus.CancelledByAdmin],
             [BookingStatus.Completed] = [BookingStatus.RefundPending],
             [BookingStatus.CancelledByCustomer] = [BookingStatus.RefundPending, BookingStatus.Refunded],

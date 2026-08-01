@@ -148,10 +148,35 @@ public class Partner : Entity<Guid>
     /// Kept generic here rather than one method per transition since this
     /// entity does not yet encode which transitions are legal from which
     /// state - that workflow belongs to the admin service that will call it.
+    /// In particular, the "KYC approved AND background check passed" gate
+    /// (task 160) before a transition to <see cref="PartnerStatus.Active"/>
+    /// is enforced by <c>IPartnerKycApprovalService.ActivateAsync</c>, not
+    /// here - consistent with this method staying transition-agnostic.
     /// </summary>
     public void ChangeStatus(PartnerStatus status)
     {
         Status = status;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Advances onboarding once an admin has approved at least one submitted
+    /// KYC document (task 150b - the admin-side counterpart to
+    /// <see cref="MarkKycSubmitted"/>). Idempotent, mirroring that method.
+    /// </summary>
+    public void MarkKycVerified()
+    {
+        if (OnboardingStatus == PartnerOnboardingStatus.KycSubmitted)
+        {
+            OnboardingStatus = PartnerOnboardingStatus.KycVerified;
+            UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>Onboarding is fully done once the partner has been activated (KYC verified and background check passed - task 160).</summary>
+    public void MarkOnboardingCompleted()
+    {
+        OnboardingStatus = PartnerOnboardingStatus.Completed;
         UpdatedAt = DateTime.UtcNow;
     }
 }
