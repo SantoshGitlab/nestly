@@ -28,13 +28,23 @@ public class ServicesController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
-    /// <summary>Service detail: inclusions/exclusions/add-ons/policies (SRS 11.6.1).</summary>
+    /// <summary>Service detail: inclusions/exclusions/add-ons/policies/FAQs (SRS 11.6.1).</summary>
     [HttpGet("{slug}")]
     [ProducesResponseType(typeof(ServiceDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDetail(string slug)
     {
         var result = await _serviceQueryService.GetDetailBySlugAsync(slug);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Rating summary and recent reviews for the service detail page (SRS 11.6.1 "Reviews and rating summary").</summary>
+    [HttpGet("{slug}/reviews-summary")]
+    [ProducesResponseType(typeof(ServiceReviewSummaryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetReviewsSummary(string slug)
+    {
+        var result = await _serviceQueryService.GetReviewSummaryBySlugAsync(slug);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 }

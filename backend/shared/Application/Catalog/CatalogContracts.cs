@@ -42,6 +42,9 @@ public record ServiceListItemResponse(
     string Description,
     decimal Price);
 
+/// <summary>One FAQ entry on a service detail page (task 52d, SRS 11.6.1).</summary>
+public record ServiceFaqResponse(Guid Id, string Question, string Answer);
+
 /// <summary>Full service detail page content (task 42b, SRS 11.6.1).</summary>
 public record ServiceDetailResponse(
     Guid Id,
@@ -56,7 +59,22 @@ public record ServiceDetailResponse(
     Guid CategoryId,
     string CategoryName,
     string CategorySlug,
-    IReadOnlyList<ServiceAddOnSummaryResponse> AddOns);
+    IReadOnlyList<ServiceAddOnSummaryResponse> AddOns,
+    IReadOnlyList<ServiceFaqResponse> Faqs);
+
+/// <summary>One recent review shown in a service's rating summary (task 52f, SRS 11.6.1).</summary>
+public record ServiceReviewItemResponse(Guid Id, int Rating, string? ReviewText, DateTime CreatedAtUtc);
+
+/// <summary>
+/// Rating summary for a service detail page (task 52f, SRS 11.6.1 "Reviews
+/// and rating summary") - only visible (non-hidden) reviews, same as
+/// <see cref="Nestly.Application.Reviews.IReviewRepository.ListByServiceAsync"/>.
+/// </summary>
+public record ServiceReviewSummaryResponse(
+    double AverageRating,
+    int TotalCount,
+    IReadOnlyDictionary<int, int> RatingBreakdown,
+    IReadOnlyList<ServiceReviewItemResponse> RecentReviews);
 
 /// <summary>Combined category/service search results (task 42c, SRS 11.5-11.6, 24.3).</summary>
 public record CatalogSearchResponse(

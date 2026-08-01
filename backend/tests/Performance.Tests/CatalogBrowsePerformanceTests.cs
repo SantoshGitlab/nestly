@@ -82,7 +82,8 @@ public sealed class CatalogBrowsePerformanceTests : IClassFixture<PerfTestDataba
         new(new CategoryRepository(context), new ServiceRepository(context));
 
     private static ServiceQueryService BuildServiceQueryService(NestlyDbContext context) => new(
-        new CategoryRepository(context), new ServiceRepository(context), new ServiceAddOnRepository(context), new InMemoryCacheService());
+        new CategoryRepository(context), new ServiceRepository(context), new ServiceAddOnRepository(context),
+        new ServiceFaqRepository(context), new ReviewRepository(context), new InMemoryCacheService());
 
     private static CategoryQueryService BuildCategoryQueryService(NestlyDbContext context) => new(
         new CategoryRepository(context), new ServiceRepository(context), new ServiceAddOnRepository(context),

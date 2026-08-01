@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { PriceCalculator } from "@/components/PriceCalculator";
+import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
+import { ServiceFaqs } from "@/components/ServiceFaqs";
 import { Alert, Button } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -12,11 +14,7 @@ import type { ServiceDetail } from "@/lib/types";
 
 /**
  * Service detail page (SRS 11.6.1): inclusions, exclusions, add-ons, pricing,
- * and cancellation/reschedule policy.
- *
- * Out of scope, deliberately: FAQs and a reviews/rating summary, both listed
- * in SRS 11.6.1 - there is no FAQ or Review/Testimonial entity or API
- * anywhere in the backend yet, so this does not fabricate one.
+ * FAQs, cancellation/reschedule policy, and a reviews/rating summary.
  */
 export default function ServiceDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -80,6 +78,10 @@ export default function ServiceDetailPage() {
             </ul>
           </section>
         ) : null}
+
+        <ServiceFaqs faqs={service.faqs} />
+
+        <ReviewsSummary slug={service.slug} />
       </div>
 
       <aside className="flex flex-col gap-4 md:sticky md:top-6 md:self-start">

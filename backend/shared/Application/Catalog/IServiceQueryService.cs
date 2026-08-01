@@ -8,6 +8,9 @@ public interface IServiceQueryService
     /// <summary>Active services under a category, ordered for display (task 42a).</summary>
     Task<Result<IReadOnlyList<ServiceListItemResponse>>> ListByCategoryAsync(Guid categoryId);
 
-    /// <summary>Full service detail: inclusions/exclusions/add-ons/policies (task 42b).</summary>
+    /// <summary>Full service detail: inclusions/exclusions/add-ons/policies/FAQs (task 42b, 52d).</summary>
     Task<Result<ServiceDetailResponse>> GetDetailBySlugAsync(string slug);
+
+    /// <summary>Rating summary and recent reviews for a service detail page (task 52f, SRS 11.6.1).</summary>
+    Task<Result<ServiceReviewSummaryResponse>> GetReviewSummaryBySlugAsync(string slug);
 }

@@ -112,6 +112,12 @@ export interface ServiceListItem {
   price: number;
 }
 
+export interface ServiceFaq {
+  id: string;
+  question: string;
+  answer: string;
+}
+
 export interface ServiceDetail {
   id: string;
   name: string;
@@ -126,6 +132,23 @@ export interface ServiceDetail {
   categoryName: string;
   categorySlug: string;
   addOns: ServiceAddOnSummary[];
+  faqs: ServiceFaq[];
+}
+
+/** One recent review in a service's rating summary (SRS 11.6.1). */
+export interface ServiceReviewItem {
+  id: string;
+  rating: number;
+  reviewText: string | null;
+  createdAtUtc: string;
+}
+
+/** Rating summary + recent reviews for a service detail page (SRS 11.6.1 "Reviews and rating summary"). */
+export interface ServiceReviewSummary {
+  averageRating: number;
+  totalCount: number;
+  ratingBreakdown: Record<number, number>;
+  recentReviews: ServiceReviewItem[];
 }
 
 export interface CatalogSearchResult {

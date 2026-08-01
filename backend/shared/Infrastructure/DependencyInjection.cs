@@ -204,6 +204,7 @@ public static class DependencyInjection
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
         services.AddScoped<IServiceAddOnRepository, ServiceAddOnRepository>();
+        services.AddScoped<IServiceFaqRepository, ServiceFaqRepository>();
         services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
         services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
         services.AddScoped<ISlotWindowRepository, SlotWindowRepository>();
