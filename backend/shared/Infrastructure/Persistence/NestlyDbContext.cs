@@ -63,6 +63,9 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PartnerBackgroundCheck> PartnerBackgroundChecks { get; set; }
     public DbSet<Referral> Referrals { get; set; }
     public DbSet<ReferralProgramConfig> ReferralProgramConfigs { get; set; }
+    public DbSet<RecurringBookingPlan> RecurringBookingPlans { get; set; }
+    public DbSet<RecurringBookingPlanAddOn> RecurringBookingPlanAddOns { get; set; }
+    public DbSet<RecurringBookingOccurrence> RecurringBookingOccurrences { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

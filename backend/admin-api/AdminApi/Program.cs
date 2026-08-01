@@ -83,6 +83,12 @@ app.UseRateLimiter();
 // the dashboard's admin-role filter has a populated principal to check.
 app.UseBackgroundJobsDashboard();
 
+// Task 185: registers the recurring-booking occurrence scheduler with
+// Hangfire. Admin API is the only process with BackgroundJobs:ServerEnabled
+// set (see appsettings.json across the three API processes), so it's the
+// only one that should own this registration.
+app.ScheduleRecurringBookingJob();
+
 app.MapControllers();
 
 // Liveness: process is up. Readiness: critical dependencies reachable.

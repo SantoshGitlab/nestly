@@ -34,6 +34,7 @@ using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
 using Nestly.Application.Referral;
+using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
@@ -81,11 +82,17 @@ public static class DependencyInjection
             .AddOptions<AccountOptions>()
             .Bind(configuration.GetSection(AccountOptions.SectionName));
 
+        // No ValidateOnStart here (task 152 fix): AddInfrastructure is shared
+        // by all three APIs, but only consumer-api's Program.cs calls
+        // AddJwtAuthentication (which already throws eagerly on a missing
+        // signing key) - admin-api and partner-api never resolve JwtOptions
+        // at all, so validating it unconditionally at startup forced both to
+        // carry a dummy customer-JWT secret they never use. Same reasoning
+        // as AdminJwtOptions/PartnerJwtOptions below.
         services
             .AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+            .ValidateDataAnnotations();
 
         // No ValidateOnStart here (unlike JwtOptions): AddInfrastructure is
         // shared by both APIs, and consumer-api's configuration has no
@@ -114,11 +121,17 @@ public static class DependencyInjection
             .AddOptions<PartnerAccountOptions>()
             .Bind(configuration.GetSection(PartnerAccountOptions.SectionName));
 
+        // No ValidateOnStart here either (task 152 fix): SandboxPaymentGateway
+        // is a singleton constructed lazily by the DI container, so its
+        // IOptions<SandboxGatewayOptions> is only ever resolved by an API
+        // that actually injects IPaymentGateway/ISandboxPaymentSimulator
+        // (consumer-api, admin-api) - partner-api never does, and shouldn't
+        // need a placeholder webhook secret just to satisfy an eager check
+        // for a gateway it never calls.
         services
             .AddOptions<SandboxGatewayOptions>()
             .Bind(configuration.GetSection(SandboxGatewayOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+            .ValidateDataAnnotations();
 
         // Task 157: not a secret, so (unlike the options above) this is safe
         // to fall back to CommissionOptions' own defaults when a deployment
@@ -141,6 +154,13 @@ public static class DependencyInjection
         services
             .AddOptions<ReferralOptions>()
             .Bind(configuration.GetSection(ReferralOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 185: not a secret, has a safe production-sensible default -
+        // same reasoning as CommissionOptions/ReferralOptions above.
+        services
+            .AddOptions<RecurringBookingOptions>()
+            .Bind(configuration.GetSection(RecurringBookingOptions.SectionName))
             .ValidateDataAnnotations();
 
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
@@ -386,6 +406,16 @@ public static class DependencyInjection
         services.AddScoped<IReferralFraudReviewService, ReferralFraudReviewService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
+
+        // Tasks 184-186: recurring booking plans. IRecurringBookingPlanService
+        // depends on the existing IBookingSummaryService/IBookingService
+        // (registered above) - the create/pause/cancel API and the scheduler
+        // both call into the same booking orchestration rather than a
+        // parallel one (PRODUCT-ENHANCEMENTS.md section 2).
+        services.AddScoped<IRecurringBookingPlanRepository, RecurringBookingPlanRepository>();
+        services.AddScoped<IRecurringBookingOccurrenceRepository, RecurringBookingOccurrenceRepository>();
+        services.AddScoped<IRecurringBookingPlanService, RecurringBookingPlanService>();
+        services.AddScoped<IRecurringBookingSchedulerService, RecurringBookingSchedulerService>();
 
         services
             .AddOptions<CancellationPolicyOptions>()

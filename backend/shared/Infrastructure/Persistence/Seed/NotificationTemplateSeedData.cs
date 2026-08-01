@@ -91,7 +91,21 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.SupportTicketUpdate, NotificationChannel.Email, "support_ticket_update_email", "Your support ticket was updated",
             "Hi {{CustomerName}},\n\nYour support ticket \"{{Subject}}\" is now {{Status}}."),
         Row(NotificationEventType.SupportTicketUpdate, NotificationChannel.Push, "support_ticket_update_push", "Ticket updated",
-            "Your ticket \"{{Subject}}\" is now {{Status}}.")
+            "Your ticket \"{{Subject}}\" is now {{Status}}."),
+
+        Row(NotificationEventType.RecurringBookingUpcoming, NotificationChannel.Sms, "recurring_booking_upcoming_sms", null,
+            "Your recurring {{ServiceName}} booking for {{SlotDate}}, {{SlotWindow}} is confirmed. - Nestly"),
+        Row(NotificationEventType.RecurringBookingUpcoming, NotificationChannel.Email, "recurring_booking_upcoming_email", "Your upcoming recurring booking",
+            "Hi {{CustomerName}},\n\nYour recurring {{ServiceName}} plan has booked its next visit for {{SlotDate}} ({{SlotWindow}})."),
+        Row(NotificationEventType.RecurringBookingUpcoming, NotificationChannel.Push, "recurring_booking_upcoming_push", "Upcoming recurring booking",
+            "Your recurring {{ServiceName}} visit is booked for {{SlotDate}}, {{SlotWindow}}."),
+
+        Row(NotificationEventType.RecurringBookingSkipped, NotificationChannel.Sms, "recurring_booking_slot_unavailable_sms", null,
+            "We couldn't book your recurring {{ServiceName}} visit for {{SlotDate}} - the slot is no longer available. Open the app to reschedule this occurrence. - Nestly"),
+        Row(NotificationEventType.RecurringBookingSkipped, NotificationChannel.Email, "recurring_booking_slot_unavailable_email", "We couldn't book your upcoming recurring visit",
+            "Hi {{CustomerName}},\n\nYour recurring {{ServiceName}} plan's visit scheduled for {{SlotDate}} could not be booked - the slot is no longer available. This occurrence has been skipped; your plan will continue with its next scheduled date. Open the app if you'd like to book this date manually."),
+        Row(NotificationEventType.RecurringBookingSkipped, NotificationChannel.Push, "recurring_booking_slot_unavailable_push", "Recurring visit could not be booked",
+            "Your {{ServiceName}} visit for {{SlotDate}} couldn't be booked - the slot's no longer available.")
     ];
 
     private static SeedRow Row(NotificationEventType eventType, NotificationChannel channel, string templateKey, string? subject, string body) =>
