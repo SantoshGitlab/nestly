@@ -22,6 +22,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // Admin panel JWT bearer auth (SRS 12.1, tasks 95a/95e) — its own scheme and
 // signing key, kept deliberately separate from the customer one.
 builder.Services.AddAdminJwtAuthentication(builder.Configuration);
+builder.Services.AddNestlyCors(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -73,6 +74,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

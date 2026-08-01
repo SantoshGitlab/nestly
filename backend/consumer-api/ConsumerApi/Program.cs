@@ -18,6 +18,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddNestlyCors(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -117,6 +118,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

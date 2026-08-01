@@ -112,7 +112,7 @@ public class PaymentsController : ControllerBase
     [HttpPost("orders/simulate")]
     [Authorize]
     [EnableRateLimiting("payment")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Simulate([FromBody] SimulatePaymentRequest request)
@@ -124,7 +124,14 @@ public class PaymentsController : ControllerBase
         }
 
         var result = await _paymentService.SimulateAsync(CurrentCustomerId(), request);
-        return result.IsSuccess ? Ok() : result.ToProblemResult();
+        // NoContent, not Ok(): Ok() with no value still serialises a 200
+        // with an empty body, which frontend/customer-web's apiFetch (only
+        // special-cased for 204) then fails to JSON-parse - task 140b's E2E
+        // suite caught this as a real "Failed to execute 'json' on
+        // 'Response'" crash on the sandbox payment button, not a test-only
+        // issue. NoContent matches every other no-body success response in
+        // this codebase (see CategoriesController.Activate for the pattern).
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
     private Guid CurrentCustomerId() =>

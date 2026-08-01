@@ -22,6 +22,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // scheme and signing key, kept deliberately separate from the customer and
 // admin ones (see DependencyInjection.AddPartnerJwtAuthentication).
 builder.Services.AddPartnerJwtAuthentication(builder.Configuration);
+builder.Services.AddNestlyCors(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -83,6 +84,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

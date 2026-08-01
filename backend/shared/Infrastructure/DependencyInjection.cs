@@ -623,4 +623,42 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>CORS policy name every API's Program.cs passes to <c>UseCors</c>.</summary>
+    public const string NestlyCorsPolicy = "NestlyCors";
+
+    /// <summary>
+    /// Registers a CORS policy from the "Cors:AllowedOrigins" configuration
+    /// section (task 140a: the E2E suite surfaced that no API had a CORS
+    /// policy at all, so every browser-originated request - real or test -
+    /// failed the preflight check before ever reaching a controller).
+    /// Credentials are not enabled: every API authenticates via a Bearer
+    /// token in the Authorization header (see AddJwtAuthentication /
+    /// AddAdminJwtAuthentication / AddPartnerJwtAuthentication), never a
+    /// cookie, so there is nothing that needs
+    /// Access-Control-Allow-Credentials - keeping it off is the safer
+    /// default per docs/CLAUDE.md SECURITY ("least privilege").
+    /// </summary>
+    public static IServiceCollection AddNestlyCors(this IServiceCollection services, IConfiguration configuration)
+    {
+        var allowedOrigins = configuration.GetSection(CorsOptions.SectionName)
+            .Get<CorsOptions>()?.AllowedOrigins ?? [];
+
+        services.AddCors(options =>
+        {
+            options.AddPolicy(NestlyCorsPolicy, policy =>
+            {
+                if (allowedOrigins.Length > 0)
+                {
+                    policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+                }
+                // No origins configured: the policy exists but permits
+                // nothing, matching "external, environment specific"
+                // configuration - a missing config value fails closed
+                // (every browser request rejected) rather than open.
+            });
+        });
+
+        return services;
+    }
 }

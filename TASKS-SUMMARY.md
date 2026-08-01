@@ -12,12 +12,54 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 27 | 5 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 31 | 1 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **417** | **43** | **50** | **2** | **512** |
+| **Overall** | **421** | **39** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 142a-142d and 143 (Phase 8
+Last updated: 2026-08-01, after completing tasks 140a-140d (Phase 8 QA E2E
+suite) on `phase-8-hardening-launch`. Added a real Playwright/Chromium E2E
+suite in `frontend/customer-web/e2e/` driving the four SRS 33 UAT flows
+(discovery→category→service detail, slot→booking→payment,
+cancellation/reschedule, refund/review submission) against a real
+consumer-api/admin-api/Postgres/Redis stack, not mocks - matching this
+backlog's established "prove it, don't just claim it" pattern (`e2e/README.md`
+has full run instructions). Getting the suite running for real surfaced and
+fixed three genuine, previously-unnoticed production bugs, none of which a
+same-origin curl/server-to-server call or an in-process WebApplicationFactory
+test would ever have exercised: (1) no CORS policy existed on any of the
+three APIs at all - every real browser request from every frontend was
+silently failing its preflight check, fixed with a new `AddNestlyCors`
+(`backend/shared/Infrastructure/DependencyInjection.cs`) wired into all
+three `Program.cs` files, config-driven via a new `Cors:AllowedOrigins`
+section (fails closed - no origins configured means the policy permits
+nothing); (2) `PaymentsController.Simulate` returned `Ok()` (200 with an
+empty body) instead of `NoContent()`, which crashed the frontend's
+`apiFetch` (only special-cased for 204) - every sandbox "Pay" button click
+in a real browser was broken, fixed to match every other no-body-success
+response in this codebase; (3) the review page's `reviewQuery` returned
+`undefined` on a 204 (no review submitted yet), which TanStack Query treats
+as an invariant violation ("data is undefined") rather than valid query
+data - crashed `/bookings/{id}/review` for every booking without an
+existing review, fixed by normalising to `null`. Also filled two
+infrastructure gaps the suite needed to run at all and that were flagged but
+never implemented elsewhere: `database/seed/dev-admin-seed.sql` and
+`dev-customer-seed.sql` (DEVOPS.md references `database/seed` for seed
+scripts; the directory was empty - `AdminUser`/`CustomerAuthIdentity` have no
+self-registration path by design, so bootstrapping the first account of each
+needs a one-time direct insert, documented in each script's header), and
+admin-api's `appsettings.Development.json` was missing `Jwt`/
+`PaymentGateway:Sandbox` sections that the shared `AddInfrastructure`
+eagerly validates on startup regardless of whether an API actually uses them
+(admin-api doesn't - only needed to stop local `dotnet run` from crashing).
+`dotnet build Nestly.sln` clean, full suite 882/882 passing (unchanged - no
+existing test was touched, only new code and the two intentional bug fixes
+above, both outside existing test coverage). Phase 8 is now 31/38 done; the
+one remaining `todo` is 141 (UAT execution against SRS 33 acceptance
+criteria) plus 6 `decomposed` parent placeholders (each already satisfied by
+done lettered subtasks).
+
+Previously, 2026-08-01: completed tasks 142a-142d and 143 (Phase 8
 docs/product close-out) on `phase-8-hardening-launch`. Task 143 closed all
 twelve SRS §34 open decisions by auditing what Phases 1-7 actually shipped
 rather than re-deciding in isolation (`docs/SRS.md` §34 rewritten in place,
