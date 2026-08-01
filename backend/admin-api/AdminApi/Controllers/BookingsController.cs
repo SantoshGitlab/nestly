@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.BookingManagement;
+using Nestly.Application.PartnerManagement;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
 using Nestly.Infrastructure;
@@ -40,26 +41,35 @@ public class BookingsController : ControllerBase
     private const string WritePolicy = AdminModules.Bookings + ".write";
 
     private readonly IBookingManagementService _bookingManagementService;
+    private readonly IBookingPartnerAssignmentService _assignmentService;
     private readonly IValidator<AdminBookingSearchRequest> _searchValidator;
     private readonly IValidator<AdminBookingStatusUpdateRequest> _statusUpdateValidator;
     private readonly IValidator<AdminCancelBookingRequest> _cancelValidator;
     private readonly IValidator<AdminRescheduleBookingRequest> _rescheduleValidator;
     private readonly IValidator<AdminRefundRequest> _refundValidator;
+    private readonly IValidator<AssignPartnerRequest> _assignPartnerValidator;
+    private readonly IValidator<RejectAssignmentRequest> _rejectAssignmentValidator;
 
     public BookingsController(
         IBookingManagementService bookingManagementService,
+        IBookingPartnerAssignmentService assignmentService,
         IValidator<AdminBookingSearchRequest> searchValidator,
         IValidator<AdminBookingStatusUpdateRequest> statusUpdateValidator,
         IValidator<AdminCancelBookingRequest> cancelValidator,
         IValidator<AdminRescheduleBookingRequest> rescheduleValidator,
-        IValidator<AdminRefundRequest> refundValidator)
+        IValidator<AdminRefundRequest> refundValidator,
+        IValidator<AssignPartnerRequest> assignPartnerValidator,
+        IValidator<RejectAssignmentRequest> rejectAssignmentValidator)
     {
         _bookingManagementService = bookingManagementService;
+        _assignmentService = assignmentService;
         _searchValidator = searchValidator;
         _statusUpdateValidator = statusUpdateValidator;
         _cancelValidator = cancelValidator;
         _rescheduleValidator = rescheduleValidator;
         _refundValidator = refundValidator;
+        _assignPartnerValidator = assignPartnerValidator;
+        _rejectAssignmentValidator = rejectAssignmentValidator;
     }
 
     /// <summary>Filterable, paginated booking search (SRS 12.11.1, task 115a).</summary>
@@ -181,6 +191,55 @@ public class BookingsController : ControllerBase
         }
 
         var result = await _bookingManagementService.RefundAsync(bookingId, CurrentAdminUserId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Assigns (or reassigns) a partner to a booking (task 147, PARTNER.md OPEN DECISIONS #1 - manual admin-driven assignment). Gated behind "bookings.write" - the existing permission code, per PARTNER.md's SCOPE BOUNDARY this is Booking-domain behaviour, not a separate Partner-module permission.</summary>
+    [HttpPost("{bookingId:guid}/assign-partner")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(BookingPartnerAssignmentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> AssignPartner(Guid bookingId, [FromBody] AssignPartnerRequest request)
+    {
+        var validation = await _assignPartnerValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _assignmentService.AssignAsync(bookingId, CurrentAdminUserId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Rejects the booking's current outstanding assignment (task 159) - clears the assigned partner and returns the booking to AwaitingFulfilment so it needs manual reassignment (no auto-match, PARTNER.md OPEN DECISIONS #1).</summary>
+    [HttpPost("{bookingId:guid}/reject-assignment")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(BookingPartnerAssignmentResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RejectAssignment(Guid bookingId, [FromBody] RejectAssignmentRequest request)
+    {
+        var validation = await _rejectAssignmentValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _assignmentService.RejectAsync(bookingId, request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Full partner-assignment history for a booking, newest first (task 147/159) - shows prior rejections/reassignments leading to the current state.</summary>
+    [HttpGet("{bookingId:guid}/assignments")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<BookingPartnerAssignmentResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAssignmentHistory(Guid bookingId)
+    {
+        var result = await _assignmentService.GetHistoryAsync(bookingId);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

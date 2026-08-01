@@ -56,6 +56,10 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PartnerAvailabilityWindow> PartnerAvailabilityWindows { get; set; }
     public DbSet<PartnerBlackoutDate> PartnerBlackoutDates { get; set; }
     public DbSet<PartnerCapacity> PartnerCapacities { get; set; }
+    public DbSet<BookingPartnerAssignment> BookingPartnerAssignments { get; set; }
+    public DbSet<PartnerEarningLedgerEntry> PartnerEarningLedgerEntries { get; set; }
+    public DbSet<PartnerPayout> PartnerPayouts { get; set; }
+    public DbSet<PartnerBackgroundCheck> PartnerBackgroundChecks { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
