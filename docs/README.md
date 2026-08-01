@@ -33,6 +33,7 @@ Every topic has exactly **one authoritative document**.
 | [SECURITY.md](SECURITY.md) | Authentication, authorization, secrets and security practices |
 | [TESTING.md](TESTING.md) | Unit, integration, API and end-to-end testing strategy |
 | [DEVOPS.md](DEVOPS.md) | Docker, CI/CD, deployment, monitoring and operations |
+| [RUNBOOK-BACKUP-RESTORE.md](RUNBOOK-BACKUP-RESTORE.md) | Tested PostgreSQL backup/restore procedure (companion to DEVOPS.md's backup requirement) |
 | [PARTNER.md](PARTNER.md) | Partner / Vendor module specification (Phase 7 — scheduled before launch) |
 | [REFERRAL.md](REFERRAL.md) | Referral (Refer & Earn) module specification (Phase 9) |
 | [tasks.csv](tasks.csv) | Development backlog — phased tasks, priorities and dependencies |
