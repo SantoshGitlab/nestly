@@ -93,6 +93,10 @@ public static class AdminPermissionCatalog
             // customer-facing pipeline, read-only into the specialist
             // modules (catalog/pricing/coupons/reviews) it depends on but
             // does not own.
+            // Partner=true added (task 150c): assigning/managing the partners
+            // who fulfil bookings is day-to-day operational work, same tier
+            // as Bookings/Support. Payout is deliberately not granted here -
+            // that is Finance Admin's territory below.
             [AdminRoleNames.OperationsAdmin] =
             [
                 (AdminModules.Dashboard, true), (AdminModules.Customers, true),
@@ -101,7 +105,7 @@ public static class AdminPermissionCatalog
                 (AdminModules.Notifications, true), (AdminModules.Catalog, false),
                 (AdminModules.Pricing, false), (AdminModules.Coupons, false),
                 (AdminModules.Reviews, false), (AdminModules.Reports, false),
-                (AdminModules.Audit, false)
+                (AdminModules.Audit, false), (AdminModules.Partner, true)
             ],
 
             // Booking Admin: the booking lifecycle and the slot capacity it
@@ -154,11 +158,17 @@ public static class AdminPermissionCatalog
 
             // Finance Admin: financial reporting and the audit trail behind
             // it; read-only into bookings/coupons as the source of that data.
+            // Payout=true added (task 150c): running/processing manual bank
+            // transfer payouts (PARTNER.md OPEN DECISIONS #3) is financial
+            // operations work, the same tier as Reports; Partner is
+            // read-only context (who is being paid), not full partner
+            // management, which stays with Operations Admin above.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
                 (AdminModules.Coupons, false), (AdminModules.Reports, true),
-                (AdminModules.Audit, false)
+                (AdminModules.Audit, false), (AdminModules.Partner, false),
+                (AdminModules.Payout, true)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

@@ -60,6 +60,17 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(x => x.CouponCodeSnapshot).HasMaxLength(50);
         builder.Property(x => x.CouponDiscountAmountSnapshot).HasPrecision(12, 2);
 
+        // Denormalized display field only (task 147, PARTNER.md SCOPE
+        // BOUNDARY) - SetNull rather than Restrict/Cascade so a partner
+        // record can still be soft-managed without ever blocking on or
+        // corrupting historical bookings; the authoritative record is
+        // BookingPartnerAssignment, not this column.
+        builder.Property(x => x.AssignedPartnerId);
+        builder.HasOne<Partner>()
+            .WithMany()
+            .HasForeignKey(x => x.AssignedPartnerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasMany(x => x.Items)
             .WithOne()
             .HasForeignKey(x => x.BookingId)

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Escrow;
+using Nestly.Application.PartnerManagement;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Refunds;
@@ -38,6 +39,9 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
 
     private static EscrowService BuildEscrowService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(new PlatformEscrowLedgerRepository(context));
+
+    private static PartnerEarningLedgerService BuildPartnerEarningLedgerService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
+        new(new PartnerRepository(context), new PartnerEarningLedgerRepository(context));
 
     private static PaymentWebhookService BuildWebhookService(
         Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway, CommissionService? commissionService = null) =>
@@ -235,7 +239,9 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         {
             var paymentRepository = new PaymentTransactionRepository(handlerContext);
             var transaction = await paymentRepository.GetByBookingIdAsync(fixture.BookingId);
-            var handler = new EscrowReleaseOnCompletionHandler(paymentRepository, BuildEscrowService(handlerContext), NullLogger<EscrowReleaseOnCompletionHandler>.Instance);
+            var handler = new EscrowReleaseOnCompletionHandler(
+                paymentRepository, new BookingRepository(handlerContext), BuildEscrowService(handlerContext),
+                BuildPartnerEarningLedgerService(handlerContext), NullLogger<EscrowReleaseOnCompletionHandler>.Instance);
 
             await handler.Handle(
                 new DomainEventNotification<BookingStatusChangedEvent>(
@@ -252,10 +258,78 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         release.SourceType.Should().Be(EscrowSourceType.BookingCompleted);
         release.Amount.Should().Be(1000m);
         release.CommissionAmount.Should().Be(150m);
-        release.ProviderId.Should().BeNull("no Provider identity exists yet - the release target is a placeholder");
+        release.ProviderId.Should().BeNull("this booking was never assigned a partner (Booking.AssignedPartnerId is null), so there is nobody to release to");
 
         var held = await BuildEscrowService(readContext).GetHeldBalanceAsync(fixture.BookingId);
         held.Should().Be(0m, "the full hold has been released");
+    }
+
+    /// <summary>
+    /// Task 148/149a: once a booking has an assigned partner
+    /// (<see cref="Booking.AssignedPartnerId"/>, task 147), completing it
+    /// must both release escrow to that specific partner (no longer a null
+    /// placeholder) and credit their earning ledger with the net amount -
+    /// the automatic-crediting hook <c>IPartnerEarningLedgerService</c>'s doc
+    /// comment anticipated.
+    /// </summary>
+    [Fact]
+    public async Task Completing_an_assigned_bookings_job_releases_escrow_to_and_credits_the_assigned_partner()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedConfirmedPaidBookingAsync(gateway, servicePrice: 1000m, BuildCommissionService(defaultRate: 15m));
+
+        Guid partnerId;
+        using (var assignContext = _db.CreateContext())
+        {
+            var partner = new Partner(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", PartnerType.Individual, "+91" + Guid.NewGuid().ToString("N")[..9]);
+            partner.ChangeStatus(PartnerStatus.Active); // AssignAsync (task 147) only allows assigning an Active partner.
+            partnerId = partner.Id;
+            assignContext.Add(partner);
+            await assignContext.SaveChangesAsync();
+
+            var bookingRepository = new BookingRepository(assignContext);
+            var booking = await bookingRepository.GetByIdAsync(fixture.BookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            await bookingRepository.UpdateAsync(booking);
+
+            var assignmentService = new BookingPartnerAssignmentService(
+                bookingRepository, new PartnerRepository(assignContext), new BookingPartnerAssignmentRepository(assignContext));
+            var assignResult = await assignmentService.AssignAsync(fixture.BookingId, Guid.NewGuid(), new AssignPartnerRequest(partnerId, ResponseDeadline: null));
+            assignResult.IsSuccess.Should().BeTrue();
+        }
+
+        using (var lifecycleContext = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(lifecycleContext);
+            var booking = await bookingRepository.GetByIdAsync(fixture.BookingId);
+            booking!.TransitionTo(BookingStatus.InProgress);
+            booking.TransitionTo(BookingStatus.Completed);
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        using (var handlerContext = _db.CreateContext())
+        {
+            var paymentRepository = new PaymentTransactionRepository(handlerContext);
+            var handler = new EscrowReleaseOnCompletionHandler(
+                paymentRepository, new BookingRepository(handlerContext), BuildEscrowService(handlerContext),
+                BuildPartnerEarningLedgerService(handlerContext), NullLogger<EscrowReleaseOnCompletionHandler>.Instance);
+
+            await handler.Handle(
+                new DomainEventNotification<BookingStatusChangedEvent>(
+                    new BookingStatusChangedEvent(fixture.BookingId, BookingStatus.InProgress, BookingStatus.Completed)),
+                CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        var release = (await new PlatformEscrowLedgerRepository(readContext).ListByBookingAsync(fixture.BookingId))
+            .Single(e => e.EntryType == EscrowEntryType.Release);
+        release.ProviderId.Should().Be(partnerId);
+        release.CommissionAmount.Should().Be(150m);
+
+        var summary = await BuildPartnerEarningLedgerService(readContext).GetSummaryAsync(partnerId);
+        summary.IsSuccess.Should().BeTrue();
+        summary.Value.CurrentBalance.Should().Be(850m, "the net amount released to the provider (1000 - 150 commission)");
+        summary.Value.Entries.Should().ContainSingle(e => e.SourceType == PartnerEarningSourceType.JobCompletion && e.SourceReferenceId == fixture.BookingId);
     }
 
     [Fact]

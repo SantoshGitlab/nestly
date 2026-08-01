@@ -20,6 +20,8 @@ import {
   RefundStatus,
   RescheduleActor,
 } from "@/lib/bookings-types";
+import { assignPartnerToBooking, getBookingAssignmentHistory, rejectBookingAssignment } from "@/lib/partners-api";
+import { BookingPartnerAssignmentStatus } from "@/lib/partners-types";
 import type { AdminSessionClaims } from "@/lib/types";
 import { BookingStatus } from "@/lib/types";
 
@@ -83,6 +85,13 @@ const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
   [RefundStatus.Failed]: "Failed",
 };
 
+const ASSIGNMENT_STATUS_LABELS: Record<BookingPartnerAssignmentStatus, string> = {
+  [BookingPartnerAssignmentStatus.Assigned]: "Awaiting response",
+  [BookingPartnerAssignmentStatus.Accepted]: "Accepted",
+  [BookingPartnerAssignmentStatus.Rejected]: "Rejected",
+  [BookingPartnerAssignmentStatus.Reassigned]: "Superseded (reassigned)",
+};
+
 /**
  * Admin booking detail screen (SRS 12.11.2-3, task 116): snapshots, full
  * status timeline, payment/cancellation/reschedule/refund history, and the
@@ -101,6 +110,11 @@ export default function BookingDetailPage() {
   const detailQuery = useQuery({
     queryKey: ["admin-booking-detail", bookingId],
     queryFn: () => getBookingDetail(bookingId),
+  });
+
+  const assignmentHistoryQuery = useQuery({
+    queryKey: ["admin-booking-assignment-history", bookingId],
+    queryFn: () => getBookingAssignmentHistory(bookingId),
   });
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -122,7 +136,13 @@ export default function BookingDetailPage() {
   const [refundReason, setRefundReason] = useState("");
   const [refundMethod, setRefundMethod] = useState(String(RefundMethod.Gateway));
 
-  const invalidateDetail = () => queryClient.invalidateQueries({ queryKey: ["admin-booking-detail", bookingId] });
+  const [assignPartnerId, setAssignPartnerId] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+
+  const invalidateDetail = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-booking-detail", bookingId] });
+    queryClient.invalidateQueries({ queryKey: ["admin-booking-assignment-history", bookingId] });
+  };
 
   const statusMutation = useMutation({
     mutationFn: () => updateBookingStatus(bookingId, { newStatus: Number(newStatus) as BookingStatus, reason: statusReason || undefined }),
@@ -180,6 +200,28 @@ export default function BookingDetailPage() {
       setActionNotice("Refund initiated.");
       setRefundAmount("");
       setRefundReason("");
+      invalidateDetail();
+    },
+    onError: (err) => setActionError(describeError(err)),
+  });
+
+  const assignPartnerMutation = useMutation({
+    mutationFn: () => assignPartnerToBooking(bookingId, { partnerId: assignPartnerId }),
+    onSuccess: () => {
+      setActionError(null);
+      setActionNotice("Partner assigned.");
+      setAssignPartnerId("");
+      invalidateDetail();
+    },
+    onError: (err) => setActionError(describeError(err)),
+  });
+
+  const rejectAssignmentMutation = useMutation({
+    mutationFn: () => rejectBookingAssignment(bookingId, { reason: rejectReason || undefined }),
+    onSuccess: () => {
+      setActionError(null);
+      setActionNotice("Assignment rejected. Booking needs reassignment.");
+      setRejectReason("");
       invalidateDetail();
     },
     onError: (err) => setActionError(describeError(err)),
@@ -307,6 +349,67 @@ export default function BookingDetailPage() {
             </li>
           ))}
         </ol>
+      </Card>
+
+      <Card
+        title="Partner assignment"
+        description="Manual admin-driven assignment (PARTNER.md OPEN DECISIONS #1, tasks 147, 159)"
+      >
+        {assignmentHistoryQuery.isPending ? (
+          <p className="text-sm text-neutral-500">Loading assignment history…</p>
+        ) : assignmentHistoryQuery.isError ? (
+          <Alert>{describeError(assignmentHistoryQuery.error)}</Alert>
+        ) : assignmentHistoryQuery.data.length === 0 ? (
+          <p className="text-sm text-neutral-500">No partner has been assigned to this booking yet.</p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {assignmentHistoryQuery.data.map((assignment) => (
+              <li key={assignment.id} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{assignment.partnerDisplayName}</span>
+                  <span>{ASSIGNMENT_STATUS_LABELS[assignment.status]}</span>
+                </div>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Assigned {new Date(assignment.assignedAt).toLocaleString()}
+                  {assignment.respondedAt ? ` · Responded ${new Date(assignment.respondedAt).toLocaleString()}` : ""}
+                </p>
+                {assignment.notes ? <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{assignment.notes}</p> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {canWrite ? (
+          <div className="mt-5 flex flex-col gap-3 border-t border-black/10 pt-5 dark:border-white/15 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <Field
+                label="Partner ID to assign"
+                value={assignPartnerId}
+                onChange={(e) => setAssignPartnerId(e.target.value)}
+                placeholder="Partner GUID"
+              />
+            </div>
+            <Button disabled={!assignPartnerId.trim() || assignPartnerMutation.isPending} onClick={() => assignPartnerMutation.mutate()}>
+              {assignPartnerMutation.isPending ? "Assigning…" : "Assign partner"}
+            </Button>
+          </div>
+        ) : null}
+
+        {canWrite ? (
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <Field
+                label="Rejection reason (optional)"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Reason the current assignment is being rejected"
+              />
+            </div>
+            <Button variant="danger" disabled={rejectAssignmentMutation.isPending} onClick={() => rejectAssignmentMutation.mutate()}>
+              {rejectAssignmentMutation.isPending ? "Rejecting…" : "Reject current assignment"}
+            </Button>
+          </div>
+        ) : null}
       </Card>
 
       {booking.cancellation ? (

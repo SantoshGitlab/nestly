@@ -16,4 +16,7 @@ public interface IBookingRepository
 
     /// <summary>Filterable, paginated admin search across every booking (SRS 12.11.1, task 115a).</summary>
     Task<BookingSearchResult> SearchAsync(BookingSearchFilter filter);
+
+    /// <summary>Bookings currently assigned to a partner (<see cref="Booking.AssignedPartnerId"/>), for the admin performance view (task 150c). Reflects the live assignment only - a booking whose assignment was later rejected/reassigned away from this partner will no longer appear here, even though <c>BookingPartnerAssignment</c> retains that history.</summary>
+    Task<IReadOnlyList<Booking>> ListByAssignedPartnerAsync(Guid partnerId);
 }

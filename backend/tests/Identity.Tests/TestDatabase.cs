@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Nestly.Infrastructure.Persistence;
+using Nestly.Infrastructure.Persistence.Interceptors;
 
 namespace Nestly.Identity.Tests;
 
@@ -27,6 +28,16 @@ public sealed class TestDatabase : IDisposable
         Options = new DbContextOptionsBuilder<NestlyDbContext>()
             .UseSqlite(_connection)
             .UseSnakeCaseNamingConvention()
+            // Same fix DependencyInjection.AddInfrastructure wires up for
+            // the real app - see NewOwnedChildEntityInterceptor's doc
+            // comment (needed here starting with task 149a's
+            // PartnerJobServiceTests, the first Identity.Tests suite to call
+            // Booking.TransitionTo more than once against an
+            // already-tracked-and-saved booking within the same context).
+            // Tests build their DbContextOptions directly rather than
+            // through DI, so it has to be added here too - mirrors
+            // Catalog.Tests/TestDatabase.cs.
+            .AddInterceptors(new NewOwnedChildEntityInterceptor())
             .Options;
 
         using var context = new NestlyDbContext(Options);
