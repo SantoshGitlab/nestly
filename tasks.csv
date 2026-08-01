@@ -427,7 +427,7 @@ summary-note,"Phase order changed 2026-07-31: Partner (was Phase 8, deferred) no
 133e,Security - broken access control,done,critical,depends on #133d,Phase 8 - Hardening & Launch
 133f,Security - payment callback abuse,done,critical,depends on #133e,Phase 8 - Hardening & Launch
 133g,Security - OTP brute force (SRS 28.3),done,critical,depends on #133f,Phase 8 - Hardening & Launch
-134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),todo,critical,"depends on #133g | draft rate_limiting_service.cs salvaged to _salvage/auth-otp-drafts/| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
+134,Security - Rate limiting rollout: Rate limits on auth/OTP/search/payment endpoints (SRS 28.1),done,critical,"depends on #133g | draft rate_limiting_service.cs salvaged to _salvage/auth-otp-drafts/| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
 135,Performance - Load and performance testing: Catalog browse; checkout; concurrent slot booking under promotion-level traffic (SRS 29.1-29.2),decomposed,medium,"depends on #66c | auto-blocked: depends on blocked task #66 | unblocked: manual reset, dependency gate re-checked at runtime | superseded: decomposed into subtasks 135a,135b,135c",Phase 8 - Hardening & Launch
 135a,Performance - Catalog browse,todo,medium,"depends on #66c| unblocked: manual reset, dependency gate re-checked at runtime",Phase 8 - Hardening & Launch
 135b,Performance - checkout,todo,medium,depends on #135a,Phase 8 - Hardening & Launch

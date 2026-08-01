@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application.Geography;
 using Nestly.BuildingBlocks.Extensions;
 
@@ -33,6 +34,7 @@ public class GeographyController : ControllerBase
     /// it - required by the slot and serviceability APIs.
     /// </summary>
     [HttpGet("cities/{cityId:guid}/localities")]
+    [EnableRateLimiting("search")]
     [ProducesResponseType(typeof(IReadOnlyList<LocalityResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SearchLocalities(Guid cityId, [FromQuery] string? search)

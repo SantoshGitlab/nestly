@@ -5,6 +5,7 @@ using FluentValidation.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application.Payments;
 using Nestly.BuildingBlocks.Extensions;
 
@@ -44,6 +45,7 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("orders")]
     [Authorize]
+    [EnableRateLimiting("payment")]
     [ProducesResponseType(typeof(PaymentOrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -82,6 +84,7 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("webhook")]
     [AllowAnonymous]
+    [EnableRateLimiting("payment-webhook")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -108,6 +111,7 @@ public class PaymentsController : ControllerBase
     /// </summary>
     [HttpPost("orders/simulate")]
     [Authorize]
+    [EnableRateLimiting("payment")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

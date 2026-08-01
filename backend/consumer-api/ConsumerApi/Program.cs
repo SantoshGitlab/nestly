@@ -64,6 +64,41 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(rateLimits.Login.WindowMinutes),
             PermitLimit = rateLimits.Login.PermitLimit
         }));
+
+    // Task 134 (SRS 28.1): the public catalog search endpoint has no
+    // customer identity to key on either, so this is IP-partitioned like
+    // otp/login above.
+    options.AddPolicy("search", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Search.WindowMinutes),
+            PermitLimit = rateLimits.Search.PermitLimit
+        }));
+
+    // Task 134 (SRS 28.1, 28.3 "payment callback abuse"): order creation is
+    // authenticated, but still partitioned by IP rather than customer id - a
+    // compromised or malicious account probing for fraud shares an IP with
+    // itself far more reliably than it shares a stable identity across
+    // freshly-registered accounts.
+    options.AddPolicy("payment", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Payment.WindowMinutes),
+            PermitLimit = rateLimits.Payment.PermitLimit
+        }));
+
+    // Separate, more generous policy for the gateway webhook - see
+    // RateLimitOptions.PaymentWebhook for why this must not share the
+    // "payment" policy's tighter limit.
+    options.AddPolicy("payment-webhook", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.PaymentWebhook.WindowMinutes),
+            PermitLimit = rateLimits.PaymentWebhook.PermitLimit
+        }));
 });
 
 var app = builder.Build();
