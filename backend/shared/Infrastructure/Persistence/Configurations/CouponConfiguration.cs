@@ -30,6 +30,7 @@ public class CouponConfiguration : IEntityTypeConfiguration<Coupon>
             .HasForeignKey(x => x.ApplicableCategoryId)
             .OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.CustomerSegment).IsRequired().HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.RestrictedToCustomerId);
         builder.Property(x => x.CreatedAtUtc).IsRequired();
 
         builder.HasIndex(x => new { x.ValidFromUtc, x.ValidToUtc });

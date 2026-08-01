@@ -51,6 +51,24 @@ public class Coupon : Entity<Guid>
 
     public CouponCustomerSegment CustomerSegment { get; private set; }
 
+    /// <summary>
+    /// When set, only this specific customer may redeem this coupon -
+    /// checked by <c>CouponService.ValidateAsync</c> alongside every other
+    /// applicability rule. Null (the default, and the only state every
+    /// admin-created coupon has today) means unrestricted: applicability is
+    /// governed entirely by <see cref="CustomerSegment"/>/<see cref="UsageLimitPerCustomer"/>
+    /// as before. Added for referral-issued single-recipient coupon rewards
+    /// (REFERRAL.md, task 165) - before this field existed, "single-use for
+    /// customer X" could only be approximated via a global code plus
+    /// <see cref="UsageLimitPerCustomer"/>=1, which does not stop a
+    /// *different* customer who somehow obtains the code from redeeming it
+    /// first. Not part of the constructor deliberately: every existing
+    /// admin-coupon call site (<c>CouponManagementService.CreateAsync</c>)
+    /// creates an unrestricted campaign coupon and should never need to
+    /// change to accommodate this - see <see cref="RestrictToCustomer"/>.
+    /// </summary>
+    public Guid? RestrictedToCustomerId { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     protected Coupon() { }
@@ -111,6 +129,23 @@ public class Coupon : Entity<Guid>
     /// <summary>Validity window check (task 72b) - active flag plus the [ValidFrom, ValidTo] date range.</summary>
     public bool IsWithinValidityWindow(DateTime nowUtc) =>
         IsActive && nowUtc >= ValidFromUtc && nowUtc <= ValidToUtc;
+
+    /// <summary>
+    /// Restricts this coupon to exactly one customer (REFERRAL.md task 165).
+    /// Set-once, called immediately after construction by whichever service
+    /// issues a single-recipient coupon - never exposed as an admin edit,
+    /// since a campaign coupon becoming customer-restricted (or vice versa)
+    /// after the fact isn't a real scenario this platform has.
+    /// </summary>
+    public void RestrictToCustomer(Guid customerId)
+    {
+        if (RestrictedToCustomerId is not null)
+        {
+            throw new InvalidOperationException("Coupon is already restricted to a customer.");
+        }
+
+        RestrictedToCustomerId = customerId;
+    }
 
     /// <summary>
     /// Applies admin edits to every mutable rule dimension (SRS 12.12.1,

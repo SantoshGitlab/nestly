@@ -13,11 +13,43 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
 | Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 4 | 12 | 0 | 0 | 16 |
+| Phase 9 - Referral & Growth | 6 | 10 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **426** | **34** | **50** | **2** | **512** |
+| **Overall** | **428** | **32** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing task 163 (Phase 9 registration
+Last updated: 2026-08-01, after completing tasks 164-165 (Phase 9 qualifying
+hook + reward disbursement) on `phase-8-hardening-launch`. Implemented
+together, one flow: `ReferralQualifyingBookingHandler` (a third independent
+handler on `BookingStatusChangedEvent`, same shape as
+`EscrowReleaseOnCompletionHandler`/`BookingNotificationTriggerHandler`) marks
+a Registered referral Qualified when its referee's completed booking meets
+the snapshotted minimum amount, then calls `IReferralRewardService.DisburseAsync`
+synchronously in the same handler invocation - REFERRAL.md's DECISIONS
+section is explicit both sides are rewarded on the same event, not a
+separately scheduled step. Real gap found and fixed first: `Coupon` had no
+customer-scoping field at all - `UsageLimitPerCustomer=1` only limits how
+many times *one* customer can use a code, it does not stop a *different*
+customer who somehow obtains the code from redeeming it - added
+`Coupon.RestrictedToCustomerId` (set-once, not part of the constructor so no
+existing admin-coupon call site changes) plus the matching
+`CouponService.ValidateAsync` check and migration
+`20260801152757_AddCouponRestrictedToCustomer`. The per-customer reward cap
+(REFERRAL.md fraud prevention) caps the referrer's own reward only via
+`CountRewardedByReferrerAsync` - the referee's reward is independent and
+always proceeds once Qualified, regardless of the referrer's cap status. 5
+new tests (`ReferralQualificationAndRewardTests`), bookings built directly
+via `Booking`'s constructor + `TransitionTo` chain rather than the full
+`BookingService` orchestration (out of scope for what these tests need). One
+test-infrastructure bug caught and fixed along the way: `ReferralProgramConfig`
+is a true single-row table in production, but the shared `TestDatabase`
+fixture (one DB per test class) meant naive per-test seeding left several
+rows behind and `GetAsync()`'s unfiltered lookup picked an arbitrary one -
+fixed by clearing existing rows before seeding each test, documented in the
+test helper as a reminder for future single-row-table tests. Full suite
+894/894. Next: task 166 (fraud review queue - admin approve/reject on
+flagged rows; the cap enforcement itself already landed here).
+
+Previously, 2026-08-01: completed task 163 (Phase 9 registration
 wiring) on `phase-8-hardening-launch`. `RegisterCustomerRequest` gained an
 optional `ReferralCode`; `CustomerRegistrationService.TryCreateReferralAsync`
 resolves the referrer by code, best-effort (an invalid/unknown code or a
