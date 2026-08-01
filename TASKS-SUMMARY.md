@@ -12,12 +12,37 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 22 | 10 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 27 | 5 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **412** | **48** | **50** | **2** | **512** |
+| **Overall** | **417** | **43** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 138a-138d and 139 (Phase 8
+Last updated: 2026-08-01, after completing tasks 142a-142d and 143 (Phase 8
+docs/product close-out) on `phase-8-hardening-launch`. Task 143 closed all
+twelve SRS §34 open decisions by auditing what Phases 1-7 actually shipped
+rather than re-deciding in isolation (`docs/SRS.md` §34 rewritten in place,
+each item traced to a concrete type/setting/service — e.g. multi-service
+bookings via `BookingItem`, no COD anywhere in `backend/`, capacity-linked
+slots via `SlotCapacityRepository`, coupon stacking and tax-inclusive
+display both configurable via existing `SettingsContracts` fields, reviews
+visible-immediately with post-publish moderation via
+`ReviewModerationService`, multilingual not implemented since no locale
+infrastructure exists). Tasks 142a-142d added `docs/RUNBOOK-DEPLOYMENT.md`
+(deploy path via `cd-staging.yml`/`cd-production.yml` and how to verify a
+deploy landed; rollback via `rollback.yml` with app-rollback-first guidance
+and the `Down()`-migration safety caveat carried over from task 138d;
+incident response built on task 137's `FailureRateAlertMonitor` `AlertCode`s
+plus the existing idempotency guarantees on payment/booking paths; on-call
+basics that state plainly there is no paging destination yet per
+`docs/DEVOPS.md` OPEN DECISIONS, rather than fabricating a 3am-pager
+process that doesn't exist) — companion to the already-shipped
+`docs/RUNBOOK-BACKUP-RESTORE.md`, not a duplicate of it. Docs-only batch, no
+C# changes; `dotnet build Nestly.sln` and full test suite unaffected
+(882/882 passing, unchanged from the prior entry). Phase 8 is now 27/38
+done, 5 `todo` (140a-140d QA E2E, 141 UAT) and 6 `decomposed` parent
+placeholders (each already satisfied by done lettered subtasks) remain.
+
+Previously, 2026-08-01: completed tasks 138a-138d and 139 (Phase 8
 DevOps: CD pipeline + backup/restore) on `phase-8-hardening-launch`. Extended
 the existing GitHub Actions CI/CD setup (`.github/workflows/ci.yml`, PR/push
 gate) with real deployment workflows rather than duplicating it:

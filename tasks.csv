@@ -1,5 +1,5 @@
 id,task,status,priority,notes,phase
-summary,"SUMMARY (auto-generated overview row; not a real task -- id fails the task-id pattern [0-9]+[a-z0-9]*, so the scheduler skips every row in this block; regenerate by re-running the script that produced it, do not hand-edit). Total tasks: 512. By status: blocked=2, decomposed=50, done=357, todo=103.",done,,auto-generated summary row; not scheduled,
+summary,"SUMMARY (auto-generated overview row; not a real task -- id fails the task-id pattern [0-9]+[a-z0-9]*, so the scheduler skips every row in this block; regenerate by re-running the script that produced it, do not hand-edit). Total tasks: 512. By status: blocked=2, decomposed=50, done=417, todo=43.",done,,auto-generated summary row; not scheduled,
 summary-p0,"SUMMARY - Phase 0 - Foundation: 25/25 done (todo 0, decomposed 0, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-p1,"SUMMARY - Phase 1 - Identity & Customer: 46/46 done (todo 0, decomposed 0, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-p2,"SUMMARY - Phase 2 - Catalog & Serviceability: 67/72 done (todo 0, decomposed 3, review 0, blocked 2)",done,,auto-generated summary row; not scheduled,
@@ -8,7 +8,7 @@ summary-p4,"SUMMARY - Phase 4 - Payments & Financial: 40/46 done (todo 0, decomp
 summary-p5,"SUMMARY - Phase 5 - Post-Booking: 40/47 done (todo 0, decomposed 7, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-p6,"SUMMARY - Phase 6 - Admin Panel: 92/119 done (todo 12, decomposed 15, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-p7,"SUMMARY - Phase 7 - Partner: 0/25 done (todo 21, decomposed 4, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
-summary-p8,"SUMMARY - Phase 8 - Hardening & Launch: 0/38 done (todo 32, decomposed 6, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
+summary-p8,"SUMMARY - Phase 8 - Hardening & Launch: 27/38 done (todo 5, decomposed 6, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-p9,"SUMMARY - Phase 9 - Referral & Growth: 0/16 done (todo 16, decomposed 0, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-p10,"SUMMARY - Phase 10 - Product Enhancements: 0/22 done (todo 22, decomposed 0, review 0, blocked 0)",done,,auto-generated summary row; not scheduled,
 summary-note,"Phase order changed 2026-07-31: Partner (was Phase 8, deferred) now runs as Phase 7, before Hardening & Launch (now Phase 8), per explicit instruction to complete partner/provider work before launch. Phase 9 is Referral & Growth (#155-176, from comparing Urban.docx against this backlog plus 6 approved growth enhancements). Phase 10 is Product Enhancements (#177-198): subscriptions, recurring bookings, in-app chat, service completion verification.",done,,auto-generated summary row; not scheduled,
