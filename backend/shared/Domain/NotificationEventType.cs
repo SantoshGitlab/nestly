@@ -16,5 +16,14 @@ public enum NotificationEventType
     ReferralRegistered,
 
     /// <summary>A referral reward (wallet credit or coupon) was disbursed (REFERRAL.md, task 172). Sent to both referrer and referee - dispatched once per recipient, same event type.</summary>
-    ReferralRewardCredited
+    ReferralRewardCredited,
+
+    /// <summary>
+    /// A chat message arrived while the recipient had no live SignalR
+    /// connection (PRODUCT-ENHANCEMENTS.md IN-APP CHAT, task 194). Only ever
+    /// dispatched for the customer side of a thread today - see
+    /// <c>ChatNotificationTriggerHandler</c>'s doc comment for the documented
+    /// scope gap on the admin/partner side.
+    /// </summary>
+    NewChatMessage
 }

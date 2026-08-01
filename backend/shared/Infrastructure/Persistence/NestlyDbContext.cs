@@ -63,6 +63,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PartnerBackgroundCheck> PartnerBackgroundChecks { get; set; }
     public DbSet<Referral> Referrals { get; set; }
     public DbSet<ReferralProgramConfig> ReferralProgramConfigs { get; set; }
+    public DbSet<ChatThread> ChatThreads { get; set; }
+    public DbSet<ChatMessage> ChatMessages { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

@@ -20,6 +20,9 @@ public static class CacheKeys
     {
         public const string Catalog = "catalog";
         public const string Session = "session";
+
+        /// <summary>Chat presence (task 190) - shared across consumer-api/admin-api/partner-api, each its own process.</summary>
+        public const string ChatPresence = "chat-presence";
     }
 
     /// <summary>A single service's catalog projection.</summary>
@@ -56,6 +59,10 @@ public static class CacheKeys
     /// <summary>A customer's active session projection.</summary>
     public static string CustomerSession(Guid customerId) =>
         Compose(Areas.Session, "customer", customerId.ToString("D"));
+
+    /// <summary>Set of live SignalR connection ids for one user, regardless of which API's hub they connected through (task 190).</summary>
+    public static string ChatPresence(Guid userId) =>
+        Compose(Areas.ChatPresence, "user", userId.ToString("D"));
 
     /// <summary>
     /// Builds a key from pre-validated segments. Kept private so every key in

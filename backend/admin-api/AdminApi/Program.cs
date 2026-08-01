@@ -7,6 +7,7 @@ using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Realtime;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -84,6 +85,12 @@ app.UseRateLimiter();
 app.UseBackgroundJobsDashboard();
 
 app.MapControllers();
+
+// Task 190/193: the same ChatHub type consumer-api maps, at the same path -
+// see its doc comment for why one shared hub type (behind the Redis
+// backplane, not two independent per-API hubs) is required for cross-process
+// delivery between a customer's connection and an admin's.
+app.MapHub<ChatHub>(ChatHubRoutes.ChatPath);
 
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
