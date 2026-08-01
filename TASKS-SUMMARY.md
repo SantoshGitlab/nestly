@@ -12,12 +12,30 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 31 | 1 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **421** | **39** | **50** | **2** | **512** |
+| **Overall** | **422** | **38** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 140a-140d (Phase 8 QA E2E
+Last updated: 2026-08-01, after completing task 141 (Phase 8 UAT execution)
+on `phase-8-hardening-launch`. `docs/UAT-REPORT.md` runs all 16 SRS §33
+acceptance criteria (customer/admin/platform) against real evidence rather
+than code inspection: the task 140a-140d E2E suite's actual runs, live
+admin-api/consumer-api calls made during this pass with a real Super Admin
+JWT (categories/services/pricing/serviceability/slots/coupons/CMS,
+end-to-end booking management, the audit log genuinely populated with this
+pass's own login events, dashboard/reports endpoints), and the 882-test
+backend suite. 16/16 pass. Two non-blocking gaps noted honestly rather than
+glossed over: no admin-web browser E2E suite exists (admin acceptance here
+is API-layer, not UI-driven - new scope beyond what 140a-140d covers), and
+the coupon-apply UI path wasn't exercised in the E2E run (no coupon was
+seeded; the underlying service has its own Catalog.Tests coverage). No code
+changes this task - docs only. **Phase 8 (Hardening & Launch) is now
+substantively complete: 32/38 done, 0 todo, 6 `decomposed` parent
+placeholders remain (each already satisfied by done lettered subtasks, per
+this backlog's existing convention for 133/135/136/137/138).**
+
+Previously, 2026-08-01: completed tasks 140a-140d (Phase 8 QA E2E
 suite) on `phase-8-hardening-launch`. Added a real Playwright/Chromium E2E
 suite in `frontend/customer-web/e2e/` driving the four SRS 33 UAT flows
 (discovery→category→service detail, slot→booking→payment,
