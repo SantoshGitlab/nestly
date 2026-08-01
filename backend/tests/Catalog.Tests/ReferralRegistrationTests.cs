@@ -89,6 +89,14 @@ public sealed class ReferralRegistrationTests : IClassFixture<TestDatabase>
         referral.ReferrerCustomerId.Should().Be(referrer.Id);
         referral.Status.Should().Be(ReferralStatus.Registered);
         referral.ReferralCodeUsed.Should().Be("REFCODE1");
+
+        // Task 172: the referrer is notified their code was used - before
+        // NotificationTemplateSeedData carried rows for ReferralRegistered
+        // this would have logged a "no_template" Failed row instead.
+        context.NotificationEvents
+            .Where(e => e.EventType == NotificationEventType.ReferralRegistered && e.CustomerId == referrer.Id)
+            .Should().NotBeEmpty()
+            .And.OnlyContain(e => e.Status == NotificationDeliveryStatus.Sent);
     }
 
     [Fact]

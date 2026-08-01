@@ -80,3 +80,6 @@ public record ReferralCostReportResponse(
     int MilestoneBonusCount,
     DateTime? FromUtc,
     DateTime? ToUtc);
+
+/// <summary>Task 170's fraud review queue actions - an optional admin note, same shape as reviews' ModerateReviewRequest.</summary>
+public record ReferralFraudReviewRequest(string? Note);

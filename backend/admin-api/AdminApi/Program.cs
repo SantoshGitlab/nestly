@@ -1,8 +1,10 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
+using Hangfire;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
+using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
@@ -82,6 +84,23 @@ app.UseRateLimiter();
 // Background-job dashboard (T018) — admin API only, and after authorization so
 // the dashboard's admin-role filter has a populated principal to check.
 app.UseBackgroundJobsDashboard();
+
+// Task 175's wallet-credit expiry sweep: the only recurring job in the
+// system so far, registered only when this process actually runs a Hangfire
+// server (admin-api is the sole ServerEnabled=true process, see
+// BackgroundJobOptions.ServerEnabled's doc comment) - scheduling metadata
+// from a process that will never execute it would be pointless and, in
+// Testing config (ServerEnabled=false, no live Postgres guaranteed at
+// startup), would fail for no benefit. Idempotent re-execution is required
+// by the retry convention (BackgroundJobRegistration) and satisfied by
+// WalletCreditExpirySweepJob itself (see its doc comment).
+if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundJobOptions>>().Value.ServerEnabled)
+{
+    RecurringJob.AddOrUpdate<IWalletCreditExpirySweepJob>(
+        "wallet-credit-expiry-sweep",
+        job => job.SweepAsync(CancellationToken.None),
+        Cron.Daily);
+}
 
 app.MapControllers();
 
