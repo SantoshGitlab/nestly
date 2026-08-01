@@ -60,6 +60,18 @@ public class BookingPartnerAssignment : Entity<Guid>
     /// <summary>Rejection reason or admin notes, set when the partner responds or the assignment is superseded.</summary>
     public string? Notes { get; private set; }
 
+    /// <summary>
+    /// Reference (storage key/URL) to completion evidence the partner
+    /// uploaded (task 149a, PARTNER.md API surface "upload completion
+    /// proof") - a reference only, mirroring how <see cref="PartnerKycDocument.FileRef"/>
+    /// stores an already-uploaded file's reference rather than binary
+    /// content. Lives here rather than on <see cref="Booking"/> because it is
+    /// specific to this assignment's execution, not booking-wide state - the
+    /// SCOPE BOUNDARY only allows one denormalized field on Booking, already
+    /// spent on <see cref="Booking.AssignedPartnerId"/>.
+    /// </summary>
+    public string? CompletionProofRef { get; private set; }
+
     protected BookingPartnerAssignment() { }
 
     public BookingPartnerAssignment(
@@ -112,6 +124,27 @@ public class BookingPartnerAssignment : Entity<Guid>
 
         Status = BookingPartnerAssignmentStatus.Reassigned;
         RespondedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Attaches/replaces the completion evidence reference (task 149a). Only
+    /// legal once the partner has actually accepted the job - an assignment
+    /// still awaiting a response, or one that was rejected/superseded, has no
+    /// job execution to attach evidence to.
+    /// </summary>
+    public void SetCompletionProof(string proofRef)
+    {
+        if (string.IsNullOrWhiteSpace(proofRef))
+        {
+            throw new ArgumentException("A completion proof reference is required.", nameof(proofRef));
+        }
+
+        if (Status != BookingPartnerAssignmentStatus.Accepted)
+        {
+            throw new InvalidOperationException($"Cannot attach completion proof to an assignment in status {Status}.");
+        }
+
+        CompletionProofRef = proofRef;
     }
 
     private void EnsureOutstanding()

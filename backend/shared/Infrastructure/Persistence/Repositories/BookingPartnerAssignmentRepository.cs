@@ -44,4 +44,10 @@ public class BookingPartnerAssignmentRepository : IBookingPartnerAssignmentRepos
             .Where(a => a.BookingId == bookingId)
             .OrderByDescending(a => a.AssignedAt)
             .ToListAsync();
+
+    public async Task<IReadOnlyList<BookingPartnerAssignment>> ListByPartnerAsync(Guid partnerId) =>
+        await _context.BookingPartnerAssignments
+            .Where(a => a.PartnerId == partnerId)
+            .OrderByDescending(a => a.AssignedAt)
+            .ToListAsync();
 }

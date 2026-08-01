@@ -87,7 +87,63 @@ public class BookingPartnerAssignmentService : IBookingPartnerAssignmentService
             return Error.Business("BookingPartnerAssignment.NoOutstandingAssignment", "This booking has no outstanding assignment to reject.");
         }
 
-        assignment.Reject(request.Reason);
+        return await RejectInternalAsync(booking, assignment, request.Reason);
+    }
+
+    public async Task<Result<BookingPartnerAssignmentResponse>> AcceptAsync(Guid bookingId, Guid partnerId)
+    {
+        var assignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+        if (assignment is null || assignment.PartnerId != partnerId)
+        {
+            // Hides whether the booking/assignment exists at all from a
+            // non-owning caller (SRS 28.3 IDOR), same pattern as
+            // PartnerAvailabilityService.DeleteBlackoutDateAsync.
+            return Error.NotFound("BookingPartnerAssignment.NoOutstandingAssignment", "You have no outstanding assignment for this booking.");
+        }
+
+        if (assignment.Status != BookingPartnerAssignmentStatus.Assigned)
+        {
+            return Error.Business("BookingPartnerAssignment.AlreadyResponded", $"This assignment was already {assignment.Status}.");
+        }
+
+        assignment.Accept();
+        await _assignmentRepository.UpdateAsync(assignment);
+
+        var partner = await _partnerRepository.GetByIdAsync(partnerId);
+        return ToResponse(assignment, partner?.DisplayName ?? "(unknown partner)");
+    }
+
+    public async Task<Result<BookingPartnerAssignmentResponse>> RejectByPartnerAsync(Guid bookingId, Guid partnerId, RejectAssignmentRequest request)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("BookingPartnerAssignment.BookingNotFound", "Booking was not found.");
+        }
+
+        var assignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+        if (assignment is null || assignment.PartnerId != partnerId)
+        {
+            return Error.NotFound("BookingPartnerAssignment.NoOutstandingAssignment", "You have no outstanding assignment for this booking.");
+        }
+
+        if (assignment.Status != BookingPartnerAssignmentStatus.Assigned)
+        {
+            return Error.Business("BookingPartnerAssignment.AlreadyResponded", $"This assignment was already {assignment.Status}.");
+        }
+
+        return await RejectInternalAsync(booking, assignment, request.Reason);
+    }
+
+    /// <summary>
+    /// Shared task 159 handling behind both the admin-recorded
+    /// <see cref="RejectAsync"/> and the partner-authenticated
+    /// <see cref="RejectByPartnerAsync"/>: reject the assignment, clear the
+    /// display field, and return the booking to the assignable pool.
+    /// </summary>
+    private async Task<Result<BookingPartnerAssignmentResponse>> RejectInternalAsync(Booking booking, BookingPartnerAssignment assignment, string? reason)
+    {
+        assignment.Reject(reason);
         await _assignmentRepository.UpdateAsync(assignment);
 
         // Needs reassignment (task 159): clear the display field and return
@@ -142,5 +198,6 @@ public class BookingPartnerAssignmentService : IBookingPartnerAssignmentService
         assignment.Status,
         assignment.ResponseDeadline,
         assignment.RespondedAt,
-        assignment.Notes);
+        assignment.Notes,
+        assignment.CompletionProofRef);
 }

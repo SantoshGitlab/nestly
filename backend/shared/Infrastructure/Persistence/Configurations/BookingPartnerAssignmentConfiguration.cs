@@ -30,6 +30,7 @@ public class BookingPartnerAssignmentConfiguration : IEntityTypeConfiguration<Bo
         builder.Property(x => x.ResponseDeadline);
         builder.Property(x => x.RespondedAt);
         builder.Property(x => x.Notes).HasMaxLength(500);
+        builder.Property(x => x.CompletionProofRef).HasMaxLength(500);
 
         // Several rows accumulate per booking over time (reassignment
         // history) - unlike BookingCancellation, no unique index on

@@ -14,4 +14,7 @@ public interface IBookingPartnerAssignmentRepository
 
     /// <summary>Full assignment history for a booking, newest first (task 159 - shows prior rejections leading to the current state).</summary>
     Task<IReadOnlyList<BookingPartnerAssignment>> ListByBookingAsync(Guid bookingId);
+
+    /// <summary>Every assignment ever made to a partner, across every booking, newest first (task 149a - the partner's own "my jobs" list, unlike <c>IBookingRepository.ListByAssignedPartnerAsync</c> this includes rejected/superseded rows too).</summary>
+    Task<IReadOnlyList<BookingPartnerAssignment>> ListByPartnerAsync(Guid partnerId);
 }

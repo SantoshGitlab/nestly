@@ -19,4 +19,5 @@ public sealed record BookingPartnerAssignmentResponse(
     BookingPartnerAssignmentStatus Status,
     DateTime? ResponseDeadline,
     DateTime? RespondedAt,
-    string? Notes);
+    string? Notes,
+    string? CompletionProofRef);

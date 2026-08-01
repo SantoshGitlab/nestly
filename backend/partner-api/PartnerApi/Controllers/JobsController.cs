@@ -1,26 +1,24 @@
+using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
+using FluentValidation;
+using FluentValidation.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Nestly.Application.PartnerJobs;
+using Nestly.BuildingBlocks.Extensions;
 using Nestly.Infrastructure;
 
 namespace Nestly.PartnerApi.Controllers;
 
 /// <summary>
-/// Partner jobs (task 149a, PARTNER.md API surface "Jobs" — list/detail,
-/// accept/reject/start/complete, completion proof upload).
-///
-/// STUB: every action here returns 501 Not Implemented. PARTNER.md's
-/// assignment bridge entity, <c>BookingPartnerAssignment</c>, is being built
-/// concurrently on a sibling branch (task 147) and is not yet present in this
-/// worktree. Route shapes and method signatures below match the API surface
-/// PARTNER.md describes so wiring this up is a drop-in once 147 merges: swap
-/// each body for a call into an <c>IPartnerJobService</c> (to be introduced
-/// then) backed by <c>IBookingPartnerAssignmentRepository</c>, following the
-/// same "resolve the caller's own partner id from the JWT, never trust a
-/// route/body value" pattern as <see cref="ProfileController"/> and
-/// <see cref="AvailabilityController"/>.
-///
-/// TODO(task 147): replace every action body once BookingPartnerAssignment lands.
+/// Partner jobs (task 149a, PARTNER.md API surface "Jobs" - list/detail,
+/// accept/reject/start/complete, completion proof upload), wired to a real
+/// <see cref="IPartnerJobService"/> backed by the <c>BookingPartnerAssignment</c>
+/// bridge entity (task 147). Every action is scoped to the caller's own
+/// partner id taken from the JWT - there is no route or body parameter that
+/// could name a different partner (SRS 28.3 IDOR), same pattern as
+/// <see cref="ProfileController"/>/<see cref="AvailabilityController"/>.
 /// </summary>
 [ApiController]
 [ApiVersion(1)]
@@ -28,47 +26,119 @@ namespace Nestly.PartnerApi.Controllers;
 [Route("api/v{version:apiVersion}/jobs")]
 public class JobsController : ControllerBase
 {
-    /// <summary>List jobs assigned to the caller, optionally filtered by status and/or date.</summary>
+    private readonly IPartnerJobService _jobService;
+    private readonly IValidator<RejectJobRequest> _rejectValidator;
+    private readonly IValidator<UploadJobCompletionProofRequest> _completionProofValidator;
+
+    public JobsController(
+        IPartnerJobService jobService,
+        IValidator<RejectJobRequest> rejectValidator,
+        IValidator<UploadJobCompletionProofRequest> completionProofValidator)
+    {
+        _jobService = jobService;
+        _rejectValidator = rejectValidator;
+        _completionProofValidator = completionProofValidator;
+    }
+
+    /// <summary>List jobs ever assigned to the caller, optionally filtered by status and/or slot date.</summary>
     [HttpGet]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult List([FromQuery] string? status, [FromQuery] DateOnly? date) => NotImplementedPendingAssignmentBridge();
+    [ProducesResponseType(typeof(PartnerJobSearchResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> List([FromQuery] PartnerJobStatus? status, [FromQuery] DateOnly? date)
+    {
+        var result = await _jobService.ListAsync(CurrentPartnerId(), status, date);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 
     /// <summary>Get one job's detail.</summary>
-    [HttpGet("{id:guid}")]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult GetDetail(Guid id) => NotImplementedPendingAssignmentBridge();
+    [HttpGet("{bookingId:guid}")]
+    [ProducesResponseType(typeof(PartnerJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDetail(Guid bookingId)
+    {
+        var result = await _jobService.GetDetailAsync(CurrentPartnerId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 
     /// <summary>Accept an assigned job.</summary>
-    [HttpPost("{id:guid}/accept")]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult Accept(Guid id) => NotImplementedPendingAssignmentBridge();
+    [HttpPost("{bookingId:guid}/accept")]
+    [ProducesResponseType(typeof(PartnerJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Accept(Guid bookingId)
+    {
+        var result = await _jobService.AcceptAsync(CurrentPartnerId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 
-    /// <summary>Reject an assigned job.</summary>
-    [HttpPost("{id:guid}/reject")]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult Reject(Guid id) => NotImplementedPendingAssignmentBridge();
+    /// <summary>Reject an assigned job (task 159 - returns the booking to the assignable pool for admin reassignment).</summary>
+    [HttpPost("{bookingId:guid}/reject")]
+    [ProducesResponseType(typeof(PartnerJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Reject(Guid bookingId, [FromBody] RejectJobRequest request)
+    {
+        var validation = await _rejectValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _jobService.RejectAsync(CurrentPartnerId(), bookingId, request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 
     /// <summary>Mark an accepted job as started (partner has arrived / begun work).</summary>
-    [HttpPost("{id:guid}/start")]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult Start(Guid id) => NotImplementedPendingAssignmentBridge();
+    [HttpPost("{bookingId:guid}/start")]
+    [ProducesResponseType(typeof(PartnerJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Start(Guid bookingId)
+    {
+        var result = await _jobService.StartAsync(CurrentPartnerId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 
     /// <summary>Mark an in-progress job as completed.</summary>
-    [HttpPost("{id:guid}/complete")]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult Complete(Guid id) => NotImplementedPendingAssignmentBridge();
+    [HttpPost("{bookingId:guid}/complete")]
+    [ProducesResponseType(typeof(PartnerJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Complete(Guid bookingId)
+    {
+        var result = await _jobService.CompleteAsync(CurrentPartnerId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 
     /// <summary>Attach completion proof (photo/file reference) to a job.</summary>
-    [HttpPost("{id:guid}/completion-proof")]
-    [ProducesResponseType(StatusCodes.Status501NotImplemented)]
-    public IActionResult UploadCompletionProof(Guid id) => NotImplementedPendingAssignmentBridge();
-
-    private ObjectResult NotImplementedPendingAssignmentBridge() =>
-        StatusCode(StatusCodes.Status501NotImplemented, new ProblemDetails
+    [HttpPost("{bookingId:guid}/completion-proof")]
+    [ProducesResponseType(typeof(PartnerJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> UploadCompletionProof(Guid bookingId, [FromBody] UploadJobCompletionProofRequest request)
+    {
+        var validation = await _completionProofValidator.ValidateAsync(request);
+        if (!validation.IsValid)
         {
-            Status = StatusCodes.Status501NotImplemented,
-            Title = "Jobs.NotYetAvailable",
-            Detail = "Job assignment is not available yet - it depends on the BookingPartnerAssignment " +
-                     "bridge entity (task 147), which has not merged into this API yet."
-        });
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _jobService.UploadCompletionProofAsync(CurrentPartnerId(), bookingId, request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    private Guid CurrentPartnerId() =>
+        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+
+    private static ModelStateDictionary ToModelState(ValidationResult validation)
+    {
+        var modelState = new ModelStateDictionary();
+        foreach (var error in validation.Errors)
+        {
+            modelState.AddModelError(error.PropertyName, error.ErrorMessage);
+        }
+
+        return modelState;
+    }
 }

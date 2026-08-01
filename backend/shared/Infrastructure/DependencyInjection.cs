@@ -27,7 +27,9 @@ using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Notifications;
 using Nestly.Application.PartnerAvailability;
+using Nestly.Application.PartnerEarnings;
 using Nestly.Application.PartnerIdentity;
+using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
 using Nestly.Application.Refunds;
@@ -269,6 +271,16 @@ public static class DependencyInjection
         services.AddScoped<IPartnerBackgroundCheckRepository, PartnerBackgroundCheckRepository>();
         services.AddScoped<IPartnerManagementService, PartnerManagementService>();
         services.AddScoped<IPartnerKycApprovalService, PartnerKycApprovalService>();
+
+        // Tasks 149a/149c: partner-api's own self-service views over the
+        // same Assignment Bridge/Financial Domain entities as the admin
+        // registrations directly above - IPartnerJobService additionally
+        // owns the accept/reject IDOR checks and the start/complete booking
+        // transitions; IPartnerEarningsService is a read-only, ownership-
+        // scoped facade over IPartnerEarningLedgerService/IPartnerPayoutService,
+        // not a second copy of the ledger/payout logic.
+        services.AddScoped<IPartnerJobService, PartnerJobService>();
+        services.AddScoped<IPartnerEarningsService, PartnerEarningsService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's

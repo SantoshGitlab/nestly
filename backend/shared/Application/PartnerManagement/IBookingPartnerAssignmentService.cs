@@ -33,6 +33,26 @@ public interface IBookingPartnerAssignmentService
     /// </summary>
     Task<Result<BookingPartnerAssignmentResponse>> RejectAsync(Guid bookingId, RejectAssignmentRequest request);
 
+    /// <summary>
+    /// The partner's own self-service acceptance of an outstanding
+    /// assignment (task 149a, PARTNER.md API surface "accept job"). Verifies
+    /// <paramref name="partnerId"/> actually owns the booking's currently
+    /// outstanding assignment before calling <see cref="Nestly.Domain.BookingPartnerAssignment.Accept"/>
+    /// (SRS 28.3 IDOR) - the caller's partner id must come from the JWT, not
+    /// a route/body value.
+    /// </summary>
+    Task<Result<BookingPartnerAssignmentResponse>> AcceptAsync(Guid bookingId, Guid partnerId);
+
+    /// <summary>
+    /// The partner's own self-service rejection of an outstanding assignment
+    /// (task 149a/159, PARTNER.md API surface "reject job") - the
+    /// partner-authenticated counterpart to <see cref="RejectAsync"/>, which
+    /// verifies <paramref name="partnerId"/> actually owns the outstanding
+    /// assignment (SRS 28.3 IDOR) before applying the same reassignment-pool
+    /// handling.
+    /// </summary>
+    Task<Result<BookingPartnerAssignmentResponse>> RejectByPartnerAsync(Guid bookingId, Guid partnerId, RejectAssignmentRequest request);
+
     /// <summary>Full assignment history for a booking, newest first (task 159 - lets the admin UI show why a booking needs reassignment).</summary>
     Task<Result<IReadOnlyList<BookingPartnerAssignmentResponse>>> GetHistoryAsync(Guid bookingId);
 }
