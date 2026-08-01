@@ -255,12 +255,23 @@ flowchart TD
 | Flow | Primary phase(s) | Key task IDs |
 |---|---|---|
 | Customer booking journey | Phase 3 — Booking Core | #50–#65 |
-| Partner onboarding & earnings | Phase 8 — Partner (Deferred) | #144–#149, #159, #160 |
+| Partner onboarding & earnings | Phase 7 — Partner | #144–#149, #159, #160 |
 | Payments, escrow, commission | Phase 4 — Payments & Financial | #67, #74, #157, #158 |
 | Dispute resolution | Phase 5 — Post-Booking | #84, #86, #155 |
 | Reviews & moderation | Phase 5 — Post-Booking | #85, #122, #123 |
 | Notifications | Phase 5 — Post-Booking | #31, #87, #88, #156 |
 | Admin dashboard | Phase 6 — Admin Panel | #90–#143 |
+| Referral & growth (REFERRAL.md) | Phase 9 — Referral & Growth | #155–#176 |
+| Subscription, recurring bookings, chat, completion verification (PRODUCT-ENHANCEMENTS.md) | Phase 10 — Product Enhancements | #177–#198 |
+
+**Note on Partner's phase number**: moved from Phase 8 to Phase 7 on
+2026-07-31 — it now runs *before* Hardening & Launch (Phase 8), not after
+everything else. See PARTNER.md's STATUS section.
+
+**Not yet diagrammed above**: the Referral and Product Enhancements flows
+are new since this document's diagrams were drawn (sections 1–9 predate
+Phase 9/10). The spec docs (REFERRAL.md, PRODUCT-ENHANCEMENTS.md) are
+authoritative for those flows until diagrams are added here.
 
 For current status of any of these (done / todo / blocked), see the summary
 rows at the top of [tasks.csv](tasks.csv) or run:

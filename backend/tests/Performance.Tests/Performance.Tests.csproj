@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Nestly.Performance.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- Pinned to 7.x: FluentAssertions 8.0 requires a paid licence for commercial use (see Catalog.Tests.csproj). -->
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <!--
+      SQLite rather than the EF in-memory provider: these are concurrency/load
+      tests that assert on real relational behaviour (unique-index
+      enforcement, atomic conditional updates), which the in-memory provider
+      silently ignores - same reasoning as Catalog.Tests.csproj. Unlike
+      Catalog.Tests, PerfTestDatabase uses a *file-based* SQLite database (see
+      its doc comment) so genuinely concurrent callers get independent
+      connections instead of sharing one.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Application\Application.csproj" />
+    <ProjectReference Include="..\..\shared\BuildingBlocks\BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\shared\Domain\Domain.csproj" />
+    <ProjectReference Include="..\..\shared\Infrastructure\Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

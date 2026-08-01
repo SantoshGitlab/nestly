@@ -10,5 +10,11 @@ public enum NotificationEventType
     BookingCancelled,
     BookingRescheduled,
     RefundProcessed,
-    SupportTicketUpdate
+    SupportTicketUpdate,
+
+    /// <summary>A referrer's shared code/link was used at registration (REFERRAL.md, task 172). Sent to the referrer only.</summary>
+    ReferralRegistered,
+
+    /// <summary>A referral reward (wallet credit or coupon) was disbursed (REFERRAL.md, task 172). Sent to both referrer and referee - dispatched once per recipient, same event type.</summary>
+    ReferralRewardCredited
 }

@@ -18,6 +18,7 @@ builder.Host.UseSerilog((context, loggerConfiguration) =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddNestlyCors(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -64,6 +65,41 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(rateLimits.Login.WindowMinutes),
             PermitLimit = rateLimits.Login.PermitLimit
         }));
+
+    // Task 134 (SRS 28.1): the public catalog search endpoint has no
+    // customer identity to key on either, so this is IP-partitioned like
+    // otp/login above.
+    options.AddPolicy("search", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Search.WindowMinutes),
+            PermitLimit = rateLimits.Search.PermitLimit
+        }));
+
+    // Task 134 (SRS 28.1, 28.3 "payment callback abuse"): order creation is
+    // authenticated, but still partitioned by IP rather than customer id - a
+    // compromised or malicious account probing for fraud shares an IP with
+    // itself far more reliably than it shares a stable identity across
+    // freshly-registered accounts.
+    options.AddPolicy("payment", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.Payment.WindowMinutes),
+            PermitLimit = rateLimits.Payment.PermitLimit
+        }));
+
+    // Separate, more generous policy for the gateway webhook - see
+    // RateLimitOptions.PaymentWebhook for why this must not share the
+    // "payment" policy's tighter limit.
+    options.AddPolicy("payment-webhook", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(rateLimits.PaymentWebhook.WindowMinutes),
+            PermitLimit = rateLimits.PaymentWebhook.PermitLimit
+        }));
 });
 
 var app = builder.Build();
@@ -82,6 +118,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -91,5 +128,12 @@ app.MapControllers();
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+
+// Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): Prometheus scrape
+// endpoint for the payment/booking/notification counters and histograms
+// registered in AddInfrastructure - unauthenticated, same as the health
+// endpoints above, since this is meant for an internal scraper behind the
+// network boundary rather than a public consumer.
+app.MapPrometheusScrapingEndpoint("/metrics");
 
 app.Run();

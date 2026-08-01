@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application.Catalog;
 using Nestly.BuildingBlocks.Extensions;
 
@@ -20,6 +21,7 @@ public class CatalogSearchController : ControllerBase
 
     /// <summary>Search categories and services by name.</summary>
     [HttpGet]
+    [EnableRateLimiting("search")]
     [ProducesResponseType(typeof(CatalogSearchResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Search([FromQuery] string q)

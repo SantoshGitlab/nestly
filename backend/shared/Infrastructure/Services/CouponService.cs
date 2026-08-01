@@ -50,6 +50,11 @@ public class CouponService : ICouponService
             return Error.Business("Coupon.CategoryNotApplicable", "This coupon does not apply to the selected service's category.");
         }
 
+        if (coupon.RestrictedToCustomerId is not null && coupon.RestrictedToCustomerId != customerId)
+        {
+            return Error.Business("Coupon.NotApplicableToCustomer", "This coupon is not valid for your account.");
+        }
+
         if (coupon.CustomerSegment != CouponCustomerSegment.All)
         {
             bool isFirstBooking = await IsFirstBookingCustomerAsync(customerId);

@@ -38,6 +38,20 @@ public class ServiceAddOnRepository : IServiceAddOnRepository
             .ThenBy(a => a.Name)
             .ToListAsync();
 
+    public async Task<IReadOnlyList<ServiceAddOn>> ListActiveByServiceIdsAsync(IReadOnlyCollection<Guid> serviceIds)
+    {
+        if (serviceIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await _context.Set<ServiceAddOn>()
+            .Where(a => serviceIds.Contains(a.ServiceId) && a.IsActive)
+            .OrderBy(a => a.SortOrder)
+            .ThenBy(a => a.Name)
+            .ToListAsync();
+    }
+
     public async Task<IReadOnlyList<ServiceAddOn>> ListAllAsync(Guid? serviceId)
     {
         IQueryable<ServiceAddOn> query = _context.Set<ServiceAddOn>();

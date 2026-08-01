@@ -19,6 +19,7 @@ public class SlotAvailabilityService : ISlotAvailabilityService
     private readonly ISlotWindowRepository _slotWindowRepository;
     private readonly ISlotBlackoutRepository _blackoutRepository;
     private readonly ISlotBookingPolicyRepository _policyRepository;
+    private readonly ISlotCapacityRepository _slotCapacityRepository;
     private readonly TimeProvider _timeProvider;
 
     public SlotAvailabilityService(
@@ -27,6 +28,7 @@ public class SlotAvailabilityService : ISlotAvailabilityService
         ISlotWindowRepository slotWindowRepository,
         ISlotBlackoutRepository blackoutRepository,
         ISlotBookingPolicyRepository policyRepository,
+        ISlotCapacityRepository slotCapacityRepository,
         TimeProvider timeProvider)
     {
         _serviceabilityRepository = serviceabilityRepository;
@@ -34,6 +36,7 @@ public class SlotAvailabilityService : ISlotAvailabilityService
         _slotWindowRepository = slotWindowRepository;
         _blackoutRepository = blackoutRepository;
         _policyRepository = policyRepository;
+        _slotCapacityRepository = slotCapacityRepository;
         _timeProvider = timeProvider;
     }
 
@@ -104,6 +107,27 @@ public class SlotAvailabilityService : ISlotAvailabilityService
         return new SlotRevalidationResponse(
             stillAvailable,
             stillAvailable ? null : "This slot is no longer available (cutoff passed, blacked out, or out of the bookable range).");
+    }
+
+    public async Task<Result> ReserveSlotAsync(Guid slotWindowId, DateOnly date)
+    {
+        var window = await _slotWindowRepository.GetByIdAsync(slotWindowId);
+        if (window is null)
+        {
+            return Result.Failure(Error.NotFound("Slots.WindowNotFound", "The specified slot window does not exist."));
+        }
+
+        if (window.MaxBookingsPerSlot is null)
+        {
+            return Result.Success();
+        }
+
+        bool reserved = await _slotCapacityRepository.TryReserveAsync(slotWindowId, date, window.MaxBookingsPerSlot.Value);
+        return reserved
+            ? Result.Success()
+            : Result.Failure(Error.Conflict(
+                "Booking.SlotCapacityReached",
+                "This slot has reached its maximum bookings for the day. Please choose a different slot."));
     }
 
     private static SlotOptionResponse ToOption(SlotWindow window) => new(

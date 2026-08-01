@@ -51,6 +51,7 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
                 new SlotWindowRepository(context),
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
                 TimeProvider.System),
             new PriceCalculationService(
                 new ServiceRepository(context),
@@ -60,7 +61,20 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
                 new CityPricingPolicyRepository(context)),
             couponService);
 
-        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
+        return new BookingService(
+            summaryService,
+            new BookingRepository(context),
+            new CustomerRepository(context),
+            couponService,
+            new SlotAvailabilityService(
+                new ServiceabilityRepository(context),
+                new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
+                new SlotWindowRepository(context),
+                new SlotBlackoutRepository(context),
+                new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private sealed record Fixture(
@@ -114,15 +128,16 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
         f.Service.Id, f.City.Id, addressId, f.Locality.Id, f.Window.Id, f.Date, Quantity: 1, []);
 
     /// <summary>
-    /// Today's slot windows carry no booking-count capacity check anywhere in
-    /// BookingService/BookingSummaryService - SlotOptionResponse.MaxBookingsPerSlot
-    /// (task 46) is reported to the frontend but nothing enforces it at
-    /// creation time; per-window capacity is expected to be handled later by
-    /// professional assignment/dispatch (Phase 6), not by rejecting the
-    /// booking itself. This test pins down that two different customers can
-    /// both book the exact same slot today, so a future capacity feature
-    /// landing is a deliberate, visible change to this test - not a silent
-    /// regression nobody notices.
+    /// As of task 135c, BookingService.CreateAsync enforces
+    /// SlotWindow.MaxBookingsPerSlot via ISlotAvailabilityService.ReserveSlotAsync
+    /// (see SlotCapacityRepository) - but only when a window actually has a
+    /// capacity configured. This fixture's window never calls SetCapacity, so
+    /// MaxBookingsPerSlot stays null ("unlimited", the same convention
+    /// PartnerCapacity uses), and reservation is a no-op. This test pins down
+    /// that an unlimited window still lets two different customers book the
+    /// exact same slot - see Performance.Tests/ConcurrentSlotBookingPerformanceTests.cs
+    /// for the capacity-configured, actually-contended case, which is where
+    /// the enforcement itself is proven under real concurrent load.
     /// </summary>
     [Fact]
     public async Task Two_different_customers_can_both_book_the_identical_slot_since_capacity_is_not_enforced_at_creation_yet()

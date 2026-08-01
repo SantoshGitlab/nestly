@@ -38,6 +38,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
                 new SlotWindowRepository(context),
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
                 TimeProvider.System),
             new PriceCalculationService(
                 new ServiceRepository(context),
@@ -47,7 +48,20 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
                 new CityPricingPolicyRepository(context)),
             couponService);
 
-        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
+        return new BookingService(
+            summaryService,
+            new BookingRepository(context),
+            new CustomerRepository(context),
+            couponService,
+            new SlotAvailabilityService(
+                new ServiceabilityRepository(context),
+                new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
+                new SlotWindowRepository(context),
+                new SlotBlackoutRepository(context),
+                new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private static RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
@@ -66,7 +80,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         new(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 

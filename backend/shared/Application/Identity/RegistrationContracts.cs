@@ -15,7 +15,8 @@ public record RegisterCustomerRequest(
     string Name,
     string? Email,
     string? Password,
-    bool ConsentAccepted);
+    bool ConsentAccepted,
+    string? ReferralCode = null);
 
 /// <summary>Never includes PasswordHash or anything else sensitive.</summary>
 public record CustomerSummaryResponse(Guid Id, string Mobile, string? Email, string Name, string Status);

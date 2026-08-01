@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Notifications;
 using Nestly.Domain;
 
@@ -18,6 +19,7 @@ public class NotificationDispatchService : INotificationDispatchService
     private readonly INotificationProvider _notificationProvider;
     private readonly IPushNotificationProvider _pushNotificationProvider;
     private readonly INotificationEventRepository _repository;
+    private readonly IMetricsService _metricsService;
     private readonly ILogger<NotificationDispatchService> _logger;
 
     public NotificationDispatchService(
@@ -25,12 +27,14 @@ public class NotificationDispatchService : INotificationDispatchService
         INotificationProvider notificationProvider,
         IPushNotificationProvider pushNotificationProvider,
         INotificationEventRepository repository,
+        IMetricsService metricsService,
         ILogger<NotificationDispatchService> logger)
     {
         _templateRenderer = templateRenderer;
         _notificationProvider = notificationProvider;
         _pushNotificationProvider = pushNotificationProvider;
         _repository = repository;
+        _metricsService = metricsService;
         _logger = logger;
     }
 
@@ -90,6 +94,7 @@ public class NotificationDispatchService : INotificationDispatchService
             var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
             untemplated.MarkFailed("No template registered for this event/channel combination.");
             await _repository.AddAsync(untemplated);
+            _metricsService.RecordNotificationOutcome(channel.ToString(), succeeded: false, untemplated.ErrorReason);
             return new NotificationDispatchOutcome(untemplated.Id, channel, untemplated.Status, untemplated.ErrorReason);
         }
 
@@ -115,6 +120,7 @@ public class NotificationDispatchService : INotificationDispatchService
         }
 
         await _repository.UpdateAsync(notification);
+        _metricsService.RecordNotificationOutcome(channel.ToString(), sendResult.IsSuccess, notification.ErrorReason);
 
         return new NotificationDispatchOutcome(notification.Id, channel, notification.Status, notification.ErrorReason);
     }

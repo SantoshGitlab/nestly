@@ -1,0 +1,72 @@
+name: Postgres Backup
+
+# Automated daily PostgreSQL backup (docs/DEVOPS.md DATABASE OPERATIONS:
+# "Backups: automated daily backups with tested restore procedure").
+#
+# Scheduling choice: a GitHub Actions cron workflow, not a systemd timer or
+# host crontab - this repo has no persistent host of its own yet (no real
+# staging/production infra exists per docs/DEVOPS.md OPEN DECISIONS), and
+# GitHub Actions is already this repo's chosen CI/CD platform (DEVOPS.md
+# "OPEN DECISIONS > Decided: CI platform: GitHub Actions"), so a cron
+# workflow is the pattern that already fits without inventing new
+# infrastructure. If/when a long-lived production host is provisioned, a
+# systemd timer calling database/scripts/backup-postgres.sh directly on that
+# host (avoiding the network hop + libpq-over-the-internet requirement this
+# workflow has) is the documented alternative - see
+# docs/RUNBOOK-BACKUP-RESTORE.md.
+#
+# Runs database/scripts/backup-postgres.sh against the production database
+# and, when BACKUP_S3_BUCKET is configured, ships the resulting dump to
+# durable off-host storage. Until then it falls back to a GitHub Actions
+# artifact upload - explicitly NOT a substitute for real off-host backup
+# storage (90-day max retention, tied to a single workflow run, not a
+# documented durability/encryption guarantee) - kept only so the backup
+# step still produces something inspectable while the real storage target
+# is still an OPEN DECISION in docs/DEVOPS.md.
+#
+# Required secrets (none of which exist yet - see docs/DEVOPS.md OPEN
+# DECISIONS):
+#   PRODUCTION_DATABASE_HOST / _PORT / _NAME / _USER / _PASSWORD
+#   BACKUP_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (optional -
+#     only needed once an object-storage target is chosen)
+
+on:
+  schedule:
+    # 02:00 UTC daily - off-peak per docs/DEVOPS.md SCALABILITY note about
+    # planning around traffic, and ahead of most business-hours timezones
+    # this platform is likely to serve first.
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    name: Backup production database
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Run backup
+        env:
+          PGHOST: ${{ secrets.PRODUCTION_DATABASE_HOST }}
+          PGPORT: ${{ secrets.PRODUCTION_DATABASE_PORT }}
+          PGDATABASE: ${{ secrets.PRODUCTION_DATABASE_NAME }}
+          PGUSER: ${{ secrets.PRODUCTION_DATABASE_USER }}
+          PGPASSWORD: ${{ secrets.PRODUCTION_DATABASE_PASSWORD }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: bash database/scripts/backup-postgres.sh database/backups
+
+      - name: Upload as workflow artifact (interim fallback only)
+        if: ${{ secrets.BACKUP_S3_BUCKET == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-backup-${{ github.run_id }}
+          path: database/backups/*.dump
+          retention-days: 14

@@ -12,19 +12,378 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 0 | 32 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
+| Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
+| Phase 9 - Referral & Growth | 7 | 9 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **390** | **70** | **50** | **2** | **512** |
+| **Overall** | **429** | **31** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing Phase 7 (Partner) on
-`phase-7-partner`: assignment bridge (147), earnings/payouts (148),
-partner-api jobs/earnings endpoints (149a/149c), admin partner CRUD/KYC/
-performance + Partner/Payout RBAC (150a-150c), provider reassignment on
-rejection (159), and background verification (160). All 25 Phase 7 rows are
-now `done` except the four `decomposed` parent placeholders (145, 146, 149,
-150 - superseded by their own lettered subtasks, all of which are done).
-Phase order changed 2026-07-31: Partner now runs as Phase 7 (before
-Hardening & Launch, now Phase 8); Phase 9 (Referral & Growth) and Phase 10
-(Product Enhancements) were added.
+Last updated: 2026-08-01, after completing task 166 (Phase 9 fraud review
+queue) on `phase-8-hardening-launch`. Design tension resolved: REFERRAL.md's
+`ReferralStatus` enum included `FraudFlagged`, but reward disbursement runs
+synchronously with qualification (tasks 164-165), leaving no real pre-reward
+review window a Status-based flag could pause. Refactored to an independent
+`bool IsFraudFlagged` + review metadata, mirroring the existing
+`Review.IsFlagged` pattern exactly rather than inventing a new one - flagging
+never touches `Status`. Removed the now-unused `ReferralStatus.FraudFlagged`
+value (it never had any rows). Of REFERRAL.md's two named soft signals, only
+one is honestly implementable: "same device/payment method as referrer" has
+no data source anywhere in this codebase and was **not faked**;
+"qualifying booking cancelled right after reward" is real, implemented as
+`ReferralCancellationFraudSignalHandler` (a fourth independent handler on
+`BookingStatusChangedEvent`), auto-flagging within a 2-day window of
+`RewardedAtUtc`. Approving a flag only records the finding - it never
+auto-reverses a wallet credit, since a correct partial reversal needs the
+FIFO consumption-tracking design task 175 explicitly defers. 6 new tests.
+Full suite 900/900. Phase 9 is now 7/16 done. Remaining: 167 (admin config
+API+UI), 168 (customer API), 169-170 (both frontends), 171 (admin reports),
+172 (notification templates), 174 (milestone rewards), 175 (expiring wallet
+credit), 176 (contextual prompts) - launching parallel work on these plus
+all of Phase 10 next.
+
+Previously, 2026-08-01: completed tasks 164-165 (Phase 9 qualifying
+hook + reward disbursement) on `phase-8-hardening-launch`. Implemented
+together, one flow: `ReferralQualifyingBookingHandler` (a third independent
+handler on `BookingStatusChangedEvent`, same shape as
+`EscrowReleaseOnCompletionHandler`/`BookingNotificationTriggerHandler`) marks
+a Registered referral Qualified when its referee's completed booking meets
+the snapshotted minimum amount, then calls `IReferralRewardService.DisburseAsync`
+synchronously in the same handler invocation - REFERRAL.md's DECISIONS
+section is explicit both sides are rewarded on the same event, not a
+separately scheduled step. Real gap found and fixed first: `Coupon` had no
+customer-scoping field at all - `UsageLimitPerCustomer=1` only limits how
+many times *one* customer can use a code, it does not stop a *different*
+customer who somehow obtains the code from redeeming it - added
+`Coupon.RestrictedToCustomerId` (set-once, not part of the constructor so no
+existing admin-coupon call site changes) plus the matching
+`CouponService.ValidateAsync` check and migration
+`20260801152757_AddCouponRestrictedToCustomer`. The per-customer reward cap
+(REFERRAL.md fraud prevention) caps the referrer's own reward only via
+`CountRewardedByReferrerAsync` - the referee's reward is independent and
+always proceeds once Qualified, regardless of the referrer's cap status. 5
+new tests (`ReferralQualificationAndRewardTests`), bookings built directly
+via `Booking`'s constructor + `TransitionTo` chain rather than the full
+`BookingService` orchestration (out of scope for what these tests need). One
+test-infrastructure bug caught and fixed along the way: `ReferralProgramConfig`
+is a true single-row table in production, but the shared `TestDatabase`
+fixture (one DB per test class) meant naive per-test seeding left several
+rows behind and `GetAsync()`'s unfiltered lookup picked an arbitrary one -
+fixed by clearing existing rows before seeding each test, documented in the
+test helper as a reminder for future single-row-table tests. Full suite
+894/894. Next: task 166 (fraud review queue - admin approve/reject on
+flagged rows; the cap enforcement itself already landed here).
+
+Previously, 2026-08-01: completed task 163 (Phase 9 registration
+wiring) on `phase-8-hardening-launch`. `RegisterCustomerRequest` gained an
+optional `ReferralCode`; `CustomerRegistrationService.TryCreateReferralAsync`
+resolves the referrer by code, best-effort (an invalid/unknown code or a
+self-referral attempt only skips creating a `Referral` row, never fails
+registration itself - a bad code shouldn't block a legitimate signup).
+`IReferralRepository`/`IReferralProgramConfigRepository` added. Notable
+finding, not a bug: the self-referral mobile/email guard turns out to be
+currently unreachable through the public registration flow -
+`Customer.Mobile`/`Email` are both unconditionally DB-unique regardless of
+the app-level `RequireUniqueEmail` toggle (confirmed experimentally, a
+duplicate-email insert throws a raw unique-constraint violation even with
+that flag off), so a genuine self-referral attempt already fails earlier on
+`Registration.MobileAlreadyRegistered`/`EmailAlreadyRegistered` - a
+strictly stronger protection than the referral-specific check would have
+been alone. Kept as defense-in-depth per REFERRAL.md's explicit "checked at
+registration, not just at reward time" ask, documented honestly in both the
+code and its test rather than presented as independently exercisable. 3 new
+tests (`ReferralRegistrationTests`), all driving real OTP generate/validate
+through `OtpService` (not mocked) - the same standard this codebase's
+existing registration tests already use, since OTP codes can't be retrieved
+through the live HTTP API by design. Full suite 889/889. Next: tasks 164-165
+(qualifying-booking hook + reward disbursement), which will need the
+`Coupon.CustomerId`-scoping gap task 161's research flagged, resolved first.
+
+Previously, 2026-08-01: completed task 162 (Phase 9 referral code
+generation) on `phase-8-hardening-launch`. `IReferralCodeService`
+(`backend/shared/Application/Referral`, `Infrastructure/Services`): 8-char
+codes from a 31-symbol alphabet excluding visually ambiguous characters
+(0/O, 1/I/L), cryptographically random (`RandomNumberGenerator`, same
+primitive `OtpService` already uses), uniqueness enforced via
+`ICustomerRepository.ExistsByReferralCodeAsync` with retry, lazy
+get-or-create backed by task 161's `Customer.SetReferralCode` set-once
+guard. Share-link base URL is a new `ReferralOptions` (options-file config,
+not DB-adminable yet, same reasoning as `CommissionOptions` - the
+production domain itself isn't decided per `docs/DEVOPS.md` OPEN
+DECISIONS). 4 new tests (`ReferralCodeServiceTests`) - generation/
+persistence, idempotent re-fetch, no collisions across 25 customers, link
+construction. Full suite 886/886 (882 + 4 new). Next: task 163
+(registration wiring - `POST /auth/register` accepts an optional
+`referralCode`, self-referral block, one-referral-per-referee).
+
+Previously, 2026-08-01: completed tasks 161 and 173 (Phase 9
+Referral domain schema + RBAC) on `phase-8-hardening-launch`. First real
+Phase 9 work: closed `docs/REFERRAL.md`'s three OPEN DECISIONS ahead of
+implementation (same convention as task 143/144) - reward type stays
+admin's-choice-per-campaign, self-redemption is blocked (free consequence of
+the existing self-referral check), and a fraud flag pauses only that
+referral's payout, not the referrer's ongoing eligibility (the per-customer
+cap plus the existing customer block/unblock tool already cover the real
+risk, so a second suspension mechanism would just duplicate one that
+exists). Added `Referral`/`ReferralProgramConfig` entities,
+`ReferralStatus`/`ReferralRewardType` enums, `Customer.ReferralCode`
+(nullable, set-once), `WalletSourceType.ReferralReward`, and
+`NotificationEventType.ReferralRegistered`/`ReferralRewardCredited`.
+`ReferralProgramConfig` intentionally has no `effective_from`/`effective_to`
+versioning despite REFERRAL.md naming those columns - reward terms are
+snapshotted onto `Referral` at registration instead, reusing the exact
+"snapshot at creation, never re-read mutable config later" pattern `Booking`
+already relies on, which achieves the same non-retroactivity with less
+machinery (documented as a deliberate deviation in the entity's doc
+comment). Migration `20260801150457_AddReferralSchema` (schema + one seeded
+default config row, mirroring how `system_setting` rows are pre-seeded
+since `SystemSettingsService`-style get/update pipelines error on a missing
+row rather than lazily default) applied and verified against the local dev
+DB. Task 173 (RBAC) landed bundled into 161 rather than after tasks 167/170
+as `tasks.csv`'s dependency notation implied - `AdminModules`/
+`AdminPermissionCatalog` have to exist before any future controller can
+declare `[Authorize(Policy = "referral.write")]`, the same ordering task
+96a and 150c already established for every other module. Added
+`AdminModules.Referral` and role grants (Marketing Admin=write, Finance
+Admin=read, Super Admin=full - referral sits with the coupon/notification
+campaign cluster Marketing Admin already owns), migration
+`20260801150655_SeedReferralPermissions` (mirrors
+`20260731233627_SeedPartnerPayoutPermissions`'s incremental-seed pattern
+exactly), and collapsed REFERRAL.md's requested four permission tiers
+(View/Configure/Approve-Fraud/Export) to this codebase's existing two
+(Read/Write) - `AdminPermissionAction`'s own doc comment explicitly
+anticipates and endorses exactly this for a module with no controller
+distinguishing finer tiers yet, which nothing does, including this one.
+Verified live, not just by inspection: re-logged in as the seeded Super
+Admin after the migration and confirmed `referral.read`/`referral.write`
+appear in the issued JWT's `permission` claims. `dotnet build Nestly.sln`
+clean, full suite 882/882 passing (unchanged - no existing code touched
+beyond the additive fields/enums above). Next: task 162 (referral code
+generation), then the registration-wiring/qualifying-hook/reward-disbursement
+chain (163-165), which task 161's Explore-agent research flagged has a real
+prerequisite gap of its own - `Coupon` has no customer-scoping field, so a
+referral coupon reward meant for exactly one referee needs a new field
+before task 165 can issue one correctly.
+
+Previously, 2026-08-01: completed task 141 (Phase 8 UAT execution)
+on `phase-8-hardening-launch`. `docs/UAT-REPORT.md` runs all 16 SRS §33
+acceptance criteria (customer/admin/platform) against real evidence rather
+than code inspection: the task 140a-140d E2E suite's actual runs, live
+admin-api/consumer-api calls made during this pass with a real Super Admin
+JWT (categories/services/pricing/serviceability/slots/coupons/CMS,
+end-to-end booking management, the audit log genuinely populated with this
+pass's own login events, dashboard/reports endpoints), and the 882-test
+backend suite. 16/16 pass. Two non-blocking gaps noted honestly rather than
+glossed over: no admin-web browser E2E suite exists (admin acceptance here
+is API-layer, not UI-driven - new scope beyond what 140a-140d covers), and
+the coupon-apply UI path wasn't exercised in the E2E run (no coupon was
+seeded; the underlying service has its own Catalog.Tests coverage). No code
+changes this task - docs only. **Phase 8 (Hardening & Launch) is now
+substantively complete: 32/38 done, 0 todo, 6 `decomposed` parent
+placeholders remain (each already satisfied by done lettered subtasks, per
+this backlog's existing convention for 133/135/136/137/138).**
+
+Previously, 2026-08-01: completed tasks 140a-140d (Phase 8 QA E2E
+suite) on `phase-8-hardening-launch`. Added a real Playwright/Chromium E2E
+suite in `frontend/customer-web/e2e/` driving the four SRS 33 UAT flows
+(discovery→category→service detail, slot→booking→payment,
+cancellation/reschedule, refund/review submission) against a real
+consumer-api/admin-api/Postgres/Redis stack, not mocks - matching this
+backlog's established "prove it, don't just claim it" pattern (`e2e/README.md`
+has full run instructions). Getting the suite running for real surfaced and
+fixed three genuine, previously-unnoticed production bugs, none of which a
+same-origin curl/server-to-server call or an in-process WebApplicationFactory
+test would ever have exercised: (1) no CORS policy existed on any of the
+three APIs at all - every real browser request from every frontend was
+silently failing its preflight check, fixed with a new `AddNestlyCors`
+(`backend/shared/Infrastructure/DependencyInjection.cs`) wired into all
+three `Program.cs` files, config-driven via a new `Cors:AllowedOrigins`
+section (fails closed - no origins configured means the policy permits
+nothing); (2) `PaymentsController.Simulate` returned `Ok()` (200 with an
+empty body) instead of `NoContent()`, which crashed the frontend's
+`apiFetch` (only special-cased for 204) - every sandbox "Pay" button click
+in a real browser was broken, fixed to match every other no-body-success
+response in this codebase; (3) the review page's `reviewQuery` returned
+`undefined` on a 204 (no review submitted yet), which TanStack Query treats
+as an invariant violation ("data is undefined") rather than valid query
+data - crashed `/bookings/{id}/review` for every booking without an
+existing review, fixed by normalising to `null`. Also filled two
+infrastructure gaps the suite needed to run at all and that were flagged but
+never implemented elsewhere: `database/seed/dev-admin-seed.sql` and
+`dev-customer-seed.sql` (DEVOPS.md references `database/seed` for seed
+scripts; the directory was empty - `AdminUser`/`CustomerAuthIdentity` have no
+self-registration path by design, so bootstrapping the first account of each
+needs a one-time direct insert, documented in each script's header), and
+admin-api's `appsettings.Development.json` was missing `Jwt`/
+`PaymentGateway:Sandbox` sections that the shared `AddInfrastructure`
+eagerly validates on startup regardless of whether an API actually uses them
+(admin-api doesn't - only needed to stop local `dotnet run` from crashing).
+`dotnet build Nestly.sln` clean, full suite 882/882 passing (unchanged - no
+existing test was touched, only new code and the two intentional bug fixes
+above, both outside existing test coverage). Phase 8 is now 31/38 done; the
+one remaining `todo` is 141 (UAT execution against SRS 33 acceptance
+criteria) plus 6 `decomposed` parent placeholders (each already satisfied by
+done lettered subtasks).
+
+Previously, 2026-08-01: completed tasks 142a-142d and 143 (Phase 8
+docs/product close-out) on `phase-8-hardening-launch`. Task 143 closed all
+twelve SRS §34 open decisions by auditing what Phases 1-7 actually shipped
+rather than re-deciding in isolation (`docs/SRS.md` §34 rewritten in place,
+each item traced to a concrete type/setting/service — e.g. multi-service
+bookings via `BookingItem`, no COD anywhere in `backend/`, capacity-linked
+slots via `SlotCapacityRepository`, coupon stacking and tax-inclusive
+display both configurable via existing `SettingsContracts` fields, reviews
+visible-immediately with post-publish moderation via
+`ReviewModerationService`, multilingual not implemented since no locale
+infrastructure exists). Tasks 142a-142d added `docs/RUNBOOK-DEPLOYMENT.md`
+(deploy path via `cd-staging.yml`/`cd-production.yml` and how to verify a
+deploy landed; rollback via `rollback.yml` with app-rollback-first guidance
+and the `Down()`-migration safety caveat carried over from task 138d;
+incident response built on task 137's `FailureRateAlertMonitor` `AlertCode`s
+plus the existing idempotency guarantees on payment/booking paths; on-call
+basics that state plainly there is no paging destination yet per
+`docs/DEVOPS.md` OPEN DECISIONS, rather than fabricating a 3am-pager
+process that doesn't exist) — companion to the already-shipped
+`docs/RUNBOOK-BACKUP-RESTORE.md`, not a duplicate of it. Docs-only batch, no
+C# changes; `dotnet build Nestly.sln` and full test suite unaffected
+(882/882 passing, unchanged from the prior entry). Phase 8 is now 27/38
+done, 5 `todo` (140a-140d QA E2E, 141 UAT) and 6 `decomposed` parent
+placeholders (each already satisfied by done lettered subtasks) remain.
+
+Previously, 2026-08-01: completed tasks 138a-138d and 139 (Phase 8
+DevOps: CD pipeline + backup/restore) on `phase-8-hardening-launch`. Extended
+the existing GitHub Actions CI/CD setup (`.github/workflows/ci.yml`, PR/push
+gate) with real deployment workflows rather than duplicating it:
+`.github/workflows/cd-staging.yml` (push to `develop` → build/test gate →
+build+push consumer-api/admin-api/partner-api images to GHCR → `dotnet ef
+database update` → deploy, `environment: staging`) and
+`.github/workflows/cd-production.yml` (same shape on push to `main`,
+`environment: production` so GitHub's Required-reviewers protection rule
+applies once configured in repo settings - not expressible in YAML, called
+out with an explicit setup checklist in the workflow header, 138b). GHCR was
+picked as the registry since docs/DEVOPS.md still lists the registry as an
+OPEN DECISION and GHCR needs no new secret. The explicit migration-apply
+step (138c) is its own job in both workflows, between image build and
+deploy, reusing the existing `database/scripts/apply-migrations.sh` (one
+code path for "how migrations get applied", not a CI-only duplicate).
+Deploy targets a remote Docker host over SSH running a new
+`deploy/docker-compose.deploy.yml` (pulls pre-built GHCR images; distinct
+from the root `docker-compose.yml`, which builds from source for local dev)
+- there is no real staging/production host yet (docs/DEVOPS.md OPEN
+DECISIONS: cloud provider/registry/orchestrator all unresolved), so this is
+written to be correct against real infra and documented as failing fast on
+missing secrets until a host + secrets exist, per this repo's existing
+"decompose, implement for real, be honest about what's blocked by missing
+infra" pattern. `.github/workflows/rollback.yml` (138d) is a
+`workflow_dispatch` workflow that redeploys a specified prior image tag
+without rebuilding, with `environment: ${{ inputs.environment }}` so a
+production rollback still needs approval like any other production change;
+its header documents the real EF Core Down()-migration tradeoff (safe only
+when every intervening migration's Down() is lossless) rather than
+fabricating an automatic DB-rollback capability, defaulting to
+redeploy-app-and-forward-fix. Task 139 added `database/scripts/backup-postgres.sh`
+(`pg_dump -Fc`, env-var configured, optional S3 upload, local retention
+pruning) and `database/scripts/restore-postgres.sh` (`pg_restore --clean
+--if-exists`), scheduled via a new `.github/workflows/backup-postgres.yml`
+daily cron (GitHub Actions chosen over a systemd timer since there's no
+persistent host of our own yet - documented as the fallback once one
+exists), plus `docs/RUNBOOK-BACKUP-RESTORE.md`. The restore drill was
+actually executed against the local docker-compose Postgres
+(`nestly-postgres-1`): backed up the real `nestly` database, restored into
+a throwaway `nestly_restore_test` database, and verified all 74 tables'
+exact row counts identical, md5 content checksums identical on the two
+populated business tables, and `pg_constraint` count (148) identical
+source-vs-restored (schema/FKs/indexes, not just data) - not just claimed,
+shown with real command output in the runbook. `dotnet build Nestly.sln`
+clean, full suite 882/882 passing (unchanged - this batch touched no C#
+code). No cloud secrets exist to actually exercise the CD/backup workflows
+end-to-end against real infra; per instruction that's an expected,
+documented gap, not a blocker to marking the workflows themselves done.
+
+Previously, 2026-08-01: completed tasks 137a-137c (Phase 8
+observability: metrics export + alerts for payment, booking, and
+notification failures) on `phase-8-hardening-launch`. Task 10 (Serilog +
+health checks) was already in place with no metrics abstraction, so this
+adds one: `IMetricsService` (`Nestly.Application.Abstractions.Observability`)
+implemented by `NestlyMetricsService`
+(`Nestly.Infrastructure.Observability`) over `System.Diagnostics.Metrics`
+(Counter/Histogram on a `"Nestly"` Meter), exported via
+`OpenTelemetry.Extensions.Hosting` + `OpenTelemetry.Exporter.Prometheus.AspNetCore`
+on a self-hosted, unauthenticated `/metrics` scrape endpoint on all three
+APIs (consumer/admin/partner) - a scrape endpoint rather than an OTLP push
+since DEVOPS.md's OPEN DECISIONS still lists the monitoring/alerting stack
+as unresolved and no OTel collector exists anywhere in this repo yet; the
+Prometheus AspNetCore exporter package is still versioned as beta upstream
+(no stable release exists), accepted here as the least-new-infra option the
+task explicitly called out. Wired into `PaymentWebhookService` (payment
+outcome counter + processing-latency histogram, 137a),
+`BookingService.CreateAsync` (creation success/failure counter + a
+dedicated slot-conflict counter for "Booking.SlotCapacityReached", 137b)
+plus a new `BookingMetricsHandler` reacting to every
+`BookingStatusChangedEvent` for status-transition tracking (137b), and
+`NotificationDispatchService` (per-channel SMS/email/push send outcome
+counter, 137c). DEVOPS.md names no alerting destination (Slack/PagerDuty/
+email) yet, so "alerting" is implemented as a rolling, per-category
+failure-rate monitor (`FailureRateAlertMonitor`, config in the new
+`MetricsOptions`/`"Metrics"` section) that raises a distinctly-tagged,
+error-level structured log event (own `EventId` + an `AlertCode` property
+per category: `Payment.FailureRateAlert`, `Booking.FailureRateAlert`,
+`Notification.FailureRateAlert`, the last tracked independently per
+channel) an external alert rule can match on once DEVOPS.md's monitoring
+stack is decided - scoped deliberately short of a fabricated webhook
+integration. DEVOPS.md's OBSERVABILITY section also lists booking among the
+"critical failures" needing alerting, so booking creation got the same
+failure-rate-alert treatment as payment/notification even though the 137b
+task text only asked for counters/transition-tracking/slot-conflict-rate -
+noted here as the conventional call taken on that ambiguity. All 3 rows now
+`done`; Phase 8 is 17/38 done, 15 `todo`, 6 `decomposed` parent
+placeholders remain.
+
+Previously, 2026-08-01: completed tasks 135a-135c and 136a-136c
+(Phase 8 performance work) on `phase-8-hardening-launch`: established a new
+`backend/tests/Performance.Tests` project (matching this repo's existing
+per-project TestDatabase.cs pattern, but on a file-based SQLite database so
+independent DbContexts/connections can genuinely race via `Task.WhenAll`,
+unlike Catalog.Tests' shared in-memory connection) with real concurrent
+load/perf tests for catalog browse/search (135a), checkout + payment order
+creation (135b), and concurrent slot booking (135c). 135c surfaced a genuine,
+previously-undocumented-as-fixed overbooking race - `SlotWindow.MaxBookingsPerSlot`
+was reported to customers but never enforced anywhere in
+BookingService/BookingSummaryService - fixed with an atomic
+conditional-update reservation (`SlotCapacityRepository`, mirroring
+`CouponRepository.TryReserveRedemptionAsync`) wired into
+`BookingService.CreateAsync`; proven by disabling the fix and confirming the
+new tests fail, then re-enabling and confirming they pass, including under a
+forced wide race window. Building the checkout load test (135b) also
+surfaced a second real race - `PaymentService.CreateOrderAsync`'s duplicate-order
+dedup had an unhandled time-of-check/time-of-use gap between reading the
+existing transaction and inserting a new one - fixed with a
+`TryAddAsync`/unique-index-conflict fallback in `PaymentTransactionRepository`,
+verified the same way (forced-delay reproduction, then fix confirmation).
+The query optimization pass (136a-136c) fixed a real N+1
+(`CategoryQueryService.GetDetailBySlugAsync` was calling
+`ListActiveByServiceAsync` once per service in a loop; replaced with a new
+batched `ListActiveByServiceIdsAsync`), added `.AsNoTracking()` to confirmed
+read-only catalog/booking list queries, added a composite
+`Service(CategoryId, IsActive)` index (migration
+`20260801050749_AddSlotCapacityAndCatalogIndexes`, which also adds the
+`slot_booking_counter` table from 135c's fix) replacing a redundant
+single-column one, and capped `CatalogSearchService.SearchAsync` at 20
+results per type (previously unbounded) without touching the several admin
+"list all active" call sites that legitimately reuse the same repository
+method with an empty query. Other reviewed areas (booking admin search
+pagination, partner performance-summary N+1, review-by-service listing) were
+found already paginated, already low-volume/admin-scoped by design, or
+unused in production - documented as sound rather than changed. 14 of Phase
+8's 38 rows are now `done`; the remaining 18 `todo` rows and 6 `decomposed`
+parent placeholders are unstarted.
+
+Previously, 2026-08-01: completed Phase 7 (Partner) on `phase-7-partner`:
+assignment bridge (147), earnings/payouts (148), partner-api jobs/earnings
+endpoints (149a/149c), admin partner CRUD/KYC/performance + Partner/Payout
+RBAC (150a-150c), provider reassignment on rejection (159), and background
+verification (160). All 25 Phase 7 rows are now `done` except the four
+`decomposed` parent placeholders (145, 146, 149, 150 - superseded by their
+own lettered subtasks, all of which are done). Phase order changed
+2026-07-31: Partner now runs as Phase 7 (before Hardening & Launch, now
+Phase 8); Phase 9 (Referral & Growth) and Phase 10 (Product Enhancements)
+were added.
 

@@ -70,6 +70,12 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .WithMany()
             .HasForeignKey(x => x.AssignedPartnerId)
             .OnDelete(DeleteBehavior.SetNull);
+        // No explicit HasIndex needed here (checked for task 136b,
+        // BookingRepository.ListByAssignedPartnerAsync's filter column): EF
+        // Core creates ix_booking_assigned_partner_id automatically for this
+        // foreign key by convention - confirmed in
+        // database/migrations/NestlyDbContextModelSnapshot.cs. An explicit
+        // duplicate would violate DATABASE.md's "avoid excessive indexing."
 
         builder.HasMany(x => x.Items)
             .WithOne()

@@ -55,13 +55,18 @@ function ReviewBookingScreen() {
       }),
   });
 
-  // undefined body on 204 means no review has been submitted yet.
+  // No review yet -> 204 -> apiFetch resolves undefined. Normalised to null
+  // here rather than left as undefined: TanStack Query treats a query
+  // function returning undefined as an error ("Query data cannot be
+  // undefined") since undefined is its own internal "no data yet" sentinel -
+  // task 140d's E2E suite hit this as a real crash on every booking that
+  // doesn't have a review yet, not a test-only issue.
   const reviewQuery = useQuery({
     queryKey: ["review", id],
-    queryFn: () =>
-      apiFetch<ReviewResponse | undefined>(`${API_V1}/bookings/${id}/review`, {
+    queryFn: async () =>
+      (await apiFetch<ReviewResponse | undefined>(`${API_V1}/bookings/${id}/review`, {
         authenticated: true,
-      }),
+      })) ?? null,
   });
 
   if (eligibilityQuery.isPending || reviewQuery.isPending) {

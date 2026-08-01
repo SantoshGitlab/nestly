@@ -41,8 +41,16 @@ public class BookingRepository : IBookingRepository
     public Task<Booking?> GetByIdAsync(Guid id) =>
         FullyLoaded().FirstOrDefaultAsync(b => b.Id == id);
 
+    // AsNoTracking (task 136a): unlike GetByIdAsync above (which several
+    // read-modify-write flows load through and then save back on this same
+    // context), every call site of the three methods below is read-only
+    // display/reporting - a customer's booking list, admin search, and a
+    // partner's assigned-jobs view. None of them ever call UpdateAsync on
+    // what they load.
+
     public async Task<IReadOnlyList<Booking>> ListByCustomerAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses) =>
         await FullyLoaded()
+            .AsNoTracking()
             .Where(b => b.CustomerId == customerId && statuses.Contains(b.Status))
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync();
@@ -135,6 +143,7 @@ public class BookingRepository : IBookingRepository
         int totalCount = await query.CountAsync();
 
         var rows = await query
+            .AsNoTracking()
             .Include(b => b.Items)
             .OrderByDescending(b => b.CreatedAtUtc)
             .Skip((filter.Page - 1) * filter.PageSize)
@@ -147,6 +156,7 @@ public class BookingRepository : IBookingRepository
     /// <summary>Bookings currently assigned to a partner (task 150c performance view).</summary>
     public async Task<IReadOnlyList<Booking>> ListByAssignedPartnerAsync(Guid partnerId) =>
         await FullyLoaded()
+            .AsNoTracking()
             .Where(b => b.AssignedPartnerId == partnerId)
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync();

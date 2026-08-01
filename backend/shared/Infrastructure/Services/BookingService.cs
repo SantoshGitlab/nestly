@@ -1,6 +1,8 @@
 using Nestly.Application;
+using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
+using Nestly.Application.Slots;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -12,18 +14,30 @@ public class BookingService : IBookingService
     /// <summary>Recorded on the auto-transition to PaymentPending, since there is no real payment gateway integration yet to explain it instead (Phase 4).</summary>
     private const string NoPaymentGatewayReason = "No payment gateway integrated yet - booking moves directly to awaiting payment.";
 
+    /// <summary>Task 137b: the specific error code SlotAvailabilityService.ReserveSlotAsync returns when a slot has no remaining per-day capacity.</summary>
+    private const string SlotCapacityReachedErrorCode = "Booking.SlotCapacityReached";
+
     private readonly IBookingSummaryService _summaryService;
     private readonly IBookingRepository _bookingRepository;
     private readonly ICustomerRepository _customerRepository;
     private readonly ICouponService _couponService;
+    private readonly ISlotAvailabilityService _slotAvailabilityService;
+    private readonly IMetricsService _metricsService;
 
     public BookingService(
-        IBookingSummaryService summaryService, IBookingRepository bookingRepository, ICustomerRepository customerRepository, ICouponService couponService)
+        IBookingSummaryService summaryService,
+        IBookingRepository bookingRepository,
+        ICustomerRepository customerRepository,
+        ICouponService couponService,
+        ISlotAvailabilityService slotAvailabilityService,
+        IMetricsService metricsService)
     {
         _summaryService = summaryService;
         _bookingRepository = bookingRepository;
         _customerRepository = customerRepository;
         _couponService = couponService;
+        _slotAvailabilityService = slotAvailabilityService;
+        _metricsService = metricsService;
     }
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
@@ -34,16 +48,41 @@ public class BookingService : IBookingService
         var summaryResult = await _summaryService.GetSummaryAsync(customerId, request);
         if (summaryResult.IsFailure)
         {
+            _metricsService.RecordBookingCreated(succeeded: false, summaryResult.Error.Code);
             return summaryResult.Error;
         }
 
         var customer = await _customerRepository.GetByIdAsync(customerId);
         if (customer is null)
         {
-            return Error.NotFound("Booking.CustomerNotFound", "The specified customer does not exist.");
+            const string errorCode = "Booking.CustomerNotFound";
+            _metricsService.RecordBookingCreated(succeeded: false, errorCode);
+            return Error.NotFound(errorCode, "The specified customer does not exist.");
         }
 
         var summary = summaryResult.Value;
+
+        // Reserve the slot's per-day capacity (SRS 12.10.1, task 135c)
+        // before anything else: an atomic conditional update, same shape as
+        // the coupon reservation below, so two customers racing for the
+        // last seat on a promoted slot cannot both succeed. Checked first
+        // because under promotion-level traffic the slot - not the coupon -
+        // is the more likely contended resource.
+        var slotReservation = await _slotAvailabilityService.ReserveSlotAsync(summary.Slot.SlotWindowId, summary.Slot.Date);
+        if (slotReservation.IsFailure)
+        {
+            // Task 137b: tracked as its own counter (not just a
+            // RecordBookingCreated failure reason) so "slot-conflict rate"
+            // can be graphed directly as this counter's rate against total
+            // booking-creation attempts.
+            if (slotReservation.Error.Code == SlotCapacityReachedErrorCode)
+            {
+                _metricsService.RecordSlotConflict();
+            }
+
+            _metricsService.RecordBookingCreated(succeeded: false, slotReservation.Error.Code);
+            return slotReservation.Error;
+        }
 
         // Reserve the coupon's usage slot before the booking exists (task
         // 72c/73): CouponRedemption has a foreign key to the booking, so it
@@ -56,6 +95,7 @@ public class BookingService : IBookingService
             var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId);
             if (reserveResult.IsFailure)
             {
+                _metricsService.RecordBookingCreated(succeeded: false, reserveResult.Error.Code);
                 return reserveResult.Error;
             }
         }
@@ -100,6 +140,7 @@ public class BookingService : IBookingService
             await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
         }
 
+        _metricsService.RecordBookingCreated(succeeded: true);
         return Result.Success(ToDetailResponse(booking));
     }
 

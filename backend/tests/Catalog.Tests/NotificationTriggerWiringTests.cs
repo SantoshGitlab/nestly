@@ -42,6 +42,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
                 new SlotWindowRepository(context),
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
                 TimeProvider.System),
             new PriceCalculationService(
                 new ServiceRepository(context),
@@ -51,7 +52,20 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
                 new CityPricingPolicyRepository(context)),
             couponService);
 
-        return new BookingService(summaryService, new BookingRepository(context), new CustomerRepository(context), couponService);
+        return new BookingService(
+            summaryService,
+            new BookingRepository(context),
+            new CustomerRepository(context),
+            couponService,
+            new SlotAvailabilityService(
+                new ServiceabilityRepository(context),
+                new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
+                new SlotWindowRepository(context),
+                new SlotBlackoutRepository(context),
+                new SlotBookingPolicyRepository(context),
+                new SlotCapacityRepository(context),
+                TimeProvider.System),
+            new NoOpMetricsService());
     }
 
     private static PaymentWebhookService BuildWebhookService(
@@ -60,7 +74,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         new(
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, NullLogger<PaymentWebhookService>.Instance);
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private static BookingNotificationTriggerHandler BuildBookingHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(
@@ -82,7 +96,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         new(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(context),
-            NullLogger<NotificationDispatchService>.Instance);
+            new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
@@ -180,7 +194,8 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         {
             var registrationService = new CustomerRegistrationService(
                 new CustomerRepository(context), new CustomerAuthIdentityRepository(context), new OtpService(context, otpProvider),
-                BuildDispatchService(context), Options.Create(new AccountOptions()));
+                BuildDispatchService(context), new ReferralRepository(context), new ReferralProgramConfigRepository(context),
+                NullLogger<CustomerRegistrationService>.Instance, Options.Create(new AccountOptions()));
 
             var result = await registrationService.RegisterAsync(new RegisterCustomerRequest(mobile, otpCode, "Asha Rao", $"asha-{Guid.NewGuid():N}@example.com", null, true));
             result.IsSuccess.Should().BeTrue();

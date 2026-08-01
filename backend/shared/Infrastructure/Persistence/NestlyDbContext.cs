@@ -17,6 +17,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<SlotBlackout> SlotBlackouts { get; set; }
     public DbSet<SlotBookingPolicy> SlotBookingPolicies { get; set; }
     public DbSet<SlotAvailabilityOverride> SlotAvailabilityOverrides { get; set; }
+    public DbSet<SlotBookingCounter> SlotBookingCounters { get; set; }
     public DbSet<ServiceCityPrice> ServiceCityPrices { get; set; }
     public DbSet<CityPricingPolicy> CityPricingPolicies { get; set; }
     public DbSet<PromotionalPrice> PromotionalPrices { get; set; }
@@ -60,6 +61,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<PartnerEarningLedgerEntry> PartnerEarningLedgerEntries { get; set; }
     public DbSet<PartnerPayout> PartnerPayouts { get; set; }
     public DbSet<PartnerBackgroundCheck> PartnerBackgroundChecks { get; set; }
+    public DbSet<Referral> Referrals { get; set; }
+    public DbSet<ReferralProgramConfig> ReferralProgramConfigs { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

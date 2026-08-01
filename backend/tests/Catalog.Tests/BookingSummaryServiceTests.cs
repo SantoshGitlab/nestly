@@ -26,6 +26,7 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
             new SlotWindowRepository(context),
             new SlotBlackoutRepository(context),
             new SlotBookingPolicyRepository(context),
+            new SlotCapacityRepository(context),
             TimeProvider.System),
         new PriceCalculationService(
             new ServiceRepository(context),

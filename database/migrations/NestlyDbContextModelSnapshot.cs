@@ -74,6 +74,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("pincode");
 
+                    b.Property<string>("ReferralCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referral_code");
+
                     b.Property<string>("State")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
@@ -100,6 +105,11 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasIndex("Mobile")
                         .IsUnique()
                         .HasDatabaseName("ix_customer_mobile");
+
+                    b.HasIndex("ReferralCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_customer_referral_code")
+                        .HasFilter("referral_code IS NOT NULL");
 
                     b.ToTable("customer", (string)null);
                 });
@@ -1324,6 +1334,10 @@ namespace Nestly.Infrastructure.Migrations
                     b.Property<int>("RedemptionCount")
                         .HasColumnType("integer")
                         .HasColumnName("redemption_count");
+
+                    b.Property<Guid?>("RestrictedToCustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restricted_to_customer_id");
 
                     b.Property<int?>("UsageLimitPerCustomer")
                         .HasColumnType("integer")
@@ -3026,6 +3040,195 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("promotional_price", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Referral", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<string>("FraudReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("fraud_review_note");
+
+                    b.Property<DateTime?>("FraudReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fraud_reviewed_at_utc");
+
+                    b.Property<Guid?>("FraudReviewedByAdminUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("fraud_reviewed_by_admin_user_id");
+
+                    b.Property<bool>("IsFraudFlagged")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_fraud_flagged");
+
+                    b.Property<decimal>("MinQualifyingOrderAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("min_qualifying_order_amount");
+
+                    b.Property<DateTime?>("QualifiedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("qualified_at_utc");
+
+                    b.Property<Guid?>("QualifyingBookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("qualifying_booking_id");
+
+                    b.Property<Guid?>("RefereeCouponId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referee_coupon_id");
+
+                    b.Property<Guid>("RefereeCustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referee_customer_id");
+
+                    b.Property<string>("RefereeRewardType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referee_reward_type");
+
+                    b.Property<decimal>("RefereeRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referee_reward_value");
+
+                    b.Property<Guid?>("RefereeWalletEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referee_wallet_entry_id");
+
+                    b.Property<string>("ReferralCodeUsed")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referral_code_used");
+
+                    b.Property<Guid?>("ReferrerCouponId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referrer_coupon_id");
+
+                    b.Property<Guid>("ReferrerCustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referrer_customer_id");
+
+                    b.Property<string>("ReferrerRewardType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referrer_reward_type");
+
+                    b.Property<decimal>("ReferrerRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referrer_reward_value");
+
+                    b.Property<Guid?>("ReferrerWalletEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referrer_wallet_entry_id");
+
+                    b.Property<DateTime>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at_utc");
+
+                    b.Property<DateTime?>("RewardedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("rewarded_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_referral");
+
+                    b.HasIndex("IsFraudFlagged")
+                        .HasDatabaseName("ix_referral_is_fraud_flagged");
+
+                    b.HasIndex("RefereeCustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_referral_referee_customer_id");
+
+                    b.HasIndex("ReferrerCustomerId")
+                        .HasDatabaseName("ix_referral_referrer_customer_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_referral_status");
+
+                    b.HasIndex("Status", "ExpiresAtUtc")
+                        .HasDatabaseName("ix_referral_status_expires_at_utc");
+
+                    b.ToTable("referral", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ReferralProgramConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int?>("MaxReferralsPerCustomer")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_referrals_per_customer");
+
+                    b.Property<decimal>("MinQualifyingOrderAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("min_qualifying_order_amount");
+
+                    b.Property<string>("RefereeRewardType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referee_reward_type");
+
+                    b.Property<decimal>("RefereeRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referee_reward_value");
+
+                    b.Property<int>("ReferralExpiryDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("referral_expiry_days");
+
+                    b.Property<string>("ReferrerRewardType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referrer_reward_type");
+
+                    b.Property<decimal>("ReferrerRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referrer_reward_value");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<Guid?>("UpdatedByAdminUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_admin_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_referral_program_config");
+
+                    b.ToTable("referral_program_config", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.RefundTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3357,12 +3560,12 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_service");
 
-                    b.HasIndex("CategoryId")
-                        .HasDatabaseName("ix_service_category_id");
-
                     b.HasIndex("Slug")
                         .IsUnique()
                         .HasDatabaseName("ix_service_slug");
+
+                    b.HasIndex("CategoryId", "IsActive")
+                        .HasDatabaseName("ix_service_category_id_is_active");
 
                     b.ToTable("service", (string)null);
                 });
@@ -3644,6 +3847,35 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_slot_blackout_city_id_start_date_end_date");
 
                     b.ToTable("slot_blackout", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotBookingCounter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("BookedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("booked_count");
+
+                    b.Property<DateOnly>("SlotDate")
+                        .HasColumnType("date")
+                        .HasColumnName("slot_date");
+
+                    b.Property<Guid>("SlotWindowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("slot_window_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_slot_booking_counter");
+
+                    b.HasIndex("SlotWindowId", "SlotDate")
+                        .IsUnique()
+                        .HasDatabaseName("ix_slot_booking_counter_slot_window_id_slot_date");
+
+                    b.ToTable("slot_booking_counter", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.SlotBookingPolicy", b =>
@@ -4610,6 +4842,16 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_slot_blackout_city_city_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.SlotBookingCounter", b =>
+                {
+                    b.HasOne("Nestly.Domain.SlotWindow", null)
+                        .WithMany()
+                        .HasForeignKey("SlotWindowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_slot_booking_counter_slot_windows_slot_window_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.SlotBookingPolicy", b =>

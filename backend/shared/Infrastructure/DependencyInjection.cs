@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
 using Nestly.Application.Identity;
@@ -32,6 +33,7 @@ using Nestly.Application.PartnerIdentity;
 using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
+using Nestly.Application.Referral;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
@@ -46,11 +48,13 @@ using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Authorization;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Caching;
+using Nestly.Infrastructure.Observability;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
+using OpenTelemetry.Metrics;
 
 namespace Nestly.Infrastructure;
 
@@ -124,6 +128,21 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(CommissionOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): not a secret and
+        // has safe production-sensible defaults, same reasoning as
+        // CommissionOptions above - no ValidateOnStart.
+        services
+            .AddOptions<MetricsOptions>()
+            .Bind(configuration.GetSection(MetricsOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 162: not a secret, has a safe placeholder default, same
+        // reasoning as CommissionOptions above - no ValidateOnStart.
+        services
+            .AddOptions<ReferralOptions>()
+            .Bind(configuration.GetSection(ReferralOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
@@ -144,6 +163,21 @@ public static class DependencyInjection
         services
             .AddHealthChecks()
             .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+
+        // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): singleton so the
+        // underlying Meter and rolling failure-rate windows accumulate across
+        // the whole process lifetime, not per request/scope. The OpenTelemetry
+        // SDK collects from NestlyMetricsService.MeterName and exposes it on a
+        // self-hosted Prometheus scrape endpoint (see each API's Program.cs
+        // MapPrometheusScrapingEndpoint call) - no OTel collector exists
+        // anywhere in this repo yet, so a scrape endpoint is the smallest
+        // infrastructure footprint that is still useful once DEVOPS.md's
+        // "Monitoring/alerting stack" open decision is resolved.
+        services.AddSingleton<IMetricsService, NestlyMetricsService>();
+        services.AddOpenTelemetry()
+            .WithMetrics(metrics => metrics
+                .AddMeter(NestlyMetricsService.MeterName)
+                .AddPrometheusExporter());
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
@@ -174,6 +208,7 @@ public static class DependencyInjection
         services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
         services.AddScoped<ISlotWindowRepository, SlotWindowRepository>();
         services.AddScoped<ISlotAvailabilityOverrideRepository, SlotAvailabilityOverrideRepository>();
+        services.AddScoped<ISlotCapacityRepository, SlotCapacityRepository>();
         services.AddScoped<ISlotManagementService, SlotManagementService>();
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
@@ -343,6 +378,11 @@ public static class DependencyInjection
         services.AddScoped<ICouponManagementService, CouponManagementService>();
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IReferralCodeService, ReferralCodeService>();
+        services.AddScoped<IReferralRepository, ReferralRepository>();
+        services.AddScoped<IReferralProgramConfigRepository, ReferralProgramConfigRepository>();
+        services.AddScoped<IReferralRewardService, ReferralRewardService>();
+        services.AddScoped<IReferralFraudReviewService, ReferralFraudReviewService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 
@@ -593,6 +633,44 @@ public static class DependencyInjection
             });
 
         services.AddAuthorization();
+
+        return services;
+    }
+
+    /// <summary>CORS policy name every API's Program.cs passes to <c>UseCors</c>.</summary>
+    public const string NestlyCorsPolicy = "NestlyCors";
+
+    /// <summary>
+    /// Registers a CORS policy from the "Cors:AllowedOrigins" configuration
+    /// section (task 140a: the E2E suite surfaced that no API had a CORS
+    /// policy at all, so every browser-originated request - real or test -
+    /// failed the preflight check before ever reaching a controller).
+    /// Credentials are not enabled: every API authenticates via a Bearer
+    /// token in the Authorization header (see AddJwtAuthentication /
+    /// AddAdminJwtAuthentication / AddPartnerJwtAuthentication), never a
+    /// cookie, so there is nothing that needs
+    /// Access-Control-Allow-Credentials - keeping it off is the safer
+    /// default per docs/CLAUDE.md SECURITY ("least privilege").
+    /// </summary>
+    public static IServiceCollection AddNestlyCors(this IServiceCollection services, IConfiguration configuration)
+    {
+        var allowedOrigins = configuration.GetSection(CorsOptions.SectionName)
+            .Get<CorsOptions>()?.AllowedOrigins ?? [];
+
+        services.AddCors(options =>
+        {
+            options.AddPolicy(NestlyCorsPolicy, policy =>
+            {
+                if (allowedOrigins.Length > 0)
+                {
+                    policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+                }
+                // No origins configured: the policy exists but permits
+                // nothing, matching "external, environment specific"
+                // configuration - a missing config value fails closed
+                // (every browser request rejected) rather than open.
+            });
+        });
 
         return services;
     }

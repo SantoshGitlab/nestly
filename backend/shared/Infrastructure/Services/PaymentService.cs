@@ -78,7 +78,32 @@ public class PaymentService : IPaymentService
                 Guid.NewGuid(), booking.Id, customerId, booking.TotalPayableSnapshot, Currency,
                 string.IsNullOrWhiteSpace(request.IdempotencyKey) ? Guid.NewGuid().ToString("N") : request.IdempotencyKey);
             transaction.StartAttempt(Guid.NewGuid(), gatewayResult.GatewayOrderId);
-            await _paymentRepository.AddAsync(transaction);
+
+            // task 135b: the read above and this insert are two separate
+            // round trips, so two concurrent duplicate requests for the same
+            // booking (a double-click, a client retry-on-timeout, two open
+            // tabs) can both observe "no existing transaction" and both
+            // reach here. TryAddAsync's unique-index guard lets only one
+            // actually win; the loser falls back to that winner's
+            // transaction and responds idempotently, exactly like the
+            // non-concurrent duplicate-request path below already does.
+            if (!await _paymentRepository.TryAddAsync(transaction))
+            {
+                var winner = await _paymentRepository.GetByBookingIdAsync(booking.Id);
+                if (winner is null)
+                {
+                    // Pathological: the unique constraint fired but no row is
+                    // visible under it yet. Surface this rather than
+                    // fabricate a response - something is wrong beyond a
+                    // simple lost race (e.g. read-your-own-writes isn't
+                    // holding on the underlying store).
+                    return Error.Infrastructure(
+                        "Payment.OrderCreationRaceUnresolved",
+                        "Could not create or locate a payment order for this booking. Please retry.");
+                }
+
+                return Result.Success(ToOrderResponse(winner, winner.LatestAttempt!));
+            }
         }
         else
         {

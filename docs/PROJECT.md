@@ -60,6 +60,9 @@ Administrators manage the complete business lifecycle through a dedicated admin 
 - Payments
 - Notifications
 - Reviews
+- Referral
+- Subscription
+- Chat
 - Dashboard
 - Reports
 - Settings

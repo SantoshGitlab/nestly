@@ -27,5 +27,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .HasConversion<string>()
             .HasMaxLength(20)
             .IsRequired();
+        builder.Property(x => x.ReferralCode).HasMaxLength(20);
+        builder.HasIndex(x => x.ReferralCode).IsUnique().HasFilter("referral_code IS NOT NULL");
     }
 }

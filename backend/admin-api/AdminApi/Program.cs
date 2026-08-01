@@ -22,6 +22,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // Admin panel JWT bearer auth (SRS 12.1, tasks 95a/95e) — its own scheme and
 // signing key, kept deliberately separate from the customer one.
 builder.Services.AddAdminJwtAuthentication(builder.Configuration);
+builder.Services.AddNestlyCors(builder.Configuration);
 
 // API surface.
 builder.Services.AddControllers();
@@ -73,6 +74,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -86,5 +88,12 @@ app.MapControllers();
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+
+// Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): Prometheus scrape
+// endpoint for the payment/booking/notification counters and histograms
+// registered in AddInfrastructure - unauthenticated, same as the health
+// endpoints above, since this is meant for an internal scraper behind the
+// network boundary rather than a public consumer.
+app.MapPrometheusScrapingEndpoint("/metrics");
 
 app.Run();
