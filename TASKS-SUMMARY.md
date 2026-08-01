@@ -12,23 +12,49 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 8 | 24 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 14 | 18 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **398** | **62** | **50** | **2** | **512** |
+| **Overall** | **404** | **56** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 133a-133g and 134 (Phase 8
-security hardening) on `phase-8-hardening-launch`: an OWASP-style audit of
-the consumer/partner/admin APIs covering injection, XSS, CSRF, IDOR, broken
-access control, payment callback abuse, and OTP brute force (133a-133g) -
-found and fixed a CSV/formula-injection gap in the shared report-export
-writer, confirmed the rest of each category already sound with no code
-changes needed - plus a rate-limiting rollout (134) adding IP-partitioned
-`search`, `payment`, and `payment-webhook` policies alongside the existing
-`otp`/`login` ones, applied to the catalog search, locality search, and
-payment order/simulate/webhook endpoints. 8 of Phase 8's 38 rows are now
-`done`; the remaining 24 `todo` rows and 6 `decomposed` parent placeholders
-are unstarted.
+Last updated: 2026-08-01, after completing tasks 135a-135c and 136a-136c
+(Phase 8 performance work) on `phase-8-hardening-launch`: established a new
+`backend/tests/Performance.Tests` project (matching this repo's existing
+per-project TestDatabase.cs pattern, but on a file-based SQLite database so
+independent DbContexts/connections can genuinely race via `Task.WhenAll`,
+unlike Catalog.Tests' shared in-memory connection) with real concurrent
+load/perf tests for catalog browse/search (135a), checkout + payment order
+creation (135b), and concurrent slot booking (135c). 135c surfaced a genuine,
+previously-undocumented-as-fixed overbooking race - `SlotWindow.MaxBookingsPerSlot`
+was reported to customers but never enforced anywhere in
+BookingService/BookingSummaryService - fixed with an atomic
+conditional-update reservation (`SlotCapacityRepository`, mirroring
+`CouponRepository.TryReserveRedemptionAsync`) wired into
+`BookingService.CreateAsync`; proven by disabling the fix and confirming the
+new tests fail, then re-enabling and confirming they pass, including under a
+forced wide race window. Building the checkout load test (135b) also
+surfaced a second real race - `PaymentService.CreateOrderAsync`'s duplicate-order
+dedup had an unhandled time-of-check/time-of-use gap between reading the
+existing transaction and inserting a new one - fixed with a
+`TryAddAsync`/unique-index-conflict fallback in `PaymentTransactionRepository`,
+verified the same way (forced-delay reproduction, then fix confirmation).
+The query optimization pass (136a-136c) fixed a real N+1
+(`CategoryQueryService.GetDetailBySlugAsync` was calling
+`ListActiveByServiceAsync` once per service in a loop; replaced with a new
+batched `ListActiveByServiceIdsAsync`), added `.AsNoTracking()` to confirmed
+read-only catalog/booking list queries, added a composite
+`Service(CategoryId, IsActive)` index (migration
+`20260801050749_AddSlotCapacityAndCatalogIndexes`, which also adds the
+`slot_booking_counter` table from 135c's fix) replacing a redundant
+single-column one, and capped `CatalogSearchService.SearchAsync` at 20
+results per type (previously unbounded) without touching the several admin
+"list all active" call sites that legitimately reuse the same repository
+method with an empty query. Other reviewed areas (booking admin search
+pagination, partner performance-summary N+1, review-by-service listing) were
+found already paginated, already low-volume/admin-scoped by design, or
+unused in production - documented as sound rather than changed. 14 of Phase
+8's 38 rows are now `done`; the remaining 18 `todo` rows and 6 `decomposed`
+parent placeholders are unstarted.
 
 Previously, 2026-08-01: completed Phase 7 (Partner) on `phase-7-partner`:
 assignment bridge (147), earnings/payouts (148), partner-api jobs/earnings
