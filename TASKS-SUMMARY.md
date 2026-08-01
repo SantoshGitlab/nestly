@@ -12,12 +12,62 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 17 | 15 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 22 | 10 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **407** | **53** | **50** | **2** | **512** |
+| **Overall** | **412** | **48** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 137a-137c (Phase 8
+Last updated: 2026-08-01, after completing tasks 138a-138d and 139 (Phase 8
+DevOps: CD pipeline + backup/restore) on `phase-8-hardening-launch`. Extended
+the existing GitHub Actions CI/CD setup (`.github/workflows/ci.yml`, PR/push
+gate) with real deployment workflows rather than duplicating it:
+`.github/workflows/cd-staging.yml` (push to `develop` → build/test gate →
+build+push consumer-api/admin-api/partner-api images to GHCR → `dotnet ef
+database update` → deploy, `environment: staging`) and
+`.github/workflows/cd-production.yml` (same shape on push to `main`,
+`environment: production` so GitHub's Required-reviewers protection rule
+applies once configured in repo settings - not expressible in YAML, called
+out with an explicit setup checklist in the workflow header, 138b). GHCR was
+picked as the registry since docs/DEVOPS.md still lists the registry as an
+OPEN DECISION and GHCR needs no new secret. The explicit migration-apply
+step (138c) is its own job in both workflows, between image build and
+deploy, reusing the existing `database/scripts/apply-migrations.sh` (one
+code path for "how migrations get applied", not a CI-only duplicate).
+Deploy targets a remote Docker host over SSH running a new
+`deploy/docker-compose.deploy.yml` (pulls pre-built GHCR images; distinct
+from the root `docker-compose.yml`, which builds from source for local dev)
+- there is no real staging/production host yet (docs/DEVOPS.md OPEN
+DECISIONS: cloud provider/registry/orchestrator all unresolved), so this is
+written to be correct against real infra and documented as failing fast on
+missing secrets until a host + secrets exist, per this repo's existing
+"decompose, implement for real, be honest about what's blocked by missing
+infra" pattern. `.github/workflows/rollback.yml` (138d) is a
+`workflow_dispatch` workflow that redeploys a specified prior image tag
+without rebuilding, with `environment: ${{ inputs.environment }}` so a
+production rollback still needs approval like any other production change;
+its header documents the real EF Core Down()-migration tradeoff (safe only
+when every intervening migration's Down() is lossless) rather than
+fabricating an automatic DB-rollback capability, defaulting to
+redeploy-app-and-forward-fix. Task 139 added `database/scripts/backup-postgres.sh`
+(`pg_dump -Fc`, env-var configured, optional S3 upload, local retention
+pruning) and `database/scripts/restore-postgres.sh` (`pg_restore --clean
+--if-exists`), scheduled via a new `.github/workflows/backup-postgres.yml`
+daily cron (GitHub Actions chosen over a systemd timer since there's no
+persistent host of our own yet - documented as the fallback once one
+exists), plus `docs/RUNBOOK-BACKUP-RESTORE.md`. The restore drill was
+actually executed against the local docker-compose Postgres
+(`nestly-postgres-1`): backed up the real `nestly` database, restored into
+a throwaway `nestly_restore_test` database, and verified all 74 tables'
+exact row counts identical, md5 content checksums identical on the two
+populated business tables, and `pg_constraint` count (148) identical
+source-vs-restored (schema/FKs/indexes, not just data) - not just claimed,
+shown with real command output in the runbook. `dotnet build Nestly.sln`
+clean, full suite 882/882 passing (unchanged - this batch touched no C#
+code). No cloud secrets exist to actually exercise the CD/backup workflows
+end-to-end against real infra; per instruction that's an expected,
+documented gap, not a blocker to marking the workflows themselves done.
+
+Previously, 2026-08-01: completed tasks 137a-137c (Phase 8
 observability: metrics export + alerts for payment, booking, and
 notification failures) on `phase-8-hardening-launch`. Task 10 (Serilog +
 health checks) was already in place with no metrics abstraction, so this
