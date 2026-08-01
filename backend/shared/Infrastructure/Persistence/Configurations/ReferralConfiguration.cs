@@ -43,5 +43,11 @@ public class ReferralConfiguration : IEntityTypeConfiguration<Referral>
 
         // Task 175's expiry sweep scans Registered rows past ExpiresAtUtc.
         builder.HasIndex(x => new { x.Status, x.ExpiresAtUtc });
+
+        builder.Property(x => x.IsFraudFlagged).IsRequired();
+        builder.Property(x => x.FraudReviewNote).HasMaxLength(1000);
+        builder.Property(x => x.FraudReviewedByAdminUserId);
+        builder.Property(x => x.FraudReviewedAtUtc);
+        builder.HasIndex(x => x.IsFraudFlagged);
     }
 }

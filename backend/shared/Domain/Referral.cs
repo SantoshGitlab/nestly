@@ -39,6 +39,29 @@ public class Referral : Entity<Guid>
     public DateTime? RewardedAtUtc { get; private set; }
     public DateTime ExpiresAtUtc { get; private set; }
 
+    /// <summary>
+    /// Task 166 fraud review (REFERRAL.md "FRAUD / ABUSE PREVENTION"'s
+    /// "manual review queue, not auto-block, for soft signals"). Independent
+    /// of <see cref="Status"/>, same shape as <see cref="Review.IsFlagged"/> -
+    /// a Rewarded referral can still be flagged for after-the-fact review
+    /// (e.g. "qualifying booking cancelled right after reward"), which a
+    /// Status-based FraudFlagged state couldn't represent cleanly since
+    /// reward disbursement runs synchronously with qualification (task
+    /// 164-165's DisburseAsync), leaving no real pre-reward review window
+    /// for automated flags to act on before money moves. Approving a flag
+    /// only records the admin's finding here - it never auto-reverses a
+    /// wallet credit or deactivates a coupon, since the wallet ledger is
+    /// append-only (SRS 14.5) and safely reversing only the unspent portion
+    /// of ONE specific credit needs the FIFO consumption-tracking design
+    /// task 175 explicitly defers; any actual clawback is a deliberate,
+    /// separate admin action through existing wallet/coupon tooling.
+    /// </summary>
+    public bool IsFraudFlagged { get; private set; }
+
+    public string? FraudReviewNote { get; private set; }
+    public Guid? FraudReviewedByAdminUserId { get; private set; }
+    public DateTime? FraudReviewedAtUtc { get; private set; }
+
     protected Referral() { }
 
     public Referral(
@@ -92,7 +115,7 @@ public class Referral : Entity<Guid>
         Guid? referrerWalletEntryId, Guid? referrerCouponId,
         Guid? refereeWalletEntryId, Guid? refereeCouponId)
     {
-        if (Status is not (ReferralStatus.Qualified or ReferralStatus.FraudFlagged))
+        if (Status != ReferralStatus.Qualified)
         {
             throw new InvalidOperationException($"Cannot reward a referral in status {Status}.");
         }
@@ -105,26 +128,22 @@ public class Referral : Entity<Guid>
         RewardedAtUtc = DateTime.UtcNow;
     }
 
-    /// <summary>Task 166: a soft abuse signal paused this referral's payout pending admin review.</summary>
-    public void FlagForFraudReview()
+    /// <summary>Task 166: an admin raised (or system detected) a soft abuse signal - see <see cref="IsFraudFlagged"/>'s doc comment for why this doesn't touch <see cref="Status"/>.</summary>
+    public void Flag(Guid? adminUserId, string? note)
     {
-        if (Status != ReferralStatus.Qualified)
-        {
-            throw new InvalidOperationException($"Cannot fraud-flag a referral in status {Status}.");
-        }
-
-        Status = ReferralStatus.FraudFlagged;
+        IsFraudFlagged = true;
+        FraudReviewNote = note;
+        FraudReviewedByAdminUserId = adminUserId;
+        FraudReviewedAtUtc = DateTime.UtcNow;
     }
 
-    /// <summary>Task 166: admin rejected the flagged referral - closed, no reward.</summary>
-    public void RejectFraudReview()
+    /// <summary>Task 166: admin resolved the flag - confirmed fraud (any actual reversal happens separately, see <see cref="IsFraudFlagged"/>) or false positive. Either way the flag itself clears.</summary>
+    public void Unflag(Guid adminUserId, string? note)
     {
-        if (Status != ReferralStatus.FraudFlagged)
-        {
-            throw new InvalidOperationException($"Cannot reject fraud review for a referral in status {Status}.");
-        }
-
-        Status = ReferralStatus.Expired;
+        IsFraudFlagged = false;
+        FraudReviewNote = note;
+        FraudReviewedByAdminUserId = adminUserId;
+        FraudReviewedAtUtc = DateTime.UtcNow;
     }
 
     /// <summary>Scheduled sweep: no qualifying booking within the expiry window.</summary>

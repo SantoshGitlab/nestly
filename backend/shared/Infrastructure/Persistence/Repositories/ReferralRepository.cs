@@ -19,6 +19,9 @@ public class ReferralRepository : IReferralRepository
     public Task<Referral?> GetByRefereeCustomerIdAsync(Guid refereeCustomerId) =>
         _context.Referrals.FirstOrDefaultAsync(r => r.RefereeCustomerId == refereeCustomerId);
 
+    public Task<Referral?> GetByQualifyingBookingIdAsync(Guid bookingId) =>
+        _context.Referrals.FirstOrDefaultAsync(r => r.QualifyingBookingId == bookingId);
+
     public async Task<IReadOnlyList<Referral>> ListByReferrerCustomerIdAsync(Guid referrerCustomerId) =>
         await _context.Referrals
             .Where(r => r.ReferrerCustomerId == referrerCustomerId)

@@ -382,6 +382,7 @@ public static class DependencyInjection
         services.AddScoped<IReferralRepository, ReferralRepository>();
         services.AddScoped<IReferralProgramConfigRepository, ReferralProgramConfigRepository>();
         services.AddScoped<IReferralRewardService, ReferralRewardService>();
+        services.AddScoped<IReferralFraudReviewService, ReferralFraudReviewService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 

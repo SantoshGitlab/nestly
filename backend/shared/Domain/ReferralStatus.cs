@@ -13,8 +13,5 @@ public enum ReferralStatus
     Rewarded,
 
     /// <summary>No qualifying booking within the configured expiry window. Terminal - no reward, no error.</summary>
-    Expired,
-
-    /// <summary>A soft abuse signal was raised (REFERRAL.md "FRAUD / ABUSE PREVENTION") - payout is paused pending admin review, not auto-reversed.</summary>
-    FraudFlagged
+    Expired
 }

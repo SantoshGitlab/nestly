@@ -13,11 +13,34 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
 | Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 6 | 10 | 0 | 0 | 16 |
+| Phase 9 - Referral & Growth | 7 | 9 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **428** | **32** | **50** | **2** | **512** |
+| **Overall** | **429** | **31** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 164-165 (Phase 9 qualifying
+Last updated: 2026-08-01, after completing task 166 (Phase 9 fraud review
+queue) on `phase-8-hardening-launch`. Design tension resolved: REFERRAL.md's
+`ReferralStatus` enum included `FraudFlagged`, but reward disbursement runs
+synchronously with qualification (tasks 164-165), leaving no real pre-reward
+review window a Status-based flag could pause. Refactored to an independent
+`bool IsFraudFlagged` + review metadata, mirroring the existing
+`Review.IsFlagged` pattern exactly rather than inventing a new one - flagging
+never touches `Status`. Removed the now-unused `ReferralStatus.FraudFlagged`
+value (it never had any rows). Of REFERRAL.md's two named soft signals, only
+one is honestly implementable: "same device/payment method as referrer" has
+no data source anywhere in this codebase and was **not faked**;
+"qualifying booking cancelled right after reward" is real, implemented as
+`ReferralCancellationFraudSignalHandler` (a fourth independent handler on
+`BookingStatusChangedEvent`), auto-flagging within a 2-day window of
+`RewardedAtUtc`. Approving a flag only records the finding - it never
+auto-reverses a wallet credit, since a correct partial reversal needs the
+FIFO consumption-tracking design task 175 explicitly defers. 6 new tests.
+Full suite 900/900. Phase 9 is now 7/16 done. Remaining: 167 (admin config
+API+UI), 168 (customer API), 169-170 (both frontends), 171 (admin reports),
+172 (notification templates), 174 (milestone rewards), 175 (expiring wallet
+credit), 176 (contextual prompts) - launching parallel work on these plus
+all of Phase 10 next.
+
+Previously, 2026-08-01: completed tasks 164-165 (Phase 9 qualifying
 hook + reward disbursement) on `phase-8-hardening-launch`. Implemented
 together, one flow: `ReferralQualifyingBookingHandler` (a third independent
 handler on `BookingStatusChangedEvent`, same shape as

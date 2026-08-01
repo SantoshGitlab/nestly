@@ -9,6 +9,9 @@ public interface IReferralRepository
     /// <summary>Task 163's self-referral/duplicate-referee guard, and task 164's qualifying-booking lookup key off the referee.</summary>
     Task<Domain.Referral?> GetByRefereeCustomerIdAsync(Guid refereeCustomerId);
 
+    /// <summary>Task 166's post-reward cancellation signal: is this booking a Rewarded referral's qualifying booking?</summary>
+    Task<Domain.Referral?> GetByQualifyingBookingIdAsync(Guid bookingId);
+
     Task<IReadOnlyList<Domain.Referral>> ListByReferrerCustomerIdAsync(Guid referrerCustomerId);
 
     /// <summary>Task 166/165's per-customer reward cap (REFERRAL.md "FRAUD / ABUSE PREVENTION").</summary>
