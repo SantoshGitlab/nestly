@@ -13,11 +13,28 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
 | Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 2 | 14 | 0 | 0 | 16 |
+| Phase 9 - Referral & Growth | 3 | 13 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **424** | **36** | **50** | **2** | **512** |
+| **Overall** | **425** | **35** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing tasks 161 and 173 (Phase 9
+Last updated: 2026-08-01, after completing task 162 (Phase 9 referral code
+generation) on `phase-8-hardening-launch`. `IReferralCodeService`
+(`backend/shared/Application/Referral`, `Infrastructure/Services`): 8-char
+codes from a 31-symbol alphabet excluding visually ambiguous characters
+(0/O, 1/I/L), cryptographically random (`RandomNumberGenerator`, same
+primitive `OtpService` already uses), uniqueness enforced via
+`ICustomerRepository.ExistsByReferralCodeAsync` with retry, lazy
+get-or-create backed by task 161's `Customer.SetReferralCode` set-once
+guard. Share-link base URL is a new `ReferralOptions` (options-file config,
+not DB-adminable yet, same reasoning as `CommissionOptions` - the
+production domain itself isn't decided per `docs/DEVOPS.md` OPEN
+DECISIONS). 4 new tests (`ReferralCodeServiceTests`) - generation/
+persistence, idempotent re-fetch, no collisions across 25 customers, link
+construction. Full suite 886/886 (882 + 4 new). Next: task 163
+(registration wiring - `POST /auth/register` accepts an optional
+`referralCode`, self-referral block, one-referral-per-referee).
+
+Previously, 2026-08-01: completed tasks 161 and 173 (Phase 9
 Referral domain schema + RBAC) on `phase-8-hardening-launch`. First real
 Phase 9 work: closed `docs/REFERRAL.md`'s three OPEN DECISIONS ahead of
 implementation (same convention as task 143/144) - reward type stays

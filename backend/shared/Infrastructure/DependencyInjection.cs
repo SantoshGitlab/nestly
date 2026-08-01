@@ -33,6 +33,7 @@ using Nestly.Application.PartnerIdentity;
 using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
+using Nestly.Application.Referral;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
@@ -133,6 +134,13 @@ public static class DependencyInjection
         services
             .AddOptions<MetricsOptions>()
             .Bind(configuration.GetSection(MetricsOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 162: not a secret, has a safe placeholder default, same
+        // reasoning as CommissionOptions above - no ValidateOnStart.
+        services
+            .AddOptions<ReferralOptions>()
+            .Bind(configuration.GetSection(ReferralOptions.SectionName))
             .ValidateDataAnnotations();
 
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
@@ -370,6 +378,7 @@ public static class DependencyInjection
         services.AddScoped<ICouponManagementService, CouponManagementService>();
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IReferralCodeService, ReferralCodeService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 
