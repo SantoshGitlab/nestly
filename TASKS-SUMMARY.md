@@ -12,19 +12,32 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
 | Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 0 | 32 | 6 | 0 | 38 |
+| Phase 8 - Hardening & Launch | 8 | 24 | 6 | 0 | 38 |
 | Phase 9 - Referral & Growth | 0 | 16 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **390** | **70** | **50** | **2** | **512** |
+| **Overall** | **398** | **62** | **50** | **2** | **512** |
 
-Last updated: 2026-08-01, after completing Phase 7 (Partner) on
-`phase-7-partner`: assignment bridge (147), earnings/payouts (148),
-partner-api jobs/earnings endpoints (149a/149c), admin partner CRUD/KYC/
-performance + Partner/Payout RBAC (150a-150c), provider reassignment on
-rejection (159), and background verification (160). All 25 Phase 7 rows are
-now `done` except the four `decomposed` parent placeholders (145, 146, 149,
-150 - superseded by their own lettered subtasks, all of which are done).
-Phase order changed 2026-07-31: Partner now runs as Phase 7 (before
-Hardening & Launch, now Phase 8); Phase 9 (Referral & Growth) and Phase 10
-(Product Enhancements) were added.
+Last updated: 2026-08-01, after completing tasks 133a-133g and 134 (Phase 8
+security hardening) on `phase-8-hardening-launch`: an OWASP-style audit of
+the consumer/partner/admin APIs covering injection, XSS, CSRF, IDOR, broken
+access control, payment callback abuse, and OTP brute force (133a-133g) -
+found and fixed a CSV/formula-injection gap in the shared report-export
+writer, confirmed the rest of each category already sound with no code
+changes needed - plus a rate-limiting rollout (134) adding IP-partitioned
+`search`, `payment`, and `payment-webhook` policies alongside the existing
+`otp`/`login` ones, applied to the catalog search, locality search, and
+payment order/simulate/webhook endpoints. 8 of Phase 8's 38 rows are now
+`done`; the remaining 24 `todo` rows and 6 `decomposed` parent placeholders
+are unstarted.
+
+Previously, 2026-08-01: completed Phase 7 (Partner) on `phase-7-partner`:
+assignment bridge (147), earnings/payouts (148), partner-api jobs/earnings
+endpoints (149a/149c), admin partner CRUD/KYC/performance + Partner/Payout
+RBAC (150a-150c), provider reassignment on rejection (159), and background
+verification (160). All 25 Phase 7 rows are now `done` except the four
+`decomposed` parent placeholders (145, 146, 149, 150 - superseded by their
+own lettered subtasks, all of which are done). Phase order changed
+2026-07-31: Partner now runs as Phase 7 (before Hardening & Launch, now
+Phase 8); Phase 9 (Referral & Growth) and Phase 10 (Product Enhancements)
+were added.
 
