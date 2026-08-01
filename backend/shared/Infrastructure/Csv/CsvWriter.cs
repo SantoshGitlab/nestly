@@ -27,12 +27,30 @@ public static class CsvWriter
         return Encoding.UTF8.GetBytes(builder.ToString());
     }
 
+    /// <summary>
+    /// Characters that Excel/Sheets/LibreOffice interpret as the start of a
+    /// formula when a cell begins with one of them - CSV/"formula injection"
+    /// (OWASP injection family). Every report exported by this class draws at
+    /// least one column from user-supplied input (e.g. review text, customer
+    /// notes), so a value of e.g. <c>=HYPERLINK("http://evil","x")</c> must
+    /// never reach the file verbatim.
+    /// </summary>
+    private static readonly char[] FormulaTriggers = ['=', '+', '-', '@', '\t', '\r'];
+
     /// <summary>Quotes a CSV field only when needed (RFC 4180) - it contains a comma, quote, or newline - doubling any embedded quotes.</summary>
     private static string Field(string? value)
     {
         if (string.IsNullOrEmpty(value))
         {
             return string.Empty;
+        }
+
+        // Neutralize formula injection first: a leading apostrophe forces
+        // spreadsheet applications to treat the cell as text, and is itself
+        // harmless in CSV (not a character RFC 4180 treats specially).
+        if (Array.IndexOf(FormulaTriggers, value[0]) >= 0)
+        {
+            value = "'" + value;
         }
 
         bool needsQuoting = value.IndexOfAny([',', '"', '\n', '\r']) >= 0;

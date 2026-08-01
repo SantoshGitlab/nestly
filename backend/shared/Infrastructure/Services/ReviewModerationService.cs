@@ -1,11 +1,11 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Reviews;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Csv;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -130,51 +130,43 @@ public class ReviewModerationService : IReviewModerationService
         row.Review.ModeratedAtUtc,
         row.Review.CreatedAtUtc);
 
+    /// <summary>
+    /// Delegates to <see cref="CsvWriter"/> (task 133a security pass) rather
+    /// than hand-rolling RFC 4180 escaping a second time - the previous
+    /// private implementation here was a byte-for-byte duplicate of
+    /// <c>ReportingQueryService</c>'s, missing the same CSV/formula-injection
+    /// mitigation (a leading <c>=</c>/<c>+</c>/<c>-</c>/<c>@</c> opening a
+    /// formula in Excel/Sheets) that <c>CsvWriter</c> now applies. Both
+    /// <see cref="ReviewModerationRow.CustomerName"/> and the review's own
+    /// text/notes are customer- or moderator-supplied, so this export cannot
+    /// skip the same protection every other report gets.
+    /// </summary>
     private static byte[] BuildCsv(IReadOnlyList<ReviewModerationRow> rows)
     {
-        var builder = new StringBuilder();
-        builder.AppendLine(string.Join(',', [
+        var header = new[]
+        {
             "ReviewId", "BookingId", "CustomerName", "ServiceName", "CategoryName",
             "Rating", "ReviewText", "IssueTags", "Status", "IsFlagged",
             "ModeratorNote", "ModeratedAtUtc", "CreatedAtUtc"
-        ]));
+        };
 
-        foreach (var row in rows)
+        var rowValues = rows.Select(row => (IReadOnlyList<string?>)new[]
         {
-            builder.AppendLine(string.Join(',', [
-                CsvField(row.Review.Id.ToString()),
-                CsvField(row.Review.BookingId.ToString()),
-                CsvField(row.CustomerName),
-                CsvField(row.ServiceName),
-                CsvField(row.CategoryName),
-                CsvField(row.Review.Rating.ToString(CultureInfo.InvariantCulture)),
-                CsvField(row.Review.ReviewText),
-                CsvField(row.Review.IssueTags),
-                CsvField(row.Review.Status.ToString()),
-                CsvField(row.Review.IsFlagged.ToString()),
-                CsvField(row.Review.ModeratorNote),
-                CsvField(row.Review.ModeratedAtUtc?.ToString("O", CultureInfo.InvariantCulture)),
-                CsvField(row.Review.CreatedAtUtc.ToString("O", CultureInfo.InvariantCulture))
-            ]));
-        }
+            row.Review.Id.ToString(),
+            row.Review.BookingId.ToString(),
+            row.CustomerName,
+            row.ServiceName,
+            row.CategoryName,
+            row.Review.Rating.ToString(CultureInfo.InvariantCulture),
+            row.Review.ReviewText,
+            row.Review.IssueTags,
+            row.Review.Status.ToString(),
+            row.Review.IsFlagged.ToString(),
+            row.Review.ModeratorNote,
+            row.Review.ModeratedAtUtc?.ToString("O", CultureInfo.InvariantCulture),
+            row.Review.CreatedAtUtc.ToString("O", CultureInfo.InvariantCulture)
+        });
 
-        return Encoding.UTF8.GetBytes(builder.ToString());
-    }
-
-    /// <summary>Quotes a CSV field only when needed (RFC 4180) - it contains a comma, quote, or newline - doubling any embedded quotes.</summary>
-    private static string CsvField(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
-
-        bool needsQuoting = value.IndexOfAny([',', '"', '\n', '\r']) >= 0;
-        if (!needsQuoting)
-        {
-            return value;
-        }
-
-        return $"\"{value.Replace("\"", "\"\"")}\"";
+        return CsvWriter.Write(header, rowValues);
     }
 }
