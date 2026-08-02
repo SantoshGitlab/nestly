@@ -437,6 +437,7 @@ public static class DependencyInjection
         services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
         services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
         services.AddScoped<INestlyCoinsAdminService, NestlyCoinsAdminService>();
+        services.AddScoped<INestlyCoinsCustomerService, NestlyCoinsCustomerService>();
         services.AddScoped<IReferralCodeService, ReferralCodeService>();
         services.AddScoped<IReferralRepository, ReferralRepository>();
         services.AddScoped<IReferralProgramConfigRepository, ReferralProgramConfigRepository>();

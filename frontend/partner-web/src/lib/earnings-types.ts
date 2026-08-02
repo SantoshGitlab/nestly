@@ -17,6 +17,21 @@ export enum EarningSourceType {
   JobCompletion = 0,
   Penalty = 1,
   AdminCorrection = 2,
+  NestlyCoinsReward = 3,
+  NestlyCoinsClawback = 4,
+}
+
+const EARNING_SOURCE_LABELS: Record<EarningSourceType, string> = {
+  [EarningSourceType.JobCompletion]: "Job completed",
+  [EarningSourceType.Penalty]: "Penalty",
+  [EarningSourceType.AdminCorrection]: "Adjustment",
+  [EarningSourceType.NestlyCoinsReward]: "Nestly Coins earned",
+  [EarningSourceType.NestlyCoinsClawback]: "Nestly Coins clawed back",
+};
+
+/** Readable label for a ledger entry's source (task 203). */
+export function earningSourceLabel(sourceType: EarningSourceType): string {
+  return EARNING_SOURCE_LABELS[sourceType] ?? "Earnings";
 }
 
 /** One append-only entry in the partner's earning ledger. */

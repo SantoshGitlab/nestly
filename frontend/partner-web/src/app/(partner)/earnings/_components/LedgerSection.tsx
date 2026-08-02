@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Alert, Card } from "@/components/ui";
 import { describeError, isNotImplemented } from "@/lib/api";
 import { listEarningsLedger } from "@/lib/earnings-api";
+import { earningSourceLabel } from "@/lib/earnings-types";
 import { NotYetAvailable } from "./NotYetAvailable";
 
 /** Append-only earning ledger table (credit per completed job, debit for penalties). */
@@ -44,6 +45,7 @@ export function LedgerSection() {
         <table className="w-full min-w-[480px] text-left text-sm">
           <thead className="border-b border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/5">
             <tr>
+              <th className="px-3 py-2 font-medium">Source</th>
               <th className="px-3 py-2 font-medium">Description</th>
               <th className="px-3 py-2 font-medium">Amount</th>
               <th className="px-3 py-2 font-medium">Date</th>
@@ -52,6 +54,7 @@ export function LedgerSection() {
           <tbody>
             {query.data.map((entry) => (
               <tr key={entry.id} className="border-b border-black/5 last:border-0 dark:border-white/10">
+                <td className="px-3 py-2">{earningSourceLabel(entry.sourceType)}</td>
                 <td className="px-3 py-2">{entry.description ?? "—"}</td>
                 <td className="px-3 py-2">₹{entry.amount.toFixed(2)}</td>
                 <td className="px-3 py-2">{entry.createdAtUtc ? new Date(entry.createdAtUtc).toLocaleDateString() : "—"}</td>

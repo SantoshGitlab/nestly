@@ -561,6 +561,11 @@ export enum WalletSourceType {
   Refund = 0,
   PromotionalCredit = 1,
   ManualAdjustment = 2,
+  ReferralReward = 3,
+  ReferralMilestoneBonus = 4,
+  ReferralCreditExpiry = 5,
+  NestlyCoinsReward = 6,
+  NestlyCoinsClawback = 7,
 }
 
 export interface WalletBalanceResponse {

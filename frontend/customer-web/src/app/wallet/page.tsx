@@ -7,7 +7,14 @@ import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { WalletEntryType, WalletSourceType } from "@/lib/types";
 import type { WalletBalanceResponse, WalletLedgerEntryResponse } from "@/lib/types";
 
-/** Readable label for a ledger entry's source (SRS 11.17). */
+/**
+ * Readable label for a ledger entry's source (SRS 11.17, GUIDELINES #4 of
+ * docs/NESTLY-COINS.md - "a breakdown showing how much of the applied
+ * balance was coins vs. other credit"). Real gap fixed here, not just
+ * NestlyCoinsReward added alongside it (task 203): the three Referral
+ * source types already existed on the backend but were never added to this
+ * switch, silently falling through to the generic "Wallet" label.
+ */
 function sourceLabel(sourceType: WalletSourceType): string {
   switch (sourceType) {
     case WalletSourceType.Refund:
@@ -16,6 +23,16 @@ function sourceLabel(sourceType: WalletSourceType): string {
       return "Promotional credit";
     case WalletSourceType.ManualAdjustment:
       return "Adjustment";
+    case WalletSourceType.ReferralReward:
+      return "Referral reward";
+    case WalletSourceType.ReferralMilestoneBonus:
+      return "Referral milestone bonus";
+    case WalletSourceType.ReferralCreditExpiry:
+      return "Referral credit expired";
+    case WalletSourceType.NestlyCoinsReward:
+      return "Nestly Coins earned";
+    case WalletSourceType.NestlyCoinsClawback:
+      return "Nestly Coins clawed back";
     default:
       return "Wallet";
   }
