@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Nestly.Domain;
+using Nestly.Domain.NestlyCoins;
 
 namespace Nestly.Infrastructure.Persistence;
 
@@ -71,6 +72,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<ReferralMilestoneAward> ReferralMilestoneAwards { get; set; }
     public DbSet<ChatThread> ChatThreads { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<NestlyCoinsProgramConfig> NestlyCoinsProgramConfigs { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

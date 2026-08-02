@@ -23,5 +23,8 @@ public enum WalletSourceType
     ReferralMilestoneBonus,
 
     /// <summary>Debited by the expiry sweep (task 175) for the unconsumed portion of an expiring wallet credit. SourceReferenceId is the expiring WalletLedgerEntry's id.</summary>
-    ReferralCreditExpiry
+    ReferralCreditExpiry,
+
+    /// <summary>Credited from a qualifying order's Nestly Coins reward (docs/NESTLY-COINS.md, task 201). SourceReferenceId is the completed Booking's id.</summary>
+    NestlyCoinsReward
 }

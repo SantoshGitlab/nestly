@@ -24,7 +24,10 @@ public enum PartnerEarningSourceType
     Penalty,
 
     /// <summary>Manual admin correction, no source aggregate.</summary>
-    ManualAdjustment
+    ManualAdjustment,
+
+    /// <summary>Credited from a qualifying job's Nestly Coins reward (docs/NESTLY-COINS.md, task 201). SourceReferenceId is the completed Booking's id.</summary>
+    NestlyCoinsReward
 }
 
 /// <summary>
