@@ -22,5 +22,14 @@ public enum NotificationEventType
     RecurringBookingUpcoming,
 
     /// <summary>A recurring plan's occurrence was skipped because the slot/address was no longer available, or the booking orchestration otherwise rejected the attempt (task 185, task 188). This is the "does not silently fail" notification PRODUCT-ENHANCEMENTS.md section 2 requires.</summary>
-    RecurringBookingSkipped
+    RecurringBookingSkipped,
+
+    /// <summary>
+    /// A chat message arrived while the recipient had no live SignalR
+    /// connection (PRODUCT-ENHANCEMENTS.md IN-APP CHAT, task 194). Only ever
+    /// dispatched for the customer side of a thread today - see
+    /// <c>ChatNotificationTriggerHandler</c>'s doc comment for the documented
+    /// scope gap on the admin/partner side.
+    /// </summary>
+    NewChatMessage
 }

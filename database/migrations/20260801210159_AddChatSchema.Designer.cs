@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260801210159_AddChatSchema")]
+    partial class AddChatSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3132,185 +3135,6 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("promotional_price", (string)null);
                 });
 
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingOccurrence", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("BookingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("booking_id");
-
-                    b.Property<string>("Outcome")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("outcome");
-
-                    b.Property<DateTime>("ProcessedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("processed_at_utc");
-
-                    b.Property<Guid>("RecurringBookingPlanId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("recurring_booking_plan_id");
-
-                    b.Property<DateOnly>("ScheduledDate")
-                        .HasColumnType("date")
-                        .HasColumnName("scheduled_date");
-
-                    b.Property<string>("SkipReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("skip_reason");
-
-                    b.HasKey("Id")
-                        .HasName("pk_recurring_booking_occurrence");
-
-                    b.HasIndex("RecurringBookingPlanId", "ScheduledDate")
-                        .IsUnique()
-                        .HasDatabaseName("ix_recurring_booking_occurrence_recurring_booking_plan_id_sche");
-
-                    b.ToTable("recurring_booking_occurrence", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingPlan", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("AddressId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("address_id");
-
-                    b.Property<Guid>("CityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("city_id");
-
-                    b.Property<int>("CompletedOccurrenceCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("completed_occurrence_count");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("customer_id");
-
-                    b.Property<DateOnly?>("EndDate")
-                        .HasColumnType("date")
-                        .HasColumnName("end_date");
-
-                    b.Property<string>("Frequency")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("frequency");
-
-                    b.Property<Guid>("LocalityId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("locality_id");
-
-                    b.Property<DateOnly>("NextOccurrenceDate")
-                        .HasColumnType("date")
-                        .HasColumnName("next_occurrence_date");
-
-                    b.Property<int?>("OccurrenceCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("occurrence_count");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity");
-
-                    b.Property<int?>("RecurrenceDayOfMonth")
-                        .HasColumnType("integer")
-                        .HasColumnName("recurrence_day_of_month");
-
-                    b.Property<string>("RecurrenceDayOfWeek")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("recurrence_day_of_week");
-
-                    b.Property<Guid>("ServiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("service_id");
-
-                    b.Property<Guid>("SlotWindowId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("slot_window_id");
-
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date")
-                        .HasColumnName("start_date");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.HasKey("Id")
-                        .HasName("pk_recurring_booking_plan");
-
-                    b.HasIndex("AddressId")
-                        .HasDatabaseName("ix_recurring_booking_plan_address_id");
-
-                    b.HasIndex("CityId")
-                        .HasDatabaseName("ix_recurring_booking_plan_city_id");
-
-                    b.HasIndex("CustomerId")
-                        .HasDatabaseName("ix_recurring_booking_plan_customer_id");
-
-                    b.HasIndex("LocalityId")
-                        .HasDatabaseName("ix_recurring_booking_plan_locality_id");
-
-                    b.HasIndex("ServiceId")
-                        .HasDatabaseName("ix_recurring_booking_plan_service_id");
-
-                    b.HasIndex("SlotWindowId")
-                        .HasDatabaseName("ix_recurring_booking_plan_slot_window_id");
-
-                    b.HasIndex("Status", "NextOccurrenceDate")
-                        .HasDatabaseName("ix_recurring_booking_plan_status_next_occurrence_date");
-
-                    b.ToTable("recurring_booking_plan", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingPlanAddOn", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("AddOnId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("add_on_id");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity");
-
-                    b.Property<Guid>("RecurringBookingPlanId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("recurring_booking_plan_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_recurring_booking_plan_addon");
-
-                    b.HasIndex("RecurringBookingPlanId")
-                        .HasDatabaseName("ix_recurring_booking_plan_addon_recurring_booking_plan_id");
-
-                    b.ToTable("recurring_booking_plan_addon", (string)null);
-                });
-
             modelBuilder.Entity("Nestly.Domain.Referral", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3438,83 +3262,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_referral_status_expires_at_utc");
 
                     b.ToTable("referral", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.ReferralMilestone", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("BonusType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("bonus_type");
-
-                    b.Property<decimal>("BonusValue")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)")
-                        .HasColumnName("bonus_value");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<int>("ThresholdCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("threshold_count");
-
-                    b.HasKey("Id")
-                        .HasName("pk_referral_milestone");
-
-                    b.HasIndex("ThresholdCount")
-                        .IsUnique()
-                        .HasDatabaseName("ix_referral_milestone_threshold_count");
-
-                    b.ToTable("referral_milestone", (string)null);
-                });
-
-            modelBuilder.Entity("Nestly.Domain.ReferralMilestoneAward", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("AwardedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("awarded_at_utc");
-
-                    b.Property<Guid?>("CouponId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("coupon_id");
-
-                    b.Property<Guid>("ReferralMilestoneId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("referral_milestone_id");
-
-                    b.Property<Guid>("ReferrerCustomerId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("referrer_customer_id");
-
-                    b.Property<Guid?>("WalletEntryId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("wallet_entry_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_referral_milestone_award");
-
-                    b.HasIndex("ReferralMilestoneId", "ReferrerCustomerId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_referral_milestone_award_referral_milestone_id_referrer_cus");
-
-                    b.ToTable("referral_milestone_award", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.ReferralProgramConfig", b =>
@@ -4569,15 +4316,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("entry_type");
 
-                    b.Property<DateTime?>("ExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at_utc");
-
-                    b.Property<decimal?>("RemainingAmount")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)")
-                        .HasColumnName("remaining_amount");
-
                     b.Property<Guid?>("SourceReferenceId")
                         .HasColumnType("uuid")
                         .HasColumnName("source_reference_id");
@@ -4593,9 +4331,6 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CustomerId", "CreatedAtUtc")
                         .HasDatabaseName("ix_wallet_ledger_customer_id_created_at_utc");
-
-                    b.HasIndex("ExpiresAtUtc", "RemainingAmount")
-                        .HasDatabaseName("ix_wallet_ledger_expires_at_utc_remaining_amount");
 
                     b.ToTable("wallet_ledger", (string)null);
                 });
@@ -5076,71 +4811,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_promotional_price_service_service_id");
                 });
 
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingOccurrence", b =>
-                {
-                    b.HasOne("Nestly.Domain.RecurringBookingPlan", null)
-                        .WithMany()
-                        .HasForeignKey("RecurringBookingPlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_occurrence_recurring_booking_plans_recurr");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingPlan", b =>
-                {
-                    b.HasOne("Nestly.Domain.CustomerAddress", null)
-                        .WithMany()
-                        .HasForeignKey("AddressId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_customer_address_address_id");
-
-                    b.HasOne("Nestly.Domain.City", null)
-                        .WithMany()
-                        .HasForeignKey("CityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_city_city_id");
-
-                    b.HasOne("Nestly.Application.Customer", null)
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_customer_customer_id");
-
-                    b.HasOne("Nestly.Domain.Locality", null)
-                        .WithMany()
-                        .HasForeignKey("LocalityId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_locality_locality_id");
-
-                    b.HasOne("Nestly.Domain.Service", null)
-                        .WithMany()
-                        .HasForeignKey("ServiceId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_service_service_id");
-
-                    b.HasOne("Nestly.Domain.SlotWindow", null)
-                        .WithMany()
-                        .HasForeignKey("SlotWindowId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_slot_windows_slot_window_id");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingPlanAddOn", b =>
-                {
-                    b.HasOne("Nestly.Domain.RecurringBookingPlan", null)
-                        .WithMany("AddOns")
-                        .HasForeignKey("RecurringBookingPlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_recurring_booking_plan_addon_recurring_booking_plans_recurr");
-                });
-
             modelBuilder.Entity("Nestly.Domain.RefundTransaction", b =>
                 {
                     b.HasOne("Nestly.Domain.Booking", null)
@@ -5392,11 +5062,6 @@ namespace Nestly.Infrastructure.Migrations
             modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
                 {
                     b.Navigation("Attempts");
-                });
-
-            modelBuilder.Entity("Nestly.Domain.RecurringBookingPlan", b =>
-                {
-                    b.Navigation("AddOns");
                 });
 
             modelBuilder.Entity("Nestly.Domain.SupportTicket", b =>

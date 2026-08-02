@@ -49,11 +49,34 @@ public static class AdminModules
     /// </summary>
     public const string Referral = "referral";
 
-    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner and Phase 9 Referral module additions (tasks 150c, 173).</summary>
+    /// <summary>
+    /// Support-console access to chat threads (PRODUCT-ENHANCEMENTS.md IN-APP
+    /// CHAT, RBAC ADDITIONS - the admin-facing console this gates is task 193).
+    /// PRODUCT-ENHANCEMENTS.md lists only one tier for this module ("View"),
+    /// unlike Subscription's "View / Configure" - this catalog still
+    /// mechanically generates both chat.read and chat.write (every module
+    /// does, see <see cref="AdminPermissionCatalog.BuildPermissions"/>), but
+    /// no role below is granted chat.write and no controller checks it:
+    /// replying in the support console is gated behind chat.read alone, the
+    /// same "View" tier that grants access to the console at all. That is a
+    /// deliberate departure from this catalog's own Read-views/Write-mutates
+    /// convention (every other module gates its mutating actions behind
+    /// Write, e.g. support.write for a ticket reply) - chosen because
+    /// PRODUCT-ENHANCEMENTS.md is explicit that Chat has exactly one tier,
+    /// and a customer sending their own chat message needs no elevated
+    /// permission beyond thread access either, so treating an admin's reply
+    /// the same way (rather than inventing a second tier the source doc
+    /// never asked for) keeps the two sides of the same conversation
+    /// consistent. See AdminChatController's doc comment for the
+    /// controller-side half of this decision.
+    /// </summary>
+    public const string Chat = "chat";
+
+    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner, Phase 9 Referral, and Phase 10 Chat module additions (tasks 150c, 173, 194).</summary>
     public static readonly IReadOnlyList<string> All =
     [
         Dashboard, Customers, Catalog, Pricing, Serviceability, Slots, Bookings,
         Coupons, Support, Reviews, Cms, Notifications, Reports, Audit, Settings,
-        Partner, Payout, Referral
+        Partner, Payout, Referral, Chat
     ];
 }

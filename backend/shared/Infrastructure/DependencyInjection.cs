@@ -12,6 +12,7 @@ using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
+using Nestly.Application.Chat;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
@@ -54,6 +55,7 @@ using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
+using Nestly.Infrastructure.Realtime;
 using Nestly.Infrastructure.Services;
 using OpenTelemetry.Metrics;
 
@@ -201,6 +203,31 @@ public static class DependencyInjection
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
+
+        // Task 190: real-time chat transport. One SignalR hub type
+        // (ChatHub) mapped by both consumer-api and admin-api - see its doc
+        // comment for why a shared Redis backplane, not two independent hub
+        // instances, is what makes a message persisted by one API process
+        // reach a live connection held by the other. Falls back to a
+        // single-process hub (still fully correct for local dev/tests,
+        // where only one API instance is ever running) when Redis is not
+        // configured, same graceful-degradation shape as AddCaching above.
+        var chatCacheOptions = new CacheOptions();
+        configuration.GetSection(CacheOptions.SectionName).Bind(chatCacheOptions);
+        var signalRBuilder = services.AddSignalR();
+        if (chatCacheOptions.IsRedisConfigured)
+        {
+            signalRBuilder.AddStackExchangeRedis(chatCacheOptions.ConnectionString!, options =>
+            {
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("nestly-chat");
+            });
+        }
+
+        services.AddScoped<IChatThreadRepository, ChatThreadRepository>();
+        services.AddScoped<IChatMessageRepository, ChatMessageRepository>();
+        services.AddScoped<IChatService, ChatService>();
+        services.AddScoped<IAdminChatService, AdminChatService>();
+        services.AddSingleton<IChatPresenceTracker, ChatPresenceTracker>();
 
         // Application.DependencyInjection.AddApplication() only scans the
         // Application assembly for MediatR handlers, so this second
@@ -571,6 +598,7 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+                options.Events = ChatHubJwtEvents.Create();
             });
 
         services.AddAuthorization();
@@ -613,6 +641,7 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+                options.Events = ChatHubJwtEvents.Create();
             });
 
         // Task 96b: one authorization policy per permission code in the
