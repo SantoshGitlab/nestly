@@ -803,3 +803,56 @@ export interface SupportTicketDetailResponse {
   createdAtUtc: string;
   updatedAtUtc: string;
 }
+
+/**
+ * Chat shapes mirror the C# records in Nestly.Application.Chat
+ * (ChatContracts.cs) - see ChatController (consumer-api), ChatHub (live
+ * delivery) and PRODUCT-ENHANCEMENTS.md "3. IN-APP CHAT" (tasks 189-192).
+ */
+
+/** Mirrors Nestly.Domain.ChatContextType's declaration order exactly. */
+export enum ChatContextType {
+  Booking = 0,
+  SupportTicket = 1,
+}
+
+/** Mirrors Nestly.Domain.ChatSenderType's declaration order exactly. */
+export enum ChatSenderType {
+  Customer = 0,
+  Admin = 1,
+  Partner = 2,
+}
+
+export interface GetOrCreateChatThreadRequestBody {
+  contextType: ChatContextType;
+  contextId: string;
+}
+
+export interface ChatThreadResponse {
+  id: string;
+  contextType: ChatContextType;
+  contextId: string;
+  createdAtUtc: string;
+  lastMessageAtUtc: string;
+}
+
+export interface SendChatMessageRequestBody {
+  body: string;
+}
+
+export interface ChatMessageResponse {
+  id: string;
+  threadId: string;
+  senderId: string;
+  senderType: ChatSenderType;
+  body: string;
+  sentAtUtc: string;
+  readAtUtc: string | null;
+}
+
+export interface ChatMessagePageResult {
+  messages: ChatMessageResponse[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
