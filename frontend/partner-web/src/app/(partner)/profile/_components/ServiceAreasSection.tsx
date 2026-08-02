@@ -2,12 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Field } from "@/components/ui";
+import { Alert, Button, Card, Select } from "@/components/ui";
 import { describeError } from "@/lib/api";
+import { listGeographyCities, listGeographyPincodes, listGeographyZones } from "@/lib/lookup-api";
 import { getServiceAreas, updateServiceAreas } from "@/lib/profile-api";
 import type { ServiceAreaInput } from "@/lib/profile-types";
 
 const EMPTY_ROW: ServiceAreaInput = { cityId: "", zoneId: "", pincodeId: "" };
+const NO_SPECIFIC_ZONE = "";
+const NO_SPECIFIC_PINCODE = "";
 
 /**
  * Service areas editor (docs/PARTNER.md's Capability & Coverage domain,
@@ -15,11 +18,10 @@ const EMPTY_ROW: ServiceAreaInput = { cityId: "", zoneId: "", pincodeId: "" };
  * work in. The API is a full-replace PUT, so this section edits a local
  * draft list and only sends it on "Save changes".
  *
- * City/zone/pincode are identified by id here rather than through a
- * lookup/typeahead picker - the task this screen was built against did not
- * include a serviceability lookup endpoint on partner-api, so ids are
- * entered directly. Swapping these plain inputs for a proper picker once
- * such a lookup exists only touches this file.
+ * City/zone/pincode are chosen from real name dropdowns (task 205, backed by
+ * `/api/v1/geography/{cities,zones,pincodes}`) rather than the hand-typed
+ * GUIDs this screen originally shipped with - there was no serviceability
+ * lookup endpoint on partner-api at the time.
  */
 export function ServiceAreasSection() {
   const queryClient = useQueryClient();
@@ -27,6 +29,11 @@ export function ServiceAreasSection() {
   const [isDirty, setIsDirty] = useState(false);
 
   const query = useQuery({ queryKey: ["partner-service-areas"], queryFn: getServiceAreas });
+  const citiesQuery = useQuery({ queryKey: ["geography-cities"], queryFn: listGeographyCities });
+  // Fetched once, unfiltered, then filtered per-row client-side - simpler than
+  // one query per row and the geography master is small enough that this is cheap.
+  const zonesQuery = useQuery({ queryKey: ["geography-zones"], queryFn: () => listGeographyZones() });
+  const pincodesQuery = useQuery({ queryKey: ["geography-pincodes"], queryFn: () => listGeographyPincodes() });
 
   useEffect(() => {
     if (query.data && !isDirty) {
@@ -74,7 +81,7 @@ export function ServiceAreasSection() {
     mutation.mutate(areas);
   }
 
-  if (query.isPending) {
+  if (query.isPending || citiesQuery.isPending || zonesQuery.isPending || pincodesQuery.isPending) {
     return (
       <Card title="Service areas">
         <p className="text-sm text-neutral-500">Loading service areas…</p>
@@ -90,6 +97,16 @@ export function ServiceAreasSection() {
     );
   }
 
+  if (citiesQuery.isError || zonesQuery.isError || pincodesQuery.isError) {
+    return (
+      <Card title="Service areas">
+        <Alert>{describeError(citiesQuery.error ?? zonesQuery.error ?? pincodesQuery.error)}</Alert>
+      </Card>
+    );
+  }
+
+  const cityOptions = citiesQuery.data.map((city) => ({ value: city.id, label: city.name }));
+
   return (
     <Card title="Service areas" description="Cities, zones and pincodes you're willing to work in.">
       {mutation.isError ? (
@@ -102,34 +119,58 @@ export function ServiceAreasSection() {
         <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">No service areas added yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {rows.map((row, index) => (
-            <div key={index} className="flex flex-wrap items-end gap-3">
-              <div className="w-48">
-                <Field
-                  label="City ID"
-                  value={row.cityId}
-                  onChange={(e) => updateRow(index, { cityId: e.target.value })}
-                />
+          {rows.map((row, index) => {
+            const zoneOptions = [
+              { value: NO_SPECIFIC_ZONE, label: "Any zone in this city" },
+              ...zonesQuery.data
+                .filter((zone) => zone.cityId === row.cityId)
+                .map((zone) => ({ value: zone.id, label: zone.name })),
+            ];
+            const pincodeOptions = [
+              { value: NO_SPECIFIC_PINCODE, label: "Any pincode in this city" },
+              ...pincodesQuery.data
+                .filter((pincode) => pincode.cityId === row.cityId)
+                .map((pincode) => ({ value: pincode.id, label: pincode.code })),
+            ];
+
+            return (
+              <div key={index} className="flex flex-wrap items-end gap-3">
+                <div className="w-48">
+                  <Select
+                    id={`area-city-${index}`}
+                    label="City"
+                    placeholder="Select a city…"
+                    options={cityOptions}
+                    value={row.cityId}
+                    onChange={(e) => updateRow(index, { cityId: e.target.value, zoneId: "", pincodeId: "" })}
+                  />
+                </div>
+                <div className="w-48">
+                  <Select
+                    id={`area-zone-${index}`}
+                    label="Zone"
+                    options={zoneOptions}
+                    value={row.zoneId ?? NO_SPECIFIC_ZONE}
+                    disabled={!row.cityId}
+                    onChange={(e) => updateRow(index, { zoneId: e.target.value })}
+                  />
+                </div>
+                <div className="w-48">
+                  <Select
+                    id={`area-pincode-${index}`}
+                    label="Pincode"
+                    options={pincodeOptions}
+                    value={row.pincodeId ?? NO_SPECIFIC_PINCODE}
+                    disabled={!row.cityId}
+                    onChange={(e) => updateRow(index, { pincodeId: e.target.value })}
+                  />
+                </div>
+                <Button type="button" variant="danger" onClick={() => removeRow(index)}>
+                  Remove
+                </Button>
               </div>
-              <div className="w-48">
-                <Field
-                  label="Zone ID (optional)"
-                  value={row.zoneId ?? ""}
-                  onChange={(e) => updateRow(index, { zoneId: e.target.value })}
-                />
-              </div>
-              <div className="w-48">
-                <Field
-                  label="Pincode ID (optional)"
-                  value={row.pincodeId ?? ""}
-                  onChange={(e) => updateRow(index, { pincodeId: e.target.value })}
-                />
-              </div>
-              <Button type="button" variant="danger" onClick={() => removeRow(index)}>
-                Remove
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
