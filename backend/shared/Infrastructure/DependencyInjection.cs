@@ -300,6 +300,12 @@ public static class DependencyInjection
         // self-service auth/onboarding (tasks 145a-146c).
         services.AddScoped<IBookingPartnerAssignmentRepository, BookingPartnerAssignmentRepository>();
         services.AddScoped<IBookingPartnerAssignmentService, BookingPartnerAssignmentService>();
+        // Task 195: completion verification (photo + checklist proof gating
+        // the InProgress -> Completed transition, task 196) - registered
+        // here rather than beside IBookingRepository above since every
+        // caller today is partner/admin booking-management code, matching
+        // where IBookingPartnerAssignmentRepository lives.
+        services.AddScoped<IBookingCompletionProofRepository, BookingCompletionProofRepository>();
         services.AddScoped<IPartnerEarningLedgerRepository, PartnerEarningLedgerRepository>();
         services.AddScoped<IPartnerEarningLedgerService, PartnerEarningLedgerService>();
         services.AddScoped<IPartnerPayoutRepository, PartnerPayoutRepository>();

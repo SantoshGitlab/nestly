@@ -25,6 +25,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<BookingItem> BookingItems { get; set; }
     public DbSet<BookingAddOnItem> BookingAddOnItems { get; set; }
     public DbSet<BookingStatusHistory> BookingStatusHistories { get; set; }
+    public DbSet<BookingCompletionProof> BookingCompletionProofs { get; set; }
     public DbSet<PaymentTransaction> PaymentTransactions { get; set; }
     public DbSet<PaymentAttempt> PaymentAttempts { get; set; }
     public DbSet<RefundTransaction> RefundTransactions { get; set; }
