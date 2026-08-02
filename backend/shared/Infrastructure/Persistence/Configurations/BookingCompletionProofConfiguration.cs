@@ -27,5 +27,12 @@ public class BookingCompletionProofConfiguration : IEntityTypeConfiguration<Book
 
         builder.Property(x => x.PhotoRefsJson).HasColumnType("jsonb").IsRequired();
         builder.Property(x => x.ChecklistAnswersJson).HasColumnType("jsonb").IsRequired();
+
+        // Computed convenience properties over the two JSON columns above -
+        // not real columns, and PhotoRefs/ChecklistAnswers' element types
+        // have no key EF could map them as entities/owned types by
+        // convention.
+        builder.Ignore(x => x.PhotoRefs);
+        builder.Ignore(x => x.ChecklistAnswers);
     }
 }
