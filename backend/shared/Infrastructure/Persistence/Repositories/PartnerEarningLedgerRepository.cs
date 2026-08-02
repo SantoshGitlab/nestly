@@ -59,4 +59,13 @@ public class PartnerEarningLedgerRepository : IPartnerEarningLedgerRepository
     public Task<PartnerEarningLedgerEntry?> FindBySourceAsync(PartnerEarningSourceType sourceType, Guid sourceReferenceId) =>
         _context.PartnerEarningLedgerEntries
             .FirstOrDefaultAsync(e => e.SourceType == sourceType && e.SourceReferenceId == sourceReferenceId);
+
+    public async Task<decimal> SumBySourceTypeInRangeAsync(PartnerEarningSourceType sourceType, PartnerEarningEntryType entryType, DateTime fromUtc, DateTime toUtc) =>
+        (await _context.PartnerEarningLedgerEntries
+            .Where(e => e.SourceType == sourceType
+                && e.EntryType == entryType
+                && e.CreatedAtUtc >= fromUtc && e.CreatedAtUtc < toUtc)
+            .Select(e => e.Amount)
+            .ToListAsync())
+            .Sum();
 }

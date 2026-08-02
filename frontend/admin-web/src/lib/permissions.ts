@@ -51,7 +51,8 @@ export type NavModuleKey =
   | "settings"
   | "admin-users"
   | "partner"
-  | "referral";
+  | "referral"
+  | "nestly-coins";
 
 export interface NavModule {
   key: NavModuleKey;
@@ -81,6 +82,7 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "admin-users", label: "Admin Users", href: "/admin-users", srsRef: "SRS 12.2", requiredPermission: "settings.read" },
   { key: "partner", label: "Partners", href: "/partners", srsRef: "PARTNER.md", requiredPermission: "partner.read" },
   { key: "referral", label: "Referral Program", href: "/referral", srsRef: "REFERRAL.md", requiredPermission: "referral.read" },
+  { key: "nestly-coins", label: "Nestly Coins", href: "/nestly-coins", srsRef: "NESTLY-COINS.md", requiredPermission: "nestly-coins.read" },
 ];
 
 /** Whether the current admin can perform mutating ("write") actions within a module, per AdminPermissionCatalog. */
@@ -111,8 +113,8 @@ const ROLE_MODULE_FALLBACK: Record<string, NavModuleKey[] | "*"> = {
   "Support Admin": ["dashboard", "support", "customers", "reviews"],
   "Catalog Admin": ["dashboard", "catalog", "pricing"],
   "Pricing Admin": ["dashboard", "pricing", "coupons"],
-  "Marketing Admin": ["dashboard", "coupons", "cms", "notifications", "reviews", "referral"],
-  "Finance Admin": ["dashboard", "bookings", "reports", "partner"],
+  "Marketing Admin": ["dashboard", "coupons", "cms", "notifications", "reviews", "referral", "nestly-coins"],
+  "Finance Admin": ["dashboard", "bookings", "reports", "partner", "nestly-coins"],
   "Read-only Analyst": ["dashboard", "reports"],
 };
 

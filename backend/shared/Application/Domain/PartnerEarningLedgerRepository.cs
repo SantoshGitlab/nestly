@@ -22,4 +22,7 @@ public interface IPartnerEarningLedgerRepository
 
     /// <summary>Nestly Coins' clawback lookup (task 201): the credit entry issued for one source event, if any.</summary>
     Task<PartnerEarningLedgerEntry?> FindBySourceAsync(PartnerEarningSourceType sourceType, Guid sourceReferenceId);
+
+    /// <summary>Nestly Coins' admin issued/clawed-back report (task 202): program-wide total (every partner) for one source type + entry type within a date range - unlike <see cref="SumCreditsBySourceTypeInRangeAsync"/>, which is scoped to a single partner for the earn cap check.</summary>
+    Task<decimal> SumBySourceTypeInRangeAsync(PartnerEarningSourceType sourceType, PartnerEarningEntryType entryType, DateTime fromUtc, DateTime toUtc);
 }

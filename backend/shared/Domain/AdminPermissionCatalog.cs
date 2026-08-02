@@ -157,12 +157,15 @@ public static class AdminPermissionCatalog
             // the referral program (config, fraud review, funnel/cost
             // reports) is a growth campaign in the same cluster as coupons
             // and notifications, both of which this role already owns.
+            // NestlyCoins=true added (task 202): same reasoning - a reorder/
+            // repeat-activity incentive program sits in the same growth
+            // cluster as Referral, just configured/reported differently.
             [AdminRoleNames.MarketingAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Coupons, true),
                 (AdminModules.Notifications, true), (AdminModules.Cms, true),
                 (AdminModules.Reviews, false), (AdminModules.Reports, false),
-                (AdminModules.Referral, true)
+                (AdminModules.Referral, true), (AdminModules.NestlyCoins, true)
             ],
 
             // Finance Admin: financial reporting and the audit trail behind
@@ -175,13 +178,16 @@ public static class AdminPermissionCatalog
             // Referral=false added (task 173): read-only visibility into
             // program cost (the referral funnel/cost report is one of this
             // role's Reports), not configuration or fraud-review authority,
-            // which stays with Marketing Admin above.
+            // which stays with Marketing Admin above. NestlyCoins=false
+            // added (task 202): same reasoning, read-only cost visibility
+            // into the coins-issued/clawed-back report.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
                 (AdminModules.Coupons, false), (AdminModules.Reports, true),
                 (AdminModules.Audit, false), (AdminModules.Partner, false),
-                (AdminModules.Payout, true), (AdminModules.Referral, false)
+                (AdminModules.Payout, true), (AdminModules.Referral, false),
+                (AdminModules.NestlyCoins, false)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

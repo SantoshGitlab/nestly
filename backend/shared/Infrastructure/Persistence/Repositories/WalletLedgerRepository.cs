@@ -72,4 +72,13 @@ public class WalletLedgerRepository : IWalletLedgerRepository
     public Task<WalletLedgerEntry?> FindBySourceAsync(WalletSourceType sourceType, Guid sourceReferenceId) =>
         _context.WalletLedgerEntries
             .FirstOrDefaultAsync(e => e.SourceType == sourceType && e.SourceReferenceId == sourceReferenceId);
+
+    public async Task<decimal> SumBySourceTypeInRangeAsync(WalletSourceType sourceType, WalletEntryType entryType, DateTime fromUtc, DateTime toUtc) =>
+        (await _context.WalletLedgerEntries
+            .Where(e => e.SourceType == sourceType
+                && e.EntryType == entryType
+                && e.CreatedAtUtc >= fromUtc && e.CreatedAtUtc < toUtc)
+            .Select(e => e.Amount)
+            .ToListAsync())
+            .Sum();
 }

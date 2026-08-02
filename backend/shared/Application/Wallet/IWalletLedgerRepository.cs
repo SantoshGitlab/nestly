@@ -30,6 +30,9 @@ public interface IWalletLedgerRepository
     /// <summary>Nestly Coins' clawback lookup (task 201): the credit entry issued for one source event, if any. SourceReferenceId is unique per crediting event, so no customer scoping is needed to disambiguate.</summary>
     Task<WalletLedgerEntry?> FindBySourceAsync(WalletSourceType sourceType, Guid sourceReferenceId);
 
+    /// <summary>Nestly Coins' admin issued/clawed-back report (task 202): program-wide total (every customer) for one source type + entry type within a date range - unlike <see cref="SumCreditsBySourceTypeInRangeAsync"/>, which is scoped to a single customer for the earn cap check.</summary>
+    Task<decimal> SumBySourceTypeInRangeAsync(WalletSourceType sourceType, WalletEntryType entryType, DateTime fromUtc, DateTime toUtc);
+
     /// <summary>
     /// Persists a mutation to <see cref="WalletLedgerEntry.RemainingAmount"/>
     /// only (via <see cref="WalletLedgerEntry.ConsumeRemaining"/> /

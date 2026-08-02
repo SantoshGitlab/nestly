@@ -72,11 +72,23 @@ public static class AdminModules
     /// </summary>
     public const string Chat = "chat";
 
-    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner, Phase 9 Referral, and Phase 10 Chat module additions (tasks 150c, 173, 194).</summary>
+    /// <summary>
+    /// Nestly Coins program config (per audience) and coins-issued/clawed-
+    /// back report (docs/NESTLY-COINS.md RBAC ADDITIONS, task 202). The doc
+    /// asks for three tiers (View/Configure/Export); this catalog collapses
+    /// to the existing two (Read/Write) for the same reason Referral and
+    /// Chat already did - see <see cref="Referral"/>'s doc comment for the
+    /// full reasoning, which applies unchanged here. No Approve-Fraud tier
+    /// either (unlike Referral) - the doc is explicit clawback is automatic
+    /// on cancellation, not a manual review queue.
+    /// </summary>
+    public const string NestlyCoins = "nestly-coins";
+
+    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner, Phase 9 Referral, Phase 10 Chat, and Phase 11 Nestly Coins module additions (tasks 150c, 173, 194, 202).</summary>
     public static readonly IReadOnlyList<string> All =
     [
         Dashboard, Customers, Catalog, Pricing, Serviceability, Slots, Bookings,
         Coupons, Support, Reviews, Cms, Notifications, Reports, Audit, Settings,
-        Partner, Payout, Referral, Chat
+        Partner, Payout, Referral, Chat, NestlyCoins
     ];
 }
