@@ -241,7 +241,8 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
             new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             BuildGateway(), context),
         new AuditLogWriter(context, new StubAuditContextProvider(AuditActorType.AdminUser, Guid.NewGuid())),
-        context);
+        context,
+        new BookingCompletionProofRepository(context));
 
     private static SandboxPaymentGateway BuildGateway() =>
         new(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" }));
@@ -341,6 +342,57 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
 
         result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "cancel should succeed for a Confirmed booking");
         result.Value.Status.Should().Be(BookingStatus.CancelledByAdmin);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_rejects_Completed_without_a_completion_proof_on_file()
+    {
+        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
+
+        using (var context = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            booking.TransitionTo(BookingStatus.Assigned);
+            booking.TransitionTo(BookingStatus.InProgress);
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        using var context2 = _db.CreateContext();
+        var service = BuildBookingManagementService(context2);
+        var result = await service.UpdateStatusAsync(
+            bookingId, Guid.NewGuid(), new AdminBookingStatusUpdateRequest(BookingStatus.Completed, "Marking complete"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Booking.CompletionProofRequired");
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_accepts_Completed_once_a_completion_proof_exists()
+    {
+        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
+
+        using (var context = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            booking.TransitionTo(BookingStatus.Assigned);
+            booking.TransitionTo(BookingStatus.InProgress);
+            await bookingRepository.UpdateAsync(booking);
+
+            var proof = new BookingCompletionProof(Guid.NewGuid(), bookingId, Guid.NewGuid(), ["s3://proofs/photo.jpg"], []);
+            await new BookingCompletionProofRepository(context).AddAsync(proof);
+        }
+
+        using var context2 = _db.CreateContext();
+        var service = BuildBookingManagementService(context2);
+        var result = await service.UpdateStatusAsync(
+            bookingId, Guid.NewGuid(), new AdminBookingStatusUpdateRequest(BookingStatus.Completed, "Marking complete"));
+
+        result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "Completed should succeed once a proof is on file");
+        result.Value.Status.Should().Be(BookingStatus.Completed);
     }
 
     /// <summary>

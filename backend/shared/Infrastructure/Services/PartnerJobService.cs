@@ -13,15 +13,18 @@ public class PartnerJobService : IPartnerJobService
     private readonly IBookingRepository _bookingRepository;
     private readonly IBookingPartnerAssignmentRepository _assignmentRepository;
     private readonly IBookingPartnerAssignmentService _assignmentService;
+    private readonly IBookingCompletionProofRepository _completionProofRepository;
 
     public PartnerJobService(
         IBookingRepository bookingRepository,
         IBookingPartnerAssignmentRepository assignmentRepository,
-        IBookingPartnerAssignmentService assignmentService)
+        IBookingPartnerAssignmentService assignmentService,
+        IBookingCompletionProofRepository completionProofRepository)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _assignmentService = assignmentService;
+        _completionProofRepository = completionProofRepository;
     }
 
     public async Task<Result<PartnerJobSearchResponse>> ListAsync(Guid partnerId, PartnerJobStatus? status, DateOnly? date)
@@ -161,6 +164,12 @@ public class PartnerJobService : IPartnerJobService
             return Error.Business("PartnerJob.NotStarted", "The job must be started before it can be marked completed.");
         }
 
+        var proofError = await _completionProofRepository.EnsureCompletionProofExistsAsync(bookingId);
+        if (proofError is not null)
+        {
+            return proofError;
+        }
+
         try
         {
             // Raises BookingStatusChangedEvent -> EscrowReleaseOnCompletionHandler,
@@ -199,6 +208,31 @@ public class PartnerJobService : IPartnerJobService
         await _assignmentRepository.UpdateAsync(assignment);
 
         return ToDetailResponse(assignment, booking);
+    }
+
+    public async Task<Result<BookingCompletionProofResponse>> SubmitCompletionProofAsync(Guid partnerId, Guid bookingId, SubmitCompletionProofRequest request)
+    {
+        var resolved = await ResolveAcceptedAsync(partnerId, bookingId);
+        if (resolved is null)
+        {
+            return NotFoundError();
+        }
+
+        var checklistAnswers = request.ChecklistAnswers
+            .Select(a => new CompletionChecklistAnswer(a.Item, a.Completed, a.Notes))
+            .ToList();
+
+        var existing = await _completionProofRepository.GetByBookingIdAsync(bookingId);
+        if (existing is null)
+        {
+            var proof = new BookingCompletionProof(Guid.NewGuid(), bookingId, partnerId, request.PhotoRefs, checklistAnswers);
+            await _completionProofRepository.AddAsync(proof);
+            return proof.ToResponse()!;
+        }
+
+        existing.Update(request.PhotoRefs, checklistAnswers);
+        await _completionProofRepository.UpdateAsync(existing);
+        return existing.ToResponse()!;
     }
 
     /// <summary>Resolves the most recent assignment this partner ever had on this booking, alongside the booking itself. Null if the booking doesn't exist or was never assigned to this partner (SRS 28.3 IDOR - the caller maps this to a 404, hiding the booking's existence from a non-owning partner).</summary>

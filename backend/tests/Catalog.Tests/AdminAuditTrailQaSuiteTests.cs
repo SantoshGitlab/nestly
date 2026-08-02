@@ -234,7 +234,8 @@ public sealed class AdminAuditTrailQaSuiteTests : IClassFixture<TestDatabase>
             new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             new SandboxPaymentGateway(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" })), context),
         new AuditLogWriter(context, new StubAuditContextProvider(actorId)),
-        context);
+        context,
+        new BookingCompletionProofRepository(context));
 
     [Fact]
     public async Task Admin_cancelling_a_booking_is_audited()
