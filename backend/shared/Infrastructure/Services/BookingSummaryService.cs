@@ -4,6 +4,7 @@ using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
 using Nestly.Application.Slots;
+using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
 
 namespace Nestly.Infrastructure.Services;
@@ -23,6 +24,7 @@ public class BookingSummaryService : IBookingSummaryService
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IPriceCalculationService _priceCalculationService;
     private readonly ICouponService _couponService;
+    private readonly ISubscriptionBenefitService _subscriptionBenefitService;
 
     public BookingSummaryService(
         IServiceRepository serviceRepository,
@@ -30,7 +32,8 @@ public class BookingSummaryService : IBookingSummaryService
         ICustomerAddressRepository addressRepository,
         ISlotAvailabilityService slotAvailabilityService,
         IPriceCalculationService priceCalculationService,
-        ICouponService couponService)
+        ICouponService couponService,
+        ISubscriptionBenefitService subscriptionBenefitService)
     {
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
@@ -38,6 +41,7 @@ public class BookingSummaryService : IBookingSummaryService
         _slotAvailabilityService = slotAvailabilityService;
         _priceCalculationService = priceCalculationService;
         _couponService = couponService;
+        _subscriptionBenefitService = subscriptionBenefitService;
     }
 
     public async Task<Result<BookingSummaryResponse>> GetSummaryAsync(Guid customerId, BookingSummaryRequest request)
@@ -116,6 +120,24 @@ public class BookingSummaryService : IBookingSummaryService
             finalPayable = Math.Max(0, priceResult.Value.TotalPayable - coupon.DiscountAmount);
         }
 
+        // Subscription benefit (task 179): automatic, needs no code from the
+        // customer - but only when no coupon was applied. A coupon is an
+        // explicit customer choice; stacking it with a standing subscription
+        // benefit would need a documented precedence/combination rule this
+        // spec never asks for (PRODUCT-ENHANCEMENTS.md #1), so the simplest
+        // unambiguous reading is "the two are mutually exclusive per
+        // booking," matching how <see cref="Coupon"/> already reads unique
+        // per booking.
+        SubscriptionBenefitSummary? subscriptionBenefit = null;
+        if (coupon is null)
+        {
+            subscriptionBenefit = await _subscriptionBenefitService.PreviewAsync(customerId, finalPayable);
+            if (subscriptionBenefit is not null)
+            {
+                finalPayable = Math.Max(0, finalPayable - subscriptionBenefit.DiscountAmount);
+            }
+        }
+
         var response = new BookingSummaryResponse(
             new BookingServiceSummary(service.Id, service.Name, service.Slug),
             addOnSummaries,
@@ -128,7 +150,8 @@ public class BookingSummaryService : IBookingSummaryService
             service.CancellationPolicy,
             service.ReschedulePolicy,
             coupon,
-            finalPayable);
+            finalPayable,
+            subscriptionBenefit);
 
         return Result.Success(response);
     }

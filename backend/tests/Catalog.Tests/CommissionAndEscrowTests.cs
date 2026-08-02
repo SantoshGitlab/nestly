@@ -76,7 +76,8 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
-            couponService);
+            couponService,
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
         return new BookingService(
             summaryService,
@@ -91,7 +92,8 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new CustomerSubscriptionRepository(context));
     }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, Guid CategoryId, decimal Total);

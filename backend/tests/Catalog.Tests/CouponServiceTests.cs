@@ -40,7 +40,8 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
-            couponService);
+            couponService,
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
         return new BookingService(
             summaryService,
@@ -55,7 +56,8 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new CustomerSubscriptionRepository(context));
     }
 
     private sealed record Fixture(Customer Customer, City City, CustomerAddress Address, Locality Locality, Service Service, Category Category, SlotWindow Window, DateOnly Date);

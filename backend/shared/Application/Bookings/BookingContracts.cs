@@ -1,6 +1,7 @@
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
+using Nestly.Application.Subscriptions;
 using Nestly.Domain;
 
 namespace Nestly.Application.Bookings;
@@ -59,6 +60,13 @@ public record BookingSlotSummary(Guid SlotWindowId, string Name, DateOnly Date, 
 /// (SRS 14.1's formula subtracts the discount after tax/fees, not before) -
 /// <see cref="PriceBreakdownResponse"/> itself is always the pre-discount
 /// breakdown, so a caller can still show "was / now" pricing.
+///
+/// <paramref name="SubscriptionBenefit"/> (task 179) is populated
+/// automatically from the customer's active subscription, if any - unlike
+/// <paramref name="Coupon"/> it needs no code from the caller. A coupon
+/// always takes precedence: <paramref name="SubscriptionBenefit"/> is only
+/// ever populated when <paramref name="Coupon"/> is null, so the two never
+/// stack on the same booking.
 /// </summary>
 public record BookingSummaryResponse(
     BookingServiceSummary Service,
@@ -69,7 +77,8 @@ public record BookingSummaryResponse(
     string? CancellationPolicy,
     string? ReschedulePolicy,
     CouponSummaryResponse? Coupon,
-    decimal FinalPayable);
+    decimal FinalPayable,
+    SubscriptionBenefitSummary? SubscriptionBenefit = null);
 
 /// <summary>
 /// One entry in a booking's status timeline (SRS 11.13, task 60c), mirroring

@@ -92,7 +92,8 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
-            new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System));
+            new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
         var bookingService = new BookingService(
             summaryService,
@@ -107,7 +108,8 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new CustomerSubscriptionRepository(context));
 
         var notificationDispatchService = new NotificationDispatchService(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),
