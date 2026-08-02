@@ -6,6 +6,7 @@ using Nestly.Application;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Realtime;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -124,6 +125,10 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+
+// Task 190: real-time chat transport - see ChatHub's doc comment for the
+// JWT-over-query-string auth and cross-process (Redis backplane) design.
+app.MapHub<ChatHub>(ChatHubRoutes.ChatPath);
 
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });

@@ -253,6 +253,13 @@ function ActionCtas({ booking }: { booking: BookingDetail }) {
           Reschedule booking
         </Button>
       </Link>
+      {canRebook ? (
+        <Link href={`/recurring-bookings/new?serviceSlug=${booking.service.slug}`}>
+          <Button type="button" variant="secondary" className="w-full">
+            Set up recurring booking
+          </Button>
+        </Link>
+      ) : null}
       <Link href={`/bookings/${booking.id}/cancel`}>
         <Button type="button" variant="secondary" className="w-full">
           Cancel booking
@@ -263,6 +270,13 @@ function ActionCtas({ booking }: { booking: BookingDetail }) {
           Leave a review
         </Button>
       </Link>
+      {booking.status === BookingStatus.Completed ? (
+        <Link href="/refer-earn">
+          <Button type="button" variant="secondary" className="w-full">
+            Refer a friend & earn
+          </Button>
+        </Link>
+      ) : null}
       <Link href="/bookings">
         <Button type="button" variant="secondary" className="w-full">
           Back to my bookings

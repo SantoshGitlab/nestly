@@ -119,7 +119,7 @@ export default function CustomersPage() {
               id="status-filter"
               value={filters.status}
               onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none [color-scheme:light] focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:[color-scheme:dark] dark:focus:border-white dark:focus:ring-white"
             >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.label} value={option.value}>

@@ -1,0 +1,241 @@
+# NESTLY-COINS.md
+
+Nestly Coins (loyalty/incentive currency) module specification.
+
+## STATUS
+
+Not implemented. Scoped as **Phase 11**, after Referral & Growth (Phase 9) and
+Product Enhancements (Phase 10). It depends only on Wallet, Booking, Customer,
+and Partner (all already built) — placed last because it is a growth/retention
+lever on top of a working marketplace, not a prerequisite for one, same
+reasoning as REFERRAL.md's phase placement.
+
+## PURPOSE
+
+Nestly Coins are awarded to **both customers and partners** to encourage
+repeat activity — a customer re-ordering a service, a partner accepting and
+completing more jobs — rather than a one-time acquisition incentive (that's
+Referral's job, see [REFERRAL.md](REFERRAL.md)). This document defines: how
+coins are earned, how they're redeemed, expiry, admin configuration, and fraud
+prevention, so the two existing growth mechanisms (Referral, Coins) stay
+clearly scoped and don't duplicate each other.
+
+**Coins vs. Referral, at a glance:**
+
+| | Referral | Nestly Coins |
+|---|---|---|
+| Trigger | Inviting a new person who converts | Any qualifying order (repeat or first) by an existing user |
+| Who earns | Referrer + referee, once per referee | Customer or partner, every qualifying order |
+| Purpose | Acquisition | Retention / reordering incentive |
+
+## DESIGN PRINCIPLE: REUSE, DON'T DUPLICATE
+
+Same principle as REFERRAL.md — Nestly Coins is a thin layer over
+infrastructure that already exists:
+
+- **Coins are wallet credit**, exactly like Referral rewards. Coin credits use
+  a new `WalletSourceType.NestlyCoinsReward` value on the existing
+  `WalletLedgerEntry` (SRS 14.5, SRS 23.4) — there is no separate "coins
+  balance" table for customers. A customer's wallet balance and their coin
+  balance are the same number; the ledger's `SourceType` is what tells you a
+  given credit came from a reorder incentive rather than a refund.
+- **Partner coins are partner earning-ledger credit**, reusing
+  `PartnerEarningLedgerEntry` (PARTNER.md's Financial domain,
+  `PartnerEarningSourceType`) the same way a completed job already credits a
+  partner — a new `PartnerEarningSourceType.NestlyCoinsReward` value, not a
+  parallel partner wallet.
+- **The admin config pattern already exists** (Coupon, Commission #157,
+  `ReferralProgramConfig`) — `NestlyCoinsProgramConfig` follows the same
+  shape: one admin-editable row governing earn rates and rules, not hardcoded
+  values.
+
+## HOW IT WORKS
+
+```
+Qualifying order placed (reorder, or first order if the program allows it)
+        │
+        ▼
+Order reaches Completed
+        │
+        ▼
+Coins credited to the customer's wallet (WalletSourceType.NestlyCoinsReward)
+        │
+        ▼
+If a partner fulfilled it: coins also credited to the partner's earning
+ledger (PartnerEarningSourceType.NestlyCoinsReward)
+```
+
+Coins are credited **once per completed order**, at completion — same timing
+as when a partner's job-completion earning is credited, and same "no
+speculative pre-crediting before the service is actually delivered" principle
+Referral's qualifying-booking design already established.
+
+## GUIDELINES (what "proper guidelines" means in practice)
+
+These are the rules the admin config and the earn/redeem logic must enforce —
+written down now so implementation doesn't have to re-derive them:
+
+1. **Coins are earned on order value, admin-configured, not hardcoded.**
+   `NestlyCoinsProgramConfig` defines an earn rate (e.g. coins per ₹100
+   spent), separately configurable for customers and partners, and a
+   `MinimumOrderAmount` below which no coins accrue (prevents gaming via
+   many tiny orders).
+2. **Reordering is incentivized, not just any order.** The default program
+   only credits coins on a customer's 2nd+ completed order for a given
+   service/category (configurable via `RequireReorder: bool` on the config)
+   — a first-time order is Referral's or a promotional coupon's job, not
+   Coins'. Admin can turn this off to run a blanket earn-on-every-order
+   campaign if desired.
+3. **Coins expire — this is a first-class design constraint, not an
+   afterthought.** Unlike a plain wallet credit, Nestly Coins carry an
+   `ExpiresAt` the sweep job checks. This requires the same **FIFO
+   consumption-tracking model** Referral's own FUTURE ENHANCEMENTS #175
+   ("Expiring wallet credit") already flagged as a real, non-trivial
+   prerequisite — `WalletLedgerEntry` today has no concept of how much of
+   one specific credit remains unspent once other debits draw against the
+   balance. **Nestly Coins must not be built before that FIFO model is
+   designed**, or expiry becomes unenforceable the moment a customer spends
+   part of their balance. If #175 is picked up first, Coins should build on
+   it directly rather than inventing a second expiry mechanism.
+4. **Redemption is spending down the wallet balance, not a separate
+   "redeem coins" action.** Since coins are wallet credit, redemption already
+   works exactly like today's wallet-balance-at-checkout flow — no new
+   redemption UI or endpoint, only a breakdown showing how much of the
+   applied balance was coins vs. other credit (for transparency, using the
+   same ledger `SourceType` tagging).
+5. **One coins program per side, admin-versioned.** Customer-side and
+   partner-side configs are independent rows (different earn rates, different
+   minimums) — a partner accepting more jobs and a customer reordering more
+   are different behaviors being incentivized, not the same lever.
+
+## FRAUD / ABUSE PREVENTION
+
+Same posture as REFERRAL.md — a coins program is a direct cash-cost surface:
+
+- **Credited only on `Completed` orders**, never on `Confirmed`/`InProgress`
+  — a cancelled-after-credit order must reverse via an explicit debit entry
+  (never a deletion; the ledger is append-only, SRS 14.5), same as Referral's
+  fraud-reversal rule.
+- **Per-customer/per-partner earn cap**, admin-configurable
+  (`MaxCoinsPerMonth`, nullable = unlimited) — bounds exposure the same way
+  Referral's `max_referrals_per_customer` does.
+- **Order-cancellation clawback window**: if an order that already credited
+  coins is cancelled/refunded within `ClawbackWindowDays` of completion, the
+  credit is reversed via a debit entry with a clear audit reason — not a
+  silent adjustment.
+
+## DATA MODEL
+
+### New
+
+| Table | Purpose |
+|---|---|
+| `nestly_coins_program_config` | Admin-editable: `audience` (customer/partner), `earn_rate_per_100`, `minimum_order_amount`, `require_reorder`, `max_coins_per_month` (nullable), `expiry_days`, `clawback_window_days`, `is_active`, `effective_from`, `effective_to` |
+
+### Reuses (no new balance tables)
+
+| Existing entity | How Coins uses it |
+|---|---|
+| `WalletLedgerEntry` | New `WalletSourceType.NestlyCoinsReward`; `SourceReferenceId` points at the completed booking |
+| `PartnerEarningLedgerEntry` | New `PartnerEarningSourceType.NestlyCoinsReward`; same `SourceReferenceId` convention as `JobCompletion` |
+| `Booking` | Read-only trigger point: the existing completion path (where `RefundProcessed`/`BookingConfirmed`/Referral's qualifying-booking check already hook in) gains one more check |
+| `NotificationEvent` | New `NotificationEventType` values: `NestlyCoinsCredited` (customer), `NestlyCoinsCreditedPartner` |
+
+## API SURFACE
+
+### Customer-Facing (extend `consumer-api`)
+
+- `GET /me/wallet` — unchanged shape; ledger entries with
+  `sourceType: NestlyCoinsReward` are how a customer sees their coins history
+  (no new endpoint — this is why reusing Wallet matters).
+- `GET /nestly-coins/program` — public: current earn rate/rules, for
+  in-app messaging ("earn coins on your next order").
+
+### Partner-Facing (extend `partner-api`)
+
+- `GET /earnings/ledger` — unchanged shape; entries with
+  `sourceType: NestlyCoinsReward` are how a partner sees their coins history.
+
+### Admin-Facing (extend `admin-api`)
+
+- Coins program config: get/update, one per audience (mirrors
+  Coupon/Commission/Referral admin config).
+- Reports: coins issued vs. redeemed, program cost over a date range (mirrors
+  Referral's funnel/cost report).
+
+## RBAC ADDITIONS
+
+One new permission module (SRS §20): **NestlyCoins** — View / Configure /
+Export. No Approve-Fraud action (unlike Referral) — clawback is automatic on
+cancellation, not a manual review queue, since it is a straightforward
+percentage-of-order reversal rather than a suspected-fraud judgment call.
+
+## NOTIFICATION EVENTS
+
+- `NestlyCoinsCredited` → customer notified their coins landed in their
+  wallet after a qualifying order completes.
+- `NestlyCoinsCreditedPartner` → partner notified the same, for their
+  earning ledger.
+
+Dispatched through the existing email/SMS/push channels (SRS 19.1) — no new
+delivery mechanism, same as every other module in this backlog.
+
+## REPOSITORY PLACEMENT
+
+```
+backend/
+  shared/
+    Domain/                       WalletSourceType.NestlyCoinsReward,
+                                   PartnerEarningSourceType.NestlyCoinsReward
+                                   (new enum members on existing types)
+    Domain/NestlyCoins/           NestlyCoinsProgramConfig
+    Application/NestlyCoins/      EvaluateQualifyingOrder, CreditCustomerCoins,
+                                   CreditPartnerCoins, ClawbackOnCancellation
+    Infrastructure/NestlyCoins/   repository, EF configuration, migration
+  consumer-api/.../               no new controller - GET /nestly-coins/program
+                                   only; wallet already exposes the ledger
+  admin-api/.../Controllers/      AdminNestlyCoinsController.cs
+  admin-web/.../nestly-coins/     program config, reports
+```
+
+Booking domain changes: **none structural** — the completion path gains one
+more read (qualifying-order check), the same shape as the existing
+notification-trigger and Referral qualifying-booking checks.
+
+## DECISIONS
+
+1. **Resolved — Coins are wallet/earning-ledger credit only, never a coupon.**
+   Unlike Referral (which lets an admin choose wallet-credit vs. coupon per
+   campaign), Coins has exactly one reward type. A reorder incentive is
+   naturally a running balance a customer builds up over many orders — a
+   single-use coupon per order doesn't fit that shape, and offering a choice
+   here would just be unused flexibility (the CLAUDE.md principle against
+   speculative configurability applies).
+2. **Resolved — partners earn Coins too, unlike Referral (partner side is
+   out of Referral's scope entirely).** Nestly Coins' whole purpose is
+   reordering/repeat-activity incentive on both sides of the marketplace,
+   not just the demand side — a partner accepting and completing more jobs
+   is exactly the behavior this program exists to reward.
+
+## OPEN DECISIONS
+
+1. **Does a customer's first order ever qualify, or strictly 2nd+?** This
+   doc defaults to `RequireReorder: true` (2nd+ order only), configurable per
+   above. Revisit once there's usage data on whether a blanket first-order
+   incentive cannibalizes Referral's acquisition budget.
+2. **Cross-category reorder counting.** Does "reordering" mean the same
+   service, the same category, or any service at all? Defaults to "any
+   completed order" for simplicity (matching this doc's `RequireReorder`
+   flag being binary, not per-category) — narrow it only if data shows the
+   blanket definition is too generous.
+
+## NEXT STEPS
+
+1. Confirm task #175's wallet FIFO consumption-tracking model (or build it
+   as this program's own prerequisite, whichever lands first) — Coins'
+   expiry cannot be enforced without it (see GUIDELINES #3).
+2. Add `nestly_coins_program_config` to DATABASE.md.
+3. Add the endpoint contracts to API.md.
+4. Extend the RBAC permission matrix and admin UI for the NestlyCoins module.
+5. Wire the booking-completion path's qualifying-order check (customer side)
+   and job-completion path's check (partner side).

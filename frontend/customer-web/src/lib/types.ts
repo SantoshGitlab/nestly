@@ -358,6 +358,98 @@ export interface BookingListItem {
 }
 
 /**
+ * Recurring booking plan shapes mirror the C# records in
+ * Nestly.Application.RecurringBookings (RecurringBookingPlanContracts.cs) -
+ * see RecurringBookingPlansController.
+ */
+
+/** Mirrors Nestly.Domain.RecurringBookingRecurrenceFrequency's declaration order exactly (no JsonStringEnumConverter registered - see BookingStatus's doc comment). */
+export enum RecurringBookingRecurrenceFrequency {
+  Weekly = 0,
+  Biweekly = 1,
+  Monthly = 2,
+}
+
+/** Mirrors Nestly.Domain.RecurringBookingPlanStatus's declaration order exactly. */
+export enum RecurringBookingPlanStatus {
+  Active = 0,
+  Paused = 1,
+  Cancelled = 2,
+  Completed = 3,
+}
+
+/** Mirrors Nestly.Domain.RecurringBookingOccurrenceOutcome's declaration order exactly. */
+export enum RecurringBookingOccurrenceOutcome {
+  Booked = 0,
+  SkippedSlotUnavailable = 1,
+  SkippedOrchestrationRejected = 2,
+}
+
+/**
+ * .NET's System.DayOfWeek serialises as its ordinal, and its ordinal order
+ * (Sunday=0 ... Saturday=6) already matches JS Date#getDay() - no remapping
+ * needed, unlike BookingStatus/PaymentTransactionStatus above.
+ */
+export const DAY_OF_WEEK_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+export interface CreateRecurringBookingPlanRequestBody {
+  serviceId: string;
+  cityId: string;
+  addressId: string;
+  localityId: string;
+  slotWindowId: string;
+  quantity: number;
+  frequency: RecurringBookingRecurrenceFrequency;
+  recurrenceDayOfWeek: number | null;
+  recurrenceDayOfMonth: number | null;
+  /** .NET DateOnly serialises as "yyyy-MM-dd". */
+  startDate: string;
+  endDate: string | null;
+  occurrenceCount: number | null;
+  addOns: AddOnSelection[];
+}
+
+export interface RecurringBookingPlanResponse {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  addressId: string;
+  slotWindowId: string;
+  quantity: number;
+  frequency: RecurringBookingRecurrenceFrequency;
+  recurrenceDayOfWeek: number | null;
+  recurrenceDayOfMonth: number | null;
+  startDate: string;
+  endDate: string | null;
+  occurrenceCount: number | null;
+  completedOccurrenceCount: number;
+  nextOccurrenceDate: string;
+  status: RecurringBookingPlanStatus;
+  createdAtUtc: string;
+}
+
+export interface UpcomingOccurrenceResponse {
+  scheduledDate: string;
+  isProjected: boolean;
+}
+
+export interface OccurrenceHistoryResponse {
+  scheduledDate: string;
+  outcome: RecurringBookingOccurrenceOutcome;
+  bookingId: string | null;
+  skipReason: string | null;
+  processedAtUtc: string;
+}
+
+/**
  * Payment shapes mirror the C# records in Nestly.Application.Payments
  * (PaymentContracts.cs) - see PaymentsController.
  */
@@ -484,6 +576,31 @@ export interface WalletLedgerEntryResponse {
   sourceReferenceId: string | null;
   description: string;
   createdAtUtc: string;
+}
+
+/**
+ * Referral shapes mirror the C# records in Nestly.Application.Referral
+ * (ReferralCustomerContracts.cs) - see ReferralController (task 168).
+ */
+
+export interface ReferralSummaryResponse {
+  referralCode: string;
+  shareLink: string;
+  invitedCount: number;
+  qualifiedCount: number;
+  rewardedCount: number;
+  totalEarned: number;
+}
+
+export interface ReferralHistoryItemResponse {
+  id: string;
+  refereeName: string;
+  /** Serialized as the ReferralStatus enum member name (e.g. "Registered") - rendered directly, not re-mapped through a numeric enum. */
+  status: string;
+  registeredAtUtc: string;
+  qualifiedAtUtc: string | null;
+  rewardedAtUtc: string | null;
+  rewardEarned: number | null;
 }
 
 /**

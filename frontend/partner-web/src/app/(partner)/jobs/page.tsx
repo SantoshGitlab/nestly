@@ -7,6 +7,7 @@ import type { FormEvent } from "react";
 import { Alert, Button, Card, Field, PageHeading, Select } from "@/components/ui";
 import { describeError, isNotImplemented } from "@/lib/api";
 import { listJobs } from "@/lib/jobs-api";
+import { jobStatusLabel } from "@/lib/jobs-types";
 
 const STATUS_OPTIONS = [
   { value: "", label: "Any status" },
@@ -98,15 +99,15 @@ export default function JobsPage() {
               <tbody>
                 {query.data.map((job) => (
                   <tr
-                    key={job.id}
+                    key={job.assignmentId}
                     className="border-b border-black/5 last:border-0 hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/[.05]"
                   >
                     <td className="px-4 py-3">
-                      <Link href={`/jobs/${job.id}`} className="font-medium underline-offset-2 hover:underline">
+                      <Link href={`/jobs/${job.bookingId}`} className="font-medium underline-offset-2 hover:underline">
                         {job.bookingId}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">{job.status}</td>
+                    <td className="px-4 py-3">{jobStatusLabel(job.status)}</td>
                     <td className="px-4 py-3">{new Date(job.assignedAt).toLocaleString()}</td>
                     <td className="px-4 py-3">
                       {job.responseDeadline ? new Date(job.responseDeadline).toLocaleString() : "—"}

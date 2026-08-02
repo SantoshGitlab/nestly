@@ -161,7 +161,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         ref={ref}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+        className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none [color-scheme:light] focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:[color-scheme:dark] dark:focus:border-white dark:focus:ring-white"
       >
         {placeholder ? (
           <option value="" disabled>

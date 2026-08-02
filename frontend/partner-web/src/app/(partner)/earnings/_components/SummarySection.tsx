@@ -24,9 +24,8 @@ export function SummarySection() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-2">
-      <StatTile label="Total earned" value={`₹${query.data.totalEarned.toFixed(2)}`} />
-      <StatTile label="Pending payout" value={`₹${query.data.pendingPayout.toFixed(2)}`} />
+    <div className="grid grid-cols-1 gap-4">
+      <StatTile label="Current balance" value={`₹${query.data.currentBalance.toFixed(2)}`} />
     </div>
   );
 }
