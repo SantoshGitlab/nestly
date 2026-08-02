@@ -119,7 +119,28 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.ReferralRewardCredited, NotificationChannel.Email, "referral_reward_credited_email", "Your referral reward has landed",
             "Hi there,\n\nYour referral reward of {{RewardValue}} has been credited. Thanks for spreading the word about Nestly!"),
         Row(NotificationEventType.ReferralRewardCredited, NotificationChannel.Push, "referral_reward_credited_push", "Referral reward credited",
-            "Your referral reward of {{RewardValue}} has landed!")
+            "Your referral reward of {{RewardValue}} has landed!"),
+
+        Row(NotificationEventType.SubscriptionRenewed, NotificationChannel.Sms, "subscription_renewed_sms", null,
+            "Your Nestly subscription has renewed for another period. Thanks for staying with us! - Nestly"),
+        Row(NotificationEventType.SubscriptionRenewed, NotificationChannel.Email, "subscription_renewed_email", "Your subscription has renewed",
+            "Hi there,\n\nYour Nestly subscription has renewed and your benefits are active for the new period."),
+        Row(NotificationEventType.SubscriptionRenewed, NotificationChannel.Push, "subscription_renewed_push", "Subscription renewed",
+            "Your Nestly subscription has renewed for another period."),
+
+        Row(NotificationEventType.SubscriptionExpiringSoon, NotificationChannel.Sms, "subscription_expiring_soon_sms", null,
+            "Your Nestly subscription will renew soon. Update your payment method if it's changed. - Nestly"),
+        Row(NotificationEventType.SubscriptionExpiringSoon, NotificationChannel.Email, "subscription_expiring_soon_email", "Your subscription renews soon",
+            "Hi there,\n\nYour Nestly subscription is due for its next charge soon. Make sure your payment details are up to date."),
+        Row(NotificationEventType.SubscriptionExpiringSoon, NotificationChannel.Push, "subscription_expiring_soon_push", "Subscription renewing soon",
+            "Your Nestly subscription is due for renewal soon."),
+
+        Row(NotificationEventType.SubscriptionPaymentFailed, NotificationChannel.Sms, "subscription_payment_failed_sms", null,
+            "We couldn't process your Nestly subscription payment. Please update your payment method. - Nestly"),
+        Row(NotificationEventType.SubscriptionPaymentFailed, NotificationChannel.Email, "subscription_payment_failed_email", "Your subscription payment failed",
+            "Hi there,\n\nWe couldn't process your Nestly subscription payment. We'll retry automatically, but please check your payment method to avoid your subscription lapsing."),
+        Row(NotificationEventType.SubscriptionPaymentFailed, NotificationChannel.Push, "subscription_payment_failed_push", "Subscription payment failed",
+            "We couldn't process your subscription payment - please check your payment method.")
     ];
 
     private static SeedRow Row(NotificationEventType eventType, NotificationChannel channel, string templateKey, string? subject, string body) =>

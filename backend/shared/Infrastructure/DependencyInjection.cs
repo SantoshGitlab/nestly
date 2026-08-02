@@ -159,6 +159,13 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(ReferralOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 178: not a secret, has safe production-sensible defaults,
+        // same reasoning as CommissionOptions above - no ValidateOnStart.
+        services
+            .AddOptions<SubscriptionBillingOptions>()
+            .Bind(configuration.GetSection(SubscriptionBillingOptions.SectionName))
+            .ValidateDataAnnotations();
+
         // Task 185: not a secret, has a safe production-sensible default -
         // same reasoning as CommissionOptions/ReferralOptions above.
         services
