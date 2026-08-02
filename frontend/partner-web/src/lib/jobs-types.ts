@@ -22,6 +22,7 @@ export enum JobStatus {
   Reassigned = 3,
   InProgress = 4,
   Completed = 5,
+  Withdrawn = 6,
 }
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
@@ -31,6 +32,7 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   [JobStatus.Reassigned]: "Reassigned",
   [JobStatus.InProgress]: "In progress",
   [JobStatus.Completed]: "Completed",
+  [JobStatus.Withdrawn]: "Cancelled by customer",
 };
 
 export function jobStatusLabel(status: JobStatus): string {

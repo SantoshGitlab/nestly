@@ -107,7 +107,8 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
 
         var notificationDispatchService = new NotificationDispatchService(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),

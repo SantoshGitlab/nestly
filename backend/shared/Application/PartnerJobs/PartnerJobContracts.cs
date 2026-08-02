@@ -29,7 +29,10 @@ public enum PartnerJobStatus
     InProgress,
 
     /// <summary>Work finished (booking Completed).</summary>
-    Completed
+    Completed,
+
+    /// <summary>The booking was cancelled (by the customer or an admin) while this assignment was still outstanding or accepted - nothing left for the partner to do (task 208).</summary>
+    Withdrawn
 }
 
 public sealed record PartnerJobItemResponse(string NameSnapshot, int Quantity, decimal UnitPriceSnapshot);

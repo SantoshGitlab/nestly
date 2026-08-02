@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.PartnerManagement;
 using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Domain;
@@ -57,7 +58,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private sealed record Fixture(
@@ -171,6 +173,71 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Booking.NotFound");
+    }
+
+    /// <summary>
+    /// Task 208 audit: Booking.Status stays "Assigned" through both the
+    /// admin's offer and the partner's accept, so before this fix the
+    /// customer's GetDetailAsync response had no way to distinguish the two -
+    /// a partner accepting never touched Booking.Status/StatusHistory at all.
+    /// PartnerAssignmentStatus (sourced from the live BookingPartnerAssignment
+    /// row, not the booking) is how the accept becomes visible immediately.
+    /// </summary>
+    [Fact]
+    public async Task GetDetailAsync_reflects_a_partners_Accept_immediately()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        Guid bookingId;
+        using (var createContext = _db.CreateContext())
+        {
+            var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            bookingId = created.Value.Id;
+        }
+
+        var beforeAssignment = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
+        beforeAssignment.Value.PartnerAssignmentStatus.Should().BeNull();
+
+        Guid partnerId;
+        var adminUserId = Guid.NewGuid();
+        using (var setupContext = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(setupContext).GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.Confirmed);
+            booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+            await new BookingRepository(setupContext).UpdateAsync(booking);
+
+            var partner = new Partner(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", PartnerType.Individual, "+919876543210");
+            partner.ChangeStatus(PartnerStatus.Active);
+            setupContext.Add(partner);
+            await setupContext.SaveChangesAsync();
+            partnerId = partner.Id;
+
+            var assignmentService = new BookingPartnerAssignmentService(
+                new BookingRepository(setupContext), new PartnerRepository(setupContext), new BookingPartnerAssignmentRepository(setupContext));
+            var assignResult = await assignmentService.AssignAsync(bookingId, adminUserId, new AssignPartnerRequest(partnerId, ResponseDeadline: null));
+            assignResult.IsSuccess.Should().BeTrue();
+        }
+
+        var afterAssign = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
+        afterAssign.Value.Status.Should().Be(BookingStatus.Assigned);
+        afterAssign.Value.PartnerAssignmentStatus.Should().Be(BookingPartnerAssignmentStatus.Assigned);
+
+        using (var acceptContext = _db.CreateContext())
+        {
+            var assignmentService = new BookingPartnerAssignmentService(
+                new BookingRepository(acceptContext), new PartnerRepository(acceptContext), new BookingPartnerAssignmentRepository(acceptContext));
+            var acceptResult = await assignmentService.AcceptAsync(bookingId, partnerId);
+            acceptResult.IsSuccess.Should().BeTrue();
+        }
+
+        var afterAccept = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
+        afterAccept.Value.Status.Should().Be(BookingStatus.Assigned, "Booking.Status has no separate accepted state by design (SRS 13.1)");
+        afterAccept.Value.PartnerAssignmentStatus.Should().Be(BookingPartnerAssignmentStatus.Accepted, "the accept must be visible to the customer the moment it happens");
     }
 
     [Fact]

@@ -64,7 +64,8 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private static PaymentService BuildPaymentService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway)

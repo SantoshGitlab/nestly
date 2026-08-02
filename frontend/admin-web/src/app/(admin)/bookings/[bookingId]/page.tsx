@@ -91,6 +91,7 @@ const ASSIGNMENT_STATUS_LABELS: Record<BookingPartnerAssignmentStatus, string> =
   [BookingPartnerAssignmentStatus.Accepted]: "Accepted",
   [BookingPartnerAssignmentStatus.Rejected]: "Rejected",
   [BookingPartnerAssignmentStatus.Reassigned]: "Superseded (reassigned)",
+  [BookingPartnerAssignmentStatus.Withdrawn]: "Withdrawn (booking cancelled)",
 };
 
 /**

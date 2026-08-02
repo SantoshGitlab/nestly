@@ -91,7 +91,8 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, Guid CategoryId, decimal Total);

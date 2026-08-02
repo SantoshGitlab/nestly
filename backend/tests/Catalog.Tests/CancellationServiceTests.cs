@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
+using Nestly.Application.PartnerManagement;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Refunds;
@@ -61,7 +62,8 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private static PaymentWebhookService BuildWebhookService(
@@ -82,6 +84,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
                 new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context),
             new BookingCancellationRepository(context),
+            new BookingPartnerAssignmentRepository(context),
             timeProvider,
             Options.Create(policy ?? new CancellationPolicyOptions()));
 
@@ -236,6 +239,64 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         var second = await service.CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Second cancel"));
         second.IsSuccess.Should().BeFalse();
         second.Error.Code.Should().Be("Cancellation.NotEligible");
+    }
+
+    /// <summary>
+    /// Task 208 audit: a customer's cancellation never touched
+    /// BookingPartnerAssignment, so a partner who had an Assigned/Accepted
+    /// job kept seeing it as active (PartnerJobService derives their status
+    /// from the assignment row, not the booking) even though the booking
+    /// itself was cancelled out from under them.
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_withdraws_the_partners_still_live_assignment()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc);
+
+        Guid partnerId;
+        var adminUserId = Guid.NewGuid();
+        using (var setupContext = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(setupContext).GetByIdAsync(fixture.BookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            await new BookingRepository(setupContext).UpdateAsync(booking);
+
+            var partner = new Partner(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", PartnerType.Individual, "+919876543210");
+            partner.ChangeStatus(PartnerStatus.Active);
+            setupContext.Add(partner);
+            await setupContext.SaveChangesAsync();
+            partnerId = partner.Id;
+
+            var assignmentService = new BookingPartnerAssignmentService(
+                new BookingRepository(setupContext), new PartnerRepository(setupContext), new BookingPartnerAssignmentRepository(setupContext));
+            (await assignmentService.AssignAsync(fixture.BookingId, adminUserId, new AssignPartnerRequest(partnerId, ResponseDeadline: null)))
+                .IsSuccess.Should().BeTrue();
+            (await assignmentService.AcceptAsync(fixture.BookingId, partnerId)).IsSuccess.Should().BeTrue();
+        }
+
+        using (var cancelContext = _db.CreateContext())
+        {
+            var result = await BuildCancellationService(cancelContext, gateway, timeProvider)
+                .CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Change of plans"));
+            result.IsSuccess.Should().BeTrue();
+        }
+
+        using var readContext = _db.CreateContext();
+        var assignmentRepository = new BookingPartnerAssignmentRepository(readContext);
+        (await assignmentRepository.GetActiveByBookingAsync(fixture.BookingId)).Should().BeNull("a withdrawn assignment is no longer 'live'");
+
+        var history = await assignmentRepository.ListByBookingAsync(fixture.BookingId);
+        history.Should().ContainSingle().Which.Status.Should().Be(BookingPartnerAssignmentStatus.Withdrawn);
+
+        var jobService = new PartnerJobService(
+            new BookingRepository(readContext), assignmentRepository,
+            new BookingPartnerAssignmentService(new BookingRepository(readContext), new PartnerRepository(readContext), assignmentRepository),
+            new BookingCompletionProofRepository(readContext));
+        var jobDetail = await jobService.GetDetailAsync(partnerId, fixture.BookingId);
+        jobDetail.IsSuccess.Should().BeTrue();
+        jobDetail.Value.Status.Should().Be(Nestly.Application.PartnerJobs.PartnerJobStatus.Withdrawn);
     }
 
     [Fact]

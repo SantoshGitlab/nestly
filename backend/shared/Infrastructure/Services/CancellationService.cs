@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Payments;
@@ -31,6 +32,7 @@ public class CancellationService : ICancellationService
     private readonly IRefundTransactionRepository _refundTransactionRepository;
     private readonly IRefundService _refundService;
     private readonly ICancellationRepository _cancellationRepository;
+    private readonly IBookingPartnerAssignmentRepository _assignmentRepository;
     private readonly TimeProvider _timeProvider;
     private readonly CancellationPolicyOptions _policy;
 
@@ -40,6 +42,7 @@ public class CancellationService : ICancellationService
         IRefundTransactionRepository refundTransactionRepository,
         IRefundService refundService,
         ICancellationRepository cancellationRepository,
+        IBookingPartnerAssignmentRepository assignmentRepository,
         TimeProvider timeProvider,
         IOptions<CancellationPolicyOptions> policy)
     {
@@ -48,6 +51,7 @@ public class CancellationService : ICancellationService
         _refundTransactionRepository = refundTransactionRepository;
         _refundService = refundService;
         _cancellationRepository = cancellationRepository;
+        _assignmentRepository = assignmentRepository;
         _timeProvider = timeProvider;
         _policy = policy.Value;
     }
@@ -148,6 +152,17 @@ public class CancellationService : ICancellationService
 
         booking.TransitionTo(targetStatus, reason);
         await _bookingRepository.UpdateAsync(booking);
+
+        // Task 208: a partner still Assigned/Accepted on this booking has no
+        // way of hearing about the cancellation otherwise - PartnerJobService
+        // derives their job status from this assignment row, not from the
+        // booking itself.
+        var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(booking.Id);
+        if (activeAssignment is not null)
+        {
+            activeAssignment.Withdraw();
+            await _assignmentRepository.UpdateAsync(activeAssignment);
+        }
 
         Guid? refundTransactionId = null;
         RefundStatus? refundStatus = null;

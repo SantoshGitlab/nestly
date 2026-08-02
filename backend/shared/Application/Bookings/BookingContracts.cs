@@ -86,7 +86,12 @@ public record BookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatu
 /// and <c>Price.TotalPayable</c> are equal here and both already
 /// coupon-adjusted - unlike the pre-booking preview, a persisted booking has
 /// only one "amount actually charged" (<see cref="Domain.Booking.TotalPayableSnapshot"/>),
-/// not a separate pre-/post-discount pair.
+/// not a separate pre-/post-discount pair. <paramref name="PartnerAssignmentStatus"/>
+/// is null until a partner is assigned, then tracks the live
+/// <see cref="Domain.BookingPartnerAssignment"/> row (task 208) - <see cref="Domain.BookingStatus"/>
+/// itself stays "Assigned" through both the offer and the partner's accept,
+/// so this is how the customer sees an accept the moment it happens rather
+/// than only once the partner starts the job.
 /// </summary>
 public record BookingDetailResponse(
     Guid Id,
@@ -101,7 +106,8 @@ public record BookingDetailResponse(
     DateTime CreatedAtUtc,
     string? CouponCode,
     decimal? CouponDiscountAmount,
-    decimal FinalPayable);
+    decimal FinalPayable,
+    BookingPartnerAssignmentStatus? PartnerAssignmentStatus);
 
 /// <summary>A row in the booking list (SRS 11.13, task 60b) - a lighter shape than the detail, for a list screen.</summary>
 public record BookingListItemResponse(

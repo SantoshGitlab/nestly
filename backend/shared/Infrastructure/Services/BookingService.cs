@@ -23,6 +23,7 @@ public class BookingService : IBookingService
     private readonly ICouponService _couponService;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IMetricsService _metricsService;
+    private readonly IBookingPartnerAssignmentRepository _assignmentRepository;
 
     public BookingService(
         IBookingSummaryService summaryService,
@@ -30,7 +31,8 @@ public class BookingService : IBookingService
         ICustomerRepository customerRepository,
         ICouponService couponService,
         ISlotAvailabilityService slotAvailabilityService,
-        IMetricsService metricsService)
+        IMetricsService metricsService,
+        IBookingPartnerAssignmentRepository assignmentRepository)
     {
         _summaryService = summaryService;
         _bookingRepository = bookingRepository;
@@ -38,6 +40,7 @@ public class BookingService : IBookingService
         _couponService = couponService;
         _slotAvailabilityService = slotAvailabilityService;
         _metricsService = metricsService;
+        _assignmentRepository = assignmentRepository;
     }
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
@@ -141,7 +144,7 @@ public class BookingService : IBookingService
         }
 
         _metricsService.RecordBookingCreated(succeeded: true);
-        return Result.Success(ToDetailResponse(booking));
+        return Result.Success(ToDetailResponse(booking, partnerAssignmentStatus: null));
     }
 
     public async Task<Result<IReadOnlyList<BookingListItemResponse>>> ListAsync(Guid customerId, BookingStatusBucket? bucket)
@@ -164,7 +167,8 @@ public class BookingService : IBookingService
             return Error.NotFound("Booking.NotFound", "The specified booking does not exist.");
         }
 
-        return Result.Success(ToDetailResponse(booking));
+        var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+        return Result.Success(ToDetailResponse(booking, activeAssignment?.Status));
     }
 
     private static BookingListItemResponse ToListItem(Booking booking) => new(
@@ -176,7 +180,7 @@ public class BookingService : IBookingService
         BookingStatusMapper.LabelFor(booking.Status),
         booking.CreatedAtUtc);
 
-    private static BookingDetailResponse ToDetailResponse(Booking booking)
+    private static BookingDetailResponse ToDetailResponse(Booking booking, BookingPartnerAssignmentStatus? partnerAssignmentStatus)
     {
         var item = booking.Items.Count > 0 ? booking.Items[0] : null;
 
@@ -209,6 +213,7 @@ public class BookingService : IBookingService
             booking.CreatedAtUtc,
             booking.CouponCodeSnapshot,
             booking.CouponDiscountAmountSnapshot,
-            booking.TotalPayableSnapshot);
+            booking.TotalPayableSnapshot,
+            partnerAssignmentStatus);
     }
 }
