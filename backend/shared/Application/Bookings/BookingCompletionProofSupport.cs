@@ -39,4 +39,32 @@ public static class BookingCompletionProofSupport
                 proof.ChecklistAnswers.Select(a => new CompletionChecklistAnswerResponse(a.Item, a.Completed, a.Notes)).ToList(),
                 proof.SubmittedByPartnerId,
                 proof.SubmittedAtUtc);
+
+    /// <summary>Customer-facing read (task 198): 404s if the booking doesn't exist or isn't the caller's own (SRS 28.3 IDOR), null value if the booking simply has no proof yet (not every booking reaches Completed).</summary>
+    public static async Task<Result<BookingCompletionProofResponse?>> GetForCustomerAsync(
+        this IBookingCompletionProofRepository completionProofRepository, IBookingRepository bookingRepository, Guid customerId, Guid bookingId)
+    {
+        var booking = await bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null || booking.CustomerId != customerId)
+        {
+            return Error.NotFound("Booking.NotFound", "The specified booking does not exist.");
+        }
+
+        var proof = await completionProofRepository.GetByBookingIdAsync(bookingId);
+        return proof.ToResponse();
+    }
+
+    /// <summary>Admin read (task 198, SRS 12.11.2 dispute review): no ownership check, only existence.</summary>
+    public static async Task<Result<BookingCompletionProofResponse?>> GetForAdminAsync(
+        this IBookingCompletionProofRepository completionProofRepository, IBookingRepository bookingRepository, Guid bookingId)
+    {
+        var booking = await bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("Booking.NotFound", "The specified booking does not exist.");
+        }
+
+        var proof = await completionProofRepository.GetByBookingIdAsync(bookingId);
+        return proof.ToResponse();
+    }
 }

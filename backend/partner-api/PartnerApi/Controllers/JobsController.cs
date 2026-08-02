@@ -5,6 +5,7 @@ using FluentValidation.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Nestly.Application.Bookings;
 using Nestly.Application.PartnerJobs;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Infrastructure;
@@ -29,15 +30,18 @@ public class JobsController : ControllerBase
     private readonly IPartnerJobService _jobService;
     private readonly IValidator<RejectJobRequest> _rejectValidator;
     private readonly IValidator<UploadJobCompletionProofRequest> _completionProofValidator;
+    private readonly IValidator<SubmitCompletionProofRequest> _submitCompletionProofValidator;
 
     public JobsController(
         IPartnerJobService jobService,
         IValidator<RejectJobRequest> rejectValidator,
-        IValidator<UploadJobCompletionProofRequest> completionProofValidator)
+        IValidator<UploadJobCompletionProofRequest> completionProofValidator,
+        IValidator<SubmitCompletionProofRequest> submitCompletionProofValidator)
     {
         _jobService = jobService;
         _rejectValidator = rejectValidator;
         _completionProofValidator = completionProofValidator;
+        _submitCompletionProofValidator = submitCompletionProofValidator;
     }
 
     /// <summary>List jobs ever assigned to the caller, optionally filtered by status and/or slot date.</summary>
@@ -126,6 +130,44 @@ public class JobsController : ControllerBase
 
         var result = await _jobService.UploadCompletionProofAsync(CurrentPartnerId(), bookingId, request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Submits (or resubmits) the completion evidence - photos plus
+    /// checklist - required before <see cref="Complete"/> will succeed
+    /// (tasks 195-197). Distinct from <see cref="UploadCompletionProof"/>'s
+    /// single legacy proof-ref field.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/completion-verification")]
+    [ProducesResponseType(typeof(BookingCompletionProofResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SubmitCompletionVerification(Guid bookingId, [FromBody] SubmitCompletionProofRequest request)
+    {
+        var validation = await _submitCompletionProofValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _jobService.SubmitCompletionProofAsync(CurrentPartnerId(), bookingId, request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>The completion evidence submitted for this job, if any (task 198).</summary>
+    [HttpGet("{bookingId:guid}/completion-verification")]
+    [ProducesResponseType(typeof(BookingCompletionProofResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCompletionVerification(Guid bookingId)
+    {
+        var result = await _jobService.GetCompletionProofAsync(CurrentPartnerId(), bookingId);
+        if (result.IsFailure)
+        {
+            return result.ToProblemResult();
+        }
+
+        return result.Value is null ? NoContent() : Ok(result.Value);
     }
 
     private Guid CurrentPartnerId() =>

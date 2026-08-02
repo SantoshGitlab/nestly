@@ -48,4 +48,7 @@ public interface IPartnerJobService
     /// and must be submitted before <see cref="CompleteAsync"/> succeeds.
     /// </summary>
     Task<Result<BookingCompletionProofResponse>> SubmitCompletionProofAsync(Guid partnerId, Guid bookingId, SubmitCompletionProofRequest request);
+
+    /// <summary>The completion proof this partner submitted for this job, if any (task 198's partner-side view).</summary>
+    Task<Result<BookingCompletionProofResponse?>> GetCompletionProofAsync(Guid partnerId, Guid bookingId);
 }

@@ -235,6 +235,18 @@ public class PartnerJobService : IPartnerJobService
         return existing.ToResponse()!;
     }
 
+    public async Task<Result<BookingCompletionProofResponse?>> GetCompletionProofAsync(Guid partnerId, Guid bookingId)
+    {
+        var resolved = await ResolveAcceptedAsync(partnerId, bookingId);
+        if (resolved is null)
+        {
+            return NotFoundError();
+        }
+
+        var proof = await _completionProofRepository.GetByBookingIdAsync(bookingId);
+        return proof.ToResponse();
+    }
+
     /// <summary>Resolves the most recent assignment this partner ever had on this booking, alongside the booking itself. Null if the booking doesn't exist or was never assigned to this partner (SRS 28.3 IDOR - the caller maps this to a 404, hiding the booking's existence from a non-owning partner).</summary>
     private async Task<(BookingPartnerAssignment Assignment, Booking Booking)?> ResolveAsync(Guid partnerId, Guid bookingId)
     {
