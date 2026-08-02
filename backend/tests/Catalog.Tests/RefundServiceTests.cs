@@ -46,7 +46,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
-            couponService);
+            couponService,
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
         return new BookingService(
             summaryService,
@@ -62,7 +63,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
             new NoOpMetricsService(),
-            new BookingPartnerAssignmentRepository(context));
+            new BookingPartnerAssignmentRepository(context),
+            new CustomerSubscriptionRepository(context));
     }
 
     private static RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>

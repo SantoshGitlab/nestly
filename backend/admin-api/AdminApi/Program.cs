@@ -4,6 +4,7 @@ using Hangfire;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
+using Nestly.Application.Subscriptions;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
@@ -108,6 +109,17 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
 // set (see appsettings.json across the three API processes), so it's the
 // only one that should own this registration.
 app.ScheduleRecurringBookingJob();
+
+// Task 178: the subscription recurring-billing sweep, same
+// ServerEnabled-guarded, idempotent-by-design registration pattern as
+// wallet-credit-expiry-sweep above.
+if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundJobOptions>>().Value.ServerEnabled)
+{
+    RecurringJob.AddOrUpdate<ISubscriptionBillingJob>(
+        "subscription-billing-sweep",
+        job => job.ProcessDueBillingAsync(CancellationToken.None),
+        Cron.Daily);
+}
 
 app.MapControllers();
 

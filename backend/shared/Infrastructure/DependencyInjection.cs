@@ -42,6 +42,7 @@ using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
 using Nestly.Application.Reviews;
 using Nestly.Application.Settings;
+using Nestly.Application.Subscriptions;
 using Nestly.Application.Support;
 using Nestly.Application.Wallet;
 using Nestly.Application.Serviceability;
@@ -157,6 +158,13 @@ public static class DependencyInjection
         services
             .AddOptions<ReferralOptions>()
             .Bind(configuration.GetSection(ReferralOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 178: not a secret, has safe production-sensible defaults,
+        // same reasoning as CommissionOptions above - no ValidateOnStart.
+        services
+            .AddOptions<SubscriptionBillingOptions>()
+            .Bind(configuration.GetSection(SubscriptionBillingOptions.SectionName))
             .ValidateDataAnnotations();
 
         // Task 185: not a secret, has a safe production-sensible default -
@@ -431,6 +439,17 @@ public static class DependencyInjection
         // CouponsController. Distinct from the consumer-facing ICouponService
         // above - see CouponManagementService's doc comment.
         services.AddScoped<ICouponManagementService, CouponManagementService>();
+
+        // Phase 10 subscription module (PRODUCT-ENHANCEMENTS.md #1, tasks
+        // 177-183). ISubscriptionBenefitService feeds BookingSummaryService/
+        // BookingService above, the same way ICouponService does.
+        services.AddScoped<ISubscriptionPlanRepository, SubscriptionPlanRepository>();
+        services.AddScoped<ICustomerSubscriptionRepository, CustomerSubscriptionRepository>();
+        services.AddScoped<ISubscriptionPlanManagementService, SubscriptionPlanManagementService>();
+        services.AddScoped<ICustomerSubscriptionService, CustomerSubscriptionService>();
+        services.AddScoped<ISubscriptionBenefitService, SubscriptionBenefitService>();
+        services.AddScoped<ISubscriptionBillingJob, SubscriptionBillingJob>();
+
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();

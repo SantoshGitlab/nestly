@@ -60,6 +60,11 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(x => x.CouponCodeSnapshot).HasMaxLength(50);
         builder.Property(x => x.CouponDiscountAmountSnapshot).HasPrecision(12, 2);
 
+        // Task 179: traceability only, not a foreign key - see SubscriptionId's doc comment.
+        builder.Property(x => x.SubscriptionId);
+        builder.Property(x => x.SubscriptionFreeVisitApplied).IsRequired();
+        builder.Property(x => x.SubscriptionDiscountAmountSnapshot).HasPrecision(12, 2);
+
         // Denormalized display field only (task 147, PARTNER.md SCOPE
         // BOUNDARY) - SetNull rather than Restrict/Cascade so a partner
         // record can still be soft-managed without ever blocking on or

@@ -73,6 +73,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<ChatThread> ChatThreads { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<NestlyCoinsProgramConfig> NestlyCoinsProgramConfigs { get; set; }
+    public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
+    public DbSet<CustomerSubscription> CustomerSubscriptions { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

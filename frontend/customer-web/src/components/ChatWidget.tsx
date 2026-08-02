@@ -18,7 +18,6 @@ import type { ChatMessagePageResult, ChatMessageResponse, ChatThreadResponse } f
 export function ChatWidget({ contextType, contextId }: { contextType: ChatContextType; contextId: string }) {
   const [draft, setDraft] = useState("");
   const [liveMessages, setLiveMessages] = useState<ChatMessageResponse[]>([]);
-  const connectionRef = useRef<signalR.HubConnection | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const threadQuery = useQuery({
@@ -42,9 +41,11 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
     enabled: !!threadId,
   });
 
-  // Server history plus anything that arrived live since it loaded - avoids
-  // waiting for a refetch to show a message this client just received.
-  const messages = [...(historyQuery.data?.messages ?? []), ...liveMessages];
+  // Server history plus anything that arrived live since it loaded, deduped
+  // by id - both our own just-sent message (added directly, in case the
+  // socket never connects - REST is the real send path, same as the
+  // backend's design) and the hub's echo of that same message can land here.
+  const messages = dedupeById([...(historyQuery.data?.messages ?? []), ...liveMessages]);
 
   const sendMutation = useMutation({
     mutationFn: (body: string) =>
@@ -53,7 +54,10 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
         authenticated: true,
         body: JSON.stringify({ body }),
       }),
-    onSuccess: () => setDraft(""),
+    onSuccess: (message) => {
+      setDraft("");
+      setLiveMessages((prev) => [...prev, message]);
+    },
   });
 
   const markReadMutation = useMutation({
@@ -63,12 +67,16 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
   useEffect(() => {
     if (!threadId) return;
 
-    const token = getAccessToken();
+    // "/hubs/chat" mirrors ChatHubRoutes.ChatPath; accessTokenFactory (rather
+    // than an Authorization header, which a browser can't set on a WebSocket
+    // handshake) puts the JWT on ?access_token= for the client automatically -
+    // exactly what ChatHubJwtEvents.OnMessageReceived reads back server-side.
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/chat`, { accessTokenFactory: () => token ?? "" })
+      .withUrl(`${API_BASE_URL}/hubs/chat`, { accessTokenFactory: () => getAccessToken() ?? "" })
       .withAutomaticReconnect()
       .build();
 
+    // "MessageReceived" mirrors ChatHubBroadcastHandler.MessageReceivedMethod.
     connection.on("MessageReceived", (message: ChatMessageResponse) => {
       if (message.threadId !== threadId) return;
       setLiveMessages((prev) => [...prev, message]);
@@ -89,12 +97,9 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
         // read paths above never depend on the socket being up.
       });
 
-    connectionRef.current = connection;
-
     return () => {
       connection.invoke("LeaveThread", threadId).catch(() => {});
       connection.stop();
-      connectionRef.current = null;
     };
     // Reconnects only when the thread changes - markReadMutation is a fresh
     // object every render (useMutation) and would otherwise tear the socket
@@ -171,8 +176,13 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
           handleSend();
         }}
       >
+        <label htmlFor="chat-message" className="sr-only">
+          Message
+        </label>
         <input
+          id="chat-message"
           type="text"
+          maxLength={4000}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Type a message…"
@@ -184,4 +194,10 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
       </form>
     </Card>
   );
+}
+
+/** Later entries win (e.g. a read-receipt update arriving after the original send). */
+function dedupeById(messages: ChatMessageResponse[]): ChatMessageResponse[] {
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  return Array.from(byId.values()).sort((a, b) => a.sentAtUtc.localeCompare(b.sentAtUtc));
 }

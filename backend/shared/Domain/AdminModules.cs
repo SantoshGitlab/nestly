@@ -84,11 +84,14 @@ public static class AdminModules
     /// </summary>
     public const string NestlyCoins = "nestly-coins";
 
-    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner, Phase 9 Referral, Phase 10 Chat, and Phase 11 Nestly Coins module additions (tasks 150c, 173, 194, 202).</summary>
+    /// <summary>Subscription plan config CRUD (PRODUCT-ENHANCEMENTS.md #1 RBAC ADDITIONS "View / Configure", task 180). Read = View plan list/detail, Write = create/update/activate/deactivate a plan - the catalog's standard two-tier split matches this module's "View / Configure" spec exactly, no collapsing needed.</summary>
+    public const string Subscription = "subscription";
+
+    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Partner, Phase 9 Referral, Phase 10 Chat/Subscription, and Phase 11 Nestly Coins module additions (tasks 150c, 173, 194, 180, 202).</summary>
     public static readonly IReadOnlyList<string> All =
     [
         Dashboard, Customers, Catalog, Pricing, Serviceability, Slots, Bookings,
         Coupons, Support, Reviews, Cms, Notifications, Reports, Audit, Settings,
-        Partner, Payout, Referral, Chat, NestlyCoins
+        Partner, Payout, Referral, Chat, NestlyCoins, Subscription
     ];
 }

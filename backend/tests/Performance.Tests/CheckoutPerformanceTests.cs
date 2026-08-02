@@ -64,12 +64,14 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
-            couponService);
+            couponService,
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
         return new BookingService(
             summaryService, new BookingRepository(context), new CustomerRepository(context), couponService, slotAvailabilityService,
             new NoOpMetricsService(),
-            new BookingPartnerAssignmentRepository(context));
+            new BookingPartnerAssignmentRepository(context),
+            new CustomerSubscriptionRepository(context));
     }
 
     private static PaymentService BuildPaymentService(NestlyDbContext context, IPaymentGateway gateway)

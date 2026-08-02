@@ -160,12 +160,17 @@ public static class AdminPermissionCatalog
             // NestlyCoins=true added (task 202): same reasoning - a reorder/
             // repeat-activity incentive program sits in the same growth
             // cluster as Referral, just configured/reported differently.
+            // Subscription=true added (task 180): plan config (price,
+            // billing cycle, benefits) is a monetization campaign in the
+            // same cluster as Coupons/Referral, both of which this role
+            // already owns.
             [AdminRoleNames.MarketingAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Coupons, true),
                 (AdminModules.Notifications, true), (AdminModules.Cms, true),
                 (AdminModules.Reviews, false), (AdminModules.Reports, false),
-                (AdminModules.Referral, true), (AdminModules.NestlyCoins, true)
+                (AdminModules.Referral, true), (AdminModules.NestlyCoins, true),
+                (AdminModules.Subscription, true)
             ],
 
             // Finance Admin: financial reporting and the audit trail behind
@@ -181,13 +186,17 @@ public static class AdminPermissionCatalog
             // which stays with Marketing Admin above. NestlyCoins=false
             // added (task 202): same reasoning, read-only cost visibility
             // into the coins-issued/clawed-back report.
+            // Subscription=false added (task 180): read-only visibility into
+            // recurring subscription revenue as reporting context, not
+            // plan-configuration authority, which stays with Marketing
+            // Admin above - same treatment as Referral=false right above.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
                 (AdminModules.Coupons, false), (AdminModules.Reports, true),
                 (AdminModules.Audit, false), (AdminModules.Partner, false),
                 (AdminModules.Payout, true), (AdminModules.Referral, false),
-                (AdminModules.NestlyCoins, false)
+                (AdminModules.NestlyCoins, false), (AdminModules.Subscription, false)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

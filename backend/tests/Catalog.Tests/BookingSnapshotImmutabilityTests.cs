@@ -54,7 +54,8 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
-            couponService);
+            couponService,
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
         return new BookingService(
             summaryService,
@@ -70,7 +71,8 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
             new NoOpMetricsService(),
-            new BookingPartnerAssignmentRepository(context));
+            new BookingPartnerAssignmentRepository(context),
+            new CustomerSubscriptionRepository(context));
     }
 
     private sealed record Fixture(
