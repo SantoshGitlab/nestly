@@ -16,10 +16,8 @@ function statusLabel(status: string): string {
       return "Qualified";
     case "Rewarded":
       return "Rewarded";
-    case "FraudFlagged":
-      return "Under review";
-    case "FraudRejected":
-      return "Rejected";
+    case "Expired":
+      return "Expired";
     default:
       return status;
   }
