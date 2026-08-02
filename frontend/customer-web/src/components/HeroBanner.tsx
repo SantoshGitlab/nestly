@@ -10,16 +10,34 @@ import { SearchBar } from "@/components/SearchBar";
  */
 export function HeroBanner() {
   return (
-    <section className="rounded-2xl bg-gradient-to-br from-black to-neutral-700 px-6 py-14 text-white dark:from-neutral-100 dark:to-white dark:text-black sm:px-10 sm:py-20">
-      <h1 className="max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+    <section className="relative isolate overflow-hidden rounded-3xl bg-brand-gradient px-6 py-14 text-white shadow-lg sm:px-12 sm:py-20">
+      {/* Two soft radial washes over the flat gradient. Purely decorative, and
+          `isolate` + `-z-10` keep them behind the content without a stacking
+          context leaking out of the section. */}
+      <div
+        aria-hidden
+        className="absolute -right-24 -top-24 -z-10 h-80 w-80 rounded-full bg-white/15 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="absolute -bottom-32 -left-20 -z-10 h-80 w-80 rounded-full bg-accent-400/20 blur-3xl"
+      />
+
+      <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur-sm">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />
+        Vetted professionals, upfront pricing
+      </p>
+
+      <h1 className="max-w-2xl text-display-md font-semibold text-balance sm:text-display-lg">
         Trusted home services, booked in minutes.
       </h1>
-      <p className="mt-3 max-w-xl text-white/80 dark:text-black/70">
-        Cleaning, repairs, salon, and more - vetted professionals, upfront pricing, and slots that fit your day.
+      <p className="mt-4 max-w-xl text-[0.9375rem] leading-relaxed text-white/85 text-pretty">
+        Cleaning, repairs, salon, and more — background-checked professionals,
+        prices you see before you book, and slots that fit your day.
       </p>
 
       <div className="mt-8 max-w-xl">
-        <SearchBar />
+        <SearchBar variant="hero" />
       </div>
     </section>
   );

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { CategoryTile } from "@/components/CategoryTile";
 import { CitySelector } from "@/components/CitySelector";
-import { Alert } from "@/components/ui";
+import { Alert, Button, EmptyState, Skeleton } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CategorySummary } from "@/lib/types";
@@ -17,8 +17,10 @@ import type { CategorySummary } from "@/lib/types";
 export function CategoryTiles() {
   const { city } = useSelectedCity();
 
+  // `undefined` means the persisted city is still being read; showing the
+  // "pick a city" prompt here would flash it at every customer who already has one.
   if (city === undefined) {
-    return <p className="text-sm text-neutral-500">Loading…</p>;
+    return <CategoryGridSkeleton />;
   }
 
   if (city === null) {
@@ -28,14 +30,39 @@ export function CategoryTiles() {
   return <CityCategoryGrid cityId={city.id} />;
 }
 
+/** Mirrors the real grid's shape so nothing jumps when the data lands. */
+function CategoryGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+      {Array.from({ length: 8 }, (_, index) => (
+        <Skeleton key={index} className="h-[9.5rem] rounded-2xl" />
+      ))}
+    </div>
+  );
+}
+
 function NoCitySelectedPrompt() {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-black/15 p-10 text-center dark:border-white/20">
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
-        Select your city to see the services available near you.
-      </p>
-      <CitySelector />
-    </div>
+    <EmptyState
+      icon={
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-5 w-5"
+          aria-hidden
+        >
+          <path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11Z" />
+          <circle cx="12" cy="10" r="2.5" />
+        </svg>
+      }
+      title="Choose your city"
+      description="Services and pricing vary by city — tell us where you are and we'll show what's available near you."
+      action={<CitySelector />}
+    />
   );
 }
 
@@ -47,25 +74,39 @@ function CityCategoryGrid({ cityId }: { cityId: string }) {
   });
 
   if (query.isPending) {
-    return <p className="text-sm text-neutral-500">Loading categories…</p>;
+    return <CategoryGridSkeleton />;
   }
 
   if (query.isError) {
-    return <Alert>{describeError(query.error)}</Alert>;
+    return (
+      <Alert
+        tone="error"
+        title="Couldn't load categories"
+        action={
+          <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+            Retry
+          </Button>
+        }
+      >
+        {describeError(query.error)}
+      </Alert>
+    );
   }
 
   if (query.data.length === 0) {
     return (
-      <p className="text-sm text-neutral-500">
-        No services are available in your city yet - check back soon.
-      </p>
+      <EmptyState
+        title="No services here yet"
+        description="We're not live in your city yet — try another city, or check back soon."
+        action={<CitySelector />}
+      />
     );
   }
 
   const visible = showAll ? query.data : query.data.slice(0, 8);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
         {visible.map((category) => (
           <CategoryTile key={category.id} category={category} />
@@ -73,13 +114,9 @@ function CityCategoryGrid({ cityId }: { cityId: string }) {
       </div>
 
       {!showAll && query.data.length > visible.length ? (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="mx-auto text-sm font-medium hover:underline"
-        >
+        <Button variant="secondary" className="mx-auto" onClick={() => setShowAll(true)}>
           Show all {query.data.length} categories
-        </button>
+        </Button>
       ) : null}
     </div>
   );
