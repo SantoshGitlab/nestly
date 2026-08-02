@@ -27,11 +27,19 @@ public class ReferralRewardService : IReferralRewardService
     // reward coupon's own shelf life).
     private static readonly TimeSpan CouponValidityWindow = TimeSpan.FromDays(90);
 
+    // Task 175: referral wallet-credit rewards (per-referral and milestone
+    // bonus alike) expire if unspent, so the program's cash liability doesn't
+    // sit on the books indefinitely. Same "no dedicated config field yet"
+    // reasoning as CouponValidityWindow above - a year is a generous default.
+    private static readonly TimeSpan ReferralCreditExpiryWindow = TimeSpan.FromDays(365);
+
     private readonly IReferralRepository _referralRepository;
     private readonly IReferralProgramConfigRepository _configRepository;
     private readonly ICustomerRepository _customerRepository;
     private readonly IWalletService _walletService;
     private readonly ICouponRepository _couponRepository;
+    private readonly IReferralMilestoneRepository _milestoneRepository;
+    private readonly IReferralMilestoneAwardRepository _milestoneAwardRepository;
     private readonly INotificationDispatchService _notificationDispatchService;
     private readonly ILogger<ReferralRewardService> _logger;
 
@@ -41,6 +49,8 @@ public class ReferralRewardService : IReferralRewardService
         ICustomerRepository customerRepository,
         IWalletService walletService,
         ICouponRepository couponRepository,
+        IReferralMilestoneRepository milestoneRepository,
+        IReferralMilestoneAwardRepository milestoneAwardRepository,
         INotificationDispatchService notificationDispatchService,
         ILogger<ReferralRewardService> logger)
     {
@@ -49,6 +59,8 @@ public class ReferralRewardService : IReferralRewardService
         _customerRepository = customerRepository;
         _walletService = walletService;
         _couponRepository = couponRepository;
+        _milestoneRepository = milestoneRepository;
+        _milestoneAwardRepository = milestoneAwardRepository;
         _notificationDispatchService = notificationDispatchService;
         _logger = logger;
     }
@@ -78,7 +90,8 @@ public class ReferralRewardService : IReferralRewardService
         if (!referrerCapReached)
         {
             (referrerWalletEntryId, referrerCouponId) = await IssueRewardAsync(
-                referrer, referral.ReferrerRewardType, referral.ReferrerRewardValue, referral.Id);
+                referrer, referral.ReferrerRewardType, referral.ReferrerRewardValue,
+                WalletSourceType.ReferralReward, referral.Id, "Referral reward");
         }
         else
         {
@@ -88,7 +101,8 @@ public class ReferralRewardService : IReferralRewardService
         }
 
         (Guid? refereeWalletEntryId, Guid? refereeCouponId) = await IssueRewardAsync(
-            referee, referral.RefereeRewardType, referral.RefereeRewardValue, referral.Id);
+            referee, referral.RefereeRewardType, referral.RefereeRewardValue,
+            WalletSourceType.ReferralReward, referral.Id, "Referral reward");
 
         referral.MarkRewarded(referrerWalletEntryId, referrerCouponId, refereeWalletEntryId, refereeCouponId);
         await _referralRepository.UpdateAsync(referral);
@@ -107,15 +121,55 @@ public class ReferralRewardService : IReferralRewardService
             NotificationEventType.ReferralRewardCredited,
             new NotificationRecipient(referee.Mobile, referee.Email),
             new Dictionary<string, string> { ["RewardValue"] = referral.RefereeRewardValue.ToString("0.00") });
+
+        // Task 174: milestone bonus, layered on top of the per-referral
+        // reward just disbursed above - checked on the referrer's REWARDED
+        // count regardless of the per-referral cap (that cap governs the
+        // per-referral reward only; the referral itself still counts toward
+        // a milestone even on a capped referral).
+        await CheckAndAwardMilestoneAsync(referrer);
+    }
+
+    private async Task CheckAndAwardMilestoneAsync(Customer referrer)
+    {
+        int rewardedCount = await _referralRepository.CountRewardedByReferrerAsync(referrer.Id);
+        var milestones = await _milestoneRepository.ListActiveOrderedByThresholdAsync();
+        var milestone = milestones.FirstOrDefault(m => m.ThresholdCount == rewardedCount);
+        if (milestone is null)
+        {
+            return;
+        }
+
+        if (await _milestoneAwardRepository.ExistsAsync(milestone.Id, referrer.Id))
+        {
+            // Already paid (e.g. a retried handler invocation) - the award
+            // row is the idempotency guard, never pay the same milestone twice.
+            return;
+        }
+
+        (Guid? walletEntryId, Guid? couponId) = await IssueRewardAsync(
+            referrer, milestone.BonusType, milestone.BonusValue,
+            WalletSourceType.ReferralMilestoneBonus, milestone.Id, "Referral milestone bonus");
+
+        await _milestoneAwardRepository.AddAsync(
+            new ReferralMilestoneAward(Guid.NewGuid(), milestone.Id, referrer.Id, walletEntryId, couponId));
+
+        await _notificationDispatchService.DispatchAsync(
+            referrer.Id,
+            NotificationEventType.ReferralRewardCredited,
+            new NotificationRecipient(referrer.Mobile, referrer.Email),
+            new Dictionary<string, string> { ["RewardValue"] = milestone.BonusValue.ToString("0.00") });
     }
 
     private async Task<(Guid? WalletEntryId, Guid? CouponId)> IssueRewardAsync(
-        Customer recipient, ReferralRewardType rewardType, decimal rewardValue, Guid referralId)
+        Customer recipient, ReferralRewardType rewardType, decimal rewardValue,
+        WalletSourceType walletSourceType, Guid sourceReferenceId, string description)
     {
         if (rewardType == ReferralRewardType.WalletCredit)
         {
             var entry = await _walletService.CreditAsync(
-                recipient.Id, rewardValue, WalletSourceType.ReferralReward, referralId, "Referral reward");
+                recipient.Id, rewardValue, walletSourceType, sourceReferenceId, description,
+                expiresAtUtc: DateTime.UtcNow.Add(ReferralCreditExpiryWindow));
             return (entry.Id, null);
         }
 
@@ -123,7 +177,7 @@ public class ReferralRewardService : IReferralRewardService
         var coupon = new Coupon(
             Guid.NewGuid(),
             await GenerateUniqueCouponCodeAsync(),
-            "Referral reward",
+            description,
             CouponDiscountType.Flat,
             rewardValue,
             maxDiscountAmount: null,

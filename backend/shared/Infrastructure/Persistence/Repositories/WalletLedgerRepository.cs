@@ -30,4 +30,27 @@ public class WalletLedgerRepository : IWalletLedgerRepository
             .Where(e => e.CustomerId == customerId)
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync();
+
+    public async Task<IReadOnlyList<WalletLedgerEntry>> ListUnexpiredCreditsWithRemainingAsync(Guid customerId, DateTime asOfUtc) =>
+        await _context.WalletLedgerEntries
+            .Where(e => e.CustomerId == customerId
+                && e.EntryType == WalletEntryType.Credit
+                && e.ExpiresAtUtc != null && e.ExpiresAtUtc > asOfUtc
+                && e.RemainingAmount > 0)
+            .OrderBy(e => e.ExpiresAtUtc)
+            .ToListAsync();
+
+    public async Task<IReadOnlyList<WalletLedgerEntry>> ListExpiredCreditsWithRemainingAsync(DateTime asOfUtc) =>
+        await _context.WalletLedgerEntries
+            .Where(e => e.EntryType == WalletEntryType.Credit
+                && e.ExpiresAtUtc != null && e.ExpiresAtUtc <= asOfUtc
+                && e.RemainingAmount > 0)
+            .OrderBy(e => e.ExpiresAtUtc)
+            .ToListAsync();
+
+    public async Task UpdateRemainingAsync(WalletLedgerEntry entry)
+    {
+        _context.WalletLedgerEntries.Update(entry);
+        await _context.SaveChangesAsync();
+    }
 }

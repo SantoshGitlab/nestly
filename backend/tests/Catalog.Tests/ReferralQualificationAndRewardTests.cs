@@ -25,6 +25,8 @@ public sealed class ReferralQualificationAndRewardTests : IClassFixture<TestData
             new CustomerRepository(context),
             new WalletService(new WalletLedgerRepository(context)),
             new CouponRepository(context),
+            new ReferralMilestoneRepository(context),
+            new ReferralMilestoneAwardRepository(context),
             new NotificationDispatchService(
                 new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),
                 new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),

@@ -17,5 +17,11 @@ public enum WalletSourceType
     ManualAdjustment,
 
     /// <summary>Credited from a qualifying <see cref="Referral"/>'s reward disbursement (REFERRAL.md, task 165). SourceReferenceId is the Referral id.</summary>
-    ReferralReward
+    ReferralReward,
+
+    /// <summary>Credited from a referrer crossing a <see cref="ReferralMilestone"/> threshold (task 174). SourceReferenceId is the ReferralMilestone id.</summary>
+    ReferralMilestoneBonus,
+
+    /// <summary>Debited by the expiry sweep (task 175) for the unconsumed portion of an expiring wallet credit. SourceReferenceId is the expiring WalletLedgerEntry's id.</summary>
+    ReferralCreditExpiry
 }

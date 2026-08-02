@@ -36,6 +36,68 @@ public class ReferralRepository : IReferralRepository
             .Where(r => r.Status == ReferralStatus.Registered && r.ExpiresAtUtc <= asOfUtc)
             .ToListAsync();
 
+    public async Task<(IReadOnlyList<Referral> Items, int TotalCount)> SearchAsync(
+        ReferralStatus? status, bool? isFraudFlagged, IReadOnlyList<Guid>? customerIds, int page, int pageSize)
+    {
+        var query = _context.Referrals.AsQueryable();
+
+        if (status.HasValue)
+        {
+            query = query.Where(r => r.Status == status.Value);
+        }
+
+        if (isFraudFlagged.HasValue)
+        {
+            query = query.Where(r => r.IsFraudFlagged == isFraudFlagged.Value);
+        }
+
+        if (customerIds is { Count: > 0 })
+        {
+            query = query.Where(r => customerIds.Contains(r.ReferrerCustomerId) || customerIds.Contains(r.RefereeCustomerId));
+        }
+
+        int totalCount = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(r => r.RegisteredAtUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
+
+    public async Task<IReadOnlyList<Referral>> ListRegisteredInRangeAsync(DateTime? fromUtc, DateTime? toUtc)
+    {
+        var query = _context.Referrals.AsQueryable();
+        if (fromUtc.HasValue)
+        {
+            query = query.Where(r => r.RegisteredAtUtc >= fromUtc.Value);
+        }
+
+        if (toUtc.HasValue)
+        {
+            query = query.Where(r => r.RegisteredAtUtc <= toUtc.Value);
+        }
+
+        return await query.ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<Referral>> ListRewardedInRangeAsync(DateTime? fromUtc, DateTime? toUtc)
+    {
+        var query = _context.Referrals.Where(r => r.Status == ReferralStatus.Rewarded && r.RewardedAtUtc != null);
+        if (fromUtc.HasValue)
+        {
+            query = query.Where(r => r.RewardedAtUtc >= fromUtc.Value);
+        }
+
+        if (toUtc.HasValue)
+        {
+            query = query.Where(r => r.RewardedAtUtc <= toUtc.Value);
+        }
+
+        return await query.ToListAsync();
+    }
+
     public async Task AddAsync(Referral referral)
     {
         await _context.Referrals.AddAsync(referral);

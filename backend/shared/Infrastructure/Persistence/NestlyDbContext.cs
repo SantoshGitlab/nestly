@@ -66,6 +66,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<RecurringBookingPlan> RecurringBookingPlans { get; set; }
     public DbSet<RecurringBookingPlanAddOn> RecurringBookingPlanAddOns { get; set; }
     public DbSet<RecurringBookingOccurrence> RecurringBookingOccurrences { get; set; }
+    public DbSet<ReferralMilestone> ReferralMilestones { get; set; }
+    public DbSet<ReferralMilestoneAward> ReferralMilestoneAwards { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {
