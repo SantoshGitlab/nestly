@@ -1,12 +1,11 @@
 /**
  * Typed client for the Partner API's jobs surface (`/api/v1/jobs`). Every
- * call is authenticated. See jobs-types.ts's doc comment: the backend behind
- * this surface currently answers 501 (sibling task #147 not yet merged) -
- * api.ts's `isNotImplemented` helper is how callers detect that and render
- * an empty state instead of a hard error.
+ * call is authenticated. The backend (task #147) is live; `isNotImplemented`
+ * is kept as a defensive check for a 501 in case an older deployment still
+ * has the stub.
  */
 import { API_V1, apiFetch } from "./api";
-import type { JobDetail, JobListItem, JobListParams, SubmitCompletionProofRequest } from "./jobs-types";
+import type { JobDetail, JobListItem, JobListParams, JobListResponse, SubmitCompletionProofRequest } from "./jobs-types";
 
 const JOBS_BASE = `${API_V1}/jobs`;
 
@@ -16,8 +15,10 @@ function query(params: JobListParams): string {
   return `?${new URLSearchParams(entries as [string, string][]).toString()}`;
 }
 
-export const listJobs = (params: JobListParams) =>
-  apiFetch<JobListItem[]>(`${JOBS_BASE}${query(params)}`, { authenticated: true });
+export const listJobs = async (params: JobListParams): Promise<JobListItem[]> => {
+  const response = await apiFetch<JobListResponse>(`${JOBS_BASE}${query(params)}`, { authenticated: true });
+  return response.items;
+};
 
 export const getJobDetail = (jobId: string) =>
   apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}`, { authenticated: true });

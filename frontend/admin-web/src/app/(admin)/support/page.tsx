@@ -22,7 +22,7 @@ import type { SupportTicketFilters } from "@/lib/support";
 
 const PAGE_SIZE = 20;
 const selectClassName =
-  "rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white";
+  "rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none [color-scheme:light] focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:[color-scheme:dark] dark:focus:border-white dark:focus:ring-white";
 const labelClassName = "flex flex-col gap-1.5 text-sm font-medium";
 
 /**
