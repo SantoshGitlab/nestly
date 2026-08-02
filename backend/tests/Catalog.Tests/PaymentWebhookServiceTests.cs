@@ -64,7 +64,8 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private static (PaymentService Payments, PaymentWebhookService Webhook) BuildServices(

@@ -22,14 +22,20 @@ public enum BookingAssignedByType
 /// response; <see cref="Reassigned"/> marks a row that was superseded by a
 /// newer assignment before the partner responded (task 147/159) - per
 /// PARTNER.md OPEN DECISIONS #5, only one row per booking is ever "live"
-/// (Assigned or Accepted) at a time.
+/// (Assigned or Accepted) at a time. <see cref="Withdrawn"/> marks a
+/// still-live (Assigned or Accepted) row whose booking was cancelled out
+/// from under it (task 208) - distinct from <see cref="Rejected"/> (the
+/// partner's own choice) and <see cref="Reassigned"/> (superseded by another
+/// assignment), since here nobody responded, the booking itself just stopped
+/// needing fulfilment.
 /// </summary>
 public enum BookingPartnerAssignmentStatus
 {
     Assigned,
     Accepted,
     Rejected,
-    Reassigned
+    Reassigned,
+    Withdrawn
 }
 
 /// <summary>
@@ -123,6 +129,18 @@ public class BookingPartnerAssignment : Entity<Guid>
         }
 
         Status = BookingPartnerAssignmentStatus.Reassigned;
+        RespondedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Marks this still-live assignment withdrawn because its booking was cancelled (task 208, <c>CancellationService</c>) - so a partner's job list stops showing a cancelled booking as an active job.</summary>
+    public void Withdraw()
+    {
+        if (Status is not (BookingPartnerAssignmentStatus.Assigned or BookingPartnerAssignmentStatus.Accepted))
+        {
+            throw new InvalidOperationException($"Cannot withdraw a {Status} assignment.");
+        }
+
+        Status = BookingPartnerAssignmentStatus.Withdrawn;
         RespondedAt = DateTime.UtcNow;
     }
 

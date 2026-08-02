@@ -61,7 +61,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private static RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>

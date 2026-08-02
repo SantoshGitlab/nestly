@@ -64,7 +64,8 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            metricsService);
+            metricsService,
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private sealed record Fixture(Customer Customer, CustomerAddress Address, City City, Locality Locality, Service Service, SlotWindow Window, DateOnly Date);

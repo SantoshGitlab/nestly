@@ -286,6 +286,7 @@ public class PartnerJobService : IPartnerJobService
         BookingPartnerAssignmentStatus.Assigned => PartnerJobStatus.Assigned,
         BookingPartnerAssignmentStatus.Rejected => PartnerJobStatus.Rejected,
         BookingPartnerAssignmentStatus.Reassigned => PartnerJobStatus.Reassigned,
+        BookingPartnerAssignmentStatus.Withdrawn => PartnerJobStatus.Withdrawn,
         BookingPartnerAssignmentStatus.Accepted => booking.Status switch
         {
             BookingStatus.Completed => PartnerJobStatus.Completed,

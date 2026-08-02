@@ -66,6 +66,7 @@ export enum BookingPartnerAssignmentStatus {
   Accepted = 1,
   Rejected = 2,
   Reassigned = 3,
+  Withdrawn = 4,
 }
 
 /** Mirrors Nestly.Domain.PartnerEarningEntryType's declaration order exactly. */

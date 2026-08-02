@@ -74,7 +74,8 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
                 TimeProvider.System),
-            new NoOpMetricsService());
+            new NoOpMetricsService(),
+            new BookingPartnerAssignmentRepository(context));
     }
 
     private sealed record Fixture(
