@@ -21,18 +21,16 @@ without a real passing `npm run build` (all three frontends are Next projects;
 | 210 | Component kit (`ui.tsx`) | **done** |
 | 211 | Dark mode + theme toggle | **done** |
 | 212 | Customer app shell | **done** |
-| 216 | Customer home & discovery | **partial** — see below |
-| 213, 214, 215, 217–229 | — | **todo** |
+| 213 | Admin app shell | **done** |
+| 214 | Partner app shell | **done** |
+| 216 | Customer home & discovery | **done** |
+| 215, 217–229 | — | **todo** |
 
-Commits: `54ec781` (209–211), `4c8b6f6` (212 + partial 216).
+Commits: `54ec781` (209–211), `4c8b6f6` (212 + partial 216), `b8a57c8` (216
+finished), `aff73e9` (213–214).
 
-### 216 is partially done — read this before touching it
-
-Landed: `HeroBanner`, `SearchBar`, `CategoryTile`, `CategoryTiles`,
-`ServiceCard`, `TrustMarkers`, `app/page.tsx`.
-
-**Still on the old styling:** `app/search/page.tsx`, `app/categories/page.tsx`,
-`app/categories/[slug]/page.tsx`, `components/LocalitySelector.tsx`.
+**All shells and the whole design foundation are now in place.** What remains
+is screen-level work inside each app, plus the four cross-cutting passes.
 
 ---
 
@@ -88,9 +86,9 @@ file trees never touch and can be worked simultaneously:
 
 | Session | Scope | Rows |
 |---|---|---|
-| A | `frontend/customer-web/` | 216 (finish), 217, 218, 219, 220 |
-| B | `frontend/admin-web/` | 213, 221, 222 |
-| C | `frontend/partner-web/` | 214, 223 |
+| A | `frontend/customer-web/` | 217, 218, 219, 220 |
+| B | `frontend/admin-web/` | 221, 222 |
+| C | `frontend/partner-web/` | 223 |
 
 Row 215 (auth screens) spans all three — split it, each session does its own
 app's login/register/OTP/forgot-password. Preserve row 206's unified-login mode
