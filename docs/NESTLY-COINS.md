@@ -217,23 +217,60 @@ notification-trigger and Referral qualifying-booking checks.
    not just the demand side — a partner accepting and completing more jobs
    is exactly the behavior this program exists to reward.
 
-## OPEN DECISIONS
+## OPEN DECISIONS — resolved 2026-08-02 (task 199)
 
-1. **Does a customer's first order ever qualify, or strictly 2nd+?** This
-   doc defaults to `RequireReorder: true` (2nd+ order only), configurable per
-   above. Revisit once there's usage data on whether a blanket first-order
-   incentive cannibalizes Referral's acquisition budget.
-2. **Cross-category reorder counting.** Does "reordering" mean the same
-   service, the same category, or any service at all? Defaults to "any
-   completed order" for simplicity (matching this doc's `RequireReorder`
-   flag being binary, not per-category) — narrow it only if data shows the
-   blanket definition is too generous.
+1. **Resolved — first order does not qualify; `RequireReorder: true` stays
+   the shipped default.** Kept as this doc's own default rather than
+   overridden: a blanket first-order incentive would compete directly with
+   Referral's acquisition budget for the same event (a new-to-the-platform
+   customer's first order), which is exactly the overlap PURPOSE's
+   Coins-vs-Referral table exists to prevent. `RequireReorder` stays
+   admin-toggleable per GUIDELINES #1 so this can be revisited with real
+   usage data without a code change — the open question was which value
+   ships as the default, not whether the toggle exists.
+2. **Resolved — reorder counting stays "any completed order" (not scoped to
+   the same service/category).** `RequireReorder` is a single boolean on
+   `NestlyCoinsProgramConfig`, not a per-category counter, matching the
+   "no speculative configurability" principle already applied to DECISIONS
+   #1 (single reward type) — a per-category reorder count would require a
+   new per-customer-per-category counter table for a distinction the doc's
+   own fraud/abuse posture doesn't need (the earn cap and clawback window
+   already bound exposure regardless of what "reorder" means precisely).
+   Narrow this later only if usage data shows the blanket definition is
+   too generous, per the original open-decision text.
+3. **Resolved — the wallet FIFO consumption-tracking prerequisite is
+   substantially satisfied on `main`, with one specific gap called out.**
+   Verified directly against `main` (commit `fc37980`), not assumed from
+   task 175's `tasks.csv` status: `WalletLedgerEntry.RemainingAmount` /
+   `ExpiresAtUtc` exist, `WalletService.ConsumeExpiringCreditsAsync` already
+   draws down the soonest-to-expire outstanding credit first on every debit
+   (real FIFO consumption, not a stub), and `IWalletService.ExpireCreditAsync`
+   is a working write-off primitive. This is the actual data-model
+   prerequisite GUIDELINES #3 was blocking on, and it's real. **What is
+   genuinely still missing on `main`**: a scheduled sweep that calls
+   `ExpireCreditAsync` proactively once `ExpiresAtUtc` passes without the
+   credit having been spent — task 175 itself is still `todo` in
+   `tasks.csv` because only that Hangfire scheduling piece is outstanding
+   (a completed version exists in an unmerged worktree,
+   `agent-a70c5c9ee775da582`, not yet on `main`). Consequence for Coins:
+   tasks 200-203 can safely credit coins with `expiresAtUtc` set and get
+   correct FIFO consumption ordering the moment a customer/partner spends
+   anything — that part of GUIDELINES #3 is unblocked. But a coin credit
+   that is *never spent* before its expiry will not be automatically
+   written off until a sweep job exists. Per this doc's own instruction
+   ("If #175 is picked up first, Coins should build on it directly rather
+   than inventing a second expiry mechanism"), Coins' Phase 11 scope does
+   **not** add its own competing sweep — it relies on task 175's sweep
+   (whichever repo/branch state merges it to `main` first) to cover
+   unspent-coin write-off. This gap is tracked, not silently accepted: see
+   NEXT STEPS #1.
 
 ## NEXT STEPS
 
-1. Confirm task #175's wallet FIFO consumption-tracking model (or build it
-   as this program's own prerequisite, whichever lands first) — Coins'
-   expiry cannot be enforced without it (see GUIDELINES #3).
+1. **Open, tracked gap**: no scheduled sweep on `main` yet calls
+   `IWalletService.ExpireCreditAsync` for any expired-and-unconsumed credit
+   (Referral's or, once implemented, Coins'). Task 175 owns closing this;
+   Coins should not implement a second one (see OPEN DECISIONS #3 above).
 2. Add `nestly_coins_program_config` to DATABASE.md.
 3. Add the endpoint contracts to API.md.
 4. Extend the RBAC permission matrix and admin UI for the NestlyCoins module.
