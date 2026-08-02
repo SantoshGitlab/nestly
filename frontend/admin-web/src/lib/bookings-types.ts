@@ -252,3 +252,22 @@ export interface AdminRefundRequest {
   reason: string;
   method: RefundMethod;
 }
+
+/**
+ * Completion proof shapes mirror the C# records in Nestly.Application.Bookings
+ * (BookingCompletionProofContracts.cs) - tasks 195-198 dispute-review evidence.
+ */
+export interface CompletionChecklistAnswerResponse {
+  item: string;
+  completed: boolean;
+  notes: string | null;
+}
+
+export interface BookingCompletionProofResponse {
+  id: string;
+  bookingId: string;
+  photoRefs: string[];
+  checklistAnswers: CompletionChecklistAnswerResponse[];
+  submittedByPartnerId: string;
+  submittedAtUtc: string;
+}

@@ -14,6 +14,7 @@ import type {
   AdminCancelBookingRequest,
   AdminRefundRequest,
   AdminRescheduleBookingRequest,
+  BookingCompletionProofResponse,
 } from "./bookings-types";
 
 const BOOKINGS_BASE = `${API_V1}/bookings`;
@@ -61,4 +62,10 @@ export const refundBooking = (bookingId: string, request: AdminRefundRequest) =>
     method: "POST",
     authenticated: true,
     body: JSON.stringify(request),
+  });
+
+/** Completion proof (photos + checklist) for a booking, if any (tasks 195-198 dispute review). */
+export const getBookingCompletionProof = (bookingId: string) =>
+  apiFetch<BookingCompletionProofResponse | undefined>(`${BOOKINGS_BASE}/${bookingId}/completion-proof`, {
+    authenticated: true,
   });

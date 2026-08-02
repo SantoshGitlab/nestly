@@ -803,3 +803,23 @@ export interface SupportTicketDetailResponse {
   createdAtUtc: string;
   updatedAtUtc: string;
 }
+
+/**
+ * Completion proof shapes mirror the C# records in Nestly.Application.Bookings
+ * (BookingCompletionProofContracts.cs) - see BookingCompletionProofController
+ * (tasks 195-198).
+ */
+export interface CompletionChecklistAnswerResponse {
+  item: string;
+  completed: boolean;
+  notes: string | null;
+}
+
+export interface BookingCompletionProofResponse {
+  id: string;
+  bookingId: string;
+  photoRefs: string[];
+  checklistAnswers: CompletionChecklistAnswerResponse[];
+  submittedByPartnerId: string;
+  submittedAtUtc: string;
+}
