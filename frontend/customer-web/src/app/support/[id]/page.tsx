@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { ChatWidget } from "@/components/ChatWidget";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { authorTypeLabel, categoryLabel, priorityLabel, statusLabel } from "@/lib/support";
-import { SupportTicketCommentAuthorType } from "@/lib/types";
+import { ChatContextType, SupportTicketCommentAuthorType } from "@/lib/types";
 import type { SupportTicketDetailResponse } from "@/lib/types";
 
 /** Support ticket detail: thread + reply (SRS 11.18.3, task 92). */
@@ -161,6 +162,8 @@ function SupportTicketDetailScreen() {
             </Button>
           </div>
         </Card>
+
+        <ChatWidget contextType={ChatContextType.SupportTicket} contextId={ticket.id} />
 
         <Link href="/support" className="text-sm font-medium hover:underline">
           Back to tickets

@@ -103,3 +103,31 @@ export interface JobDetail {
 export interface SubmitCompletionProofRequest {
   proofRef: string;
 }
+
+/**
+ * Completion verification shapes mirror the C# records in
+ * Nestly.Application.Bookings (BookingCompletionProofContracts.cs) - tasks
+ * 195-197. Distinct from SubmitCompletionProofRequest's single legacy
+ * proof-ref field above: this is the richer photos+checklist evidence that
+ * gates the InProgress -> Completed transition (task 196).
+ */
+
+export interface CompletionChecklistAnswer {
+  item: string;
+  completed: boolean;
+  notes: string | null;
+}
+
+export interface SubmitCompletionVerificationRequest {
+  photoRefs: string[];
+  checklistAnswers: CompletionChecklistAnswer[];
+}
+
+export interface BookingCompletionProofResponse {
+  id: string;
+  bookingId: string;
+  photoRefs: string[];
+  checklistAnswers: CompletionChecklistAnswer[];
+  submittedByPartnerId: string;
+  submittedAtUtc: string;
+}

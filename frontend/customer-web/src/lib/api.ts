@@ -4,7 +4,8 @@
  */
 import { getAccessToken } from "./auth";
 
-const API_BASE_URL =
+/** Exported for the chat SignalR connection (ChatWidget), which talks to the same origin outside of `apiFetch`. */
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5257";
 
 /** All customer endpoints are served under the v1 route prefix. */

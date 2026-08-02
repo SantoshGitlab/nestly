@@ -5,7 +5,15 @@
  * has the stub.
  */
 import { API_V1, apiFetch } from "./api";
-import type { JobDetail, JobListItem, JobListParams, JobListResponse, SubmitCompletionProofRequest } from "./jobs-types";
+import type {
+  BookingCompletionProofResponse,
+  JobDetail,
+  JobListItem,
+  JobListParams,
+  JobListResponse,
+  SubmitCompletionProofRequest,
+  SubmitCompletionVerificationRequest,
+} from "./jobs-types";
 
 const JOBS_BASE = `${API_V1}/jobs`;
 
@@ -40,4 +48,17 @@ export const submitCompletionProof = (jobId: string, request: SubmitCompletionPr
     method: "POST",
     authenticated: true,
     body: JSON.stringify(request),
+  });
+
+/** The photos+checklist evidence required before `completeJob` will succeed (tasks 195-197). */
+export const submitCompletionVerification = (jobId: string, request: SubmitCompletionVerificationRequest) =>
+  apiFetch<BookingCompletionProofResponse>(`${JOBS_BASE}/${jobId}/completion-verification`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const getCompletionVerification = (jobId: string) =>
+  apiFetch<BookingCompletionProofResponse | undefined>(`${JOBS_BASE}/${jobId}/completion-verification`, {
+    authenticated: true,
   });

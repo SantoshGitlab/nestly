@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Nestly.Application;
+using Nestly.Application.Bookings;
 using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Domain;
@@ -38,7 +39,8 @@ public class PartnerJobServiceTests : IDisposable
     private PartnerJobService CreateJobService(NestlyDbContext context) => new(
         new BookingRepository(context),
         new BookingPartnerAssignmentRepository(context),
-        CreateAssignmentService(context));
+        CreateAssignmentService(context),
+        new BookingCompletionProofRepository(context));
 
     private BookingPartnerAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new PartnerRepository(context), new BookingPartnerAssignmentRepository(context));
@@ -177,6 +179,11 @@ public class PartnerJobServiceTests : IDisposable
         started.IsSuccess.Should().BeTrue();
         started.Value.Status.Should().Be(PartnerJobStatus.InProgress);
 
+        var submittedProof = await service.SubmitCompletionProofAsync(
+            _partnerId, bookingId,
+            new SubmitCompletionProofRequest(["s3://proofs/job-photo.jpg"], [new CompletionChecklistAnswerRequest("Area cleaned", true, null)]));
+        submittedProof.IsSuccess.Should().BeTrue();
+
         var completed = await service.CompleteAsync(_partnerId, bookingId);
         completed.IsSuccess.Should().BeTrue();
         completed.Value.Status.Should().Be(PartnerJobStatus.Completed);
@@ -201,6 +208,49 @@ public class PartnerJobServiceTests : IDisposable
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("PartnerJob.NotStarted");
+    }
+
+    [Fact]
+    public async Task CompleteAsync_is_rejected_without_a_completion_proof_on_file()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_partnerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.StartAsync(_partnerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.CompleteAsync(_partnerId, bookingId);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Booking.CompletionProofRequired");
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.InProgress);
+    }
+
+    [Fact]
+    public async Task SubmitCompletionProofAsync_resubmission_replaces_the_previous_evidence()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_partnerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.StartAsync(_partnerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var first = await service.SubmitCompletionProofAsync(
+            _partnerId, bookingId, new SubmitCompletionProofRequest(["s3://proofs/first.jpg"], []));
+        first.IsSuccess.Should().BeTrue();
+
+        var second = await service.SubmitCompletionProofAsync(
+            _partnerId, bookingId,
+            new SubmitCompletionProofRequest(["s3://proofs/first.jpg", "s3://proofs/second.jpg"], [new CompletionChecklistAnswerRequest("Area cleaned", true, "Extra photo added")]));
+        second.IsSuccess.Should().BeTrue();
+        second.Value.Id.Should().Be(first.Value.Id);
+        second.Value.PhotoRefs.Should().HaveCount(2);
+        second.Value.ChecklistAnswers.Should().ContainSingle(a => a.Item == "Area cleaned" && a.Completed);
+
+        var completed = await service.CompleteAsync(_partnerId, bookingId);
+        completed.IsSuccess.Should().BeTrue();
     }
 
     public void Dispose() => _database.Dispose();

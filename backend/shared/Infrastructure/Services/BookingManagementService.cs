@@ -62,6 +62,7 @@ public class BookingManagementService : IBookingManagementService
     private readonly IRefundService _refundService;
     private readonly IAuditLogWriter _auditLogWriter;
     private readonly NestlyDbContext _dbContext;
+    private readonly IBookingCompletionProofRepository _completionProofRepository;
 
     public BookingManagementService(
         IBookingRepository bookingRepository,
@@ -73,7 +74,8 @@ public class BookingManagementService : IBookingManagementService
         IRescheduleService rescheduleService,
         IRefundService refundService,
         IAuditLogWriter auditLogWriter,
-        NestlyDbContext dbContext)
+        NestlyDbContext dbContext,
+        IBookingCompletionProofRepository completionProofRepository)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
@@ -85,6 +87,7 @@ public class BookingManagementService : IBookingManagementService
         _refundService = refundService;
         _auditLogWriter = auditLogWriter;
         _dbContext = dbContext;
+        _completionProofRepository = completionProofRepository;
     }
 
     public async Task<Result<AdminBookingSearchResponse>> SearchAsync(AdminBookingSearchRequest request)
@@ -142,6 +145,15 @@ public class BookingManagementService : IBookingManagementService
             return Error.Business(
                 "Booking.InvalidTransition",
                 $"A booking in status '{booking.Status}' cannot be moved to '{request.NewStatus}'.");
+        }
+
+        if (request.NewStatus == BookingStatus.Completed)
+        {
+            var proofError = await _completionProofRepository.EnsureCompletionProofExistsAsync(bookingId);
+            if (proofError is not null)
+            {
+                return proofError;
+            }
         }
 
         var previousStatus = booking.Status;

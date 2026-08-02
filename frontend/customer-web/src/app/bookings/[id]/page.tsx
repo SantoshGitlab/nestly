@@ -3,11 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ChatWidget } from "@/components/ChatWidget";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { BookingStatus, RefundMethod, RefundStatus, RefundType } from "@/lib/types";
+import { BookingStatus, ChatContextType, RefundMethod, RefundStatus, RefundType } from "@/lib/types";
 import type {
+  BookingCompletionProofResponse,
   BookingDetail,
   BookingStatusTimelineEntry,
   PriceBreakdown,
@@ -81,9 +83,13 @@ function BookingDetailScreen() {
 
         {REFUND_STATUSES.includes(booking.status) ? <RefundInfoCard booking={booking} /> : null}
 
+        {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+
         <Card title="Status timeline">
           <Timeline entries={booking.timeline} />
         </Card>
+
+        <ChatWidget contextType={ChatContextType.Booking} contextId={booking.id} />
       </div>
 
       <aside className="flex flex-col gap-3 md:sticky md:top-6 md:self-start">
@@ -324,5 +330,55 @@ function Row({ label, value }: { label: string; value: number }) {
       <dt>{label}</dt>
       <dd>₹{value.toFixed(2)}</dd>
     </div>
+  );
+}
+
+/** Photo + checklist evidence the partner submitted at job completion (tasks 195-198). */
+function CompletionProofCard({ bookingId }: { bookingId: string }) {
+  const query = useQuery({
+    queryKey: ["booking-completion-proof", bookingId],
+    queryFn: () =>
+      apiFetch<BookingCompletionProofResponse | undefined>(`${API_V1}/bookings/${bookingId}/completion-proof`, {
+        authenticated: true,
+      }),
+  });
+
+  if (query.isPending) {
+    return (
+      <Card title="Completion proof">
+        <p className="text-sm text-neutral-500">Loading…</p>
+      </Card>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Card title="Completion proof">
+        <Alert>{describeError(query.error)}</Alert>
+      </Card>
+    );
+  }
+
+  const proof = query.data;
+  if (!proof) {
+    return null;
+  }
+
+  return (
+    <Card title="Completion proof">
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        Submitted {new Date(proof.submittedAtUtc).toLocaleString()} · {proof.photoRefs.length} photo(s)
+      </p>
+      {proof.checklistAnswers.length > 0 ? (
+        <ul className="mt-3 flex flex-col gap-1 text-sm">
+          {proof.checklistAnswers.map((answer, i) => (
+            <li key={i}>
+              {answer.completed ? "✓" : "○"} {answer.item}
+              {answer.notes ? ` — ${answer.notes}` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Card>
   );
 }

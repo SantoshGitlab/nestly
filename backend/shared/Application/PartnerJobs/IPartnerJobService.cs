@@ -1,3 +1,4 @@
+using Nestly.Application.Bookings;
 using Nestly.BuildingBlocks.Results;
 
 namespace Nestly.Application.PartnerJobs;
@@ -36,4 +37,18 @@ public interface IPartnerJobService
     Task<Result<PartnerJobDetailResponse>> CompleteAsync(Guid partnerId, Guid bookingId);
 
     Task<Result<PartnerJobDetailResponse>> UploadCompletionProofAsync(Guid partnerId, Guid bookingId, UploadJobCompletionProofRequest request);
+
+    /// <summary>
+    /// Submits (or resubmits) the richer completion evidence - photos plus
+    /// checklist - that <see cref="CompleteAsync"/> requires to exist before
+    /// it will move the booking to Completed (tasks 195-197). Distinct from
+    /// <see cref="UploadCompletionProofAsync"/>'s single legacy proof-ref
+    /// field: that one is supplementary evidence uploadable any time
+    /// (including after completion); this one is the task 196 gate itself
+    /// and must be submitted before <see cref="CompleteAsync"/> succeeds.
+    /// </summary>
+    Task<Result<BookingCompletionProofResponse>> SubmitCompletionProofAsync(Guid partnerId, Guid bookingId, SubmitCompletionProofRequest request);
+
+    /// <summary>The completion proof this partner submitted for this job, if any (task 198's partner-side view).</summary>
+    Task<Result<BookingCompletionProofResponse?>> GetCompletionProofAsync(Guid partnerId, Guid bookingId);
 }
