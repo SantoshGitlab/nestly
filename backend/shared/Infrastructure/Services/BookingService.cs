@@ -3,6 +3,7 @@ using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
 using Nestly.Application.Slots;
+using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -23,6 +24,7 @@ public class BookingService : IBookingService
     private readonly ICouponService _couponService;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IMetricsService _metricsService;
+    private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
 
     public BookingService(
         IBookingSummaryService summaryService,
@@ -30,7 +32,8 @@ public class BookingService : IBookingService
         ICustomerRepository customerRepository,
         ICouponService couponService,
         ISlotAvailabilityService slotAvailabilityService,
-        IMetricsService metricsService)
+        IMetricsService metricsService,
+        ICustomerSubscriptionRepository customerSubscriptionRepository)
     {
         _summaryService = summaryService;
         _bookingRepository = bookingRepository;
@@ -38,6 +41,7 @@ public class BookingService : IBookingService
         _couponService = couponService;
         _slotAvailabilityService = slotAvailabilityService;
         _metricsService = metricsService;
+        _customerSubscriptionRepository = customerSubscriptionRepository;
     }
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
@@ -100,6 +104,24 @@ public class BookingService : IBookingService
             }
         }
 
+        // Task 179: consume the free-visit credit before the booking exists,
+        // same reasoning as the coupon reservation above - an atomic
+        // conditional UPDATE (ICustomerSubscriptionRepository.TryConsumeFreeVisitAsync)
+        // so two bookings racing for a subscriber's last free visit cannot
+        // both win. A percentage-discount benefit (FreeVisitApplied false)
+        // has no counter to consume - it's a standing benefit, not a
+        // per-cycle credit - so nothing to reserve in that branch.
+        if (summary.SubscriptionBenefit is { FreeVisitApplied: true } benefit)
+        {
+            bool consumed = await _customerSubscriptionRepository.TryConsumeFreeVisitAsync(benefit.SubscriptionId);
+            if (!consumed)
+            {
+                const string errorCode = "Subscription.FreeVisitNoLongerAvailable";
+                _metricsService.RecordBookingCreated(succeeded: false, errorCode);
+                return Error.Conflict(errorCode, "Your subscription's free visit is no longer available. Please retry.");
+            }
+        }
+
         var booking = new Booking(
             Guid.NewGuid(),
             customerId,
@@ -116,7 +138,10 @@ public class BookingService : IBookingService
                 summary.Price.VisitCharge, summary.Price.Subtotal, summary.Price.TaxPercentage,
                 summary.Price.TaxAmount, summary.Price.PlatformFee, summary.FinalPayable),
             summary.Coupon?.Code,
-            summary.Coupon?.DiscountAmount);
+            summary.Coupon?.DiscountAmount,
+            summary.SubscriptionBenefit?.SubscriptionId,
+            summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
+            summary.SubscriptionBenefit?.DiscountAmount);
 
         // Add-on line items come from the price breakdown, not summary.AddOns:
         // the breakdown already carries each selection's quantity and

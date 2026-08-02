@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.BookingManagement;
+using Nestly.Application.Bookings;
 using Nestly.Application.PartnerManagement;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
@@ -42,6 +43,8 @@ public class BookingsController : ControllerBase
 
     private readonly IBookingManagementService _bookingManagementService;
     private readonly IBookingPartnerAssignmentService _assignmentService;
+    private readonly IBookingCompletionProofRepository _completionProofRepository;
+    private readonly IBookingRepository _bookingRepository;
     private readonly IValidator<AdminBookingSearchRequest> _searchValidator;
     private readonly IValidator<AdminBookingStatusUpdateRequest> _statusUpdateValidator;
     private readonly IValidator<AdminCancelBookingRequest> _cancelValidator;
@@ -53,6 +56,8 @@ public class BookingsController : ControllerBase
     public BookingsController(
         IBookingManagementService bookingManagementService,
         IBookingPartnerAssignmentService assignmentService,
+        IBookingCompletionProofRepository completionProofRepository,
+        IBookingRepository bookingRepository,
         IValidator<AdminBookingSearchRequest> searchValidator,
         IValidator<AdminBookingStatusUpdateRequest> statusUpdateValidator,
         IValidator<AdminCancelBookingRequest> cancelValidator,
@@ -63,6 +68,8 @@ public class BookingsController : ControllerBase
     {
         _bookingManagementService = bookingManagementService;
         _assignmentService = assignmentService;
+        _completionProofRepository = completionProofRepository;
+        _bookingRepository = bookingRepository;
         _searchValidator = searchValidator;
         _statusUpdateValidator = statusUpdateValidator;
         _cancelValidator = cancelValidator;
@@ -241,6 +248,23 @@ public class BookingsController : ControllerBase
     {
         var result = await _assignmentService.GetHistoryAsync(bookingId);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Completion proof (photos + checklist) for a booking, if any (task 198, SRS 12.11.2 dispute review).</summary>
+    [HttpGet("{bookingId:guid}/completion-proof")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(BookingCompletionProofResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCompletionProof(Guid bookingId)
+    {
+        var result = await _completionProofRepository.GetForAdminAsync(_bookingRepository, bookingId);
+        if (result.IsFailure)
+        {
+            return result.ToProblemResult();
+        }
+
+        return result.Value is null ? NoContent() : Ok(result.Value);
     }
 
     private Guid CurrentAdminUserId() =>

@@ -62,6 +62,22 @@ public class Booking : AggregateRoot<Guid>
     public string? CouponCodeSnapshot { get; private set; }
     public decimal? CouponDiscountAmountSnapshot { get; private set; }
 
+    /// <summary>
+    /// Traceability only, same convention as <see cref="SlotWindowId"/> - not
+    /// a foreign key (PRODUCT-ENHANCEMENTS.md #1, task 179). Null when no
+    /// active subscription benefit was applied at booking time. A coupon and
+    /// a subscription benefit are mutually exclusive per booking: a supplied
+    /// coupon always takes precedence (see the booking-summary service's doc
+    /// comment), so at most one of the coupon/subscription snapshot pairs is
+    /// ever populated on a given booking.
+    /// </summary>
+    public Guid? SubscriptionId { get; private set; }
+
+    /// <summary>Whether this booking consumed one of the subscription's free-visit credits (task 179) rather than applying its standing percentage discount.</summary>
+    public bool SubscriptionFreeVisitApplied { get; private set; }
+
+    public decimal? SubscriptionDiscountAmountSnapshot { get; private set; }
+
     public BookingStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
@@ -90,7 +106,10 @@ public class Booking : AggregateRoot<Guid>
         SlotSnapshot slot,
         PriceSnapshot price,
         string? couponCode = null,
-        decimal? couponDiscountAmount = null)
+        decimal? couponDiscountAmount = null,
+        Guid? subscriptionId = null,
+        bool subscriptionFreeVisitApplied = false,
+        decimal? subscriptionDiscountAmount = null)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -134,6 +153,10 @@ public class Booking : AggregateRoot<Guid>
 
         CouponCodeSnapshot = couponCode;
         CouponDiscountAmountSnapshot = couponDiscountAmount;
+
+        SubscriptionId = subscriptionId;
+        SubscriptionFreeVisitApplied = subscriptionFreeVisitApplied;
+        SubscriptionDiscountAmountSnapshot = subscriptionDiscountAmount;
 
         Status = BookingStatus.Initiated;
         CreatedAtUtc = DateTime.UtcNow;

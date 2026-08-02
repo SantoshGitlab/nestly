@@ -1,3 +1,4 @@
+using Nestly.Application.Bookings;
 using Nestly.Domain;
 
 namespace Nestly.Application.PartnerJobs;

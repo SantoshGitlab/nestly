@@ -38,7 +38,8 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
             new CouponRepository(context),
             new CouponRedemptionRepository(context),
             new BookingRepository(context),
-            TimeProvider.System));
+            TimeProvider.System),
+        new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
 
     private sealed record Fixture(
         Customer Customer, CustomerAddress Address, State State, City City, Pincode Pincode,

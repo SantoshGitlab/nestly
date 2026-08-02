@@ -51,7 +51,8 @@ export type NavModuleKey =
   | "settings"
   | "admin-users"
   | "partner"
-  | "referral";
+  | "referral"
+  | "subscription";
 
 export interface NavModule {
   key: NavModuleKey;
@@ -81,6 +82,7 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "admin-users", label: "Admin Users", href: "/admin-users", srsRef: "SRS 12.2", requiredPermission: "settings.read" },
   { key: "partner", label: "Partners", href: "/partners", srsRef: "PARTNER.md", requiredPermission: "partner.read" },
   { key: "referral", label: "Referral Program", href: "/referral", srsRef: "REFERRAL.md", requiredPermission: "referral.read" },
+  { key: "subscription", label: "Subscription Plans", href: "/subscription-plans", srsRef: "PRODUCT-ENHANCEMENTS.md #1", requiredPermission: "subscription.read" },
 ];
 
 /** Whether the current admin can perform mutating ("write") actions within a module, per AdminPermissionCatalog. */
@@ -111,7 +113,7 @@ const ROLE_MODULE_FALLBACK: Record<string, NavModuleKey[] | "*"> = {
   "Support Admin": ["dashboard", "support", "customers", "reviews"],
   "Catalog Admin": ["dashboard", "catalog", "pricing"],
   "Pricing Admin": ["dashboard", "pricing", "coupons"],
-  "Marketing Admin": ["dashboard", "coupons", "cms", "notifications", "reviews", "referral"],
+  "Marketing Admin": ["dashboard", "coupons", "cms", "notifications", "reviews", "referral", "subscription"],
   "Finance Admin": ["dashboard", "bookings", "reports", "partner"],
   "Read-only Analyst": ["dashboard", "reports"],
 };

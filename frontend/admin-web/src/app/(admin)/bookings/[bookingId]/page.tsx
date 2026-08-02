@@ -9,6 +9,7 @@ import { describeError } from "@/lib/api";
 import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import {
   cancelBooking,
+  getBookingCompletionProof,
   getBookingDetail,
   refundBooking,
   rescheduleBooking,
@@ -337,6 +338,8 @@ export default function BookingDetailPage() {
         )}
       </Card>
 
+      {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+
       <Card title="Status timeline" description="Full history (SRS 12.11.2-3)">
         <ol className="flex flex-col gap-2 text-sm">
           {booking.timeline.map((entry, index) => (
@@ -562,5 +565,63 @@ export default function BookingDetailPage() {
         </>
       ) : null}
     </div>
+  );
+}
+
+/** Photo + checklist evidence the partner submitted at job completion - dispute-review evidence (tasks 195-198, SRS 12.11.2). */
+function CompletionProofCard({ bookingId }: { bookingId: string }) {
+  const query = useQuery({
+    queryKey: ["admin-booking-completion-proof", bookingId],
+    queryFn: () => getBookingCompletionProof(bookingId),
+  });
+
+  if (query.isPending) {
+    return (
+      <Card title="Completion proof">
+        <p className="text-sm text-neutral-500">Loading…</p>
+      </Card>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Card title="Completion proof">
+        <Alert>{describeError(query.error)}</Alert>
+      </Card>
+    );
+  }
+
+  const proof = query.data;
+  if (!proof) {
+    return null;
+  }
+
+  return (
+    <Card title="Completion proof" description="Submitted by the partner at job completion (SRS 12.11.2)">
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        Submitted {new Date(proof.submittedAtUtc).toLocaleString()} · {proof.photoRefs.length} photo(s)
+      </p>
+      {proof.photoRefs.length > 0 ? (
+        <ul className="mt-2 flex flex-col gap-1 text-sm">
+          {proof.photoRefs.map((ref, i) => (
+            <li key={i}>
+              <a href={ref} target="_blank" rel="noreferrer" className="hover:underline">
+                {ref}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {proof.checklistAnswers.length > 0 ? (
+        <ul className="mt-3 flex flex-col gap-1 text-sm">
+          {proof.checklistAnswers.map((answer, i) => (
+            <li key={i}>
+              {answer.completed ? "✓" : "○"} {answer.item}
+              {answer.notes ? ` — ${answer.notes}` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Card>
   );
 }

@@ -157,12 +157,16 @@ public static class AdminPermissionCatalog
             // the referral program (config, fraud review, funnel/cost
             // reports) is a growth campaign in the same cluster as coupons
             // and notifications, both of which this role already owns.
+            // Subscription=true added (task 180): plan config (price,
+            // billing cycle, benefits) is a monetization campaign in the
+            // same cluster as Coupons/Referral, both of which this role
+            // already owns.
             [AdminRoleNames.MarketingAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Coupons, true),
                 (AdminModules.Notifications, true), (AdminModules.Cms, true),
                 (AdminModules.Reviews, false), (AdminModules.Reports, false),
-                (AdminModules.Referral, true)
+                (AdminModules.Referral, true), (AdminModules.Subscription, true)
             ],
 
             // Finance Admin: financial reporting and the audit trail behind
@@ -176,12 +180,17 @@ public static class AdminPermissionCatalog
             // program cost (the referral funnel/cost report is one of this
             // role's Reports), not configuration or fraud-review authority,
             // which stays with Marketing Admin above.
+            // Subscription=false added (task 180): read-only visibility into
+            // recurring subscription revenue as reporting context, not
+            // plan-configuration authority, which stays with Marketing
+            // Admin above - same treatment as Referral=false right above.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
                 (AdminModules.Coupons, false), (AdminModules.Reports, true),
                 (AdminModules.Audit, false), (AdminModules.Partner, false),
-                (AdminModules.Payout, true), (AdminModules.Referral, false)
+                (AdminModules.Payout, true), (AdminModules.Referral, false),
+                (AdminModules.Subscription, false)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

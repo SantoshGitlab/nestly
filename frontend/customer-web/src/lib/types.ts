@@ -805,6 +805,79 @@ export interface SupportTicketDetailResponse {
 }
 
 /**
+ * Subscription shapes mirror the C# records in Nestly.Application.Subscriptions
+ * (CustomerSubscriptionContracts.cs) - see SubscriptionController (tasks 177-182).
+ */
+
+/** Mirrors Nestly.Domain.SubscriptionBillingCycle's declaration order exactly. */
+export enum SubscriptionBillingCycle {
+  Monthly = 0,
+  Quarterly = 1,
+  Yearly = 2,
+}
+
+/** Mirrors Nestly.Domain.CustomerSubscriptionStatus's declaration order exactly. */
+export enum CustomerSubscriptionStatus {
+  Active = 0,
+  Cancelled = 1,
+  Expired = 2,
+  PaymentFailed = 3,
+}
+
+export interface SubscriptionPlanBrowseResponse {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  billingCycle: SubscriptionBillingCycle;
+  freeVisitsIncluded: number;
+  discountPercent: number;
+  prioritySlotFlag: boolean;
+}
+
+export interface SubscribeRequestBody {
+  planId: string;
+}
+
+export interface MySubscriptionResponse {
+  id: string;
+  planName: string;
+  price: number;
+  billingCycle: SubscriptionBillingCycle;
+  freeVisitsIncluded: number;
+  discountPercent: number;
+  prioritySlotFlag: boolean;
+  status: CustomerSubscriptionStatus;
+  currentPeriodStartUtc: string;
+  currentPeriodEndUtc: string;
+  freeVisitsRemaining: number;
+  nextBillingDateUtc: string;
+  lastPaymentFailureReason: string | null;
+  createdAtUtc: string;
+  cancelledAtUtc: string | null;
+}
+
+/**
+ * Completion proof shapes mirror the C# records in Nestly.Application.Bookings
+ * (BookingCompletionProofContracts.cs) - see BookingCompletionProofController
+ * (tasks 195-198).
+ */
+export interface CompletionChecklistAnswerResponse {
+  item: string;
+  completed: boolean;
+  notes: string | null;
+}
+
+export interface BookingCompletionProofResponse {
+  id: string;
+  bookingId: string;
+  photoRefs: string[];
+  checklistAnswers: CompletionChecklistAnswerResponse[];
+  submittedByPartnerId: string;
+  submittedAtUtc: string;
+}
+
+/**
  * Chat shapes mirror the C# records in Nestly.Application.Chat
  * (ChatContracts.cs) - see ChatController (consumer-api), ChatHub (live
  * delivery) and PRODUCT-ENHANCEMENTS.md "3. IN-APP CHAT" (tasks 189-192).
