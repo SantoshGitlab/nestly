@@ -9,6 +9,7 @@ using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Realtime;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -85,15 +86,15 @@ app.UseRateLimiter();
 // the dashboard's admin-role filter has a populated principal to check.
 app.UseBackgroundJobsDashboard();
 
-// Task 175's wallet-credit expiry sweep: the only recurring job in the
-// system so far, registered only when this process actually runs a Hangfire
-// server (admin-api is the sole ServerEnabled=true process, see
-// BackgroundJobOptions.ServerEnabled's doc comment) - scheduling metadata
-// from a process that will never execute it would be pointless and, in
-// Testing config (ServerEnabled=false, no live Postgres guaranteed at
-// startup), would fail for no benefit. Idempotent re-execution is required
-// by the retry convention (BackgroundJobRegistration) and satisfied by
-// WalletCreditExpirySweepJob itself (see its doc comment).
+// Task 175's wallet-credit expiry sweep: registered only when this process
+// actually runs a Hangfire server (admin-api is the sole ServerEnabled=true
+// process, see BackgroundJobOptions.ServerEnabled's doc comment) -
+// scheduling metadata from a process that will never execute it would be
+// pointless and, in Testing config (ServerEnabled=false, no live Postgres
+// guaranteed at startup), would fail for no benefit. Idempotent
+// re-execution is required by the retry convention
+// (BackgroundJobRegistration) and satisfied by WalletCreditExpirySweepJob
+// itself (see its doc comment).
 if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundJobOptions>>().Value.ServerEnabled)
 {
     RecurringJob.AddOrUpdate<IWalletCreditExpirySweepJob>(
@@ -102,7 +103,19 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         Cron.Daily);
 }
 
+// Task 185: registers the recurring-booking occurrence scheduler with
+// Hangfire. Admin API is the only process with BackgroundJobs:ServerEnabled
+// set (see appsettings.json across the three API processes), so it's the
+// only one that should own this registration.
+app.ScheduleRecurringBookingJob();
+
 app.MapControllers();
+
+// Task 190/193: the same ChatHub type consumer-api maps, at the same path -
+// see its doc comment for why one shared hub type (behind the Redis
+// backplane, not two independent per-API hubs) is required for cross-process
+// delivery between a customer's connection and an admin's.
+app.MapHub<ChatHub>(ChatHubRoutes.ChatPath);
 
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });

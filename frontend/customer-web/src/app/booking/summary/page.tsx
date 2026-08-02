@@ -403,6 +403,13 @@ function BookingSummaryScreen() {
         >
           {isSubmitting ? "Placing booking…" : "Proceed to book"}
         </Button>
+
+        {/* Entry point into task 187's recurring-plan setup flow - same service, no booking placed yet. */}
+        <Link href={`/recurring-bookings/new?serviceSlug=${service.slug}`}>
+          <Button type="button" variant="secondary" className="w-full">
+            Set up as recurring instead
+          </Button>
+        </Link>
       </aside>
     </main>
   );

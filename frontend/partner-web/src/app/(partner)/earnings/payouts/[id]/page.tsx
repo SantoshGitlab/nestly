@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { describeError, isNotImplemented } from "@/lib/api";
 import { getPayoutDetail } from "@/lib/earnings-api";
+import { payoutStatusLabel } from "@/lib/earnings-types";
 
 /** Single payout detail (docs/PARTNER.md's `partner_payout` table). Same 501-stub caveat as the earnings list. */
 export default function PayoutDetailPage() {
@@ -38,7 +39,7 @@ export default function PayoutDetailPage() {
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="font-medium">Status</dt>
-              <dd>{query.data.status ?? "—"}</dd>
+              <dd>{payoutStatusLabel(query.data.status)}</dd>
             </div>
             <div>
               <dt className="font-medium">Total amount</dt>

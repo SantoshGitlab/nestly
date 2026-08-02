@@ -253,6 +253,13 @@ function ActionCtas({ booking }: { booking: BookingDetail }) {
           Reschedule booking
         </Button>
       </Link>
+      {canRebook ? (
+        <Link href={`/recurring-bookings/new?serviceSlug=${booking.service.slug}`}>
+          <Button type="button" variant="secondary" className="w-full">
+            Set up recurring booking
+          </Button>
+        </Link>
+      ) : null}
       <Link href={`/bookings/${booking.id}/cancel`}>
         <Button type="button" variant="secondary" className="w-full">
           Cancel booking

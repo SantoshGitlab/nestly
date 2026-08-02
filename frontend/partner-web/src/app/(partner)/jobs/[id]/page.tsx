@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Alert, Button, Card, Field, PageHeading } from "@/components/ui";
 import { describeError, isNotImplemented } from "@/lib/api";
 import { acceptJob, completeJob, getJobDetail, rejectJob, startJob, submitCompletionProof } from "@/lib/jobs-api";
+import { JobStatus, jobStatusLabel } from "@/lib/jobs-types";
 
 /**
  * Job detail (docs/PARTNER.md's `booking_partner_assignment` bridge table):
@@ -30,7 +31,7 @@ export default function JobDetailPage() {
   const startMutation = useMutation({ mutationFn: () => startJob(jobId), onSuccess: invalidate });
   const completeMutation = useMutation({ mutationFn: () => completeJob(jobId), onSuccess: invalidate });
   const proofMutation = useMutation({
-    mutationFn: () => submitCompletionProof(jobId, { fileRef: proofRef }),
+    mutationFn: () => submitCompletionProof(jobId, { proofRef }),
     onSuccess: () => {
       setProofRef("");
       invalidate();
@@ -78,7 +79,7 @@ export default function JobDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <PageHeading title={`Job ${job.bookingId}`} subtitle={`Status: ${job.status}`} />
+      <PageHeading title={`Job ${job.bookingId}`} subtitle={`Status: ${jobStatusLabel(job.status)}`} />
 
       {actionError ? (
         <div className="mb-4">
@@ -94,7 +95,7 @@ export default function JobDetailPage() {
           </div>
           <div>
             <dt className="font-medium">Status</dt>
-            <dd>{job.status}</dd>
+            <dd>{jobStatusLabel(job.status)}</dd>
           </div>
           <div>
             <dt className="font-medium">Assigned</dt>
@@ -104,22 +105,30 @@ export default function JobDetailPage() {
             <dt className="font-medium">Response deadline</dt>
             <dd>{job.responseDeadline ? new Date(job.responseDeadline).toLocaleString() : "—"}</dd>
           </div>
-          {job.customerName ? (
-            <div>
-              <dt className="font-medium">Customer</dt>
-              <dd>{job.customerName}</dd>
-            </div>
-          ) : null}
-          {job.serviceName ? (
-            <div>
-              <dt className="font-medium">Service</dt>
-              <dd>{job.serviceName}</dd>
-            </div>
-          ) : null}
-          {job.addressLine ? (
+          <div>
+            <dt className="font-medium">Customer</dt>
+            <dd>
+              {job.customerNameSnapshot} ({job.customerMobileSnapshot})
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">Slot</dt>
+            <dd>
+              {job.slotDate} {job.slotStartTimeSnapshot}–{job.slotEndTimeSnapshot}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="font-medium">Address</dt>
+            <dd>
+              {job.addressLine1Snapshot}
+              {job.addressLine2Snapshot ? `, ${job.addressLine2Snapshot}` : ""}, {job.addressCitySnapshot}{" "}
+              {job.addressPincodeSnapshot}
+            </dd>
+          </div>
+          {job.items.length > 0 ? (
             <div className="sm:col-span-2">
-              <dt className="font-medium">Address</dt>
-              <dd>{job.addressLine}</dd>
+              <dt className="font-medium">Items</dt>
+              <dd>{job.items.map((item) => `${item.nameSnapshot} × ${item.quantity}`).join(", ")}</dd>
             </div>
           ) : null}
         </dl>
@@ -128,7 +137,7 @@ export default function JobDetailPage() {
       <div className="mt-6">
         <Card title="Actions">
           <div className="flex flex-wrap gap-2">
-            {job.status === "Assigned" ? (
+            {job.status === JobStatus.Assigned ? (
               <>
                 <Button type="button" disabled={anyActionPending} onClick={() => acceptMutation.mutate()}>
                   {acceptMutation.isPending ? "Accepting…" : "Accept"}
@@ -143,22 +152,22 @@ export default function JobDetailPage() {
                 </Button>
               </>
             ) : null}
-            {job.status === "Accepted" ? (
+            {job.status === JobStatus.Accepted ? (
               <Button type="button" disabled={anyActionPending} onClick={() => startMutation.mutate()}>
                 {startMutation.isPending ? "Starting…" : "Start job"}
               </Button>
             ) : null}
-            {job.status === "InProgress" ? (
+            {job.status === JobStatus.InProgress ? (
               <Button type="button" disabled={anyActionPending} onClick={() => completeMutation.mutate()}>
                 {completeMutation.isPending ? "Completing…" : "Mark complete"}
               </Button>
             ) : null}
-            {job.status !== "Assigned" && job.status !== "Accepted" && job.status !== "InProgress" ? (
+            {job.status !== JobStatus.Assigned && job.status !== JobStatus.Accepted && job.status !== JobStatus.InProgress ? (
               <p className="text-sm text-neutral-600 dark:text-neutral-400">No actions available for this status.</p>
             ) : null}
           </div>
 
-          {job.status === "InProgress" || job.status === "Completed" ? (
+          {job.status === JobStatus.InProgress || job.status === JobStatus.Completed ? (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
