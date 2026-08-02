@@ -71,6 +71,9 @@ export function SiteHeader() {
               <Link href="/wallet" className="hover:underline">
                 Wallet
               </Link>
+              <Link href="/refer-earn" className="hover:underline">
+                Refer & Earn
+              </Link>
               <Link href="/support" className="hover:underline">
                 Support
               </Link>

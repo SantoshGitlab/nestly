@@ -263,6 +263,13 @@ function ActionCtas({ booking }: { booking: BookingDetail }) {
           Leave a review
         </Button>
       </Link>
+      {booking.status === BookingStatus.Completed ? (
+        <Link href="/refer-earn">
+          <Button type="button" variant="secondary" className="w-full">
+            Refer a friend & earn
+          </Button>
+        </Link>
+      ) : null}
       <Link href="/bookings">
         <Button type="button" variant="secondary" className="w-full">
           Back to my bookings

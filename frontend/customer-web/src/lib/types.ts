@@ -487,6 +487,31 @@ export interface WalletLedgerEntryResponse {
 }
 
 /**
+ * Referral shapes mirror the C# records in Nestly.Application.Referral
+ * (ReferralCustomerContracts.cs) - see ReferralController (task 168).
+ */
+
+export interface ReferralSummaryResponse {
+  referralCode: string;
+  shareLink: string;
+  invitedCount: number;
+  qualifiedCount: number;
+  rewardedCount: number;
+  totalEarned: number;
+}
+
+export interface ReferralHistoryItemResponse {
+  id: string;
+  refereeName: string;
+  /** Serialized as the ReferralStatus enum member name (e.g. "Registered") - rendered directly, not re-mapped through a numeric enum. */
+  status: string;
+  registeredAtUtc: string;
+  qualifiedAtUtc: string | null;
+  rewardedAtUtc: string | null;
+  rewardEarned: number | null;
+}
+
+/**
  * Cancellation shapes mirror the C# records in
  * Nestly.Application.Cancellations (CancellationContracts.cs) - see
  * CancellationsController.
