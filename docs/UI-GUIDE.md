@@ -17,20 +17,22 @@ disagree, SRS.md is correct and this file is stale.
 the actual `docker-compose.yml`, migration scripts and seed scripts in this
 repository** — not assumed from memory.
 
-**18 of 21 screenshots below are now captured**, against a genuinely fresh
-database (reset from empty, all migrations replayed, both dev seed scripts
-run). Two real, pre-existing bugs were found and fixed to make that replay
-possible at all (see [Known issues found and fixed](#known-issues-found-and-fixed-2026-08-02)) —
+**All 21 of 21 screenshots below are now captured**, against a genuinely
+fresh database (reset from empty, all migrations replayed, both dev seed
+scripts run). Two real, pre-existing bugs were found and fixed to make that
+replay possible at all (see [Known issues found and fixed](#known-issues-found-and-fixed-2026-08-02)) —
 not local database drift, but migration files that would have failed the
 same way for any fresh checkout of this repo.
 
-The three still-missing screenshots (`admin-web/booking-detail`,
-`customer-web/booking-detail`, `partner-web/job-detail`) all need one real
-`Completed` booking to exist — that requires a slot window, a simulated
-payment, a partner assignment, and a completion submission on top of the
-catalog data below, which this pass did not build out. Noted as an honest
-gap, not silently skipped; each row in the table below is explicit about
-what's missing.
+The three screenshots that were missing as of the previous pass
+(`admin-web/booking-detail`, `customer-web/booking-detail`,
+`partner-web/job-detail`) needed one real `Completed` booking to exist. That
+booking was driven end-to-end through the real APIs/UIs for this pass: a
+`Weekday Morning` slot window created in admin-web, a booking placed and
+paid (sandbox gateway) in customer-web, the partner activated and assigned
+in admin-web, and accepted/started/completed in partner-web — see
+[Known issues found, not yet fixed](#known-issues-found-not-yet-fixed-2026-08-02)
+for two more real bugs this surfaced.
 
 ### Known issues found and fixed (2026-08-02)
 
@@ -65,6 +67,34 @@ both now fixed in place:
 Both fixes are scoped to migration files only — no application code,
 `AdminPermissionCatalog`, or `NotificationTemplateSeedData` changed. Full
 backend suite still 987/987 after the fix.
+
+### Known issues found, not yet fixed (2026-08-02)
+
+Driving one booking to `Completed` end-to-end (to capture the three
+screenshots above) surfaced two more real gaps, left unfixed here since
+fixing them was out of scope for a docs/screenshot pass:
+
+1. **`POST /api/v1/profile/kyc/documents` (partner-api) rejects a
+   well-formed request with a raw 400** — `The body field is required. The
+   JSON value could not be converted to
+   Nestly.PartnerApi.Controllers.SubmitPartnerKycDocumentBody` — when
+   submitted from partner-web's own "Submit a document" form
+   (`frontend/partner-web/src/app/(partner)/profile/page.tsx`) with a
+   populated document type, file reference URL and document number. This is
+   a raw model-binding exception, not a validation problem response, so the
+   root cause is a request-shape mismatch between the frontend and
+   `SubmitPartnerKycDocumentBody` (`backend/partner-api/PartnerApi/Controllers/ProfileController.cs`)
+   rather than missing input. Not root-caused further here.
+2. **No admin path activates a partner without KYC docs.** A partner with a
+   passed background check but zero submitted KYC documents (the case above
+   made unavoidable) has no "activate anyway" action anywhere in admin-web's
+   partner detail page — `PartnerStatus` stays `PendingVerification`
+   indefinitely, and `POST /api/v1/admin/bookings/{id}/assign-partner`
+   correctly refuses to assign a non-`Active` partner. For this pass the
+   partner used in the screenshots above (`Ravi K`, mobile `9888877766`) was
+   activated with a direct `UPDATE partner SET status = 'Active' WHERE id =
+   …` against the local dev database only — not a real onboarding path, and
+   not something to script or repeat outside local screenshot capture.
 
 ## FIRST-TIME SETUP
 
@@ -130,10 +160,12 @@ accounts ([First-time setup](#first-time-setup)) plus one minimal real
 catalog record created live through the admin UI for this pass: state
 Karnataka, city Bengaluru, zone/locality Koramangala, pincode 560034,
 category "Home Cleaning", service "Deep Home Cleaning" (₹1499), and the
-matching category/city + service/pincode serviceability mappings. No slot
-window, payment, or partner assignment was set up, which is why the three
-rows below marked "Not captured" are missing - they all need a real
-`Completed` booking to exist.
+matching category/city + service/pincode serviceability mappings. The three
+`booking-detail`/`job-detail` screenshots additionally needed a `Weekday
+Morning` slot window (09:00–13:00, Mon–Fri), one real booking taken all the
+way to `Completed` (sandbox payment, partner assignment, accept/start/
+complete), and the partner activation workaround noted in
+[Known issues found, not yet fixed](#known-issues-found-not-yet-fixed-2026-08-02).
 
 ### Customer web (`docs/assets/ui-guide/customer-web/`)
 
@@ -144,7 +176,7 @@ rows below marked "Not captured" are missing - they all need a real
 | `categories` | `/categories` | ![categories](assets/ui-guide/customer-web/categories.png) |
 | `service-detail` | `/services/[slug]` | ![service-detail](assets/ui-guide/customer-web/service-detail.png) |
 | `booking-summary` | `/booking/summary` | ![booking-summary](assets/ui-guide/customer-web/booking-summary.png) Mid-checkout, one service in cart |
-| `booking-detail` | `/bookings/[id]` | **Not captured** - needs a `Completed` booking (no slot/payment/partner-assignment data seeded this pass) |
+| `booking-detail` | `/bookings/[id]` | ![booking-detail](assets/ui-guide/customer-web/booking-detail.png) A `Completed` "Deep Home Cleaning" booking, with completion proof and full status timeline |
 | `wallet` | `/wallet` | ![wallet](assets/ui-guide/customer-web/wallet.png) |
 | `profile` | `/profile` | ![profile](assets/ui-guide/customer-web/profile.png) |
 
@@ -155,7 +187,7 @@ rows below marked "Not captured" are missing - they all need a real
 | `login` | `/login` | ![login](assets/ui-guide/admin-web/login.png) |
 | `dashboard` | `/dashboard` | ![dashboard](assets/ui-guide/admin-web/dashboard.png) |
 | `bookings` | `/bookings` | ![bookings](assets/ui-guide/admin-web/bookings.png) Empty list - no bookings exist in this seed |
-| `booking-detail` | `/bookings/[bookingId]` | **Not captured** - no booking exists to open |
+| `booking-detail` | `/bookings/[bookingId]` | ![booking-detail](assets/ui-guide/admin-web/booking-detail.png) Same `Completed` booking - status timeline, payment, and partner assignment sections |
 | `catalog` | `/catalog` | ![catalog](assets/ui-guide/admin-web/catalog.png) |
 | `partners` | `/partners` | ![partners](assets/ui-guide/admin-web/partners.png) |
 | `coupons` | `/coupons` | ![coupons](assets/ui-guide/admin-web/coupons.png) |
@@ -165,10 +197,15 @@ rows below marked "Not captured" are missing - they all need a real
 
 No dev seed exists for a partner account ([First-time setup](#first-time-setup)
 step 6) - the screenshots below use a real partner registered live through
-`/register` for this pass (mobile `9888877766`), OTP-verified by reading and
-SHA-256-brute-forcing `partner_otp.code_hash` (6 digits, unsalted, ~instant
-locally - the code itself is never logged or retrievable in plaintext by
-design, same as the customer OTP path).
+`/register` for this pass (mobile `9888877766`). OTP-verified two different
+ways across this pass's screenshots: by reading and SHA-256-brute-forcing
+`partner_otp.code_hash` for the first batch (6 digits, unsalted, ~instant
+locally), and for `job-detail` specifically (where the 5-minute OTP expiry
+made brute-forcing impractical) by temporarily adding, using, and reverting
+a one-line `Console.WriteLine` of the plaintext code in
+`PartnerOtpService.GenerateAsync` - the code itself is never logged or
+retrievable in plaintext in the actual application, same as the customer OTP
+path.
 
 | Screenshot | Route | Notes |
 |---|---|---|
@@ -176,5 +213,5 @@ design, same as the customer OTP path).
 | `profile-skills` | `/profile` | ![profile-skills](assets/ui-guide/partner-web/profile-skills.png) Real category/service dropdowns (task 205) - shows "Home Cleaning", not a raw GUID |
 | `profile-service-areas` | `/profile` | ![profile-service-areas](assets/ui-guide/partner-web/profile-service-areas.png) Real city/zone/pincode dropdowns (task 205) - shows "Bengaluru", not a raw GUID |
 | `jobs` | `/jobs` | ![jobs](assets/ui-guide/partner-web/jobs.png) Empty list - no bookings assigned in this seed |
-| `job-detail` | `/jobs/[id]` | **Not captured** - no job exists to open |
+| `job-detail` | `/jobs/[id]` | ![job-detail](assets/ui-guide/partner-web/job-detail.png) Same booking, `Completed` from the partner's side - completion proof and verification checklist |
 | `earnings` | `/earnings` | ![earnings](assets/ui-guide/partner-web/earnings.png) |
