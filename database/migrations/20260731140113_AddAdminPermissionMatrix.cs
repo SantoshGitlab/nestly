@@ -40,6 +40,28 @@ namespace Nestly.Infrastructure.Migrations
 
         private static Guid RoleId(string roleName) => DeterministicId($"admin_role:{roleName}");
 
+        // Frozen to the SRS section 12 modules that existed when this migration
+        // was authored (task 96a). AdminModules.All and AdminPermissionCatalog
+        // keep growing as later tasks add modules (Partner/Payout via task 150c,
+        // Referral via 173, Chat via 194, Subscription via 180, NestlyCoins via
+        // 202) - each of those ships its own incremental "SeedXPermissions"
+        // migration that inserts only its own module's rows. Reading
+        // AdminPermissionCatalog.Permissions here without this filter computes
+        // against whatever AdminModules.All contains in the CURRENTLY COMPILED
+        // code, not what existed on 2026-07-31 - on a fresh database that
+        // silently re-seeds every later module's rows too, colliding with each
+        // of those migrations' own INSERTs on their primary keys. This is a
+        // real bug fix, not a style preference: without it, `dotnet ef database
+        // update` cannot succeed from an empty database at all.
+        private static readonly string[] OriginalModules =
+        [
+            AdminModules.Dashboard, AdminModules.Customers, AdminModules.Catalog,
+            AdminModules.Pricing, AdminModules.Serviceability, AdminModules.Slots,
+            AdminModules.Bookings, AdminModules.Coupons, AdminModules.Support,
+            AdminModules.Reviews, AdminModules.Cms, AdminModules.Notifications,
+            AdminModules.Reports, AdminModules.Audit, AdminModules.Settings
+        ];
+
         // MigrationBuilder.InsertData's multi-row overload takes a
         // rectangular object[,], not a jagged object[][] - this converts the
         // more readable row-by-row LINQ projections below into that shape.
@@ -79,10 +101,14 @@ namespace Nestly.Infrastructure.Migrations
                 principalColumn: "id",
                 onDelete: ReferentialAction.SetNull);
 
+            var originalPermissions = AdminPermissionCatalog.Permissions
+                .Where(p => OriginalModules.Contains(p.Module))
+                .ToList();
+
             migrationBuilder.InsertData(
                 table: "admin_permission",
                 columns: new[] { "id", "code", "module", "description", "created_at" },
-                values: AsRows(AdminPermissionCatalog.Permissions
+                values: AsRows(originalPermissions
                     .Select(p => new object[] { PermissionId(p.Code), p.Code, p.Module, p.Description, SeedTimestamp })
                     .ToArray()));
 
@@ -98,6 +124,7 @@ namespace Nestly.Infrastructure.Migrations
                 columns: new[] { "id", "role_id", "permission_id", "created_at" },
                 values: AsRows(AdminRoleNames.All
                     .SelectMany(role => AdminPermissionCatalog.RolePermissionCodes[role]
+                        .Where(code => originalPermissions.Any(p => p.Code == code))
                         .Select(code => new object[]
                         {
                             DeterministicId($"role_permission_mapping:{role}:{code}"),

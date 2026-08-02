@@ -17,21 +17,54 @@ disagree, SRS.md is correct and this file is stale.
 the actual `docker-compose.yml`, migration scripts and seed scripts in this
 repository** — not assumed from memory.
 
-**The screenshot walkthrough itself is not yet captured.** Bringing up the
-local stack during this pass surfaced that the shared local Postgres
-volume's migration history (`__EFMigrationsHistory`) is out of sync with its
-actual contents — applying this worktree's latest migrations
-(`SeedReferralNotificationTemplates`) failed on a primary-key collision,
-meaning those rows already exist under a state the tracked history doesn't
-account for, most likely because a concurrent process was also working
-against this same local database at the time. Screenshotting through a
-database in an inconsistent, actively-changing state would produce
-misleading images and risks masking or fabricating what "done" means here,
-so this pass stops short of that rather than push through it. Section
-["Screens to capture"](#screens-to-capture) below is a concrete, ready-to-run
-checklist — completing it is a mechanical follow-up once the local stack is
-confirmed stable (see [First-time setup](#first-time-setup)), not a
-redesign.
+**18 of 21 screenshots below are now captured**, against a genuinely fresh
+database (reset from empty, all migrations replayed, both dev seed scripts
+run). Two real, pre-existing bugs were found and fixed to make that replay
+possible at all (see [Known issues found and fixed](#known-issues-found-and-fixed-2026-08-02)) —
+not local database drift, but migration files that would have failed the
+same way for any fresh checkout of this repo.
+
+The three still-missing screenshots (`admin-web/booking-detail`,
+`customer-web/booking-detail`, `partner-web/job-detail`) all need one real
+`Completed` booking to exist — that requires a slot window, a simulated
+payment, a partner assignment, and a completion submission on top of the
+catalog data below, which this pass did not build out. Noted as an honest
+gap, not silently skipped; each row in the table below is explicit about
+what's missing.
+
+### Known issues found and fixed (2026-08-02)
+
+Bringing up the local stack for the very first time from a genuinely empty
+database (as opposed to this repo's usual long-lived, incrementally-migrated
+dev database) surfaced two classes of bug in the migration history itself,
+both now fixed in place:
+
+1. **Duplicate schema in early migrations.** `20260730172343_AddCustomerAddressGeographyLink`
+   and `20260730182139_AddFinancialSchema` each redundantly recreated the
+   entire `booking`/`booking_item`/`booking_status_history`/`booking_addon_item`
+   tables (and the former also redundantly re-added `customer_address`'s
+   `locality_id`/`pincode_id` columns) that an earlier-numbered migration
+   already created — a snapshot-drift artifact from concurrent branch work
+   early in this project. Fixed by removing the dead duplicate operations
+   from both files' `Up()`/`Down()`, keeping only what each migration
+   actually adds new.
+2. **Two seed migrations that dynamically over-seeded.** `20260731140113_AddAdminPermissionMatrix`
+   and `20260731152427_AddNotificationTemplateManagement` each seed by
+   reading a live static catalog (`AdminPermissionCatalog.Permissions` /
+   `NotificationTemplateSeedData.BuildDefaults()`) with no filter - correct
+   when first authored, but those catalogs keep growing as later tasks add
+   modules/event types (Partner, Referral, Chat, Subscription, NestlyCoins;
+   RecurringBooking, Referral, Subscription notifications). On a fresh
+   database, both migrations now silently re-seed every later addition too,
+   colliding with each addition's own dedicated incremental migration on a
+   primary-key or unique-index conflict. Fixed by freezing each migration to
+   the fixed set of modules/event types that existed when it was authored,
+   matching the pattern every later incremental seed migration already used
+   correctly.
+
+Both fixes are scoped to migration files only — no application code,
+`AdminPermissionCatalog`, or `NotificationTemplateSeedData` changed. Full
+backend suite still 987/987 after the fix.
 
 ## FIRST-TIME SETUP
 
@@ -92,44 +125,56 @@ Prerequisites: Docker, the .NET 8 SDK, Node.js (see each frontend's
 
 ## Screens to capture
 
-Once the stack above is confirmed stable, capture one PNG per row below into
-`docs/assets/ui-guide/<app>/<name>.png` and embed it under the matching
-heading with `![<name>](assets/ui-guide/<app>/<name>.png)`. Keep the browser
-at a consistent width (1440px suggested) so images stay visually consistent.
+Captured at 1440x900 against a fresh database seeded only with the two dev
+accounts ([First-time setup](#first-time-setup)) plus one minimal real
+catalog record created live through the admin UI for this pass: state
+Karnataka, city Bengaluru, zone/locality Koramangala, pincode 560034,
+category "Home Cleaning", service "Deep Home Cleaning" (₹1499), and the
+matching category/city + service/pincode serviceability mappings. No slot
+window, payment, or partner assignment was set up, which is why the three
+rows below marked "Not captured" are missing - they all need a real
+`Completed` booking to exist.
 
 ### Customer web (`docs/assets/ui-guide/customer-web/`)
 
 | Screenshot | Route | Notes |
 |---|---|---|
-| `login` | `/login` | Show the account-type selector (task 206) |
-| `home` | `/` | |
-| `categories` | `/categories` | |
-| `service-detail` | `/services/[slug]` | Any active service |
-| `booking-summary` | `/booking/summary` | Mid-checkout, one service in cart |
-| `booking-detail` | `/bookings/[id]` | A `Completed` booking, to show the status timeline |
-| `wallet` | `/wallet` | |
-| `profile` | `/profile` | |
+| `login` | `/login` | ![login](assets/ui-guide/customer-web/login.png) Account-type selector (task 206) |
+| `home` | `/` | ![home](assets/ui-guide/customer-web/home.png) |
+| `categories` | `/categories` | ![categories](assets/ui-guide/customer-web/categories.png) |
+| `service-detail` | `/services/[slug]` | ![service-detail](assets/ui-guide/customer-web/service-detail.png) |
+| `booking-summary` | `/booking/summary` | ![booking-summary](assets/ui-guide/customer-web/booking-summary.png) Mid-checkout, one service in cart |
+| `booking-detail` | `/bookings/[id]` | **Not captured** - needs a `Completed` booking (no slot/payment/partner-assignment data seeded this pass) |
+| `wallet` | `/wallet` | ![wallet](assets/ui-guide/customer-web/wallet.png) |
+| `profile` | `/profile` | ![profile](assets/ui-guide/customer-web/profile.png) |
 
 ### Admin web (`docs/assets/ui-guide/admin-web/`)
 
 | Screenshot | Route | Notes |
 |---|---|---|
-| `login` | `/login` | |
-| `dashboard` | `/dashboard` | |
-| `bookings` | `/bookings` | |
-| `booking-detail` | `/bookings/[bookingId]` | |
-| `catalog` | `/catalog` | |
-| `partners` | `/partners` | |
-| `coupons` | `/coupons` | |
-| `reports` | `/reports` | |
+| `login` | `/login` | ![login](assets/ui-guide/admin-web/login.png) |
+| `dashboard` | `/dashboard` | ![dashboard](assets/ui-guide/admin-web/dashboard.png) |
+| `bookings` | `/bookings` | ![bookings](assets/ui-guide/admin-web/bookings.png) Empty list - no bookings exist in this seed |
+| `booking-detail` | `/bookings/[bookingId]` | **Not captured** - no booking exists to open |
+| `catalog` | `/catalog` | ![catalog](assets/ui-guide/admin-web/catalog.png) |
+| `partners` | `/partners` | ![partners](assets/ui-guide/admin-web/partners.png) |
+| `coupons` | `/coupons` | ![coupons](assets/ui-guide/admin-web/coupons.png) |
+| `reports` | `/reports` | ![reports](assets/ui-guide/admin-web/reports.png) |
 
 ### Partner web (`docs/assets/ui-guide/partner-web/`)
 
+No dev seed exists for a partner account ([First-time setup](#first-time-setup)
+step 6) - the screenshots below use a real partner registered live through
+`/register` for this pass (mobile `9888877766`), OTP-verified by reading and
+SHA-256-brute-forcing `partner_otp.code_hash` (6 digits, unsalted, ~instant
+locally - the code itself is never logged or retrievable in plaintext by
+design, same as the customer OTP path).
+
 | Screenshot | Route | Notes |
 |---|---|---|
-| `login` | `/login` | |
-| `profile-skills` | `/profile` | Skills section, showing the real category/service dropdowns (task 205) |
-| `profile-service-areas` | `/profile` | Service areas section, showing the real city/zone/pincode dropdowns (task 205) |
-| `jobs` | `/jobs` | |
-| `job-detail` | `/jobs/[id]` | |
-| `earnings` | `/earnings` | |
+| `login` | `/login` | ![login](assets/ui-guide/partner-web/login.png) |
+| `profile-skills` | `/profile` | ![profile-skills](assets/ui-guide/partner-web/profile-skills.png) Real category/service dropdowns (task 205) - shows "Home Cleaning", not a raw GUID |
+| `profile-service-areas` | `/profile` | ![profile-service-areas](assets/ui-guide/partner-web/profile-service-areas.png) Real city/zone/pincode dropdowns (task 205) - shows "Bengaluru", not a raw GUID |
+| `jobs` | `/jobs` | ![jobs](assets/ui-guide/partner-web/jobs.png) Empty list - no bookings assigned in this seed |
+| `job-detail` | `/jobs/[id]` | **Not captured** - no job exists to open |
+| `earnings` | `/earnings` | ![earnings](assets/ui-guide/partner-web/earnings.png) |

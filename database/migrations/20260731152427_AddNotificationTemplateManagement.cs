@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Linq;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Nestly.Domain;
 using Nestly.Infrastructure.Persistence.Seed;
 
 #nullable disable
@@ -19,6 +21,25 @@ namespace Nestly.Infrastructure.Migrations
     /// </summary>
     public partial class AddNotificationTemplateManagement : Migration
     {
+        // Frozen to the 8 event types task 87a-d's trigger wiring depended on
+        // when this migration was authored (see NotificationTemplateSeedData's
+        // own doc comment). NotificationTemplateSeedData.BuildDefaults() keeps
+        // growing as later tasks add event types (RecurringBooking via task
+        // 188, Referral via 172, Subscription via 183) - each ships its own
+        // incremental "SeedXNotificationTemplates"/filtered migration that
+        // inserts only its own new event types. Calling BuildDefaults() here
+        // without this filter reads the CURRENTLY COMPILED seed data, not what
+        // existed on 2026-07-31 - on a fresh database that silently re-seeds
+        // every later event type's rows too, colliding with each of those
+        // migrations' own INSERTs on the unique (event_type, channel) index.
+        private static readonly NotificationEventType[] OriginalEventTypes =
+        [
+            NotificationEventType.Welcome, NotificationEventType.BookingConfirmed,
+            NotificationEventType.PaymentSuccess, NotificationEventType.PaymentFailed,
+            NotificationEventType.BookingCancelled, NotificationEventType.BookingRescheduled,
+            NotificationEventType.RefundProcessed, NotificationEventType.SupportTicketUpdate
+        ];
+
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -60,7 +81,7 @@ namespace Nestly.Infrastructure.Migrations
                 "is_active", "created_at_utc", "updated_at_utc", "updated_by_admin_user_id"
             };
 
-            foreach (var row in NotificationTemplateSeedData.BuildDefaults())
+            foreach (var row in NotificationTemplateSeedData.BuildDefaults().Where(r => OriginalEventTypes.Contains(r.EventType)))
             {
                 migrationBuilder.InsertData(
                     table: "notification_template",

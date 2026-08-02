@@ -6,18 +6,54 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 |---|---|---|---|---|---|
 | Phase 0 - Foundation | 25 | 0 | 0 | 0 | 25 |
 | Phase 1 - Identity & Customer | 46 | 0 | 0 | 0 | 46 |
-| Phase 2 - Catalog & Serviceability | 67 | 0 | 3 | 2 | 72 |
+| Phase 2 - Catalog & Serviceability | 69 | 0 | 3 | 0 | 72 |
 | Phase 3 - Booking Core | 47 | 0 | 9 | 0 | 56 |
 | Phase 4 - Payments & Financial | 40 | 0 | 6 | 0 | 46 |
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
 | Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
-| Phase 7 - Partner | 21 | 0 | 4 | 0 | 25 |
-| Phase 8 - Hardening & Launch | 32 | 0 | 6 | 0 | 38 |
-| Phase 9 - Referral & Growth | 7 | 9 | 0 | 0 | 16 |
-| Phase 10 - Product Enhancements | 0 | 22 | 0 | 0 | 22 |
-| **Overall** | **429** | **31** | **50** | **2** | **512** |
+| Phase 7 - Partner | 23 | 0 | 4 | 0 | 27 |
+| Phase 8 - Hardening & Launch | 35 | 0 | 6 | 0 | 41 |
+| Phase 9 - Referral & Growth | 16 | 0 | 0 | 0 | 16 |
+| Phase 10 - Product Enhancements | 22 | 0 | 0 | 0 | 22 |
+| Phase 11 - Nestly Coins & Loyalty | 5 | 0 | 0 | 0 | 5 |
+| **Overall** | **472** | **0** | **50** | **0** | **522** |
 
-Last updated: 2026-08-01, after completing task 166 (Phase 9 fraud review
+Last updated: 2026-08-02, after integrating branch `tasks-199-208` (tasks
+199-203, 205, 206, 208 - already complete but sitting unmerged since
+2026-08-02 15:42) into `main` and closing out task 207. All backlog rows are
+now `done` except the 50 `decomposed` parent placeholders, each already
+satisfied by its own done lettered subtasks per this backlog's existing
+convention. Merge conflicts (tasks.csv, AdminModules/AdminPermissionCatalog,
+NestlyDbContext, BookingService, 19 test files, admin-web permissions.ts)
+were all genuinely-independent additions from the two branches (NestlyCoins
+module vs. the Subscription module main had picked up in the meantime) -
+resolved additively, nothing dropped from either side; `main`'s newer,
+corrected version of task 175's resolution was kept over the integration
+branch's stale draft (the wallet-credit expiry sweep job turned out to
+already be live on `main`, not still `todo` as an earlier pass of that note
+claimed). Full backend suite 987/987 and all three frontends (`npm run
+build`) clean on the merged result.
+
+Closing out task 207 required actually bringing up the full stack from an
+empty database for the first time - previously only ever incrementally
+migrated, never replayed from scratch - which surfaced and fixed two real,
+previously-latent migration bugs (not local drift, would break any fresh
+checkout): `AddCustomerAddressGeographyLink`/`AddFinancialSchema`
+redundantly recreated tables an earlier migration already created
+(snapshot-drift duplicates from concurrent early development), and
+`AddAdminPermissionMatrix`/`AddNotificationTemplateManagement` seeded from
+the live `AdminPermissionCatalog`/`NotificationTemplateSeedData` with no
+filter, so on a fresh database each now silently re-seeds every
+module/event-type added by every later module too, colliding with each
+addition's own dedicated incremental seed migration. Both fixed in the
+migration files only (no application-code change), full suite unaffected.
+18 of 21 `docs/UI-GUIDE.md` screenshots captured against the resulting clean
+database (using one minimal real catalog record created live through the
+admin UI, and one real partner account registered live through partner-web's
+OTP flow); the 3 remaining need a real `Completed` booking, documented as an
+explicit, deliberately out-of-scope gap rather than dropped silently.
+
+Previously, 2026-08-01, after completing task 166 (Phase 9 fraud review
 queue) on `phase-8-hardening-launch`. Design tension resolved: REFERRAL.md's
 `ReferralStatus` enum included `FraudFlagged`, but reward disbursement runs
 synchronously with qualification (tasks 164-165), leaving no real pre-reward
