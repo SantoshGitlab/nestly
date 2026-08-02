@@ -71,6 +71,9 @@ export function SiteHeader() {
               <Link href="/recurring-bookings" className="hover:underline">
                 Recurring bookings
               </Link>
+              <Link href="/subscription" className="hover:underline">
+                Nestly Plus
+              </Link>
               <Link href="/wallet" className="hover:underline">
                 Wallet
               </Link>
