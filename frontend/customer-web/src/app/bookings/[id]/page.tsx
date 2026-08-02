@@ -3,10 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ChatWidget } from "@/components/ChatWidget";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { BookingStatus, RefundMethod, RefundStatus, RefundType } from "@/lib/types";
+import { BookingStatus, ChatContextType, RefundMethod, RefundStatus, RefundType } from "@/lib/types";
 import type {
   BookingDetail,
   BookingStatusTimelineEntry,
@@ -84,6 +85,8 @@ function BookingDetailScreen() {
         <Card title="Status timeline">
           <Timeline entries={booking.timeline} />
         </Card>
+
+        <ChatWidget contextType={ChatContextType.Booking} contextId={booking.id} />
       </div>
 
       <aside className="flex flex-col gap-3 md:sticky md:top-6 md:self-start">
