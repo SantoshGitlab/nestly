@@ -2,9 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
 import { CategoryTile } from "@/components/CategoryTile";
 import { CitySelector } from "@/components/CitySelector";
-import { Alert, Button, EmptyState, Skeleton } from "@/components/ui";
+import { Alert, Button, EmptyState } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CategorySummary } from "@/lib/types";
@@ -28,17 +29,6 @@ export function CategoryTiles() {
   }
 
   return <CityCategoryGrid cityId={city.id} />;
-}
-
-/** Mirrors the real grid's shape so nothing jumps when the data lands. */
-function CategoryGridSkeleton() {
-  return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-      {Array.from({ length: 8 }, (_, index) => (
-        <Skeleton key={index} className="h-[9.5rem] rounded-2xl" />
-      ))}
-    </div>
-  );
 }
 
 function NoCitySelectedPrompt() {

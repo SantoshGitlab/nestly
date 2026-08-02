@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ServiceCard } from "@/components/ServiceCard";
-import { Alert } from "@/components/ui";
+import { Alert, Button, EmptyState, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CategoryDetail } from "@/lib/types";
 
@@ -17,13 +18,23 @@ export default function CategoryDetailPage() {
   });
 
   if (query.isPending) {
-    return <main className="mx-auto w-full max-w-6xl px-6 py-10 text-sm text-neutral-500">Loading…</main>;
+    return <CategoryDetailSkeleton />;
   }
 
   if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        <Alert>{describeError(query.error)}</Alert>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+        <Alert
+          tone="error"
+          title="Couldn't load this category"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
       </main>
     );
   }
@@ -31,26 +42,64 @@ export default function CategoryDetailPage() {
   const category = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <nav aria-label="Breadcrumb" className="mb-5 text-sm">
+        <ol className="flex items-center gap-1.5 text-fg-muted">
+          <li>
+            <Link href="/" className="hover:text-fg">
+              Home
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li>
+            <Link href="/categories" className="hover:text-fg">
+              Categories
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li className="truncate font-medium text-fg" aria-current="page">
+            {category.name}
+          </li>
+        </ol>
+      </nav>
+
       {category.bannerUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
         <img
           src={category.bannerUrl}
           alt=""
-          className="mb-6 h-40 w-full rounded-2xl object-cover sm:h-56"
+          className="mb-8 h-44 w-full rounded-3xl object-cover shadow-sm sm:h-64"
         />
       ) : null}
 
-      <h1 className="text-2xl font-semibold tracking-tight">{category.name}</h1>
-      <p className="mt-2 max-w-2xl text-neutral-600 dark:text-neutral-400">{category.description}</p>
+      <h1 className="text-display-sm font-semibold text-fg">{category.name}</h1>
+      {category.description ? (
+        <p className="mt-3 max-w-2xl leading-relaxed text-fg-muted text-pretty">
+          {category.description}
+        </p>
+      ) : null}
 
-      <section aria-labelledby="services-heading" className="mt-8">
-        <h2 id="services-heading" className="mb-4 text-lg font-semibold">
+      <section aria-labelledby="services-heading" className="mt-10">
+        <h2 id="services-heading" className="mb-5 text-lg font-semibold tracking-tight text-fg">
           Services
+          <span className="ml-2 text-sm font-normal text-fg-subtle">
+            {category.services.length}
+          </span>
         </h2>
 
         {category.services.length === 0 ? (
-          <p className="text-sm text-neutral-500">No services are listed under this category yet.</p>
+          <EmptyState
+            title="Nothing listed yet"
+            description="No services are listed under this category in your city yet — check back soon."
+            action={
+              <Link
+                href="/categories"
+                className="inline-flex h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+              >
+                Browse other categories
+              </Link>
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {category.services.map((service) => (
@@ -66,6 +115,25 @@ export default function CategoryDetailPage() {
           </div>
         )}
       </section>
+    </main>
+  );
+}
+
+/** Mirrors the loaded page's frame so the heading and grid don't jump into place. */
+function CategoryDetailSkeleton() {
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <Skeleton className="h-4 w-56" />
+      <Skeleton className="mt-5 h-44 w-full rounded-3xl sm:h-64" />
+      <Skeleton className="mt-8 h-9 w-72" />
+      <Skeleton className="mt-3 h-4 w-full max-w-2xl" />
+      <Skeleton className="mt-2 h-4 w-2/3 max-w-2xl" />
+      <Skeleton className="mt-10 h-6 w-28" />
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }, (_, index) => (
+          <Skeleton key={index} className="h-[10.5rem] rounded-2xl" />
+        ))}
+      </div>
     </main>
   );
 }

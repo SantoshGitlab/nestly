@@ -4,8 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
 import { CategoryTile } from "@/components/CategoryTile";
-import { Alert, PageHeading } from "@/components/ui";
+import { SearchBar } from "@/components/SearchBar";
+import { ServiceCard } from "@/components/ServiceCard";
+import { Alert, Button, EmptyState, PageHeading, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CatalogSearchResult } from "@/lib/types";
 
@@ -18,40 +21,106 @@ import type { CatalogSearchResult } from "@/lib/types";
  */
 export default function SearchPage() {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-6xl px-6 py-10" />}>
+    <Suspense fallback={<SearchFallback />}>
       <SearchResults />
     </Suspense>
+  );
+}
+
+/**
+ * Matches the real page's frame rather than rendering an empty box, so the
+ * heading and search field don't pop in after the boundary resolves.
+ */
+function SearchFallback() {
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <Skeleton className="h-9 w-64" />
+      <Skeleton className="mt-6 h-[3.25rem] w-full max-w-xl rounded-xl" />
+      <div className="mt-10">
+        <CategoryGridSkeleton count={4} />
+      </div>
+    </main>
   );
 }
 
 function SearchResults() {
   const params = useSearchParams();
   const q = params.get("q") ?? "";
+  const trimmed = q.trim();
+  const isSearchable = trimmed.length >= 2;
 
   const query = useQuery({
     queryKey: ["catalog-search", q],
-    queryFn: () => apiFetch<CatalogSearchResult>(`${API_V1}/catalog/search?q=${encodeURIComponent(q)}`),
-    enabled: q.trim().length >= 2,
+    queryFn: () =>
+      apiFetch<CatalogSearchResult>(`${API_V1}/catalog/search?q=${encodeURIComponent(q)}`),
+    enabled: isSearchable,
   });
 
-  return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10">
-      <PageHeading title={`Search results for "${q}"`} />
+  const resultCount = query.data
+    ? query.data.categories.length + query.data.services.length
+    : 0;
 
-      {q.trim().length < 2 ? (
-        <p className="text-sm text-neutral-500">Type at least 2 characters to search.</p>
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <PageHeading
+        title={trimmed ? `Results for “${trimmed}”` : "Search"}
+        subtitle={
+          isSearchable && query.isSuccess
+            ? `${resultCount} ${resultCount === 1 ? "match" : "matches"} found`
+            : "Find a service or browse by category."
+        }
+      />
+
+      <div className="mb-10 max-w-xl">
+        <SearchBar defaultValue={q} autoFocus={!trimmed} />
+      </div>
+
+      {!isSearchable ? (
+        <EmptyState
+          title="Type at least 2 characters"
+          description="Search for a service by name — for example “AC repair” or “deep cleaning”."
+        />
       ) : query.isPending ? (
-        <p className="text-sm text-neutral-500">Searching…</p>
+        <SearchResultsSkeleton />
       ) : query.isError ? (
-        <Alert>{describeError(query.error)}</Alert>
-      ) : query.data.categories.length === 0 && query.data.services.length === 0 ? (
-        <p className="text-sm text-neutral-500">No categories or services matched your search.</p>
+        <Alert
+          tone="error"
+          title="Search failed"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
+      ) : resultCount === 0 ? (
+        <EmptyState
+          title="No matches"
+          description={`Nothing matched “${trimmed}”. Try a different word, or browse all categories.`}
+          // A Link, not a Button with a router push: this is a plain
+          // navigation and must stay middle-clickable.
+          action={
+            <Link
+              href="/categories"
+              className="inline-flex h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+            >
+              Browse categories
+            </Link>
+          }
+        />
       ) : (
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-12">
           {query.data.categories.length > 0 ? (
             <section aria-labelledby="search-categories-heading">
-              <h2 id="search-categories-heading" className="mb-4 text-lg font-semibold">
+              <h2
+                id="search-categories-heading"
+                className="mb-4 text-lg font-semibold tracking-tight text-fg"
+              >
                 Categories
+                <span className="ml-2 text-sm font-normal text-fg-subtle">
+                  {query.data.categories.length}
+                </span>
               </h2>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                 {query.data.categories.map((category) => (
@@ -63,31 +132,49 @@ function SearchResults() {
 
           {query.data.services.length > 0 ? (
             <section aria-labelledby="search-services-heading">
-              <h2 id="search-services-heading" className="mb-4 text-lg font-semibold">
+              <h2
+                id="search-services-heading"
+                className="mb-4 text-lg font-semibold tracking-tight text-fg"
+              >
                 Services
+                <span className="ml-2 text-sm font-normal text-fg-subtle">
+                  {query.data.services.length}
+                </span>
               </h2>
-              <ul className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {query.data.services.map((service) => (
-                  <li key={service.id}>
-                    <Link
-                      href={`/services/${service.slug}`}
-                      className="flex items-center justify-between rounded-xl border border-black/10 bg-white p-4 hover:border-black/25 dark:border-white/15 dark:bg-neutral-900 dark:hover:border-white/30"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{service.name}</p>
-                        <p className="mt-0.5 text-sm text-neutral-600 dark:text-neutral-400">
-                          {service.description}
-                        </p>
-                      </div>
-                      <p className="shrink-0 pl-4 text-sm font-semibold">₹{service.price}</p>
-                    </Link>
-                  </li>
+                  <ServiceCard
+                    key={service.id}
+                    slug={service.slug}
+                    name={service.name}
+                    description={service.description}
+                    price={service.price}
+                  />
                 ))}
-              </ul>
+              </div>
             </section>
           ) : null}
         </div>
       )}
     </main>
+  );
+}
+
+function SearchResultsSkeleton() {
+  return (
+    <div className="flex flex-col gap-12">
+      <div>
+        <Skeleton className="mb-4 h-6 w-32" />
+        <CategoryGridSkeleton count={4} />
+      </div>
+      <div>
+        <Skeleton className="mb-4 h-6 w-28" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-[10.5rem] rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

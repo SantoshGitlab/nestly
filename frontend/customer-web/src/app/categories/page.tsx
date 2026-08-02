@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
 import { CategoryTile } from "@/components/CategoryTile";
 import { CitySelector } from "@/components/CitySelector";
-import { Alert, PageHeading } from "@/components/ui";
+import { Alert, Button, EmptyState, PageHeading } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CategorySummary } from "@/lib/types";
@@ -13,18 +14,24 @@ export default function CategoriesPage() {
   const { city } = useSelectedCity();
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10">
-      <PageHeading title="All categories" subtitle="Browse every service we offer in your city." />
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <PageHeading
+        title="All categories"
+        subtitle="Browse every service we offer in your city."
+        actions={city ? <CitySelector /> : undefined}
+      />
 
+      {/* `undefined` is "still reading the persisted city", `null` is "read,
+          none chosen" — collapsing them would flash the picker at customers
+          who already have a city saved. */}
       {city === undefined ? (
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <CategoryGridSkeleton />
       ) : city === null ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-black/15 p-10 text-center dark:border-white/20">
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Select your city to see the categories available near you.
-          </p>
-          <CitySelector />
-        </div>
+        <EmptyState
+          title="Choose your city"
+          description="Services and pricing vary by city — tell us where you are and we'll show what's available near you."
+          action={<CitySelector />}
+        />
       ) : (
         <CategoryGrid cityId={city.id} />
       )}
@@ -39,15 +46,33 @@ function CategoryGrid({ cityId }: { cityId: string }) {
   });
 
   if (query.isPending) {
-    return <p className="text-sm text-neutral-500">Loading categories…</p>;
+    return <CategoryGridSkeleton />;
   }
 
   if (query.isError) {
-    return <Alert>{describeError(query.error)}</Alert>;
+    return (
+      <Alert
+        tone="error"
+        title="Couldn't load categories"
+        action={
+          <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+            Retry
+          </Button>
+        }
+      >
+        {describeError(query.error)}
+      </Alert>
+    );
   }
 
   if (query.data.length === 0) {
-    return <p className="text-sm text-neutral-500">No categories are available in your city yet.</p>;
+    return (
+      <EmptyState
+        title="No services here yet"
+        description="We're not live in your city yet — try another city, or check back soon."
+        action={<CitySelector />}
+      />
+    );
   }
 
   return (
