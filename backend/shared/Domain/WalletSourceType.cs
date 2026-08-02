@@ -26,5 +26,8 @@ public enum WalletSourceType
     ReferralCreditExpiry,
 
     /// <summary>Credited from a qualifying order's Nestly Coins reward (docs/NESTLY-COINS.md, task 201). SourceReferenceId is the completed Booking's id.</summary>
-    NestlyCoinsReward
+    NestlyCoinsReward,
+
+    /// <summary>Debited to reverse a Nestly Coins reward when its crediting booking is cancelled/refunded within the program's ClawbackWindowDays (docs/NESTLY-COINS.md FRAUD/ABUSE PREVENTION, task 201) - distinct from the credit's own NestlyCoinsReward tag, mirroring ReferralCreditExpiry's separation from ReferralReward. SourceReferenceId is the same Booking's id.</summary>
+    NestlyCoinsClawback
 }

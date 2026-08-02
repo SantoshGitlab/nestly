@@ -24,6 +24,12 @@ public interface IWalletLedgerRepository
     /// <summary>Task 175's sweep source: every customer's credit entries that have expired with an unconsumed portion still outstanding.</summary>
     Task<IReadOnlyList<WalletLedgerEntry>> ListExpiredCreditsWithRemainingAsync(DateTime asOfUtc);
 
+    /// <summary>Nestly Coins' monthly earn cap (docs/NESTLY-COINS.md FRAUD/ABUSE PREVENTION, task 201): total credited for one source type within a date range, computed as a DB-side SUM rather than listing and summing full ledger rows client-side (mirrors <c>IReferralRepository.CountRewardedByReferrerAsync</c>'s convention).</summary>
+    Task<decimal> SumCreditsBySourceTypeInRangeAsync(Guid customerId, WalletSourceType sourceType, DateTime fromUtc, DateTime toUtc);
+
+    /// <summary>Nestly Coins' clawback lookup (task 201): the credit entry issued for one source event, if any. SourceReferenceId is unique per crediting event, so no customer scoping is needed to disambiguate.</summary>
+    Task<WalletLedgerEntry?> FindBySourceAsync(WalletSourceType sourceType, Guid sourceReferenceId);
+
     /// <summary>
     /// Persists a mutation to <see cref="WalletLedgerEntry.RemainingAmount"/>
     /// only (via <see cref="WalletLedgerEntry.ConsumeRemaining"/> /

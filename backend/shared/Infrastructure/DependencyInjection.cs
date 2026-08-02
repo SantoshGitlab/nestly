@@ -34,6 +34,7 @@ using Nestly.Application.PartnerIdentity;
 using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
+using Nestly.Application.NestlyCoins;
 using Nestly.Application.Referral;
 using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
@@ -433,6 +434,8 @@ public static class DependencyInjection
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
+        services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
+        services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
         services.AddScoped<IReferralCodeService, ReferralCodeService>();
         services.AddScoped<IReferralRepository, ReferralRepository>();
         services.AddScoped<IReferralProgramConfigRepository, ReferralProgramConfigRepository>();

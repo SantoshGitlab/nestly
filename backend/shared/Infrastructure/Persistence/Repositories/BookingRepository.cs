@@ -161,6 +161,14 @@ public class BookingRepository : IBookingRepository
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync();
 
+    public Task<int> CountCompletedByCustomerAsync(Guid customerId, Guid excludingBookingId) =>
+        _context.Bookings.CountAsync(b =>
+            b.CustomerId == customerId && b.Status == BookingStatus.Completed && b.Id != excludingBookingId);
+
+    public Task<int> CountCompletedByAssignedPartnerAsync(Guid partnerId, Guid excludingBookingId) =>
+        _context.Bookings.CountAsync(b =>
+            b.AssignedPartnerId == partnerId && b.Status == BookingStatus.Completed && b.Id != excludingBookingId);
+
     private IQueryable<Booking> FullyLoaded() =>
         _context.Bookings
             .Include(b => b.Items).ThenInclude(i => i.AddOns)

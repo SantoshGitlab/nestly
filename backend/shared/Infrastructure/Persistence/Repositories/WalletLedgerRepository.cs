@@ -53,4 +53,23 @@ public class WalletLedgerRepository : IWalletLedgerRepository
         _context.WalletLedgerEntries.Update(entry);
         await _context.SaveChangesAsync();
     }
+
+    // Sums client-side over just the Amount column (not SumAsync) - SQLite's
+    // EF provider (this repo's test suite, see TestDatabase) cannot translate
+    // a SQL-side Sum over decimal, only Postgres can; this stays portable
+    // across both, same reasoning BookingRepository.SearchAsync's string
+    // filters already document for a different LINQ-translation gap.
+    public async Task<decimal> SumCreditsBySourceTypeInRangeAsync(Guid customerId, WalletSourceType sourceType, DateTime fromUtc, DateTime toUtc) =>
+        (await _context.WalletLedgerEntries
+            .Where(e => e.CustomerId == customerId
+                && e.SourceType == sourceType
+                && e.EntryType == WalletEntryType.Credit
+                && e.CreatedAtUtc >= fromUtc && e.CreatedAtUtc < toUtc)
+            .Select(e => e.Amount)
+            .ToListAsync())
+            .Sum();
+
+    public Task<WalletLedgerEntry?> FindBySourceAsync(WalletSourceType sourceType, Guid sourceReferenceId) =>
+        _context.WalletLedgerEntries
+            .FirstOrDefaultAsync(e => e.SourceType == sourceType && e.SourceReferenceId == sourceReferenceId);
 }

@@ -238,39 +238,48 @@ notification-trigger and Referral qualifying-booking checks.
    already bound exposure regardless of what "reorder" means precisely).
    Narrow this later only if usage data shows the blanket definition is
    too generous, per the original open-decision text.
-3. **Resolved — the wallet FIFO consumption-tracking prerequisite is
-   substantially satisfied on `main`, with one specific gap called out.**
-   Verified directly against `main` (commit `fc37980`), not assumed from
-   task 175's `tasks.csv` status: `WalletLedgerEntry.RemainingAmount` /
-   `ExpiresAtUtc` exist, `WalletService.ConsumeExpiringCreditsAsync` already
-   draws down the soonest-to-expire outstanding credit first on every debit
-   (real FIFO consumption, not a stub), and `IWalletService.ExpireCreditAsync`
-   is a working write-off primitive. This is the actual data-model
-   prerequisite GUIDELINES #3 was blocking on, and it's real. **What is
-   genuinely still missing on `main`**: a scheduled sweep that calls
-   `ExpireCreditAsync` proactively once `ExpiresAtUtc` passes without the
-   credit having been spent — task 175 itself is still `todo` in
-   `tasks.csv` because only that Hangfire scheduling piece is outstanding
-   (a completed version exists in an unmerged worktree,
-   `agent-a70c5c9ee775da582`, not yet on `main`). Consequence for Coins:
-   tasks 200-203 can safely credit coins with `expiresAtUtc` set and get
-   correct FIFO consumption ordering the moment a customer/partner spends
-   anything — that part of GUIDELINES #3 is unblocked. But a coin credit
-   that is *never spent* before its expiry will not be automatically
-   written off until a sweep job exists. Per this doc's own instruction
-   ("If #175 is picked up first, Coins should build on it directly rather
-   than inventing a second expiry mechanism"), Coins' Phase 11 scope does
-   **not** add its own competing sweep — it relies on task 175's sweep
-   (whichever repo/branch state merges it to `main` first) to cover
-   unspent-coin write-off. This gap is tracked, not silently accepted: see
-   NEXT STEPS #1.
+3. **Resolved — the wallet FIFO consumption-tracking prerequisite is fully
+   satisfied on `main`, including the scheduled sweep.** Verified directly
+   against `main` (commit `fc37980`) - **correction, superseding an earlier
+   pass of this same resolution that had it wrong**: `WalletLedgerEntry.
+   RemainingAmount`/`ExpiresAtUtc` exist, `WalletService.ConsumeExpiringCreditsAsync`
+   draws down the soonest-to-expire outstanding credit first on every debit,
+   `IWalletService.ExpireCreditAsync` is a working write-off primitive, AND
+   `WalletCreditExpirySweepJob.SweepAsync` **is** registered via Hangfire
+   (`RecurringJob.AddOrUpdate<IWalletCreditExpirySweepJob>(..., Cron.Daily)`
+   in `admin-api/Program.cs`, guarded by `BackgroundJobOptions.ServerEnabled`)
+   and covered by `WalletCreditExpiryTests.cs`. An earlier version of this
+   section claimed the sweep didn't exist on `main` and only lived in an
+   unmerged worktree - that was wrong, based on trusting task 175's stale
+   `tasks.csv` status instead of the actual code (`git log` confirms the
+   sweep landed in commit `7a8c36f`, an ancestor of this branch's fork
+   point). Task 175's `tasks.csv` row has been corrected to `done`
+   accordingly. Consequence for Coins: tasks 200-203 can credit coins with
+   `expiresAtUtc` set and get both correct FIFO consumption ordering *and*
+   automatic write-off of anything left unspent past expiry - GUIDELINES #3
+   is fully unblocked, no follow-up sweep work needed.
+4. **New, real gap found while implementing task 201, tracked in NEXT STEPS
+   #1**: `WalletService.ExpireCreditAsync` unconditionally tags every
+   write-off `WalletSourceType.ReferralCreditExpiry`, regardless of the
+   expiring credit's actual origin - written when only Referral credits
+   could expire, never revisited once the mechanism became reusable. An
+   expired, never-spent Nestly Coins credit will be swept and correctly
+   debited, but mislabeled in the ledger as a Referral event. Not fixed in
+   this task's scope (task 201 is EvaluateQualifyingOrder/CreditCustomerCoins/
+   CreditPartnerCoins/ClawbackOnCancellation, not the shared sweep), and
+   deliberately not worked around by giving Coins a second, competing sweep
+   either - see NEXT STEPS #1.
 
 ## NEXT STEPS
 
-1. **Open, tracked gap**: no scheduled sweep on `main` yet calls
-   `IWalletService.ExpireCreditAsync` for any expired-and-unconsumed credit
-   (Referral's or, once implemented, Coins'). Task 175 owns closing this;
-   Coins should not implement a second one (see OPEN DECISIONS #3 above).
+1. **Open, tracked gap**: `WalletService.ExpireCreditAsync` needs to tag its
+   write-off entry using the *expiring credit's own* source (e.g.
+   `WalletSourceType.NestlyCoinsExpiry` for a Coins credit) instead of
+   unconditionally `ReferralCreditExpiry`. Small, contained fix (the sweep
+   job already has the original entry in hand to pass its source through)
+   but touches Referral's existing, tested `IWalletService.ExpireCreditAsync`
+   signature, so it's left as its own follow-up rather than folded into
+   task 201.
 2. Add `nestly_coins_program_config` to DATABASE.md.
 3. Add the endpoint contracts to API.md.
 4. Extend the RBAC permission matrix and admin UI for the NestlyCoins module.
