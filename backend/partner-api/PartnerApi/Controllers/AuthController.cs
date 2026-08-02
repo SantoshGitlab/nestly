@@ -52,7 +52,7 @@ public class AuthController : ControllerBase
     /// <summary>Step 1: send a registration OTP to a mobile number.</summary>
     [EnableRateLimiting("otp")]
     [HttpPost("registration/otp")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> RequestRegistrationOtp([FromBody] RequestPartnerRegistrationOtpRequest request)
@@ -64,7 +64,7 @@ public class AuthController : ControllerBase
         }
 
         var result = await _registrationService.RequestOtpAsync(request);
-        return result.IsSuccess ? Ok() : result.ToProblemResult();
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
     /// <summary>Step 2: complete registration once the OTP has been verified.</summary>
@@ -87,7 +87,7 @@ public class AuthController : ControllerBase
     /// <summary>Send a login OTP to an already-registered mobile number.</summary>
     [EnableRateLimiting("otp")]
     [HttpPost("login/otp")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RequestLoginOtp([FromBody] RequestPartnerLoginOtpRequest request)
@@ -99,7 +99,7 @@ public class AuthController : ControllerBase
         }
 
         var result = await _loginService.RequestOtpAsync(request);
-        return result.IsSuccess ? Ok() : result.ToProblemResult();
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
     /// <summary>Login via mobile OTP.</summary>

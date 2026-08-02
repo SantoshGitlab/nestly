@@ -1,33 +1,63 @@
 /**
- * Response/request shapes for the Partner API's jobs surface
- * (`/api/v1/jobs`, docs/PARTNER.md's `booking_partner_assignment` bridge
- * table).
+ * Response/request shapes for the Partner API's jobs surface (`/api/v1/jobs`,
+ * docs/PARTNER.md's `booking_partner_assignment` bridge table).
  *
- * NOTE ON PROVENANCE: as of this writing, the backend behind this surface is
- * a stub returning HTTP 501 - the underlying `BookingPartnerAssignment`
- * entity is sibling task #147, not yet merged. These types describe the
- * contract this client is built against (per the task brief); the status
- * union and detail fields are held loosely (`[key: string]: unknown`) so
- * this client does not need a follow-up rewrite the moment #147 fills in
- * fields this brief did not fully pin down - only lib/jobs-api.ts's response
- * typing and this file should need reconciling if the real shape differs.
+ * Mirrors backend/shared/Application/PartnerJobs/PartnerJobContracts.cs
+ * (PartnerJobSummaryResponse / PartnerJobSearchResponse / PartnerJobDetailResponse)
+ * field-for-field, camelCased per ASP.NET Core's default JSON naming policy -
+ * keep the two in sync if that file changes.
  */
 
-export type JobStatus =
-  | "Assigned"
-  | "Accepted"
-  | "Rejected"
-  | "Reassigned"
-  | "InProgress"
-  | "Completed";
+/**
+ * Mirrors Nestly.Application.PartnerJobs.PartnerJobStatus's declaration order
+ * exactly. partner-api has no JsonStringEnumConverter registered, so this
+ * enum serialises over the wire as its ordinal (a plain number), not its
+ * name - same convention as customer-web's BookingStatus (lib/types.ts) -
+ * keep this in sync with PartnerJobContracts.cs if that enum's order changes.
+ */
+export enum JobStatus {
+  Assigned = 0,
+  Accepted = 1,
+  Rejected = 2,
+  Reassigned = 3,
+  InProgress = 4,
+  Completed = 5,
+}
 
+export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
+  [JobStatus.Assigned]: "Assigned",
+  [JobStatus.Accepted]: "Accepted",
+  [JobStatus.Rejected]: "Rejected",
+  [JobStatus.Reassigned]: "Reassigned",
+  [JobStatus.InProgress]: "In progress",
+  [JobStatus.Completed]: "Completed",
+};
+
+export function jobStatusLabel(status: JobStatus): string {
+  return JOB_STATUS_LABELS[status] ?? String(status);
+}
+
+/** One row in the partner's job list (GET /jobs). */
 export interface JobListItem {
-  id: string;
+  assignmentId: string;
   bookingId: string;
   status: JobStatus;
+  customerNameSnapshot: string;
+  customerMobileSnapshot: string;
+  addressLine1Snapshot: string;
+  addressCitySnapshot: string;
+  addressPincodeSnapshot: string;
+  slotDate: string;
+  slotStartTimeSnapshot: string;
+  slotEndTimeSnapshot: string;
+  totalPayableSnapshot: number;
   assignedAt: string;
   responseDeadline: string | null;
-  [key: string]: unknown;
+}
+
+/** GET /jobs's actual response envelope (PartnerJobSearchResponse). */
+export interface JobListResponse {
+  items: JobListItem[];
 }
 
 /** Query parameters for GET /jobs. Both optional. */
@@ -36,20 +66,40 @@ export interface JobListParams {
   date?: string;
 }
 
-/**
- * Detail view of a single assignment. Fields beyond the ones every list item
- * already carries (customer/service/address context an assignment would
- * realistically expose) are optional and read defensively - the stub backend
- * may omit them entirely until #147 lands.
- */
-export interface JobDetail extends JobListItem {
-  customerName?: string;
-  serviceName?: string;
-  addressLine?: string;
-  slotDate?: string;
-  completionProofRef?: string | null;
+export interface JobLineItem {
+  nameSnapshot: string;
+  quantity: number;
+  unitPriceSnapshot: number;
+}
+
+/** Detail view of a single assignment (GET /jobs/{bookingId}). */
+export interface JobDetail {
+  assignmentId: string;
+  bookingId: string;
+  status: JobStatus;
+  customerNameSnapshot: string;
+  customerMobileSnapshot: string;
+  addressLabelSnapshot: string;
+  addressLine1Snapshot: string;
+  addressLine2Snapshot: string | null;
+  addressLandmarkSnapshot: string | null;
+  addressCitySnapshot: string;
+  addressStateSnapshot: string;
+  addressPincodeSnapshot: string;
+  addressContactNameSnapshot: string;
+  addressContactMobileSnapshot: string;
+  slotDate: string;
+  slotStartTimeSnapshot: string;
+  slotEndTimeSnapshot: string;
+  items: JobLineItem[];
+  totalPayableSnapshot: number;
+  assignedAt: string;
+  respondedAt: string | null;
+  responseDeadline: string | null;
+  notes: string | null;
+  completionProofRef: string | null;
 }
 
 export interface SubmitCompletionProofRequest {
-  fileRef: string;
+  proofRef: string;
 }

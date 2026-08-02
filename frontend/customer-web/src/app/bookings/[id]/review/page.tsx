@@ -126,6 +126,7 @@ function ReviewBookingScreen() {
             </Link>
           </div>
         </Card>
+        {existingReview.rating >= 4 ? <ReferEarnPrompt /> : null}
       </main>
     );
   }
@@ -278,5 +279,28 @@ function StarDisplay({ rating }: { rating: number }) {
         </span>
       ))}
     </span>
+  );
+}
+
+/**
+ * Refer & Earn nudge shown after a completed booking's 4-5 star review
+ * (task 176) - a high-intent moment (happy customer, just finished a job)
+ * rather than only a static Refer & Earn screen a customer has to seek out.
+ * No new delivery mechanism: a plain in-page link to /refer-earn.
+ */
+function ReferEarnPrompt() {
+  return (
+    <div className="mt-5">
+      <Card title="Loved the service?">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          Share Nestly with a friend and you&apos;ll both get rewarded once they book.
+        </p>
+        <div className="mt-3">
+          <Link href="/refer-earn" className="text-sm font-medium hover:underline">
+            Refer & Earn →
+          </Link>
+        </div>
+      </Card>
+    </div>
   );
 }

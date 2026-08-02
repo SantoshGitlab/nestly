@@ -12,6 +12,7 @@ using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
+using Nestly.Application.Chat;
 using Nestly.Application.Identity;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
@@ -34,6 +35,7 @@ using Nestly.Application.PartnerJobs;
 using Nestly.Application.PartnerManagement;
 using Nestly.Application.PartnerProfile;
 using Nestly.Application.Referral;
+using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
@@ -53,6 +55,7 @@ using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
+using Nestly.Infrastructure.Realtime;
 using Nestly.Infrastructure.Services;
 using OpenTelemetry.Metrics;
 
@@ -81,11 +84,17 @@ public static class DependencyInjection
             .AddOptions<AccountOptions>()
             .Bind(configuration.GetSection(AccountOptions.SectionName));
 
+        // No ValidateOnStart here (task 152 fix): AddInfrastructure is shared
+        // by all three APIs, but only consumer-api's Program.cs calls
+        // AddJwtAuthentication (which already throws eagerly on a missing
+        // signing key) - admin-api and partner-api never resolve JwtOptions
+        // at all, so validating it unconditionally at startup forced both to
+        // carry a dummy customer-JWT secret they never use. Same reasoning
+        // as AdminJwtOptions/PartnerJwtOptions below.
         services
             .AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+            .ValidateDataAnnotations();
 
         // No ValidateOnStart here (unlike JwtOptions): AddInfrastructure is
         // shared by both APIs, and consumer-api's configuration has no
@@ -114,11 +123,17 @@ public static class DependencyInjection
             .AddOptions<PartnerAccountOptions>()
             .Bind(configuration.GetSection(PartnerAccountOptions.SectionName));
 
+        // No ValidateOnStart here either (task 152 fix): SandboxPaymentGateway
+        // is a singleton constructed lazily by the DI container, so its
+        // IOptions<SandboxGatewayOptions> is only ever resolved by an API
+        // that actually injects IPaymentGateway/ISandboxPaymentSimulator
+        // (consumer-api, admin-api) - partner-api never does, and shouldn't
+        // need a placeholder webhook secret just to satisfy an eager check
+        // for a gateway it never calls.
         services
             .AddOptions<SandboxGatewayOptions>()
             .Bind(configuration.GetSection(SandboxGatewayOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+            .ValidateDataAnnotations();
 
         // Task 157: not a secret, so (unlike the options above) this is safe
         // to fall back to CommissionOptions' own defaults when a deployment
@@ -141,6 +156,13 @@ public static class DependencyInjection
         services
             .AddOptions<ReferralOptions>()
             .Bind(configuration.GetSection(ReferralOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 185: not a secret, has a safe production-sensible default -
+        // same reasoning as CommissionOptions/ReferralOptions above.
+        services
+            .AddOptions<RecurringBookingOptions>()
+            .Bind(configuration.GetSection(RecurringBookingOptions.SectionName))
             .ValidateDataAnnotations();
 
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
@@ -181,6 +203,31 @@ public static class DependencyInjection
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
+
+        // Task 190: real-time chat transport. One SignalR hub type
+        // (ChatHub) mapped by both consumer-api and admin-api - see its doc
+        // comment for why a shared Redis backplane, not two independent hub
+        // instances, is what makes a message persisted by one API process
+        // reach a live connection held by the other. Falls back to a
+        // single-process hub (still fully correct for local dev/tests,
+        // where only one API instance is ever running) when Redis is not
+        // configured, same graceful-degradation shape as AddCaching above.
+        var chatCacheOptions = new CacheOptions();
+        configuration.GetSection(CacheOptions.SectionName).Bind(chatCacheOptions);
+        var signalRBuilder = services.AddSignalR();
+        if (chatCacheOptions.IsRedisConfigured)
+        {
+            signalRBuilder.AddStackExchangeRedis(chatCacheOptions.ConnectionString!, options =>
+            {
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("nestly-chat");
+            });
+        }
+
+        services.AddScoped<IChatThreadRepository, ChatThreadRepository>();
+        services.AddScoped<IChatMessageRepository, ChatMessageRepository>();
+        services.AddScoped<IChatService, ChatService>();
+        services.AddScoped<IAdminChatService, AdminChatService>();
+        services.AddSingleton<IChatPresenceTracker, ChatPresenceTracker>();
 
         // Application.DependencyInjection.AddApplication() only scans the
         // Application assembly for MediatR handlers, so this second
@@ -393,6 +440,16 @@ public static class DependencyInjection
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 
+        // Tasks 184-186: recurring booking plans. IRecurringBookingPlanService
+        // depends on the existing IBookingSummaryService/IBookingService
+        // (registered above) - the create/pause/cancel API and the scheduler
+        // both call into the same booking orchestration rather than a
+        // parallel one (PRODUCT-ENHANCEMENTS.md section 2).
+        services.AddScoped<IRecurringBookingPlanRepository, RecurringBookingPlanRepository>();
+        services.AddScoped<IRecurringBookingOccurrenceRepository, RecurringBookingOccurrenceRepository>();
+        services.AddScoped<IRecurringBookingPlanService, RecurringBookingPlanService>();
+        services.AddScoped<IRecurringBookingSchedulerService, RecurringBookingSchedulerService>();
+
         services
             .AddOptions<CancellationPolicyOptions>()
             .Bind(configuration.GetSection(CancellationPolicyOptions.SectionName))
@@ -541,6 +598,7 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+                options.Events = ChatHubJwtEvents.Create();
             });
 
         services.AddAuthorization();
@@ -583,6 +641,7 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+                options.Events = ChatHubJwtEvents.Create();
             });
 
         // Task 96b: one authorization policy per permission code in the

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Alert, Card } from "@/components/ui";
 import { describeError, isNotImplemented } from "@/lib/api";
 import { listPayouts } from "@/lib/earnings-api";
+import { payoutStatusLabel } from "@/lib/earnings-types";
 import { NotYetAvailable } from "./NotYetAvailable";
 
 /** Payout batches list (docs/PARTNER.md's `partner_payout` table - manual bank transfer in v1). */
@@ -58,7 +59,7 @@ export function PayoutsSection() {
                   {payout.periodStart && payout.periodEnd ? `${payout.periodStart} – ${payout.periodEnd}` : "—"}
                 </td>
                 <td className="px-3 py-2">{payout.totalAmount !== undefined ? `₹${payout.totalAmount.toFixed(2)}` : "—"}</td>
-                <td className="px-3 py-2">{payout.status ?? "—"}</td>
+                <td className="px-3 py-2">{payoutStatusLabel(payout.status)}</td>
                 <td className="px-3 py-2">
                   <Link href={`/earnings/payouts/${payout.id}`} className="underline underline-offset-2">
                     View

@@ -1,39 +1,83 @@
 /**
- * Response shapes for the Partner API's earnings surface
- * (`/api/v1/earnings`, docs/PARTNER.md's Financial domain:
- * `partner_earning_ledger` / `partner_payout`).
- *
- * NOTE ON PROVENANCE: same caveat as jobs-types.ts - the backend behind this
- * surface is currently a stub returning HTTP 501 pending sibling task #148.
- * Only the fields the task brief committed to are required; everything else
- * is read defensively via `[key: string]: unknown` so this client survives
- * the real shape landing without a rewrite.
+ * Response shapes for the Partner API's earnings surface (`/api/v1/earnings`).
+ * Mirrors backend/shared/Application/PartnerManagement/PartnerFinancialContracts.cs
+ * (PartnerEarningsSummaryResponse / PartnerEarningLedgerEntryResponse /
+ * PartnerPayoutSearchResponse / PartnerPayoutResponse) field-for-field,
+ * camelCased per ASP.NET Core's default JSON naming policy, with enums as
+ * numeric ordinals (no JsonStringEnumConverter registered - same convention
+ * as jobs-types.ts's JobStatus) - keep this in sync if that file changes.
  */
 
-export interface EarningsSummary {
-  totalEarned: number;
-  pendingPayout: number;
-  [key: string]: unknown;
+export enum EarningEntryType {
+  Credit = 0,
+  Debit = 1,
 }
 
-/** One append-only entry in the partner's earning ledger (credit per completed job, debit for penalties). */
+export enum EarningSourceType {
+  JobCompletion = 0,
+  Penalty = 1,
+  AdminCorrection = 2,
+}
+
+/** One append-only entry in the partner's earning ledger. */
 export interface EarningLedgerEntry {
   id: string;
+  partnerId: string;
+  entryType: EarningEntryType;
   amount: number;
-  description?: string;
-  createdAtUtc?: string;
-  [key: string]: unknown;
+  balanceAfter: number;
+  sourceType: EarningSourceType;
+  sourceReferenceId: string | null;
+  description: string;
+  createdAtUtc: string;
 }
 
+/** GET /earnings/summary's response (PartnerEarningsSummaryResponse). */
+export interface EarningsSummary {
+  partnerId: string;
+  currentBalance: number;
+  entries: EarningLedgerEntry[];
+}
+
+export enum PayoutStatus {
+  Pending = 0,
+  Processing = 1,
+  Paid = 2,
+  Failed = 3,
+}
+
+export const PAYOUT_STATUS_LABELS: Record<PayoutStatus, string> = {
+  [PayoutStatus.Pending]: "Pending",
+  [PayoutStatus.Processing]: "Processing",
+  [PayoutStatus.Paid]: "Paid",
+  [PayoutStatus.Failed]: "Failed",
+};
+
+export function payoutStatusLabel(status: PayoutStatus): string {
+  return PAYOUT_STATUS_LABELS[status] ?? String(status);
+}
+
+/** One row in the partner's payout list (PartnerPayoutResponse). */
 export interface PayoutSummary {
   id: string;
-  status?: string;
-  totalAmount?: number;
-  periodStart?: string;
-  periodEnd?: string;
-  [key: string]: unknown;
+  partnerId: string;
+  partnerDisplayName: string;
+  periodStart: string;
+  periodEnd: string;
+  totalAmount: number;
+  status: PayoutStatus;
+  payoutReference: string | null;
+  notes: string | null;
+  createdAt: string;
 }
 
-export interface PayoutDetail extends PayoutSummary {
-  payoutReference?: string | null;
+/** GET /earnings/payouts's actual response envelope (PartnerPayoutSearchResponse). */
+export interface PayoutListResponse {
+  items: PayoutSummary[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
+
+/** GET /earnings/payouts/{id}'s response - same shape as a list row. */
+export type PayoutDetail = PayoutSummary;

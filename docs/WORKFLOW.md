@@ -263,15 +263,26 @@ flowchart TD
 | Admin dashboard | Phase 6 — Admin Panel | #90–#143 |
 | Referral & growth (REFERRAL.md) | Phase 9 — Referral & Growth | #155–#176 |
 | Subscription, recurring bookings, chat, completion verification (PRODUCT-ENHANCEMENTS.md) | Phase 10 — Product Enhancements | #177–#198 |
+| Nestly Coins reorder loyalty (NESTLY-COINS.md) | Phase 11 — Nestly Coins & Loyalty | #156–#160 |
 
 **Note on Partner's phase number**: moved from Phase 8 to Phase 7 on
 2026-07-31 — it now runs *before* Hardening & Launch (Phase 8), not after
 everything else. See PARTNER.md's STATUS section.
 
-**Not yet diagrammed above**: the Referral and Product Enhancements flows
-are new since this document's diagrams were drawn (sections 1–9 predate
-Phase 9/10). The spec docs (REFERRAL.md, PRODUCT-ENHANCEMENTS.md) are
-authoritative for those flows until diagrams are added here.
+**Known task-ID drift (flagged, not yet reconciled)**: this table's
+Referral/Product-Enhancements ID ranges (#155–#198) describe tasks that were
+never actually added as rows to [tasks.csv](tasks.csv) — that file's real
+IDs stop at T151 (Partner) before jumping to T152+ (hardening/bug-fix tasks
+added 2026-08-01/02, including T155–T165, which are unrelated to what this
+table's "#155" etc. describe). Reconciling the two is its own cleanup task —
+until then, treat this table's IDs as REFERRAL.md/PRODUCT-ENHANCEMENTS.md's
+own internal numbering, not literal tasks.csv row IDs.
+
+**Not yet diagrammed above**: the Referral, Product Enhancements, and Nestly
+Coins flows are new since this document's diagrams were drawn (sections 1–9
+predate Phase 9/10/11). The spec docs (REFERRAL.md, PRODUCT-ENHANCEMENTS.md,
+NESTLY-COINS.md) are authoritative for those flows until diagrams are added
+here.
 
 For current status of any of these (done / todo / blocked), see the summary
 rows at the top of [tasks.csv](tasks.csv) or run:
