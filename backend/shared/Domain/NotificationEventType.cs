@@ -16,5 +16,14 @@ public enum NotificationEventType
     ReferralRegistered,
 
     /// <summary>A referral reward (wallet credit or coupon) was disbursed (REFERRAL.md, task 172). Sent to both referrer and referee - dispatched once per recipient, same event type.</summary>
-    ReferralRewardCredited
+    ReferralRewardCredited,
+
+    /// <summary>A subscription's recurring charge succeeded and it rolled to its next billing period (PRODUCT-ENHANCEMENTS.md #1, task 183).</summary>
+    SubscriptionRenewed,
+
+    /// <summary>A subscription's next billing attempt is within the reminder window (PRODUCT-ENHANCEMENTS.md #1, task 183).</summary>
+    SubscriptionExpiringSoon,
+
+    /// <summary>A subscription's recurring charge failed - either a recoverable suspension still retrying, or the terminal expiry once retries are exhausted (PRODUCT-ENHANCEMENTS.md #1, task 183).</summary>
+    SubscriptionPaymentFailed
 }
