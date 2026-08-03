@@ -23,60 +23,43 @@ without a real passing `npm run build` (all three frontends are Next projects;
 | 212 | Customer app shell | **done** |
 | 213 | Admin app shell | **done** |
 | 214 | Partner app shell | **done** |
+| 215 | Auth screens (all 3 apps) | **done** |
 | 216 | Customer home & discovery | **done** |
-| 215 | Auth screens | **partial** — customer-web only, see below |
-| 217 | Service detail & slots | **partial** — see below |
-| 228 | Bug sweep | **partial** — one defect class closed, see below |
-| 218–227, 229 | — | **todo** |
+| 217 | Service detail & slots | **done** |
+| 221 | Admin table system | **partial** |
+| 222 | Admin module pass | **barely started** — 1 of 16 |
+| 223 | Partner screens | **partial** |
+| 228 | Bug sweep | **partial** — date class closed |
+| 218, 219, 220, 224–227, 229 | — | **todo** |
 
-Commits: `54ec781` (209–211), `4c8b6f6` (212 + partial 216), `b8a57c8` (216
-finished), `aff73e9` (213–214), `45c8a15` (215 partial), `e8e2ae7` (217
-partial), `28c8eaa` (228 partial — date fix).
+Every row's `tasks.csv` note carries the exact remaining-file list. Read it
+before starting — several rows are further along than the status suggests, and
+`222` is far less along.
 
-### 217 is partial
+## Highest-value next step
 
-Done: `SlotPicker`, `app/services/[slug]/page.tsx`, `ServiceFaqs`,
-`ReviewsSummary`.
+**Row 222.** `admin-web/src/components/data-table.tsx` already provides
+`DataTable`, `FilterBar`, `Pagination`, `ConfirmDialog`, `Breadcrumbs`,
+`DescriptionList`, `FormGrid`/`FormActions` and formatters, and the **bookings
+list + booking detail screens are the worked reference implementation**.
+Applying that same pattern to the remaining 15 modules (catalog, customers,
+partners, pricing, slots, serviceability, coupons, cms, support, reviews,
+referral, nestly-coins, admin-users, audit, settings) is mechanical and is the
+single biggest remaining chunk of Phase 12.
 
-**Still on old styling:** `PriceCalculator`, and `ServiceAvailability`'s markup
-(only its date helper was corrected).
+## Note on subagents
 
-### 228 — use `lib/date.ts`, never `toISOString` for dates
+Two ran on `admin-web` and `partner-web` and were killed mid-pass by an account
+session limit. The arrangement that made that recoverable: they shared this
+checkout but worked on **strictly disjoint app trees** and were forbidden from
+running any writing git command, so their work surfaced as uncommitted changes
+to review rather than half-landed history. Reuse that arrangement.
 
-One systemic class is closed. 14 sites built a `YYYY-MM-DD` calendar date with
-`new Date().toISOString().slice(0, 10)`, which converts to UTC first — in IST
-that returns *yesterday* before 05:30 local. It had shipped into the slot
-strip, booking summary, reschedule and recurring-booking date defaults.
-
-`lib/date.ts` (`toLocalIsoDate` / `todayIsoDate` / `isoDateOffsetFromToday`) is
-now in all three apps. **Use it for anything calendar-shaped.** A grep for
-`toISOString()` in the `src` trees should return nothing but that file's own
-doc comment — if it returns more, the bug is back.
-
-The rest of row 228 is untouched: unhandled rejections, missing error
-boundaries, stale cache after mutation, rapid-navigation races, hydration
-warnings, the dead admin nav links, forms losing data on failure, and
-double-submit on slow networks. That part must be evidence-based against
-running apps, not a code read.
-
-**All shells and the whole design foundation are now in place.** What remains
-is screen-level work inside each app, plus the four cross-cutting passes.
-
-### 215 is partial — customer-web only
-
-Done: `customer-web`'s `/login`, `/register`, `/forgot-password`, plus the new
-shared `components/auth-ui.tsx` (`AuthShell`, `Segmented`, `OtpField`,
-`useResendCountdown`, `ResendRow`).
-
-**Still on old styling:** `admin-web/src/app/login/page.tsx`,
-`partner-web/src/app/login/page.tsx`, `partner-web/src/app/register/page.tsx`.
-Both apps' own `/login` pages are deliberately kept (row 206) for direct or
-bookmarked origin access — restyle them, don't delete them.
-
-`auth-ui.tsx` currently lives only in customer-web. Sessions B and C should
-copy it into their app rather than importing across app boundaries.
-
----
+Reviewing rather than trusting caught a real defect: the partner agent added a
+`ToastProvider` to `providers.tsx` without knowing `layout.tsx` already mounts
+one. Nested providers render a second permanently-empty toast container and
+leave the outer one unreachable. **Each app must have exactly one
+`ToastProvider`, in `layout.tsx`.**
 
 ## The foundation you are building on
 
