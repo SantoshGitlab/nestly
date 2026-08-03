@@ -8,6 +8,7 @@ import { API_V1, ApiError, apiFetch, describeError } from "@/lib/api";
 import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { canWriteModule } from "@/lib/permissions";
 import type { AdminSessionClaims } from "@/lib/types";
+import { isoDateOffsetFromToday, todayIsoDate } from "@/lib/date";
 
 enum NestlyCoinsAudience {
   Customer = 0,
@@ -246,8 +247,10 @@ function ConfigForm({
 }
 
 function ReportPanel({ audience }: { audience: NestlyCoinsAudience }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = todayIsoDate();
+  // setDate-based, so it stays correct across a DST transition where a day
+  // is not 24 hours — unlike subtracting 30 * 24h in milliseconds.
+  const monthAgo = isoDateOffsetFromToday(-30);
   const [fromDate, setFromDate] = useState(monthAgo);
   const [toDate, setToDate] = useState(today);
   const [range, setRange] = useState({ from: monthAgo, to: today });

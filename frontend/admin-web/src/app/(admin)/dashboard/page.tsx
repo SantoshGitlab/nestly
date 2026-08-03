@@ -6,10 +6,9 @@ import type { ChangeEvent, FormEvent } from "react";
 import { Alert, Button, Card, Field, PageHeading, StatTile } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { DashboardKpiFilters, DashboardKpiResponse } from "@/lib/types";
+import { toLocalIsoDate } from "@/lib/date";
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
+const isoDate = toLocalIsoDate;
 
 interface DatePreset {
   key: string;

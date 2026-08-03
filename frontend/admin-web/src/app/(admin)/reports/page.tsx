@@ -25,6 +25,7 @@ import { ExportJobStatus, ExportReportType } from "@/lib/reports-types";
 import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { canWriteModule } from "@/lib/permissions";
 import type { AdminSessionClaims } from "@/lib/types";
+import { isoDateOffsetFromToday, todayIsoDate } from "@/lib/date";
 
 function useAdminClaims(): AdminSessionClaims | null {
   const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
@@ -46,13 +47,11 @@ function toUtcEnd(dateOnly: string): string {
 }
 
 function defaultFromDate(): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 30);
-  return d.toISOString().slice(0, 10);
+  return isoDateOffsetFromToday(-30);
 }
 
 function defaultToDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayIsoDate();
 }
 
 const REPORT_TYPE_OPTIONS = [
@@ -136,7 +135,7 @@ export default function ReportsPage() {
     setExportError(null);
     try {
       const blob = await exportFn();
-      downloadBlob(blob, `${fileNamePrefix}-${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadBlob(blob, `${fileNamePrefix}-${todayIsoDate()}.csv`);
     } catch (err) {
       setExportError(describeError(err));
     }

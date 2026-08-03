@@ -15,6 +15,7 @@ import {
 } from "@/lib/reviews";
 import type { ReviewModerationFilters } from "@/lib/reviews";
 import { ReviewStatus } from "@/lib/types";
+import { todayIsoDate } from "@/lib/date";
 import type {
   AdminSessionClaims,
   ModerateReviewRequestBody,
@@ -147,7 +148,7 @@ export default function ReviewModerationPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `reviews-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `reviews-export-${todayIsoDate()}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();

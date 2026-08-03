@@ -11,6 +11,7 @@ import { SlotPicker } from "@/components/SlotPicker";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { todayIsoDate } from "@/lib/date";
 import type {
   BookingSummary,
   BookingSummaryRequestBody,
@@ -52,7 +53,7 @@ function BookingSummaryScreen() {
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set());
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState<string>(todayIsoDate);
   const [selectedSlotWindowId, setSelectedSlotWindowId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);

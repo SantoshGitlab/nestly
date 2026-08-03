@@ -10,6 +10,7 @@ import { SlotPicker } from "@/components/SlotPicker";
 import { Alert, Button, Card, Checkbox, PageHeading } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { todayIsoDate } from "@/lib/date";
 import {
   DAY_OF_WEEK_LABELS,
   RecurringBookingRecurrenceFrequency,
@@ -61,7 +62,7 @@ function NewRecurringBookingPlanScreen() {
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set());
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState<string>(todayIsoDate);
   const [selectedSlotWindowId, setSelectedSlotWindowId] = useState<string | null>(null);
   const [frequency, setFrequency] = useState<RecurringBookingRecurrenceFrequency>(
     RecurringBookingRecurrenceFrequency.Weekly,

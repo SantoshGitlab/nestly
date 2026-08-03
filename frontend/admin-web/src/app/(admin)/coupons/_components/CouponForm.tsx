@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Alert, Button, Field, Select } from "@/components/ui";
 import { describeError } from "@/lib/api";
 import { listApplicableCategories } from "@/lib/coupon-api";
+import { todayIsoDate } from "@/lib/date";
 import {
   CouponCustomerSegment,
   CouponDiscountType,
@@ -92,7 +93,7 @@ function nullableNumberToInputValue(value: number | null): string {
 
 function defaultValuesFor(coupon: CouponAdminResponse | null): CouponFormValues {
   if (!coupon) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIsoDate();
     return {
       code: "",
       description: "",

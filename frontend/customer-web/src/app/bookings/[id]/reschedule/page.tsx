@@ -10,6 +10,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { toLocalIsoDate, todayIsoDate } from "@/lib/date";
 import type {
   RescheduleEligibilityResponse,
   RescheduleOutcomeResponse,
@@ -35,7 +36,7 @@ function RescheduleBookingScreen() {
   const queryClient = useQueryClient();
   const { city, locality } = useSelectedCity();
 
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState<string>(todayIsoDate);
   const [selectedSlotWindowId, setSelectedSlotWindowId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -180,9 +181,7 @@ function RescheduleBookingScreen() {
 /** How many upcoming days are offered in the date strip - mirrors SlotPicker's VISIBLE_DAYS. */
 const VISIBLE_DAYS = 7;
 
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+const isoDate = toLocalIsoDate;
 
 function upcomingDates(): string[] {
   const today = new Date();
