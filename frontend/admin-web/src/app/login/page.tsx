@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Field, PageHeading } from "@/components/ui";
+import { AuthShell } from "@/components/auth-ui";
+import { Alert, Button, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeLoginError } from "@/lib/api";
 import { isAuthenticated, storeSession, subscribeToAuthChanges } from "@/lib/auth";
 import type { AdminLoginResponse } from "@/lib/types";
@@ -20,6 +21,11 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+/**
+ * admin-web's own sign-in page. Deliberately kept alongside the unified entry
+ * point on customer-web (task 206) so a bookmarked or direct visit to this
+ * app's origin still works.
+ */
 export default function AdminLoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -54,31 +60,31 @@ export default function AdminLoginPage() {
   });
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <PageHeading title="Admin sign in" subtitle="Sign in with your admin email and password." />
-
-      <Card title="Sign in">
-        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-          {error ? <Alert>{error}</Alert> : null}
-          <Field
-            label="Email"
-            type="email"
-            autoComplete="email"
-            error={form.formState.errors.email?.message}
-            {...form.register("email")}
-          />
-          <Field
-            label="Password"
-            type="password"
-            autoComplete="current-password"
-            error={form.formState.errors.password?.message}
-            {...form.register("password")}
-          />
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
-      </Card>
-    </main>
+    <AuthShell
+      title="Sign in"
+      subtitle="Use your admin email and password."
+      footer="Authorised personnel only. Activity on this panel is audited."
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        {error ? <Alert>{error}</Alert> : null}
+        <Field
+          label="Email"
+          type="email"
+          autoComplete="email"
+          error={form.formState.errors.email?.message}
+          {...form.register("email")}
+        />
+        <Field
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          error={form.formState.errors.password?.message}
+          {...form.register("password")}
+        />
+        <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
+          Sign in
+        </Button>
+      </form>
+    </AuthShell>
   );
 }
