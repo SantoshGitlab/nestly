@@ -25,10 +25,39 @@ without a real passing `npm run build` (all three frontends are Next projects;
 | 214 | Partner app shell | **done** |
 | 216 | Customer home & discovery | **done** |
 | 215 | Auth screens | **partial** — customer-web only, see below |
-| 217–229 | — | **todo** |
+| 217 | Service detail & slots | **partial** — see below |
+| 228 | Bug sweep | **partial** — one defect class closed, see below |
+| 218–227, 229 | — | **todo** |
 
 Commits: `54ec781` (209–211), `4c8b6f6` (212 + partial 216), `b8a57c8` (216
-finished), `aff73e9` (213–214), `45c8a15` (215 partial).
+finished), `aff73e9` (213–214), `45c8a15` (215 partial), `e8e2ae7` (217
+partial), `28c8eaa` (228 partial — date fix).
+
+### 217 is partial
+
+Done: `SlotPicker`, `app/services/[slug]/page.tsx`, `ServiceFaqs`,
+`ReviewsSummary`.
+
+**Still on old styling:** `PriceCalculator`, and `ServiceAvailability`'s markup
+(only its date helper was corrected).
+
+### 228 — use `lib/date.ts`, never `toISOString` for dates
+
+One systemic class is closed. 14 sites built a `YYYY-MM-DD` calendar date with
+`new Date().toISOString().slice(0, 10)`, which converts to UTC first — in IST
+that returns *yesterday* before 05:30 local. It had shipped into the slot
+strip, booking summary, reschedule and recurring-booking date defaults.
+
+`lib/date.ts` (`toLocalIsoDate` / `todayIsoDate` / `isoDateOffsetFromToday`) is
+now in all three apps. **Use it for anything calendar-shaped.** A grep for
+`toISOString()` in the `src` trees should return nothing but that file's own
+doc comment — if it returns more, the bug is back.
+
+The rest of row 228 is untouched: unhandled rejections, missing error
+boundaries, stale cache after mutation, rapid-navigation races, hydration
+warnings, the dead admin nav links, forms losing data on failure, and
+double-submit on slow networks. That part must be evidence-based against
+running apps, not a code read.
 
 **All shells and the whole design foundation are now in place.** What remains
 is screen-level work inside each app, plus the four cross-cutting passes.
