@@ -12,19 +12,27 @@ export function ServiceFaqs({ faqs }: { faqs: ServiceFaq[] }) {
 
   return (
     <section aria-labelledby="faqs-heading">
-      <h2 id="faqs-heading" className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+      <h2 id="faqs-heading" className="mb-4 text-lg font-semibold tracking-tight text-fg">
         Frequently asked questions
       </h2>
-      <div className="flex flex-col divide-y divide-black/10 dark:divide-white/15">
+      <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
         {faqs.map((faq) => (
-          <details key={faq.id} className="group py-3">
-            <summary className="cursor-pointer list-none text-sm font-medium marker:content-none">
-              <span className="flex items-center justify-between gap-3">
-                {faq.question}
-                <span className="text-neutral-400 transition-transform group-open:rotate-45">+</span>
-              </span>
+          <details key={faq.id} className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-fg transition-colors duration-fast ease-out marker:content-none hover:bg-surface-2">
+              {faq.question}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="h-4 w-4 shrink-0 text-fg-subtle transition-transform duration-fast ease-out group-open:rotate-180"
+                aria-hidden
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </summary>
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{faq.answer}</p>
+            <p className="px-4 pb-4 text-sm leading-relaxed text-fg-muted">{faq.answer}</p>
           </details>
         ))}
       </div>

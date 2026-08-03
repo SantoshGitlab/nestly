@@ -7,7 +7,7 @@ import { PriceCalculator } from "@/components/PriceCalculator";
 import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
 import { ServiceFaqs } from "@/components/ServiceFaqs";
-import { Alert, Button } from "@/components/ui";
+import { Alert, Button, Skeleton } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { ServiceDetail } from "@/lib/types";
@@ -26,13 +26,23 @@ export default function ServiceDetailPage() {
   });
 
   if (query.isPending) {
-    return <main className="mx-auto w-full max-w-4xl px-6 py-10 text-sm text-neutral-500">Loading…</main>;
+    return <ServiceDetailSkeleton />;
   }
 
   if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-4xl px-6 py-10">
-        <Alert>{describeError(query.error)}</Alert>
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+        <Alert
+          tone="error"
+          title="Couldn't load this service"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
       </main>
     );
   }
@@ -40,59 +50,161 @@ export default function ServiceDetailPage() {
   const service = query.data;
 
   return (
-    <main className="mx-auto grid w-full max-w-4xl gap-8 px-6 py-10 md:grid-cols-[1fr_320px]">
-      <div className="flex flex-col gap-6">
-        <div>
-          <Link
-            href={`/categories/${service.categorySlug}`}
-            className="text-sm text-neutral-500 hover:underline"
-          >
-            {service.categoryName}
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">{service.name}</h1>
-          <p className="mt-2 text-neutral-600 dark:text-neutral-400">{service.description}</p>
+    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <nav aria-label="Breadcrumb" className="mb-5 text-sm">
+        <ol className="flex flex-wrap items-center gap-1.5 text-fg-muted">
+          <li>
+            <Link href="/categories" className="hover:text-fg">
+              Categories
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li>
+            <Link href={`/categories/${service.categorySlug}`} className="hover:text-fg">
+              {service.categoryName}
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li className="font-medium text-fg" aria-current="page">
+            {service.name}
+          </li>
+        </ol>
+      </nav>
+
+      <div className="grid gap-8 md:grid-cols-[1fr_20rem]">
+        <div className="flex min-w-0 flex-col gap-8">
+          <div>
+            <h1 className="text-display-sm font-semibold text-fg">{service.name}</h1>
+            <p className="mt-3 leading-relaxed text-fg-muted text-pretty">{service.description}</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <InclusionList
+              title="What's included"
+              body={service.inclusions}
+              tone="included"
+            />
+            <InclusionList
+              title="What's not included"
+              body={service.exclusions}
+              tone="excluded"
+            />
+          </div>
+
+          {service.cancellationPolicy || service.reschedulePolicy ? (
+            <section aria-labelledby="policies-heading">
+              <h2
+                id="policies-heading"
+                className="mb-3 text-lg font-semibold tracking-tight text-fg"
+              >
+                Cancellation &amp; rescheduling
+              </h2>
+              <ul className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted">
+                {service.cancellationPolicy ? <li>{service.cancellationPolicy}</li> : null}
+                {service.reschedulePolicy ? <li>{service.reschedulePolicy}</li> : null}
+              </ul>
+            </section>
+          ) : null}
+
+          <ServiceFaqs faqs={service.faqs} />
+
+          <ReviewsSummary slug={service.slug} />
         </div>
 
-        <section aria-labelledby="inclusions-heading">
-          <h2 id="inclusions-heading" className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-            What&apos;s included
-          </h2>
-          <p className="text-sm">{service.inclusions}</p>
-        </section>
+        <aside className="flex flex-col gap-4 md:sticky md:top-20 md:self-start">
+          <PriceCalculator
+            serviceId={service.id}
+            addOns={service.addOns}
+            cityId={city ? city.id : null}
+          />
+          <ServiceAvailability serviceId={service.id} />
 
-        <section aria-labelledby="exclusions-heading">
-          <h2 id="exclusions-heading" className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-            What&apos;s not included
-          </h2>
-          <p className="text-sm">{service.exclusions}</p>
-        </section>
-
-        {service.cancellationPolicy || service.reschedulePolicy ? (
-          <section aria-labelledby="policies-heading">
-            <h2 id="policies-heading" className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              Cancellation &amp; rescheduling
-            </h2>
-            <ul className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-400">
-              {service.cancellationPolicy ? <li>{service.cancellationPolicy}</li> : null}
-              {service.reschedulePolicy ? <li>{service.reschedulePolicy}</li> : null}
-            </ul>
-          </section>
-        ) : null}
-
-        <ServiceFaqs faqs={service.faqs} />
-
-        <ReviewsSummary slug={service.slug} />
-      </div>
-
-      <aside className="flex flex-col gap-4 md:sticky md:top-6 md:self-start">
-        <PriceCalculator serviceId={service.id} addOns={service.addOns} cityId={city ? city.id : null} />
-        <ServiceAvailability serviceId={service.id} />
-        <Link href={`/booking/summary?serviceSlug=${service.slug}`}>
-          <Button type="button" className="w-full">
+          {/* A styled Link, not <Link><Button/></Link>: nesting a button
+              inside an anchor is invalid HTML and gives assistive tech two
+              nested interactive elements for one action. */}
+          <Link
+            href={`/booking/summary?serviceSlug=${service.slug}`}
+            className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-brand-600 text-[0.9375rem] font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
+          >
             Book now
-          </Button>
-        </Link>
-      </aside>
+          </Link>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function InclusionList({
+  title,
+  body,
+  tone,
+}: {
+  title: string;
+  body: string;
+  tone: "included" | "excluded";
+}) {
+  if (!body) return null;
+
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+        {tone === "included" ? (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.25"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4 text-success"
+            aria-hidden
+          >
+            <path d="m5 13 4 4L19 7" />
+          </svg>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.25"
+            strokeLinecap="round"
+            className="h-4 w-4 text-fg-subtle"
+            aria-hidden
+          >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        )}
+        {title}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-fg-muted">{body}</p>
+    </section>
+  );
+}
+
+/** Mirrors the loaded layout so the two columns don't jump into place. */
+function ServiceDetailSkeleton() {
+  return (
+    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <Skeleton className="h-4 w-72" />
+      <div className="mt-5 grid gap-8 md:grid-cols-[1fr_20rem]">
+        <div className="flex flex-col gap-6">
+          <Skeleton className="h-9 w-3/4" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-28 rounded-2xl" />
+          </div>
+          <Skeleton className="h-40 rounded-2xl" />
+        </div>
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-40 rounded-2xl" />
+          <Skeleton className="h-12 rounded-lg" />
+        </div>
+      </div>
     </main>
   );
 }

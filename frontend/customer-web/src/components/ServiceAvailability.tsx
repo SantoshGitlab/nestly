@@ -10,8 +10,20 @@ import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { clearSelectedLocality } from "@/lib/location";
 import type { ServiceabilityResult, SlotAvailability } from "@/lib/types";
 
+/**
+ * Today's local calendar date as YYYY-MM-DD.
+ *
+ * Built from local date parts, not `toISOString().slice(0, 10)`: toISOString
+ * converts to UTC first, so in any timezone ahead of UTC the early hours read
+ * as the previous day. In IST (UTC+05:30) that returned yesterday for every
+ * customer checking availability before 05:30. Mirrors SlotPicker's isoDate.
+ */
 function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /**

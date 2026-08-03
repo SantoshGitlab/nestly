@@ -2,32 +2,56 @@
 
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Alert } from "@/components/ui";
+import { Alert, Button, Skeleton, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { SlotAvailability } from "@/lib/types";
 
 /** How many upcoming days are offered in the date strip (SRS 11.8.2's "available dates"). */
 const VISIBLE_DAYS = 7;
 
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/**
+ * Local calendar date as YYYY-MM-DD.
+ *
+ * Deliberately built from the local getFullYear/getMonth/getDate rather than
+ * `toISOString().slice(0, 10)`: toISOString converts to UTC first, so for any
+ * timezone ahead of UTC the early hours of the morning render as the previous
+ * day. In IST (UTC+05:30) that meant every customer opening the picker before
+ * 05:30 got a strip starting on yesterday, and "today" silently shifted.
+ */
+function isoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function upcomingDates(): string[] {
   const today = new Date();
-  return Array.from({ length: VISIBLE_DAYS }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    return isoDate(d);
+  return Array.from({ length: VISIBLE_DAYS }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + index);
+    return isoDate(date);
   });
 }
 
 function formatDateLabel(iso: string): { weekday: string; day: string } {
-  const d = new Date(`${iso}T00:00:00`);
+  const date = new Date(`${iso}T00:00:00`);
   return {
-    weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
-    day: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+    weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
+    day: date.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
   };
+}
+
+/** Buckets a slot by its start hour so the list reads as a day, not a flat wall of chips. */
+const PARTS = [
+  { key: "morning", label: "Morning", until: 12 },
+  { key: "afternoon", label: "Afternoon", until: 17 },
+  { key: "evening", label: "Evening", until: 24 },
+] as const;
+
+function partOfDay(startTime: string): (typeof PARTS)[number]["key"] {
+  const hour = Number.parseInt(startTime.slice(0, 2), 10);
+  return (PARTS.find((part) => hour < part.until) ?? PARTS[PARTS.length - 1]).key;
 }
 
 /**
@@ -79,12 +103,12 @@ export function SlotPicker({
   const selectedQuery = selectedIndex >= 0 ? queries[selectedIndex] : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-medium">Date</h3>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {dates.map((date, i) => {
-            const query = queries[i];
+        <h3 className="mb-2.5 text-sm font-medium text-fg">Date</h3>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+          {dates.map((date, index) => {
+            const query = queries[index];
             const { weekday, day } = formatDateLabel(date);
             // A date is disabled once we know for certain it has nothing
             // bookable; while still loading (or on a fetch error) it stays
@@ -100,18 +124,32 @@ export function SlotPicker({
                 type="button"
                 disabled={disabled}
                 aria-pressed={isSelected}
+                // Without this a disabled chip is just faded, leaving the
+                // customer to guess why they cannot pick it.
+                title={
+                  notServiceable
+                    ? "Not available at this address"
+                    : knownEmpty
+                      ? "Fully booked"
+                      : undefined
+                }
                 onClick={() => {
                   onDateChange(date);
                   onSlotChange(null, null);
                 }}
-                className={`flex min-w-[4.5rem] flex-col items-center rounded-lg border px-3 py-2 text-xs transition-colors ${
+                className={cx(
+                  "flex min-w-[4.75rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-xs transition duration-fast ease-out",
                   isSelected
-                    ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                    : "border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                } disabled:cursor-not-allowed disabled:opacity-40`}
+                    ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                    : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                  disabled &&
+                    "cursor-not-allowed border-line bg-surface-2 text-fg-subtle line-through opacity-60 hover:bg-surface-2",
+                )}
               >
                 <span className="font-medium">{weekday}</span>
-                <span>{day}</span>
+                <span className={cx(isSelected ? "text-fg-on-brand/85" : "text-fg-muted")}>
+                  {day}
+                </span>
               </button>
             );
           })}
@@ -119,34 +157,79 @@ export function SlotPicker({
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-medium">Time window</h3>
+        <h3 className="mb-2.5 text-sm font-medium text-fg">Time window</h3>
+
         {!selectedQuery || selectedQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading time windows…</p>
-        ) : selectedQuery.isError ? (
-          <Alert>{describeError(selectedQuery.error)}</Alert>
-        ) : !selectedQuery.data.isServiceable ? (
-          <Alert tone="error">This service isn&apos;t available at this address.</Alert>
-        ) : selectedQuery.data.slots.length === 0 ? (
-          <p className="text-sm text-neutral-500">No slots available on this date. Try another date.</p>
-        ) : (
           <div className="flex flex-wrap gap-2">
-            {selectedQuery.data.slots.map((slot) => (
-              <button
-                key={slot.slotWindowId}
-                type="button"
-                aria-pressed={slot.slotWindowId === selectedSlotWindowId}
-                onClick={() =>
-                  onSlotChange(slot.slotWindowId, `${slot.name} · ${slot.startTime.slice(0, 5)}–${slot.endTime.slice(0, 5)}`)
-                }
-                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  slot.slotWindowId === selectedSlotWindowId
-                    ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                    : "border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                }`}
-              >
-                {slot.name} · {slot.startTime.slice(0, 5)}–{slot.endTime.slice(0, 5)}
-              </button>
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-11 w-36 rounded-xl" />
             ))}
+          </div>
+        ) : selectedQuery.isError ? (
+          <Alert
+            tone="error"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => selectedQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            {describeError(selectedQuery.error)}
+          </Alert>
+        ) : !selectedQuery.data.isServiceable ? (
+          <Alert tone="error" title="Not available here">
+            This service isn&apos;t available at this address.
+          </Alert>
+        ) : selectedQuery.data.slots.length === 0 ? (
+          <Alert tone="info" title="Fully booked">
+            No slots left on this date — pick another day from the strip above.
+          </Alert>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {PARTS.map((part) => {
+              const slots = selectedQuery.data.slots.filter(
+                (slot) => partOfDay(slot.startTime) === part.key,
+              );
+              if (slots.length === 0) return null;
+
+              return (
+                <div key={part.key}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                    {part.label}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {slots.map((slot) => {
+                      const isSelected = slot.slotWindowId === selectedSlotWindowId;
+                      const range = `${slot.startTime.slice(0, 5)}–${slot.endTime.slice(0, 5)}`;
+                      return (
+                        <button
+                          key={slot.slotWindowId}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => onSlotChange(slot.slotWindowId, `${slot.name} · ${range}`)}
+                          className={cx(
+                            "flex flex-col items-start rounded-xl border px-3.5 py-2 text-sm transition duration-fast ease-out",
+                            isSelected
+                              ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                              : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                          )}
+                        >
+                          <span className="font-medium">{slot.name}</span>
+                          <span
+                            className={cx(
+                              "nums text-xs",
+                              isSelected ? "text-fg-on-brand/85" : "text-fg-muted",
+                            )}
+                          >
+                            {range}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
