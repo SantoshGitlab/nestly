@@ -5,7 +5,15 @@ import { LedgerSection } from "./_components/LedgerSection";
 import { PayoutsSection } from "./_components/PayoutsSection";
 import { SummarySection } from "./_components/SummarySection";
 
-/** Earnings screen (docs/PARTNER.md's Financial domain): summary, ledger and payouts. */
+/**
+ * Earnings (docs/PARTNER.md's Financial domain), in the order a partner asks
+ * the questions: what am I owed right now, where did it come from, and when
+ * was it paid out.
+ *
+ * Each section owns its own query and its own three states, because the three
+ * endpoints fail independently — a ledger that is briefly unreachable must not
+ * blank out a balance that loaded fine.
+ */
 export default function EarningsPage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">

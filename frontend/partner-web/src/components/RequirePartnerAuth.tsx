@@ -37,11 +37,11 @@ export function RequirePartnerAuth({ children }: { children: ReactNode }) {
   }, [authed, router]);
 
   if (authed === undefined) {
-    return <p className="p-8 text-sm text-neutral-500">Loading…</p>;
+    return <p className="p-8 text-sm text-fg-muted">Loading…</p>;
   }
 
   if (!authed) {
-    return <p className="p-8 text-sm text-neutral-500">Redirecting to sign in…</p>;
+    return <p className="p-8 text-sm text-fg-muted">Redirecting to sign in…</p>;
   }
 
   return <>{children}</>;

@@ -16,5 +16,5 @@ export default function RootPage() {
     router.replace(isAuthenticated() ? "/jobs" : "/login");
   }, [router]);
 
-  return <p className="p-8 text-sm text-neutral-500">Loading…</p>;
+  return <p className="p-8 text-sm text-fg-muted">Loading…</p>;
 }

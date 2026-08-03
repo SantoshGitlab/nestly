@@ -7,14 +7,20 @@ import { ServiceAreasSection } from "./_components/ServiceAreasSection";
 import { SkillsSection } from "./_components/SkillsSection";
 
 /**
- * Partner profile/onboarding screen (docs/PARTNER.md's Identity and
- * Capability & Coverage domains): profile details, KYC status/submission,
- * service areas and skills.
+ * Partner profile/onboarding (docs/PARTNER.md's Identity and Capability &
+ * Coverage domains), ordered the way onboarding actually runs: who you are,
+ * prove it, where you work, what you do.
+ *
+ * Each section owns its own query, mutation and three states, so one failing
+ * lookup never blanks out the rest of the screen.
  */
 export default function ProfilePage() {
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-      <PageHeading title="Profile" subtitle="Your identity, verification status, coverage and skills." />
+      <PageHeading
+        title="Profile"
+        subtitle="Your identity, verification status, coverage and skills."
+      />
       <ProfileDetailsSection />
       <KycSection />
       <ServiceAreasSection />
