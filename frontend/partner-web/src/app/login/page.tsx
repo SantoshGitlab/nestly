@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Field, PageHeading } from "@/components/ui";
+import { AuthShell, OtpField, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { Alert, Button, Field } from "@/components/ui";
 import { describeError, describeLoginError } from "@/lib/api";
 import { requestLoginOtp, verifyLoginOtp } from "@/lib/auth-api";
 import { isAuthenticated, storeSession, subscribeToAuthChanges } from "@/lib/auth";
@@ -37,6 +38,11 @@ type OtpFormValues = z.infer<typeof otpSchema>;
  * Two independent forms rather than one, one per step - it keeps each
  * step's validation and submit handler simple instead of one form juggling
  * two very different "what does submit do here" meanings.
+ *
+ * This page is deliberately retained (task #206) even though customer-web's
+ * unified /login can also authenticate a partner: a bookmarked or directly
+ * typed partner-web origin must still be able to sign in. The direct
+ * partner-api calls below are exactly what #206 specified, unchanged.
  */
 export default function PartnerLoginPage() {
   const router = useRouter();
@@ -44,6 +50,8 @@ export default function PartnerLoginPage() {
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const resend = useResendCountdown();
 
   // Already signed in (e.g. back-button to /login with a live session) -
   // send straight to the jobs list instead of showing the form again.
@@ -85,6 +93,7 @@ export default function PartnerLoginPage() {
       setInfoMessage(`We sent a verification code to ${values.mobile}.`);
       setStep("otp");
       otpForm.reset({ otpCode: "" });
+      resend.start();
     } catch (err) {
       setError(describeError(err));
     }
@@ -101,6 +110,22 @@ export default function PartnerLoginPage() {
     }
   });
 
+  // Resend is the same request as the first send - the countdown, not a
+  // different endpoint, is what stops a partner burning their SMS quota.
+  const resendOtp = async () => {
+    setError(null);
+    setIsResending(true);
+    try {
+      await requestLoginOtp({ mobile });
+      setInfoMessage(`We sent a new verification code to ${mobile}.`);
+      resend.start();
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const changeNumber = () => {
     setStep("mobile");
     setError(null);
@@ -109,65 +134,69 @@ export default function PartnerLoginPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
-      <PageHeading
-        title="Partner sign in"
-        subtitle="Sign in with your registered mobile number."
-      />
-
-      <Card title={step === "mobile" ? "Enter your mobile number" : "Enter the verification code"}>
-        {error ? (
-          <div className="mb-4">
-            <Alert>{error}</Alert>
-          </div>
-        ) : null}
-        {infoMessage ? (
-          <div className="mb-4">
-            <Alert tone="info">{infoMessage}</Alert>
-          </div>
-        ) : null}
+    <AuthShell
+      title="Partner sign in"
+      subtitle={
+        step === "mobile"
+          ? "Sign in with your registered mobile number."
+          : `Enter the 6-digit code we sent to ${mobile}.`
+      }
+      footer={
+        <>
+          New partner?{" "}
+          <Link
+            href="/register"
+            className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+          >
+            Register here
+          </Link>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {error ? <Alert>{error}</Alert> : null}
+        {infoMessage && !error ? <Alert tone="info">{infoMessage}</Alert> : null}
 
         {step === "mobile" ? (
           <form onSubmit={requestOtp} className="flex flex-col gap-4" noValidate>
             <Field
               label="Mobile number"
               type="tel"
+              inputMode="tel"
               autoComplete="tel"
+              autoFocus
               placeholder="e.g. 9876543210"
               error={mobileForm.formState.errors.mobile?.message}
               {...mobileForm.register("mobile")}
             />
-            <Button type="submit" disabled={mobileForm.formState.isSubmitting}>
-              {mobileForm.formState.isSubmitting ? "Sending code…" : "Send verification code"}
+            <Button type="submit" size="lg" fullWidth loading={mobileForm.formState.isSubmitting}>
+              Send verification code
             </Button>
           </form>
         ) : (
           <form onSubmit={verifyOtp} className="flex flex-col gap-4" noValidate>
-            <Field
-              label="Verification code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
+            <OtpField
+              autoFocus
               error={otpForm.formState.errors.otpCode?.message}
               {...otpForm.register("otpCode")}
             />
-            <Button type="submit" disabled={otpForm.formState.isSubmitting}>
-              {otpForm.formState.isSubmitting ? "Verifying…" : "Sign in"}
+            <Button type="submit" size="lg" fullWidth loading={otpForm.formState.isSubmitting}>
+              Sign in
             </Button>
-            <Button type="button" variant="secondary" onClick={changeNumber}>
+
+            <ResendRow
+              remaining={resend.remaining}
+              canResend={resend.canResend}
+              onResend={resendOtp}
+              pending={isResending}
+            />
+
+            <Button type="button" variant="ghost" fullWidth onClick={changeNumber}>
               Use a different number
             </Button>
           </form>
         )}
-      </Card>
-
-      <p className="mt-6 text-center text-sm text-neutral-600 dark:text-neutral-400">
-        New partner?{" "}
-        <Link href="/register" className="underline underline-offset-2">
-          Register here
-        </Link>
-        .
-      </p>
-    </main>
+      </div>
+    </AuthShell>
   );
 }

@@ -1,14 +1,29 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
-import { Alert, Button, Card, Field, PageHeading, StatTile } from "@/components/ui";
+import type { ChangeEvent } from "react";
+import { Alert, Button, Field, PageHeading, Skeleton, StatTile, cx } from "@/components/ui";
+import {
+  DataTable,
+  FilterBar,
+  countActiveFilters,
+  formatCurrency,
+} from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { BookingStatusBadge } from "@/components/status-badges";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { searchBookings } from "@/lib/bookings-api";
+import type { AdminBookingListItem } from "@/lib/bookings-types";
+import { getVisibleNavModules } from "@/lib/permissions";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import type { DashboardKpiFilters, DashboardKpiResponse } from "@/lib/types";
 import { toLocalIsoDate } from "@/lib/date";
 
 const isoDate = toLocalIsoDate;
+
+const RECENT_BOOKINGS_PAGE_SIZE = 8;
 
 interface DatePreset {
   key: string;
@@ -73,9 +88,21 @@ function buildQueryString(filters: DashboardKpiFilters): string {
  * (never a per-widget filter), and a refetch keeps the previous numbers on
  * screen at reduced opacity rather than flashing a loading skeleton -
  * `keepPreviousData` is exactly this behaviour for react-query v5.
+ *
+ * This screen is also the reference implementation for task 221's shared
+ * pattern (`components/data-table.tsx`): `FilterBar` above, a three-state KPI
+ * row, and a `DataTable` whose columns, sort, density, skeleton, empty state
+ * and error-with-retry are all the table primitive's rather than hand-rolled.
+ * Every other module screen is expected to look like this one.
  */
 export default function DashboardPage() {
   const todayIso = isoDate(new Date());
+  const claims = useAdminClaims();
+
+  // The recent-bookings panel is a second read of an existing endpoint, so it
+  // is only offered to an admin whose session actually grants the bookings
+  // module — otherwise the dashboard would show a permanent 403 card.
+  const canReadBookings = getVisibleNavModules(claims).some((module) => module.key === "bookings");
 
   const [filters, setFilters] = useState<DashboardKpiFilters>({ dateFrom: todayIso, dateTo: todayIso });
   const [activePreset, setActivePreset] = useState<string | null>("today");
@@ -93,6 +120,20 @@ export default function DashboardPage() {
     placeholderData: keepPreviousData,
   });
 
+  const recentBookings = useQuery({
+    queryKey: ["dashboard-recent-bookings", filters.dateFrom, filters.dateTo, filters.city],
+    queryFn: () =>
+      searchBookings({
+        slotDateFrom: filters.dateFrom,
+        slotDateTo: filters.dateTo,
+        city: filters.city,
+        page: 1,
+        pageSize: RECENT_BOOKINGS_PAGE_SIZE,
+      }),
+    enabled: canReadBookings,
+    placeholderData: keepPreviousData,
+  });
+
   const applyPreset = (preset: DatePreset) => {
     const range = preset.range();
     setDraftFrom(range.dateFrom);
@@ -106,8 +147,7 @@ export default function DashboardPage() {
     setActivePreset(null);
   };
 
-  const applyCustomFilters = (event: FormEvent) => {
-    event.preventDefault();
+  const applyCustomFilters = () => {
     setActivePreset(null);
     setFilters({
       dateFrom: draftFrom || undefined,
@@ -117,74 +157,157 @@ export default function DashboardPage() {
     });
   };
 
-  return (
-    <div className="mx-auto w-full max-w-5xl">
-      <PageHeading title="Dashboard" subtitle="Bookings, revenue, cancellations, refunds, and support activity." />
+  const clearFilters = () => {
+    setDraftFrom(todayIso);
+    setDraftTo(todayIso);
+    setDraftCity("");
+    setDraftCategory("");
+    setActivePreset("today");
+    setFilters({ dateFrom: todayIso, dateTo: todayIso });
+  };
 
-      <Card title="Filters" description="Scope every widget below by date range, city, and category (SRS 12.3.2).">
-        <div className="flex flex-col gap-4">
+  const columns: DataTableColumn<AdminBookingListItem>[] = [
+    {
+      key: "customer",
+      header: "Customer",
+      sortValue: (booking) => booking.customerName,
+      cell: (booking) => (
+        <>
+          <Link
+            href={`/bookings/${booking.id}`}
+            className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+          >
+            {booking.customerName}
+          </Link>
+          <div className="nums text-xs text-fg-subtle">{booking.customerMobile}</div>
+        </>
+      ),
+    },
+    {
+      key: "service",
+      header: "Service",
+      sortValue: (booking) => booking.serviceName,
+      cell: (booking) => booking.serviceName,
+    },
+    {
+      key: "city",
+      header: "City",
+      sortValue: (booking) => booking.city,
+      cell: (booking) => booking.city,
+    },
+    {
+      key: "slotDate",
+      header: "Slot date",
+      sortValue: (booking) => booking.slotDate,
+      cell: (booking) => <span className="nums">{booking.slotDate}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (booking) => booking.statusLabel,
+      cell: (booking) => <BookingStatusBadge status={booking.status} label={booking.statusLabel} />,
+    },
+    {
+      key: "total",
+      header: "Total",
+      numeric: true,
+      sortValue: (booking) => booking.totalPayable,
+      cell: (booking) => formatCurrency(booking.totalPayable),
+    },
+  ];
+
+  return (
+    <div className="mx-auto w-full max-w-6xl">
+      <PageHeading
+        title="Dashboard"
+        subtitle="Bookings, revenue, cancellations, refunds, and support activity."
+      />
+
+      <FilterBar
+        onSubmit={applyCustomFilters}
+        onClear={clearFilters}
+        activeCount={countActiveFilters(filters)}
+        submitLabel="Apply filters"
+        busy={query.isFetching}
+        columns={4}
+        actions={
           <div className="flex flex-wrap gap-2" role="group" aria-label="Date range presets">
             {PRESETS.map((preset) => (
               <Button
                 key={preset.key}
                 type="button"
-                variant={activePreset === preset.key ? "primary" : "secondary"}
+                size="sm"
+                variant={activePreset === preset.key ? "subtle" : "ghost"}
                 onClick={() => applyPreset(preset)}
               >
                 {preset.label}
               </Button>
             ))}
           </div>
+        }
+      >
+        <Field label="From" type="date" value={draftFrom} onChange={onDraftDateChange(setDraftFrom)} />
+        <Field label="To" type="date" value={draftTo} onChange={onDraftDateChange(setDraftTo)} />
+        <Field
+          label="City"
+          placeholder="e.g. Bengaluru"
+          value={draftCity}
+          onChange={(event) => setDraftCity(event.target.value)}
+        />
+        <Field
+          label="Category"
+          placeholder="e.g. cleaning"
+          value={draftCategory}
+          onChange={(event) => setDraftCategory(event.target.value)}
+        />
+      </FilterBar>
 
-          <form onSubmit={applyCustomFilters} className="flex flex-wrap items-end gap-3">
-            <Field label="From" type="date" value={draftFrom} onChange={onDraftDateChange(setDraftFrom)} />
-            <Field label="To" type="date" value={draftTo} onChange={onDraftDateChange(setDraftTo)} />
-            <Field
-              label="City"
-              placeholder="e.g. Bengaluru"
-              value={draftCity}
-              onChange={(event) => setDraftCity(event.target.value)}
-            />
-            <Field
-              label="Category"
-              placeholder="e.g. cleaning"
-              value={draftCategory}
-              onChange={(event) => setDraftCategory(event.target.value)}
-            />
-            <Button type="submit" variant="secondary">
-              Apply filters
-            </Button>
-          </form>
-        </div>
-      </Card>
-
-      <div className="mt-6">
+      <section className="mt-6" aria-label="Key metrics">
         {query.isPending ? (
-          <p className="text-sm text-neutral-500">Loading dashboard…</p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }, (_, index) => (
+              <div key={index} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="mt-3 h-8 w-24" />
+              </div>
+            ))}
+          </div>
         ) : query.isError ? (
-          <Alert>{describeError(query.error)}</Alert>
+          <Alert
+            tone="error"
+            title="Could not load the dashboard"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            {describeError(query.error)}
+          </Alert>
         ) : (
           <>
-            <p className="mb-3 text-sm text-neutral-600 dark:text-neutral-400">
-              Showing {query.data.dateFrom} to {query.data.dateTo}
+            <p className="mb-3 text-sm text-fg-muted">
+              Showing <span className="nums">{query.data.dateFrom}</span> to{" "}
+              <span className="nums">{query.data.dateTo}</span>
               {query.isFetching ? " · refreshing…" : ""}
             </p>
             <div
-              className={`grid grid-cols-2 gap-4 transition-opacity sm:grid-cols-3 lg:grid-cols-5 ${
-                query.isFetching ? "opacity-60" : ""
-              }`}
+              className={cx(
+                "grid grid-cols-2 gap-4 transition-opacity duration-fast ease-out sm:grid-cols-3 lg:grid-cols-5",
+                query.isFetching && "opacity-60",
+              )}
             >
               <StatTile label="Bookings" value={query.data.bookingsCount.toLocaleString("en-IN")} />
               <StatTile
                 label="Revenue"
-                value={`₹${query.data.revenueTotal.toFixed(2)}`}
-                title={`₹${query.data.revenueTotal.toFixed(2)}`}
+                value={formatCurrency(query.data.revenueTotal)}
+                title={formatCurrency(query.data.revenueTotal)}
               />
               <StatTile label="Cancellations" value={query.data.cancellationsCount.toLocaleString("en-IN")} />
               <StatTile
                 label="Refund amount"
-                value={`₹${query.data.refundAmountTotal.toFixed(2)}`}
-                title={`₹${query.data.refundAmountTotal.toFixed(2)}`}
+                value={formatCurrency(query.data.refundAmountTotal)}
+                title={formatCurrency(query.data.refundAmountTotal)}
               />
               <StatTile
                 label="Open support tickets"
@@ -193,7 +316,49 @@ export default function DashboardPage() {
             </div>
           </>
         )}
-      </div>
+      </section>
+
+      {canReadBookings ? (
+        <div className="mt-6">
+          <DataTable
+            title="Bookings in this window"
+            description="The most recent bookings matching the filters above."
+            columns={columns}
+            rows={recentBookings.data?.items}
+            rowKey={(booking) => booking.id}
+            isLoading={recentBookings.isPending}
+            isFetching={recentBookings.isFetching}
+            error={recentBookings.error}
+            onRetry={() => recentBookings.refetch()}
+            skeletonRows={5}
+            minWidth="820px"
+            caption="Recent bookings in the selected window"
+            emptyTitle="No bookings in this window"
+            emptyDescription="Widen the date range or clear the city filter to see more."
+            emptyAction={
+              <Button variant="secondary" onClick={clearFilters}>
+                Reset filters
+              </Button>
+            }
+            footer={
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-fg-muted">
+                  Showing up to <span className="nums">{RECENT_BOOKINGS_PAGE_SIZE}</span> of{" "}
+                  <span className="nums font-medium text-fg">
+                    {(recentBookings.data?.totalCount ?? 0).toLocaleString("en-IN")}
+                  </span>
+                </span>
+                <Link
+                  href="/bookings"
+                  className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                >
+                  View all bookings
+                </Link>
+              </div>
+            }
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

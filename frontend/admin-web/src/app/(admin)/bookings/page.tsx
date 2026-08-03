@@ -1,12 +1,21 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import type { FormEvent } from "react";
-import { Alert, Button, Card, Field, PageHeading, Select } from "@/components/ui";
-import { describeError } from "@/lib/api";
+import { Button, Field, PageHeading, Select } from "@/components/ui";
+import {
+  DataTable,
+  FilterBar,
+  Pagination,
+  countActiveFilters,
+  formatCurrency,
+  formatDate,
+} from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { BookingStatusBadge } from "@/components/status-badges";
 import { searchBookings } from "@/lib/bookings-api";
+import type { AdminBookingListItem } from "@/lib/bookings-types";
 import { BookingStatus } from "@/lib/types";
 
 const PAGE_SIZE = 20;
@@ -58,6 +67,10 @@ const EMPTY_FILTERS: FilterFormState = {
  * AdminBookingSearchParams.serviceId/categoryId, but no lookup picker exists
  * on this screen yet) and a "professional/source" filter that has no backing
  * domain concept at all (see BookingSearchFilter's doc comment).
+ *
+ * Built on the task 221 pattern. Columns are deliberately NOT sortable: this
+ * list is paged server-side and the endpoint takes no sort parameter, so a
+ * header sort would silently reorder only the 20 rows on screen.
  */
 export default function BookingsPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
@@ -79,10 +92,10 @@ export default function BookingsPage() {
         page,
         pageSize: PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
 
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
+  const onSubmit = () => {
     setPage(1);
     setAppliedFilters(filters);
   };
@@ -93,134 +106,139 @@ export default function BookingsPage() {
     setPage(1);
   };
 
-  const totalPages = query.data ? Math.max(1, Math.ceil(query.data.totalCount / PAGE_SIZE)) : 1;
+  const columns: DataTableColumn<AdminBookingListItem>[] = [
+    {
+      key: "customer",
+      header: "Customer",
+      cell: (booking) => (
+        <>
+          <Link
+            href={`/bookings/${booking.id}`}
+            className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+          >
+            {booking.customerName}
+          </Link>
+          <div className="nums text-xs text-fg-subtle">{booking.customerMobile}</div>
+        </>
+      ),
+    },
+    { key: "service", header: "Service", cell: (booking) => booking.serviceName },
+    { key: "city", header: "City", cell: (booking) => booking.city },
+    {
+      key: "slotDate",
+      header: "Slot date",
+      cell: (booking) => <span className="nums">{booking.slotDate}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (booking) => <BookingStatusBadge status={booking.status} label={booking.statusLabel} />,
+    },
+    {
+      key: "total",
+      header: "Total",
+      numeric: true,
+      cell: (booking) => formatCurrency(booking.totalPayable),
+    },
+    {
+      key: "created",
+      header: "Created",
+      cell: (booking) => <span className="nums">{formatDate(booking.createdAtUtc)}</span>,
+    },
+  ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <PageHeading title="Bookings" subtitle="Search bookings and manage cancellations, reschedules and refunds (SRS 12.11)." />
+    <div className="mx-auto w-full max-w-7xl">
+      <PageHeading
+        title="Bookings"
+        subtitle="Search bookings and manage cancellations, reschedules and refunds (SRS 12.11)."
+      />
 
-      <Card title="Filters">
-        <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field
-            label="Booking ID"
-            value={filters.bookingId}
-            onChange={(e) => setFilters((f) => ({ ...f, bookingId: e.target.value }))}
-            placeholder="Exact booking ID"
-          />
-          <Field
-            label="Customer name"
-            value={filters.customerName}
-            onChange={(e) => setFilters((f) => ({ ...f, customerName: e.target.value }))}
-          />
-          <Field
-            label="Customer mobile"
-            value={filters.customerMobile}
-            onChange={(e) => setFilters((f) => ({ ...f, customerMobile: e.target.value }))}
-          />
-          <Select
-            label="Status"
-            options={STATUS_OPTIONS}
-            value={filters.status}
-            onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-          />
-          <Field
-            label="City"
-            value={filters.city}
-            onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
-          />
-          <Field
-            label="Coupon code"
-            value={filters.couponCode}
-            onChange={(e) => setFilters((f) => ({ ...f, couponCode: e.target.value }))}
-          />
-          <Field
-            label="Slot date from"
-            type="date"
-            value={filters.slotDateFrom}
-            onChange={(e) => setFilters((f) => ({ ...f, slotDateFrom: e.target.value }))}
-          />
-          <Field
-            label="Slot date to"
-            type="date"
-            value={filters.slotDateTo}
-            onChange={(e) => setFilters((f) => ({ ...f, slotDateTo: e.target.value }))}
-          />
-          <div className="flex items-end gap-2">
-            <Button type="submit">Search</Button>
-            <Button type="button" variant="secondary" onClick={onClear}>
-              Clear
-            </Button>
-          </div>
-        </form>
-      </Card>
+      <FilterBar
+        onSubmit={onSubmit}
+        onClear={onClear}
+        activeCount={countActiveFilters(appliedFilters)}
+        busy={query.isFetching}
+      >
+        <Field
+          label="Booking ID"
+          value={filters.bookingId}
+          onChange={(e) => setFilters((f) => ({ ...f, bookingId: e.target.value }))}
+          placeholder="Exact booking ID"
+        />
+        <Field
+          label="Customer name"
+          value={filters.customerName}
+          onChange={(e) => setFilters((f) => ({ ...f, customerName: e.target.value }))}
+        />
+        <Field
+          label="Customer mobile"
+          value={filters.customerMobile}
+          onChange={(e) => setFilters((f) => ({ ...f, customerMobile: e.target.value }))}
+        />
+        <Select
+          label="Status"
+          options={STATUS_OPTIONS}
+          value={filters.status}
+          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+        />
+        <Field
+          label="City"
+          value={filters.city}
+          onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+        />
+        <Field
+          label="Coupon code"
+          value={filters.couponCode}
+          onChange={(e) => setFilters((f) => ({ ...f, couponCode: e.target.value }))}
+        />
+        <Field
+          label="Slot date from"
+          type="date"
+          value={filters.slotDateFrom}
+          onChange={(e) => setFilters((f) => ({ ...f, slotDateFrom: e.target.value }))}
+        />
+        <Field
+          label="Slot date to"
+          type="date"
+          value={filters.slotDateTo}
+          onChange={(e) => setFilters((f) => ({ ...f, slotDateTo: e.target.value }))}
+        />
+      </FilterBar>
 
       <div className="mt-6">
-        {query.isPending ? (
-          <p className="text-sm text-neutral-500">Loading bookings…</p>
-        ) : query.isError ? (
-          <Alert>{describeError(query.error)}</Alert>
-        ) : query.data.items.length === 0 ? (
-          <Card title="No bookings match these filters">
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">Try broadening your search criteria.</p>
-          </Card>
-        ) : (
-          <>
-            <div className="overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-              <table className="w-full min-w-[860px] text-left text-sm">
-                <thead className="border-b border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/5">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Customer</th>
-                    <th className="px-4 py-3 font-medium">Service</th>
-                    <th className="px-4 py-3 font-medium">City</th>
-                    <th className="px-4 py-3 font-medium">Slot date</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Total</th>
-                    <th className="px-4 py-3 font-medium">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {query.data.items.map((booking) => (
-                    <tr
-                      key={booking.id}
-                      className="border-b border-black/5 last:border-0 hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/[.05]"
-                    >
-                      <td className="px-4 py-3">
-                        <Link href={`/bookings/${booking.id}`} className="font-medium underline-offset-2 hover:underline">
-                          {booking.customerName}
-                        </Link>
-                        <div className="text-xs text-neutral-500">{booking.customerMobile}</div>
-                      </td>
-                      <td className="px-4 py-3">{booking.serviceName}</td>
-                      <td className="px-4 py-3">{booking.city}</td>
-                      <td className="px-4 py-3">{booking.slotDate}</td>
-                      <td className="px-4 py-3">{booking.statusLabel}</td>
-                      <td className="px-4 py-3">₹{booking.totalPayable.toFixed(2)}</td>
-                      <td className="px-4 py-3">{new Date(booking.createdAtUtc).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between text-sm">
-              <span className="text-neutral-600 dark:text-neutral-400">
-                Page {page} of {totalPages} · {query.data.totalCount} booking{query.data.totalCount === 1 ? "" : "s"}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
+        <DataTable
+          title="Results"
+          columns={columns}
+          rows={query.data?.items}
+          rowKey={(booking) => booking.id}
+          isLoading={query.isPending}
+          isFetching={query.isFetching}
+          error={query.error}
+          onRetry={() => query.refetch()}
+          skeletonRows={8}
+          minWidth="920px"
+          caption="Bookings matching the current filters"
+          emptyTitle="No bookings match these filters"
+          emptyDescription="Try broadening the date range, or clear the filters to see every booking."
+          emptyAction={
+            <Button variant="secondary" onClick={onClear}>
+              Clear filters
+            </Button>
+          }
+          footer={
+            query.data ? (
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalCount={query.data.totalCount}
+                onPageChange={setPage}
+                busy={query.isFetching}
+                itemLabel="booking"
+              />
+            ) : null
+          }
+        />
       </div>
     </div>
   );
