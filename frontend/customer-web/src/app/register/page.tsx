@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Checkbox, Field, PageHeading } from "@/components/ui";
+import {
+  AuthShell,
+  OtpField,
+  ResendRow,
+  useResendCountdown,
+} from "@/components/auth-ui";
+import { Alert, Button, Checkbox, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CustomerSummary } from "@/lib/types";
 
@@ -41,8 +47,11 @@ const registerSchema = z
 export default function RegisterPage() {
   const router = useRouter();
   const [step, setStep] = useState<"otp" | "details">("otp");
+  const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const { remaining, start, canResend } = useResendCountdown();
 
   const otpForm = useForm<z.infer<typeof otpRequestSchema>>({
     resolver: zodResolver(otpRequestSchema),
@@ -57,24 +66,46 @@ export default function RegisterPage() {
       name: "",
       email: "",
       password: "",
-      consentAccepted: true,
+      // Must start false. Defaulting to true pre-ticks the consent box, so the
+      // schema's "you must accept" rule can never fire and the account is
+      // created recording a consent the customer never actually gave.
+      consentAccepted: false as unknown as true,
     },
   });
 
-  const onRequestOtp = otpForm.handleSubmit(async ({ mobile }) => {
+  const sendCode = async (value: string) => {
+    await apiFetch(`${API_V1}/auth/registration/otp`, {
+      method: "POST",
+      body: JSON.stringify({ mobile: value }),
+    });
+    start();
+  };
+
+  const onRequestOtp = otpForm.handleSubmit(async ({ mobile: value }) => {
     setError(null);
     try {
-      await apiFetch(`${API_V1}/auth/registration/otp`, {
-        method: "POST",
-        body: JSON.stringify({ mobile }),
-      });
-      detailsForm.setValue("mobile", mobile);
-      setNotice(`We sent a 6-digit code to ${mobile}.`);
+      await sendCode(value);
+      setMobile(value);
+      detailsForm.setValue("mobile", value);
+      setNotice(`We sent a 6-digit code to ${value}.`);
       setStep("details");
     } catch (err) {
       setError(describeError(err));
     }
   });
+
+  const onResend = async () => {
+    setError(null);
+    setResending(true);
+    try {
+      await sendCode(mobile);
+      setNotice(`We sent a new code to ${mobile}.`);
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onRegister = detailsForm.handleSubmit(async (values) => {
     setError(null);
@@ -99,84 +130,109 @@ export default function RegisterPage() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-md px-6 py-12">
-      <PageHeading
-        title="Create your account"
-        subtitle="We verify your mobile number with a one-time code."
-      />
-
-      <Card title={step === "otp" ? "Verify your mobile" : "Your details"}>
-        <div className="flex flex-col gap-4">
+    <AuthShell
+      title="Create your account"
+      subtitle="We verify your mobile number with a one-time code."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+          >
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      {step === "otp" ? (
+        <form onSubmit={onRequestOtp} className="flex flex-col gap-4" noValidate>
           {error ? <Alert>{error}</Alert> : null}
-          {step === "details" && notice ? <Alert tone="info">{notice}</Alert> : null}
+          <Field
+            label="Mobile number"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+919876543210"
+            hint="We'll text you a 6-digit code to confirm it's you."
+            error={otpForm.formState.errors.mobile?.message}
+            {...otpForm.register("mobile")}
+          />
+          <Button type="submit" size="lg" fullWidth loading={otpForm.formState.isSubmitting}>
+            Send code
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={onRegister} className="flex flex-col gap-4" noValidate>
+          {error ? <Alert>{error}</Alert> : null}
+          {notice ? <Alert tone="info">{notice}</Alert> : null}
 
-          {step === "otp" ? (
-            <form onSubmit={onRequestOtp} className="flex flex-col gap-4" noValidate>
-              <Field
-                label="Mobile number"
-                type="tel"
-                autoComplete="tel"
-                placeholder="+919876543210"
-                error={otpForm.formState.errors.mobile?.message}
-                {...otpForm.register("mobile")}
-              />
-              <Button type="submit" disabled={otpForm.formState.isSubmitting}>
-                {otpForm.formState.isSubmitting ? "Sending…" : "Send code"}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={onRegister} className="flex flex-col gap-4" noValidate>
-              <Field
-                label="6-digit code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                error={detailsForm.formState.errors.otpCode?.message}
-                {...detailsForm.register("otpCode")}
-              />
-              <Field
-                label="Full name"
-                autoComplete="name"
-                error={detailsForm.formState.errors.name?.message}
-                {...detailsForm.register("name")}
-              />
-              <Field
-                label="Email (optional)"
-                type="email"
-                autoComplete="email"
-                error={detailsForm.formState.errors.email?.message}
-                {...detailsForm.register("email")}
-              />
-              <Field
-                label="Password (optional)"
-                type="password"
-                autoComplete="new-password"
-                error={detailsForm.formState.errors.password?.message}
-                {...detailsForm.register("password")}
-              />
-              <Checkbox
-                label="I accept the Terms & Privacy Policy"
-                {...detailsForm.register("consentAccepted")}
-              />
-              {detailsForm.formState.errors.consentAccepted ? (
-                <p className="text-xs text-red-600 dark:text-red-400">
-                  {detailsForm.formState.errors.consentAccepted.message}
-                </p>
-              ) : null}
-              <Button type="submit" disabled={detailsForm.formState.isSubmitting}>
-                {detailsForm.formState.isSubmitting ? "Creating…" : "Create account"}
-              </Button>
-            </form>
-          )}
-        </div>
-      </Card>
+          <OtpField
+            error={detailsForm.formState.errors.otpCode?.message}
+            {...detailsForm.register("otpCode")}
+          />
 
-      <p className="mt-6 text-sm text-neutral-600 dark:text-neutral-400">
-        Already have an account?{" "}
-        <Link href="/login" className="underline">
-          Sign in
-        </Link>
-      </p>
-    </main>
+          <ResendRow
+            remaining={remaining}
+            canResend={canResend}
+            onResend={onResend}
+            pending={resending}
+          />
+
+          <div className="my-1 border-t border-line" />
+
+          <Field
+            label="Full name"
+            required
+            autoComplete="name"
+            error={detailsForm.formState.errors.name?.message}
+            {...detailsForm.register("name")}
+          />
+          <Field
+            label="Email"
+            type="email"
+            autoComplete="email"
+            hint="Optional — needed only if you want to sign in with a password."
+            error={detailsForm.formState.errors.email?.message}
+            {...detailsForm.register("email")}
+          />
+          <Field
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            hint="Optional — at least 8 characters."
+            error={detailsForm.formState.errors.password?.message}
+            {...detailsForm.register("password")}
+          />
+
+          <div className="flex flex-col gap-1.5">
+            <Checkbox
+              label="I accept the Terms & Privacy Policy"
+              {...detailsForm.register("consentAccepted")}
+            />
+            {detailsForm.formState.errors.consentAccepted ? (
+              <p className="text-xs font-medium text-danger">
+                {detailsForm.formState.errors.consentAccepted.message}
+              </p>
+            ) : null}
+          </div>
+
+          <Button type="submit" size="lg" fullWidth loading={detailsForm.formState.isSubmitting}>
+            Create account
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setStep("otp");
+              setNotice(null);
+              setError(null);
+            }}
+          >
+            Use a different number ({mobile})
+          </Button>
+        </form>
+      )}
+    </AuthShell>
   );
 }

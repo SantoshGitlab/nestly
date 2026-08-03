@@ -6,7 +6,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Field, PageHeading } from "@/components/ui";
+import {
+  AuthShell,
+  OtpField,
+  ResendRow,
+  Segmented,
+  useResendCountdown,
+} from "@/components/auth-ui";
+import { Alert, Button, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { storeSession } from "@/lib/auth";
 import type { LoginResponse } from "@/lib/types";
@@ -45,10 +52,15 @@ const partnerOtpSchema = z.object({
 type Mode = "otp" | "password";
 type AccountType = "customer" | "admin" | "partner";
 
-const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
-  { value: "customer", label: "Customer" },
-  { value: "admin", label: "Admin" },
-  { value: "partner", label: "Partner" },
+const ACCOUNT_TYPES = [
+  { value: "customer" as const, label: "Customer" },
+  { value: "admin" as const, label: "Admin" },
+  { value: "partner" as const, label: "Partner" },
+];
+
+const SIGN_IN_MODES = [
+  { value: "otp" as const, label: "Mobile OTP" },
+  { value: "password" as const, label: "Email & password" },
 ];
 
 /**
@@ -74,59 +86,50 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("otp");
 
   return (
-    <main className="mx-auto w-full max-w-md px-6 py-12">
-      <PageHeading title="Sign in" subtitle="One sign-in page for customers, admins and partners." />
-
-      <div className="mb-5 flex gap-2" role="tablist" aria-label="Account type">
-        {ACCOUNT_TYPES.map((type) => (
-          <Button
-            key={type.value}
-            role="tab"
-            aria-selected={accountType === type.value}
-            variant={accountType === type.value ? "primary" : "secondary"}
-            onClick={() => setAccountType(type.value)}
-          >
-            {type.label}
-          </Button>
-        ))}
-      </div>
-
-      {accountType === "customer" ? (
-        <>
-          <div className="mb-5 flex gap-2" role="tablist" aria-label="Sign-in method">
-            <Button
-              role="tab"
-              aria-selected={mode === "otp"}
-              variant={mode === "otp" ? "primary" : "secondary"}
-              onClick={() => setMode("otp")}
-            >
-              Mobile OTP
-            </Button>
-            <Button
-              role="tab"
-              aria-selected={mode === "password"}
-              variant={mode === "password" ? "primary" : "secondary"}
-              onClick={() => setMode("password")}
-            >
-              Email &amp; password
-            </Button>
-          </div>
-
-          {mode === "otp" ? <OtpLogin /> : <PasswordLogin />}
-
-          <p className="mt-6 text-sm text-neutral-600 dark:text-neutral-400">
+    <AuthShell
+      title="Welcome back"
+      subtitle="One sign-in for customers, admins and partners."
+      footer={
+        accountType === "customer" ? (
+          <>
             New to Nestly?{" "}
-            <Link href="/register" className="underline">
+            <Link
+              href="/register"
+              className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+            >
               Create an account
             </Link>
-          </p>
-        </>
-      ) : accountType === "admin" ? (
-        <AdminLoginUnified />
-      ) : (
-        <PartnerLoginUnified />
-      )}
-    </main>
+          </>
+        ) : null
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <Segmented
+          name="account-type"
+          label="Account type"
+          options={ACCOUNT_TYPES}
+          value={accountType}
+          onChange={setAccountType}
+        />
+
+        {accountType === "customer" ? (
+          <>
+            <Segmented
+              name="sign-in-mode"
+              label="Sign-in method"
+              options={SIGN_IN_MODES}
+              value={mode}
+              onChange={setMode}
+            />
+            {mode === "otp" ? <OtpLogin /> : <PasswordLogin />}
+          </>
+        ) : accountType === "admin" ? (
+          <AdminLoginUnified />
+        ) : (
+          <PartnerLoginUnified />
+        )}
+      </div>
+    </AuthShell>
   );
 }
 
@@ -136,6 +139,8 @@ function OtpLogin() {
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const { remaining, start, canResend } = useResendCountdown();
 
   const requestForm = useForm<z.infer<typeof otpRequestSchema>>({
     resolver: zodResolver(otpRequestSchema),
@@ -147,13 +152,18 @@ function OtpLogin() {
     defaultValues: { mobile: "", otpCode: "" },
   });
 
+  const sendCode = async (value: string) => {
+    await apiFetch(`${API_V1}/auth/login/otp`, {
+      method: "POST",
+      body: JSON.stringify({ mobile: value }),
+    });
+    start();
+  };
+
   const onRequest = requestForm.handleSubmit(async ({ mobile: value }) => {
     setError(null);
     try {
-      await apiFetch(`${API_V1}/auth/login/otp`, {
-        method: "POST",
-        body: JSON.stringify({ mobile: value }),
-      });
+      await sendCode(value);
       setMobile(value);
       verifyForm.setValue("mobile", value);
       setNotice(`We sent a 6-digit code to ${value}.`);
@@ -162,6 +172,19 @@ function OtpLogin() {
       setError(describeError(err));
     }
   });
+
+  const onResend = async () => {
+    setError(null);
+    setResending(true);
+    try {
+      await sendCode(mobile);
+      setNotice(`We sent a new code to ${mobile}.`);
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onVerify = verifyForm.handleSubmit(async (values) => {
     setError(null);
@@ -177,54 +200,58 @@ function OtpLogin() {
     }
   });
 
-  return (
-    <Card title={step === "request" ? "Sign in with OTP" : "Enter your code"}>
-      <div className="flex flex-col gap-4">
+  if (step === "request") {
+    return (
+      <form onSubmit={onRequest} className="flex flex-col gap-4" noValidate>
         {error ? <Alert>{error}</Alert> : null}
-        {step === "verify" && notice ? <Alert tone="info">{notice}</Alert> : null}
+        <Field
+          label="Mobile number"
+          type="tel"
+          autoComplete="tel"
+          placeholder="+919876543210"
+          hint="We'll text you a 6-digit code."
+          error={requestForm.formState.errors.mobile?.message}
+          {...requestForm.register("mobile")}
+        />
+        <Button type="submit" size="lg" fullWidth loading={requestForm.formState.isSubmitting}>
+          Send code
+        </Button>
+      </form>
+    );
+  }
 
-        {step === "request" ? (
-          <form onSubmit={onRequest} className="flex flex-col gap-4" noValidate>
-            <Field
-              label="Mobile number"
-              type="tel"
-              autoComplete="tel"
-              placeholder="+919876543210"
-              error={requestForm.formState.errors.mobile?.message}
-              {...requestForm.register("mobile")}
-            />
-            <Button type="submit" disabled={requestForm.formState.isSubmitting}>
-              {requestForm.formState.isSubmitting ? "Sending…" : "Send code"}
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={onVerify} className="flex flex-col gap-4" noValidate>
-            <Field
-              label="6-digit code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              error={verifyForm.formState.errors.otpCode?.message}
-              {...verifyForm.register("otpCode")}
-            />
-            <Button type="submit" disabled={verifyForm.formState.isSubmitting}>
-              {verifyForm.formState.isSubmitting ? "Verifying…" : "Verify and sign in"}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setStep("request");
-                setNotice(null);
-                setError(null);
-              }}
-            >
-              Use a different number ({mobile})
-            </Button>
-          </form>
-        )}
-      </div>
-    </Card>
+  return (
+    <form onSubmit={onVerify} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      {notice ? <Alert tone="info">{notice}</Alert> : null}
+
+      <OtpField
+        error={verifyForm.formState.errors.otpCode?.message}
+        {...verifyForm.register("otpCode")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={verifyForm.formState.isSubmitting}>
+        Verify and sign in
+      </Button>
+
+      <ResendRow
+        remaining={remaining}
+        canResend={canResend}
+        onResend={onResend}
+        pending={resending}
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => {
+          setStep("request");
+          setNotice(null);
+          setError(null);
+        }}
+      >
+        Use a different number ({mobile})
+      </Button>
+    </form>
   );
 }
 
@@ -252,31 +279,32 @@ function PasswordLogin() {
   });
 
   return (
-    <Card title="Sign in with password">
-      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-        {error ? <Alert>{error}</Alert> : null}
-        <Field
-          label="Email"
-          type="email"
-          autoComplete="email"
-          error={form.formState.errors.email?.message}
-          {...form.register("email")}
-        />
-        <Field
-          label="Password"
-          type="password"
-          autoComplete="current-password"
-          error={form.formState.errors.password?.message}
-          {...form.register("password")}
-        />
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
-        </Button>
-        <Link href="/forgot-password" className="text-sm underline">
-          Forgot your password?
-        </Link>
-      </form>
-    </Card>
+    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      <Field
+        label="Email"
+        type="email"
+        autoComplete="email"
+        error={form.formState.errors.email?.message}
+        {...form.register("email")}
+      />
+      <Field
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        error={form.formState.errors.password?.message}
+        {...form.register("password")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
+        Sign in
+      </Button>
+      <Link
+        href="/forgot-password"
+        className="text-center text-sm text-fg-muted underline-offset-4 hover:text-fg hover:underline"
+      >
+        Forgot your password?
+      </Link>
+    </form>
   );
 }
 
@@ -300,28 +328,29 @@ function AdminLoginUnified() {
   });
 
   return (
-    <Card title="Admin sign in" description="Sign in with your admin email and password.">
-      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-        {error ? <Alert>{error}</Alert> : null}
-        <Field
-          label="Email"
-          type="email"
-          autoComplete="email"
-          error={form.formState.errors.email?.message}
-          {...form.register("email")}
-        />
-        <Field
-          label="Password"
-          type="password"
-          autoComplete="current-password"
-          error={form.formState.errors.password?.message}
-          {...form.register("password")}
-        />
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
-    </Card>
+    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      <Field
+        label="Email"
+        type="email"
+        autoComplete="email"
+        error={form.formState.errors.email?.message}
+        {...form.register("email")}
+      />
+      <Field
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        error={form.formState.errors.password?.message}
+        {...form.register("password")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
+        Sign in to admin
+      </Button>
+      <p className="text-center text-xs text-fg-subtle">
+        You&apos;ll be taken to the admin panel on its own address.
+      </p>
+    </form>
   );
 }
 
@@ -331,6 +360,8 @@ function PartnerLoginUnified() {
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const { remaining, start, canResend } = useResendCountdown();
 
   const requestForm = useForm<z.infer<typeof partnerMobileSchema>>({
     resolver: zodResolver(partnerMobileSchema),
@@ -346,6 +377,7 @@ function PartnerLoginUnified() {
     setError(null);
     try {
       await requestPartnerLoginOtp(value);
+      start();
       setMobile(value);
       verifyForm.setValue("mobile", value);
       setNotice(`We sent a verification code to ${value}.`);
@@ -354,6 +386,20 @@ function PartnerLoginUnified() {
       setError(describeError(err));
     }
   });
+
+  const onResend = async () => {
+    setError(null);
+    setResending(true);
+    try {
+      await requestPartnerLoginOtp(mobile);
+      start();
+      setNotice(`We sent a new code to ${mobile}.`);
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onVerify = verifyForm.handleSubmit(async (values) => {
     setError(null);
@@ -365,52 +411,60 @@ function PartnerLoginUnified() {
     }
   });
 
-  return (
-    <Card title={step === "request" ? "Partner sign in" : "Enter your code"}>
-      <div className="flex flex-col gap-4">
+  if (step === "request") {
+    return (
+      <form onSubmit={onRequest} className="flex flex-col gap-4" noValidate>
         {error ? <Alert>{error}</Alert> : null}
-        {step === "verify" && notice ? <Alert tone="info">{notice}</Alert> : null}
+        <Field
+          label="Mobile number"
+          type="tel"
+          autoComplete="tel"
+          placeholder="e.g. 9876543210"
+          hint="Use the number registered with your partner account."
+          error={requestForm.formState.errors.mobile?.message}
+          {...requestForm.register("mobile")}
+        />
+        <Button type="submit" size="lg" fullWidth loading={requestForm.formState.isSubmitting}>
+          Send verification code
+        </Button>
+      </form>
+    );
+  }
 
-        {step === "request" ? (
-          <form onSubmit={onRequest} className="flex flex-col gap-4" noValidate>
-            <Field
-              label="Mobile number"
-              type="tel"
-              autoComplete="tel"
-              placeholder="e.g. 9876543210"
-              error={requestForm.formState.errors.mobile?.message}
-              {...requestForm.register("mobile")}
-            />
-            <Button type="submit" disabled={requestForm.formState.isSubmitting}>
-              {requestForm.formState.isSubmitting ? "Sending…" : "Send verification code"}
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={onVerify} className="flex flex-col gap-4" noValidate>
-            <Field
-              label="Verification code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              error={verifyForm.formState.errors.otpCode?.message}
-              {...verifyForm.register("otpCode")}
-            />
-            <Button type="submit" disabled={verifyForm.formState.isSubmitting}>
-              {verifyForm.formState.isSubmitting ? "Verifying…" : "Sign in"}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setStep("request");
-                setNotice(null);
-                setError(null);
-              }}
-            >
-              Use a different number ({mobile})
-            </Button>
-          </form>
-        )}
-      </div>
-    </Card>
+  return (
+    <form onSubmit={onVerify} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      {notice ? <Alert tone="info">{notice}</Alert> : null}
+
+      {/* Partner codes are 4-8 digits (partnerOtpSchema), unlike the
+          customer flow's fixed 6. */}
+      <OtpField
+        length={8}
+        error={verifyForm.formState.errors.otpCode?.message}
+        {...verifyForm.register("otpCode")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={verifyForm.formState.isSubmitting}>
+        Sign in
+      </Button>
+
+      <ResendRow
+        remaining={remaining}
+        canResend={canResend}
+        onResend={onResend}
+        pending={resending}
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => {
+          setStep("request");
+          setNotice(null);
+          setError(null);
+        }}
+      >
+        Use a different number ({mobile})
+      </Button>
+    </form>
   );
 }

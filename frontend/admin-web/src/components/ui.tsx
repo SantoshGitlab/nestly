@@ -864,15 +864,26 @@ export function Tabs<T extends string>({
   tabs,
   value,
   onChange,
+  label,
   className = "",
 }: {
   tabs: readonly { value: T; label: string; count?: number }[];
   value: T;
   onChange: (value: T) => void;
+  /**
+   * Accessible name for the tablist. Required in practice: a bare `tablist`
+   * with no name is ambiguous to screen readers on any page carrying more
+   * than one, and it is how tests address the group.
+   */
+  label?: string;
   className?: string;
 }) {
   return (
-    <div className={cx("flex gap-1 overflow-x-auto border-b border-line", className)} role="tablist">
+    <div
+      className={cx("flex gap-1 overflow-x-auto border-b border-line", className)}
+      role="tablist"
+      aria-label={label}
+    >
       {tabs.map((tab) => {
         const isActive = tab.value === value;
         return (
