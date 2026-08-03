@@ -24,13 +24,28 @@ without a real passing `npm run build` (all three frontends are Next projects;
 | 213 | Admin app shell | **done** |
 | 214 | Partner app shell | **done** |
 | 216 | Customer home & discovery | **done** |
-| 215, 217–229 | — | **todo** |
+| 215 | Auth screens | **partial** — customer-web only, see below |
+| 217–229 | — | **todo** |
 
 Commits: `54ec781` (209–211), `4c8b6f6` (212 + partial 216), `b8a57c8` (216
-finished), `aff73e9` (213–214).
+finished), `aff73e9` (213–214), `45c8a15` (215 partial).
 
 **All shells and the whole design foundation are now in place.** What remains
 is screen-level work inside each app, plus the four cross-cutting passes.
+
+### 215 is partial — customer-web only
+
+Done: `customer-web`'s `/login`, `/register`, `/forgot-password`, plus the new
+shared `components/auth-ui.tsx` (`AuthShell`, `Segmented`, `OtpField`,
+`useResendCountdown`, `ResendRow`).
+
+**Still on old styling:** `admin-web/src/app/login/page.tsx`,
+`partner-web/src/app/login/page.tsx`, `partner-web/src/app/register/page.tsx`.
+Both apps' own `/login` pages are deliberately kept (row 206) for direct or
+bookmarked origin access — restyle them, don't delete them.
+
+`auth-ui.tsx` currently lives only in customer-web. Sessions B and C should
+copy it into their app rather than importing across app boundaries.
 
 ---
 
@@ -76,6 +91,16 @@ ships the identical file. Exports: `cx`, `Card`, `Divider`, `Alert`, `Badge`,
 > commit.** There is no shared package. A one-app edit silently drifts the
 > three. `Field`'s leading adornment prop is named `leading`, not `prefix` —
 > `prefix` is a real HTML attribute typed `string` and collides.
+
+**Watch the e2e selectors.** `customer-web/e2e/` addresses UI by accessible
+name, so restyling can break tests without touching a test file. Names that
+must survive: headings `"Popular categories"`, `"All categories"`,
+`"Review your booking"`, `"Booking placed!"`, `"Cancel booking"`,
+`"Reschedule booking"`, `"Leave a review"`, `"Booking cancelled"`; buttons
+`"Proceed to book"`, `"Confirm cancellation"`, `"Confirm reschedule"`,
+`"Submit review"`; links `"Book now"`, `"View booking details"`; and
+`role="tablist"` named `"Booking status"` with a `"Upcoming"` tab. `Tabs` now
+takes a `label` prop for exactly that last one — pass it in row 219.
 
 ---
 
