@@ -4,27 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
-import { Alert } from "@/components/ui";
+import { Alert, Button, Skeleton } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { todayIsoDate } from "@/lib/date";
 import { clearSelectedLocality } from "@/lib/location";
 import type { ServiceabilityResult, SlotAvailability } from "@/lib/types";
-
-/**
- * Today's local calendar date as YYYY-MM-DD.
- *
- * Built from local date parts, not `toISOString().slice(0, 10)`: toISOString
- * converts to UTC first, so in any timezone ahead of UTC the early hours read
- * as the previous day. In IST (UTC+05:30) that returned yesterday for every
- * customer checking availability before 05:30. Mirrors SlotPicker's isoDate.
- */
-function todayIsoDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, "0");
-  const day = `${now.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 /**
  * Serviceability + slot availability at the customer's location (SRS 11.4,
@@ -45,17 +30,15 @@ export function ServiceAvailability({ serviceId }: { serviceId: string }) {
   return (
     <section
       aria-labelledby="availability-heading"
-      className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-neutral-900"
+      className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-sm"
     >
-      <h2 id="availability-heading" className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+      <h2 id="availability-heading" className="text-sm font-semibold text-fg">
         Availability at your location
       </h2>
 
       {city === null ? (
         <div className="flex flex-col items-start gap-2">
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Select your city to check availability.
-          </p>
+          <p className="text-sm text-fg-muted">Select your city to check availability.</p>
           <CitySelector />
         </div>
       ) : locality === null ? (
@@ -85,20 +68,35 @@ function ServiceLocalityAvailability({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <p className="text-neutral-600 dark:text-neutral-400">
-          Checking for <span className="font-medium text-inherit">{localityName}</span>
+        <p className="min-w-0 truncate text-fg-muted">
+          Checking for <span className="font-medium text-fg">{localityName}</span>
         </p>
-        <button type="button" onClick={clearSelectedLocality} className="font-medium hover:underline">
+        <button
+          type="button"
+          onClick={clearSelectedLocality}
+          className="shrink-0 font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+        >
           Change
         </button>
       </div>
 
       {serviceabilityQuery.isPending ? (
-        <p className="text-sm text-neutral-500">Checking availability…</p>
+        <Skeleton className="h-16 w-full" />
       ) : serviceabilityQuery.isError ? (
-        <Alert>{describeError(serviceabilityQuery.error)}</Alert>
+        <Alert
+          tone="error"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => serviceabilityQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(serviceabilityQuery.error)}
+        </Alert>
       ) : !serviceabilityQuery.data.isServiceable ? (
-        <Alert tone="error">This service isn&apos;t available in your area yet.</Alert>
+        <Alert tone="error" title="Not available here">
+          This service isn&apos;t available in your area yet.
+        </Alert>
       ) : (
         <SlotPreview serviceId={serviceId} localityId={localityId} />
       )}
@@ -118,15 +116,36 @@ function SlotPreview({ serviceId, localityId }: { serviceId: string; localityId:
   });
 
   if (query.isPending) {
-    return <p className="text-sm text-neutral-500">Loading slots…</p>;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 3 }, (_, index) => (
+          <Skeleton key={index} className="h-7 w-28 rounded-full" />
+        ))}
+      </div>
+    );
   }
 
   if (query.isError) {
-    return <Alert>{describeError(query.error)}</Alert>;
+    return (
+      <Alert
+        tone="error"
+        action={
+          <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+            Retry
+          </Button>
+        }
+      >
+        {describeError(query.error)}
+      </Alert>
+    );
   }
 
   if (query.data.slots.length === 0) {
-    return <p className="text-sm text-neutral-500">No slots available today. Try another date at checkout.</p>;
+    return (
+      <p className="text-sm text-fg-muted">
+        No slots left today — you can pick another date at checkout.
+      </p>
+    );
   }
 
   return (
@@ -134,7 +153,7 @@ function SlotPreview({ serviceId, localityId }: { serviceId: string; localityId:
       {query.data.slots.map((slot) => (
         <span
           key={slot.slotWindowId}
-          className="rounded-full border border-black/15 px-3 py-1 text-xs dark:border-white/20"
+          className="nums rounded-full border border-line bg-surface-2 px-3 py-1 text-xs text-fg-muted"
         >
           {slot.name} · {slot.startTime.slice(0, 5)}–{slot.endTime.slice(0, 5)}
         </span>
