@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ScreenSkeleton } from "@/components/patterns";
@@ -20,6 +20,17 @@ import type { SupportTicketDetailResponse } from "@/lib/types";
 
 const SUBJECT_MAX = 200;
 const DESCRIPTION_MAX = 4000;
+
+/**
+ * Draft persistence (task 228). The category/subject/description/priority
+ * fields are the only state this form has, and the booking-reference hint
+ * below explicitly sends the customer to a booking's detail page to look up
+ * the ID they need - the most ordinary way to fill this in is to navigate
+ * away and come back, which used to wipe everything they had already typed,
+ * description included. sessionStorage rather than the booking-summary
+ * page's per-record key: this is a create form with no id to key off.
+ */
+const DRAFT_KEY = "nestly.support-ticket-draft";
 
 /**
  * Both selects render the enum's numeric value, which the DOM hands back as a
@@ -116,6 +127,34 @@ function NewSupportTicketScreen() {
   );
   const descriptionLength = form.watch("description").length;
 
+  // Restore a draft left by a detour off this page (see DRAFT_KEY above).
+  // Skipped when arriving via a booking's own "Raise an issue" link -
+  // `prefilledBookingId` being set means this is a deliberate fresh start
+  // for that specific booking, not a return trip.
+  useEffect(() => {
+    if (prefilledBookingId) return;
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (raw) form.reset(JSON.parse(raw) as CreateTicketFormValues);
+    } catch {
+      // Corrupt or unavailable storage - the blank form is still usable.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist on every change so a detour to look up a booking reference
+  // doesn't cost the customer what they already wrote.
+  useEffect(() => {
+    const subscription = form.watch((values) => {
+      try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+      } catch {
+        // Storage can be unavailable (private mode); nothing to fall back to.
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   /**
    * The submit button disables itself while the request is in flight, but a
    * second click can be dispatched in the same tick as the first, before that
@@ -139,6 +178,13 @@ function NewSupportTicketScreen() {
         }),
       }),
     onSuccess: (ticket) => {
+      // The ticket exists now; a leftover draft would otherwise resurrect
+      // this exact subject/description on the next visit to this form.
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Not worth surfacing - the ticket was created either way.
+      }
       // Deliberately left latched: the route transition is asynchronous, and
       // releasing the guard here would reopen the double-submit window while
       // the next screen loads.

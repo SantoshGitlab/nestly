@@ -39,6 +39,59 @@ import type {
 } from "@/lib/types";
 
 /**
+ * Draft persistence (task 228). Quantity, add-ons, address, date and slot are
+ * plain component state with nothing else backing them, so navigating away
+ * mid-review used to wipe every selection silently - most commonly via the
+ * "+ Add a new address" link below, which leaves for /addresses/new and
+ * always redirects to /addresses on save rather than back here, so even a
+ * single detour to add an address cost the customer their quantity/add-on
+ * choices. Restored only after mount (never during the initial render, see
+ * the restore effect below) so the server-rendered markup and the client's
+ * first paint stay identical - sessionStorage doesn't exist on the server
+ * anyway, same reasoning as lib/location.ts's isBrowser guard.
+ */
+interface BookingDraft {
+  quantity: number;
+  addOnIds: string[];
+  addressId: string | null;
+  date: string;
+  slotWindowId: string | null;
+}
+
+function draftKey(serviceSlug: string): string {
+  return `nestly.booking-draft.${serviceSlug}`;
+}
+
+function readDraft(serviceSlug: string): BookingDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(draftKey(serviceSlug));
+    return raw ? (JSON.parse(raw) as BookingDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(serviceSlug: string, draft: BookingDraft): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(draftKey(serviceSlug), JSON.stringify(draft));
+  } catch {
+    // Storage can be unavailable (private mode, blocked cookies) - the
+    // booking still works, it just won't survive a detour off this page.
+  }
+}
+
+function clearDraft(serviceSlug: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.removeItem(draftKey(serviceSlug));
+  } catch {
+    // See above.
+  }
+}
+
+/**
  * Booking summary / cart page (SRS 11.7, tasks 62a-f) with slot selection
  * folded in (SRS 11.8, tasks 63a-c) - both feed the same
  * BookingSummaryRequest, so splitting them into separate routes would just
@@ -110,6 +163,33 @@ function BookingSummaryScreen() {
     const preferred = addressesQuery.data.find((a) => a.isDefault) ?? addressesQuery.data[0];
     if (preferred) setSelectedAddressId(preferred.id);
   }, [addressesQuery.data, selectedAddressId]);
+
+  // Restore a draft left by a detour off this page - see the doc comment
+  // above readDraft. Deliberately once-per-serviceSlug, not on every render.
+  useEffect(() => {
+    if (!serviceSlug) return;
+    const draft = readDraft(serviceSlug);
+    if (!draft) return;
+    setQuantity(draft.quantity);
+    setSelectedAddOnIds(new Set(draft.addOnIds));
+    setSelectedAddressId(draft.addressId);
+    setSelectedDate(draft.date);
+    setSelectedSlotWindowId(draft.slotWindowId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceSlug]);
+
+  // Persist on every change so a detour (most commonly "+ Add a new address"
+  // below) doesn't cost the customer their selections.
+  useEffect(() => {
+    if (!serviceSlug) return;
+    writeDraft(serviceSlug, {
+      quantity,
+      addOnIds: Array.from(selectedAddOnIds),
+      addressId: selectedAddressId,
+      date: selectedDate,
+      slotWindowId: selectedSlotWindowId,
+    });
+  }, [serviceSlug, quantity, selectedAddOnIds, selectedAddressId, selectedDate, selectedSlotWindowId]);
 
   const toggleAddOn = (id: string) => {
     setSelectedAddOnIds((prev) => {
@@ -215,6 +295,10 @@ function BookingSummaryScreen() {
         body: JSON.stringify(request),
       });
 
+      // The booking exists now; a leftover draft would otherwise resurrect
+      // this exact quantity/add-on/slot selection on the next visit to the
+      // same service.
+      clearDraft(service.slug);
       router.push(`/booking/payment/${booking.id}?serviceSlug=${service.slug}`);
       // Deliberately no reset here: the navigation is in flight and leaving
       // the button busy stops a second submit during the route transition.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueries } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, Skeleton, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { SlotAvailability } from "@/lib/types";
@@ -87,7 +87,16 @@ export function SlotPicker({
   selectedSlotWindowId: string | null;
   onSlotChange: (slotWindowId: string | null, slotLabel: string | null) => void;
 }) {
-  const dates = useMemo(upcomingDates, []);
+  // Computed on mount rather than via useMemo: `new Date()` and the
+  // locale-dependent weekday/day labels below would otherwise run during the
+  // server render too, and the server's default locale/clock can legitimately
+  // differ from the browser's (a different `Intl` default locale renders a
+  // different weekday string, e.g. "Mon" vs "Lundi") - a hydration mismatch
+  // on every page load rather than a rare one. Starting from `[]` keeps the
+  // server- and first-client-render markup identical (the strip is simply
+  // empty on both) until this effect fills it in just after hydration.
+  const [dates, setDates] = useState<string[]>([]);
+  useEffect(() => setDates(upcomingDates()), []);
 
   const queries = useQueries({
     queries: dates.map((date) => ({
@@ -107,52 +116,56 @@ export function SlotPicker({
       <div>
         <h3 className="mb-2.5 text-sm font-medium text-fg">Date</h3>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
-          {dates.map((date, index) => {
-            const query = queries[index];
-            const { weekday, day } = formatDateLabel(date);
-            // A date is disabled once we know for certain it has nothing
-            // bookable; while still loading (or on a fetch error) it stays
-            // selectable rather than guessing.
-            const knownEmpty = query.isSuccess && query.data.slots.length === 0;
-            const notServiceable = query.isSuccess && !query.data.isServiceable;
-            const disabled = knownEmpty || notServiceable;
-            const isSelected = date === selectedDate;
+          {dates.length === 0
+            ? Array.from({ length: VISIBLE_DAYS }, (_, index) => (
+                <Skeleton key={index} className="h-[3.25rem] w-[4.75rem] shrink-0 rounded-xl" />
+              ))
+            : dates.map((date, index) => {
+                const query = queries[index];
+                const { weekday, day } = formatDateLabel(date);
+                // A date is disabled once we know for certain it has nothing
+                // bookable; while still loading (or on a fetch error) it stays
+                // selectable rather than guessing.
+                const knownEmpty = query.isSuccess && query.data.slots.length === 0;
+                const notServiceable = query.isSuccess && !query.data.isServiceable;
+                const disabled = knownEmpty || notServiceable;
+                const isSelected = date === selectedDate;
 
-            return (
-              <button
-                key={date}
-                type="button"
-                disabled={disabled}
-                aria-pressed={isSelected}
-                // Without this a disabled chip is just faded, leaving the
-                // customer to guess why they cannot pick it.
-                title={
-                  notServiceable
-                    ? "Not available at this address"
-                    : knownEmpty
-                      ? "Fully booked"
-                      : undefined
-                }
-                onClick={() => {
-                  onDateChange(date);
-                  onSlotChange(null, null);
-                }}
-                className={cx(
-                  "flex min-w-[4.75rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-xs transition duration-fast ease-out",
-                  isSelected
-                    ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
-                    : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
-                  disabled &&
-                    "cursor-not-allowed border-line bg-surface-2 text-fg-subtle line-through opacity-60 hover:bg-surface-2",
-                )}
-              >
-                <span className="font-medium">{weekday}</span>
-                <span className={cx(isSelected ? "text-fg-on-brand/85" : "text-fg-muted")}>
-                  {day}
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={isSelected}
+                    // Without this a disabled chip is just faded, leaving the
+                    // customer to guess why they cannot pick it.
+                    title={
+                      notServiceable
+                        ? "Not available at this address"
+                        : knownEmpty
+                          ? "Fully booked"
+                          : undefined
+                    }
+                    onClick={() => {
+                      onDateChange(date);
+                      onSlotChange(null, null);
+                    }}
+                    className={cx(
+                      "flex min-w-[4.75rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-xs transition duration-fast ease-out",
+                      isSelected
+                        ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                        : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                      disabled &&
+                        "cursor-not-allowed border-line bg-surface-2 text-fg-subtle line-through opacity-60 hover:bg-surface-2",
+                    )}
+                  >
+                    <span className="font-medium">{weekday}</span>
+                    <span className={cx(isSelected ? "text-fg-on-brand/85" : "text-fg-muted")}>
+                      {day}
+                    </span>
+                  </button>
+                );
+              })}
         </div>
       </div>
 

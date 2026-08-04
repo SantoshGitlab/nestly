@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
 import { STICKY_BAR_SPACER, ScreenSkeleton, StickyActionBar } from "@/components/patterns";
@@ -267,7 +267,12 @@ function RescheduleSlotPicker({
   selectedSlotWindowId: string | null;
   onSlotChange: (slotWindowId: string | null) => void;
 }) {
-  const dates = useMemo(upcomingDates, []);
+  // Computed on mount, not via useMemo: see SlotPicker.tsx's identical
+  // comment - running `new Date()` and the locale-dependent weekday/day
+  // labels below during the server render risks a hydration mismatch
+  // whenever the server's default Intl locale differs from the browser's.
+  const [dates, setDates] = useState<string[]>([]);
+  useEffect(() => setDates(upcomingDates()), []);
 
   const queries = useQueries({
     queries: dates.map((date) => ({
@@ -288,50 +293,54 @@ function RescheduleSlotPicker({
       <div>
         <h3 className="mb-2.5 text-sm font-medium text-fg">Date</h3>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
-          {dates.map((date, index) => {
-            const query = queries[index];
-            const { weekday, day } = formatDateLabel(date);
-            // A date is disabled once we know for certain it has nothing
-            // bookable; while still loading (or on a fetch error) it stays
-            // selectable rather than guessing.
-            const knownEmpty = query.isSuccess && query.data.slots.length === 0;
-            const notServiceable = query.isSuccess && !query.data.isServiceable;
-            const disabled = knownEmpty || notServiceable;
-            const isSelected = date === selectedDate;
+          {dates.length === 0
+            ? Array.from({ length: VISIBLE_DAYS }, (_, index) => (
+                <Skeleton key={index} className="h-[3.25rem] w-[4.75rem] shrink-0 rounded-xl" />
+              ))
+            : dates.map((date, index) => {
+                const query = queries[index];
+                const { weekday, day } = formatDateLabel(date);
+                // A date is disabled once we know for certain it has nothing
+                // bookable; while still loading (or on a fetch error) it stays
+                // selectable rather than guessing.
+                const knownEmpty = query.isSuccess && query.data.slots.length === 0;
+                const notServiceable = query.isSuccess && !query.data.isServiceable;
+                const disabled = knownEmpty || notServiceable;
+                const isSelected = date === selectedDate;
 
-            return (
-              <button
-                key={date}
-                type="button"
-                disabled={disabled}
-                aria-pressed={isSelected}
-                title={
-                  notServiceable
-                    ? "Not available at this address"
-                    : knownEmpty
-                      ? "Fully booked"
-                      : undefined
-                }
-                onClick={() => {
-                  onDateChange(date);
-                  onSlotChange(null);
-                }}
-                className={cx(
-                  "flex min-w-[4.75rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-xs transition duration-fast ease-out",
-                  isSelected
-                    ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
-                    : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
-                  disabled &&
-                    "cursor-not-allowed border-line bg-surface-2 text-fg-subtle line-through opacity-60 hover:bg-surface-2",
-                )}
-              >
-                <span className="font-medium">{weekday}</span>
-                <span className={cx(isSelected ? "text-fg-on-brand/85" : "text-fg-muted")}>
-                  {day}
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    disabled={disabled}
+                    aria-pressed={isSelected}
+                    title={
+                      notServiceable
+                        ? "Not available at this address"
+                        : knownEmpty
+                          ? "Fully booked"
+                          : undefined
+                    }
+                    onClick={() => {
+                      onDateChange(date);
+                      onSlotChange(null);
+                    }}
+                    className={cx(
+                      "flex min-w-[4.75rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-xs transition duration-fast ease-out",
+                      isSelected
+                        ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                        : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                      disabled &&
+                        "cursor-not-allowed border-line bg-surface-2 text-fg-subtle line-through opacity-60 hover:bg-surface-2",
+                    )}
+                  >
+                    <span className="font-medium">{weekday}</span>
+                    <span className={cx(isSelected ? "text-fg-on-brand/85" : "text-fg-muted")}>
+                      {day}
+                    </span>
+                  </button>
+                );
+              })}
         </div>
       </div>
 
