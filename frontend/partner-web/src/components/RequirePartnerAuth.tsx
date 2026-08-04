@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { ScreenSkeleton } from "@/components/states";
 import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
 
 /**
@@ -36,12 +37,20 @@ export function RequirePartnerAuth({ children }: { children: ReactNode }) {
     }
   }, [authed, router]);
 
+  // A bare "Loading…" line here reflowed the whole shell the moment the
+  // session resolved, on every authenticated route in the app.
   if (authed === undefined) {
-    return <p className="p-8 text-sm text-fg-muted">Loading…</p>;
+    return <ScreenSkeleton />;
   }
 
   if (!authed) {
-    return <p className="p-8 text-sm text-fg-muted">Redirecting to sign in…</p>;
+    return (
+      <ScreenSkeleton>
+        <p role="status" className="text-sm text-fg-muted">
+          Redirecting you to sign in…
+        </p>
+      </ScreenSkeleton>
+    );
   }
 
   return <>{children}</>;

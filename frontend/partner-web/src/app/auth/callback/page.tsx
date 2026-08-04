@@ -48,12 +48,21 @@ export default function AuthCallbackPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
       <PageHeading title="Signing you in…" />
       {error ? (
-        <Alert>
-          {error}{" "}
-          <a href="/login" className="underline">
-            Go to sign in
-          </a>
-          .
+        <Alert
+          tone="error"
+          title="We couldn't complete sign-in"
+          // The recovery belongs in `action`, not buried mid-sentence: this is
+          // the only way out of this screen.
+          action={
+            <a
+              href="/login"
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-line bg-surface px-3 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+            >
+              Go to sign in
+            </a>
+          }
+        >
+          {error}
         </Alert>
       ) : null}
     </main>

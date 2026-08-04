@@ -481,12 +481,20 @@ export function DetailList({ children }: { children: ReactNode }) {
 export function ScreenSkeleton({
   cards = 3,
   className = "mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12",
+  children,
 }: {
   cards?: number;
   className?: string;
+  /**
+   * Optional live-region line rendered above the placeholder — for the cases
+   * where the wait has a reason worth announcing (a redirect in flight), which
+   * the silent `aria-hidden` blocks below cannot carry on their own.
+   */
+  children?: ReactNode;
 }) {
   return (
     <main className={className}>
+      {children ? <div className="mb-6">{children}</div> : null}
       <Skeleton className="h-8 w-56" />
       <Skeleton className="mt-3 h-4 w-72" />
       <div className="mt-8 flex flex-col gap-4">

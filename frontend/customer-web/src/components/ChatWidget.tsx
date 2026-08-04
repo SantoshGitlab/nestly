@@ -3,7 +3,7 @@
 import * as signalR from "@microsoft/signalr";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, cx } from "@/components/ui";
+import { Alert, Button, Card, Skeleton, cx } from "@/components/ui";
 import { API_BASE_URL, API_V1, apiFetch, describeError } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { ChatContextType, ChatSenderType } from "@/lib/types";
@@ -127,7 +127,7 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
   if (threadQuery.isPending || historyQuery.isPending) {
     return (
       <Card title="Chat">
-        <p className="text-sm text-fg-muted">Loading chat…</p>
+        <ChatSkeleton />
       </Card>
     );
   }
@@ -135,7 +135,48 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
   if (threadQuery.isError) {
     return (
       <Card title="Chat">
-        <Alert>{describeError(threadQuery.error)}</Alert>
+        <Alert
+          tone="error"
+          title="Couldn't open this chat"
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={threadQuery.isRefetching}
+              onClick={() => threadQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {describeError(threadQuery.error)}
+        </Alert>
+      </Card>
+    );
+  }
+
+  // The thread opened but its history didn't. The composer below would post
+  // into a conversation the customer can't see, so this has to be a terminal
+  // state with its own retry rather than an inline warning.
+  if (historyQuery.isError) {
+    return (
+      <Card title="Chat">
+        <Alert
+          tone="error"
+          title="Couldn't load these messages"
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={historyQuery.isRefetching}
+              onClick={() => historyQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {describeError(historyQuery.error)}
+        </Alert>
       </Card>
     );
   }
@@ -179,7 +220,28 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
 
       {sendMutation.isError ? (
         <div className="mt-2">
-          <Alert>{describeError(sendMutation.error)}</Alert>
+          <Alert
+            tone="error"
+            title="Your message didn't send"
+            action={
+              // `variables` is the body of the attempt that failed — the draft
+              // box was never cleared (that only happens onSuccess), but
+              // resending it directly saves the customer re-finding the send
+              // button after reading the error.
+              sendMutation.variables ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={sendMutation.isPending}
+                  onClick={() => sendMutation.mutate(sendMutation.variables as string)}
+                >
+                  Try again
+                </Button>
+              ) : undefined
+            }
+          >
+            {describeError(sendMutation.error)}
+          </Alert>
         </div>
       ) : null}
 
@@ -207,6 +269,41 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
         </Button>
       </form>
     </Card>
+  );
+}
+
+/**
+ * Matches the real transcript: the same bordered, padded scroll box holding
+ * alternating bubbles, plus the composer row underneath. Bubble widths vary so
+ * it reads as a conversation rather than a stack of identical bars.
+ */
+function ChatSkeleton() {
+  const bubbles = [
+    { fromCustomer: false, width: "w-3/5" },
+    { fromCustomer: true, width: "w-2/5" },
+    { fromCustomer: false, width: "w-1/2" },
+    { fromCustomer: true, width: "w-1/3" },
+  ];
+
+  return (
+    <div aria-hidden>
+      <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
+        {bubbles.map((bubble, index) => (
+          <Skeleton
+            key={index}
+            className={cx(
+              "h-14 rounded-2xl",
+              bubble.width,
+              bubble.fromCustomer ? "self-end rounded-br-md" : "self-start rounded-bl-md",
+            )}
+          />
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Skeleton className="h-[38px] min-w-0 flex-1" />
+        <Skeleton className="h-[38px] w-20 rounded-lg" />
+      </div>
+    </div>
   );
 }
 

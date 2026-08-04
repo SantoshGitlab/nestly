@@ -7,7 +7,7 @@ import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AddressForm, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
-import { Alert, Card, PageHeading } from "@/components/ui";
+import { Alert, Button, Card, EmptyState, PageHeading, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CustomerAddress } from "@/lib/types";
 
@@ -56,11 +56,40 @@ function EditAddress() {
       <PageHeading title="Edit address" />
 
       {query.isPending ? (
-        <p className="text-sm text-fg-muted">Loading address…</p>
+        <AddressFormSkeleton />
       ) : query.isError ? (
-        <Alert>{describeError(query.error)}</Alert>
+        <Alert
+          tone="error"
+          title="Couldn't load this address"
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={query.isRefetching}
+              onClick={() => query.refetch()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
       ) : !address ? (
-        <Alert>That address no longer exists.</Alert>
+        // Not an error — the address was deleted, most likely in another tab.
+        // The only useful move from here is back to the book, so offer it as
+        // the action rather than leaving the footer link as the sole way out.
+        <EmptyState
+          title="That address no longer exists"
+          description="It may have been deleted from your address book on another device."
+          action={
+            <Link
+              href="/addresses"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
+            >
+              Back to address book
+            </Link>
+          }
+        />
       ) : (
         <Card title="Address details">
           <AddressForm
@@ -79,5 +108,43 @@ function EditAddress() {
         </Link>
       </p>
     </main>
+  );
+}
+
+/**
+ * Mirrors AddressForm inside its Card: nine stacked fields, the lat/long pair
+ * on one row, then the checkbox and submit button. Sized to the real controls
+ * (20px label + 6px gap + 38px input) so the form does not jump into place
+ * when the address arrives.
+ */
+function AddressFormSkeleton() {
+  return (
+    <Card title="Address details">
+      <div className="flex flex-col gap-4" aria-hidden>
+        {Array.from({ length: 9 }, (_, index) => (
+          <FieldSkeleton key={index} />
+        ))}
+        <div className="grid grid-cols-2 gap-4">
+          <FieldSkeleton />
+          <FieldSkeleton />
+        </div>
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-3.5 w-48" />
+        </div>
+        <Skeleton className="h-10 w-full rounded-lg" />
+      </div>
+    </Card>
+  );
+}
+
+function FieldSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex h-5 items-center">
+        <Skeleton className="h-3.5 w-28" />
+      </div>
+      <Skeleton className="h-[38px] w-full" />
+    </div>
   );
 }
