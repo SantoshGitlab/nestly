@@ -1,36 +1,34 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import { Alert, Button, Card, Field, PageHeading, Select } from "@/components/ui";
+import { useState } from "react";
+import { Alert, Badge, Button, Field, Modal, PageHeading, Select } from "@/components/ui";
+import {
+  DataTable,
+  FilterBar,
+  FormGrid,
+  Pagination,
+  countActiveFilters,
+  formatDate,
+} from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { PartnerStatusBadge } from "@/components/status-badges";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { createPartner, searchPartners } from "@/lib/partners-api";
 import { PartnerOnboardingStatus, PartnerStatus } from "@/lib/partners-types";
-import type { CreatePartnerRequest } from "@/lib/partners-types";
-import type { AdminSessionClaims } from "@/lib/types";
+import type { CreatePartnerRequest, PartnerSummary } from "@/lib/partners-types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 
 const PAGE_SIZE = 20;
 
-function useAdminClaims(): AdminSessionClaims | null {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-  return claims;
-}
-
-const STATUS_OPTIONS: { value: PartnerStatus | ""; label: string }[] = [
+const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Any status" },
-  { value: PartnerStatus.PendingVerification, label: "Pending verification" },
-  { value: PartnerStatus.Active, label: "Active" },
-  { value: PartnerStatus.Suspended, label: "Suspended" },
-  { value: PartnerStatus.Deactivated, label: "Deactivated" },
+  { value: String(PartnerStatus.PendingVerification), label: "Pending verification" },
+  { value: String(PartnerStatus.Active), label: "Active" },
+  { value: String(PartnerStatus.Suspended), label: "Suspended" },
+  { value: String(PartnerStatus.Deactivated), label: "Deactivated" },
 ];
 
 const ONBOARDING_LABELS: Record<PartnerOnboardingStatus, string> = {
@@ -42,7 +40,7 @@ const ONBOARDING_LABELS: Record<PartnerOnboardingStatus, string> = {
 };
 
 function statusLabel(status: PartnerStatus): string {
-  return STATUS_OPTIONS.find((o) => o.value === status)?.label ?? "Unknown";
+  return STATUS_OPTIONS.find((o) => o.value === String(status))?.label ?? "Unknown";
 }
 
 interface FilterFormState {
@@ -59,6 +57,11 @@ const EMPTY_CREATE: CreatePartnerRequest = { legalName: "", displayName: "", pho
  * (PARTNER.md API surface "Partner CRUD", task 150a). Mirrors
  * customers/page.tsx's shape. Create is only shown to admins holding
  * "partner.write" - the API enforces this server-side regardless.
+ *
+ * Built on the task 221 pattern. Creation moved from an inline panel that
+ * pushed the whole list down into a `Modal`, which restores focus to the "New
+ * partner" button on close. Columns are NOT sortable: the list is paged
+ * server-side and the endpoint takes no sort parameter.
  */
 export default function PartnersPage() {
   const claims = useAdminClaims();
@@ -83,6 +86,7 @@ export default function PartnersPage() {
         page,
         pageSize: PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
 
   const createMutation = useMutation({
@@ -103,8 +107,7 @@ export default function PartnersPage() {
     onError: (err) => setCreateError(describeError(err)),
   });
 
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
+  const onSubmit = () => {
     setPage(1);
     setAppliedFilters(filters);
   };
@@ -115,148 +118,170 @@ export default function PartnersPage() {
     setPage(1);
   };
 
-  const totalPages = query.data ? Math.max(1, Math.ceil(query.data.totalCount / PAGE_SIZE)) : 1;
+  const createDisabled =
+    !createForm.legalName.trim() || !createForm.displayName.trim() || !createForm.phone.trim();
+
+  const columns: DataTableColumn<PartnerSummary>[] = [
+    {
+      key: "name",
+      header: "Name",
+      cell: (partner) => (
+        <Link
+          href={`/partners/${partner.id}`}
+          className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+        >
+          {partner.displayName}
+        </Link>
+      ),
+    },
+    { key: "phone", header: "Phone", cell: (partner) => <span className="nums">{partner.phone}</span> },
+    { key: "email", header: "Email", cell: (partner) => partner.email ?? "—" },
+    {
+      key: "status",
+      header: "Status",
+      cell: (partner) => <PartnerStatusBadge status={partner.status} label={statusLabel(partner.status)} />,
+    },
+    {
+      key: "onboarding",
+      header: "Onboarding",
+      cell: (partner) => (
+        <Badge
+          tone={partner.onboardingStatus === PartnerOnboardingStatus.Completed ? "success" : "neutral"}
+        >
+          {ONBOARDING_LABELS[partner.onboardingStatus]}
+        </Badge>
+      ),
+    },
+    {
+      key: "created",
+      header: "Created",
+      cell: (partner) => <span className="nums">{formatDate(partner.createdAt)}</span>,
+    },
+  ];
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <PageHeading title="Partners" subtitle="Manage service partners: profile, KYC approval and performance (PARTNER.md)." />
-        {canWrite ? (
-          <Button variant="secondary" onClick={() => setShowCreateForm((v) => !v)}>
-            {showCreateForm ? "Cancel" : "New partner"}
-          </Button>
-        ) : null}
+    <div className="mx-auto w-full max-w-7xl">
+      <PageHeading
+        title="Partners"
+        subtitle="Manage service partners: profile, KYC approval and performance (PARTNER.md)."
+        actions={
+          canWrite ? <Button onClick={() => setShowCreateForm(true)}>New partner</Button> : undefined
+        }
+      />
+
+      <FilterBar
+        onSubmit={onSubmit}
+        onClear={onClear}
+        activeCount={countActiveFilters(appliedFilters)}
+        busy={query.isFetching}
+        columns={3}
+      >
+        <Field
+          label="Name"
+          value={filters.name}
+          onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
+        />
+        <Field
+          label="Phone"
+          value={filters.phone}
+          onChange={(e) => setFilters((f) => ({ ...f, phone: e.target.value }))}
+        />
+        <Select
+          label="Status"
+          value={filters.status}
+          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+          options={STATUS_OPTIONS}
+        />
+      </FilterBar>
+
+      <div className="mt-6">
+        <DataTable
+          title="Results"
+          columns={columns}
+          rows={query.data?.items}
+          rowKey={(partner) => partner.id}
+          isLoading={query.isPending}
+          isFetching={query.isFetching}
+          error={query.error}
+          onRetry={() => query.refetch()}
+          skeletonRows={8}
+          minWidth="920px"
+          caption="Partners matching the current filters"
+          emptyTitle="No partners match these filters"
+          emptyDescription="Try a partial name or phone number, or clear the filters to see every partner."
+          emptyAction={
+            <Button variant="secondary" onClick={onClear}>
+              Clear filters
+            </Button>
+          }
+          footer={
+            query.data ? (
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalCount={query.data.totalCount}
+                onPageChange={setPage}
+                busy={query.isFetching}
+                itemLabel="partner"
+              />
+            ) : null
+          }
+        />
       </div>
 
-      {showCreateForm ? (
-        <Card title="Create partner" description="PartnerType is always Individual in v1 (OPEN DECISIONS #2).">
+      <Modal
+        open={showCreateForm}
+        onClose={() => setShowCreateForm(false)}
+        title="Create partner"
+        description="Partner type is always Individual in v1 (PARTNER.md OPEN DECISIONS #2)."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCreateForm(false)} disabled={createMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              disabled={createDisabled}
+              loading={createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+            >
+              Create partner
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
           {createError ? <Alert>{createError}</Alert> : null}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field
               label="Legal name"
+              required
               value={createForm.legalName}
               onChange={(e) => setCreateForm((f) => ({ ...f, legalName: e.target.value }))}
             />
             <Field
               label="Display name"
+              required
+              hint="Shown to customers."
               value={createForm.displayName}
               onChange={(e) => setCreateForm((f) => ({ ...f, displayName: e.target.value }))}
             />
             <Field
               label="Phone"
+              required
+              inputMode="numeric"
               value={createForm.phone}
               onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))}
             />
             <Field
-              label="Email (optional)"
+              label="Email"
               type="email"
+              hint="Optional."
               value={createForm.email ?? ""}
               onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
             />
-          </div>
-          <div className="mt-4">
-            <Button
-              disabled={!createForm.legalName.trim() || !createForm.displayName.trim() || !createForm.phone.trim() || createMutation.isPending}
-              onClick={() => createMutation.mutate()}
-            >
-              {createMutation.isPending ? "Creating…" : "Create partner"}
-            </Button>
-          </div>
-        </Card>
-      ) : null}
-
-      <Card title="Filters">
-        <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field
-            label="Name"
-            value={filters.name}
-            onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
-          />
-          <Field
-            label="Phone"
-            value={filters.phone}
-            onChange={(e) => setFilters((f) => ({ ...f, phone: e.target.value }))}
-          />
-          <Select
-            label="Status"
-            value={filters.status}
-            onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-            options={STATUS_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
-          />
-          <div className="flex items-end gap-2">
-            <Button type="submit">Search</Button>
-            <Button type="button" variant="secondary" onClick={onClear}>
-              Clear
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <div>
-        {query.isPending ? (
-          <p className="text-sm text-neutral-500">Loading partners…</p>
-        ) : query.isError ? (
-          <Alert>{describeError(query.error)}</Alert>
-        ) : query.data.items.length === 0 ? (
-          <Card title="No partners match these filters">
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">Try broadening your search criteria.</p>
-          </Card>
-        ) : (
-          <>
-            <div className="overflow-x-auto rounded-xl border border-black/10 dark:border-white/15">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/5">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Phone</th>
-                    <th className="px-4 py-3 font-medium">Email</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Onboarding</th>
-                    <th className="px-4 py-3 font-medium">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {query.data.items.map((partner) => (
-                    <tr
-                      key={partner.id}
-                      className="border-b border-black/5 last:border-0 hover:bg-black/[.03] dark:border-white/10 dark:hover:bg-white/[.05]"
-                    >
-                      <td className="px-4 py-3">
-                        <Link href={`/partners/${partner.id}`} className="font-medium underline-offset-2 hover:underline">
-                          {partner.displayName}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3">{partner.phone}</td>
-                      <td className="px-4 py-3">{partner.email ?? "—"}</td>
-                      <td className="px-4 py-3">{statusLabel(partner.status)}</td>
-                      <td className="px-4 py-3">{ONBOARDING_LABELS[partner.onboardingStatus]}</td>
-                      <td className="px-4 py-3">{new Date(partner.createdAt).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between text-sm">
-              <span className="text-neutral-600 dark:text-neutral-400">
-                Page {page} of {totalPages} · {query.data.totalCount} partner{query.data.totalCount === 1 ? "" : "s"}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+          </FormGrid>
+        </div>
+      </Modal>
     </div>
   );
 }

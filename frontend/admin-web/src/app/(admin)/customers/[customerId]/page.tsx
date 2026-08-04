@@ -1,36 +1,24 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Alert, Button, Card, Field, PageHeading } from "@/components/ui";
-import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
+import { useState } from "react";
+import { Alert, Badge, Button, Card, EmptyState, Field, PageHeading } from "@/components/ui";
 import {
-  BookingStatus,
-  CustomerStatus,
-  SupportTicketStatus,
-  WalletEntryType,
-} from "@/lib/types";
-import type { AdminSessionClaims, CustomerDetail, CustomerNote } from "@/lib/types";
-
-function useAdminClaims(): AdminSessionClaims | null {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-  return claims;
-}
-
-const STATUS_LABELS: Record<CustomerStatus, string> = {
-  [CustomerStatus.Active]: "Active",
-  [CustomerStatus.Blocked]: "Blocked",
-  [CustomerStatus.Unverified]: "Unverified",
-  [CustomerStatus.SoftDeleted]: "Deleted",
-};
+  Breadcrumbs,
+  ConfirmDialog,
+  DescriptionList,
+  FormActions,
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+} from "@/components/data-table";
+import { DetailError, DetailSkeleton } from "@/components/screen-states";
+import { BookingStatusBadge, CustomerStatusBadge, TicketStatusBadge } from "@/components/status-badges";
+import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { useAdminClaims } from "@/lib/use-admin-claims";
+import { BookingStatus, CustomerStatus, SupportTicketStatus, WalletEntryType } from "@/lib/types";
+import type { CustomerDetail, CustomerNote } from "@/lib/types";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Initiated]: "Booking Started",
@@ -64,6 +52,9 @@ const SUPPORT_STATUS_LABELS: Record<SupportTicketStatus, string> = {
  * shown to admins holding "customers.write" - the API enforces this
  * server-side regardless, this is purely to avoid showing controls that
  * would just 403.
+ *
+ * Blocking goes through `ConfirmDialog` (task 222): it locks the customer out
+ * of the app entirely and was previously a single unconfirmed click.
  */
 export default function CustomerDetailPage() {
   const params = useParams<{ customerId: string }>();
@@ -78,8 +69,10 @@ export default function CustomerDetailPage() {
   });
 
   const [blockReason, setBlockReason] = useState("");
+  const [confirmBlock, setConfirmBlock] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const invalidateDetail = () =>
     queryClient.invalidateQueries({ queryKey: ["admin-customer-detail", customerId] });
@@ -93,7 +86,9 @@ export default function CustomerDetailPage() {
       }),
     onSuccess: () => {
       setBlockReason("");
+      setConfirmBlock(false);
       setActionError(null);
+      setActionNotice("Customer blocked.");
       invalidateDetail();
     },
     onError: (err) => setActionError(describeError(err)),
@@ -107,6 +102,7 @@ export default function CustomerDetailPage() {
       }),
     onSuccess: () => {
       setActionError(null);
+      setActionNotice("Customer unblocked.");
       invalidateDetail();
     },
     onError: (err) => setActionError(describeError(err)),
@@ -122,82 +118,89 @@ export default function CustomerDetailPage() {
     onSuccess: () => {
       setNoteText("");
       setActionError(null);
+      setActionNotice("Note added.");
       invalidateDetail();
     },
     onError: (err) => setActionError(describeError(err)),
   });
 
+  const breadcrumbs = [
+    { label: "Customers", href: "/customers" },
+    { label: detailQuery.data?.name ?? "Customer" },
+  ];
+
   if (detailQuery.isPending) {
-    return <p className="text-sm text-neutral-500">Loading customer…</p>;
+    return <DetailSkeleton cards={4} className="mx-auto flex w-full max-w-4xl flex-col gap-6" />;
   }
 
   if (detailQuery.isError) {
-    return <Alert>{describeError(detailQuery.error)}</Alert>;
+    return (
+      <DetailError
+        title="Customer"
+        breadcrumbs={breadcrumbs}
+        error={detailQuery.error}
+        onRetry={() => detailQuery.refetch()}
+        className="mx-auto w-full max-w-4xl"
+      />
+    );
   }
 
   const customer = detailQuery.data;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <PageHeading title={customer.name} subtitle={`${customer.mobile}${customer.email ? ` · ${customer.email}` : ""}`} />
-        <Link href="/customers" className="text-sm underline-offset-2 hover:underline">
-          Back to customers
-        </Link>
-      </div>
+      <PageHeading
+        title={customer.name}
+        subtitle={`${customer.mobile}${customer.email ? ` · ${customer.email}` : ""}`}
+        breadcrumbs={<Breadcrumbs items={breadcrumbs} />}
+        actions={<CustomerStatusBadge status={customer.status} />}
+      />
 
-      {actionError ? <Alert>{actionError}</Alert> : null}
+      {actionError ? <Alert tone="error">{actionError}</Alert> : null}
+      {actionNotice ? <Alert tone="success">{actionNotice}</Alert> : null}
 
-      <Card title="Profile" description={`Status: ${STATUS_LABELS[customer.status]}`}>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-neutral-500">City</dt>
-            <dd>{customer.city ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-neutral-500">State</dt>
-            <dd>{customer.state ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-neutral-500">Pincode</dt>
-            <dd>{customer.pincode ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-neutral-500">Registered</dt>
-            <dd>{new Date(customer.createdAtUtc).toLocaleDateString()}</dd>
-          </div>
-          <div>
-            <dt className="text-neutral-500">Wallet balance</dt>
-            <dd>₹{customer.walletBalance.toFixed(2)}</dd>
-          </div>
-        </dl>
+      <Card title="Profile" description="Account snapshot (SRS 12.4.2).">
+        <DescriptionList
+          columns={3}
+          items={[
+            { label: "City", value: customer.city ?? "—" },
+            { label: "State", value: customer.state ?? "—" },
+            { label: "Pincode", value: <span className="nums">{customer.pincode ?? "—"}</span> },
+            { label: "Registered", value: <span className="nums">{formatDate(customer.createdAtUtc)}</span> },
+            {
+              label: "Wallet balance",
+              value: <span className="nums font-medium">{formatCurrency(customer.walletBalance)}</span>,
+            },
+            { label: "Bookings", value: <span className="nums">{customer.bookings.length}</span> },
+          ]}
+        />
 
         {canWrite ? (
-          <div className="mt-5 flex flex-col gap-3 border-t border-black/10 pt-5 dark:border-white/15">
+          <div className="mt-5 border-t border-line pt-5">
             {customer.status === CustomerStatus.Blocked ? (
-              <Button
-                variant="secondary"
-                onClick={() => unblockMutation.mutate()}
-                disabled={unblockMutation.isPending}
-              >
-                {unblockMutation.isPending ? "Unblocking…" : "Unblock customer"}
-              </Button>
+              <FormActions align="start">
+                <Button
+                  variant="secondary"
+                  loading={unblockMutation.isPending}
+                  onClick={() => unblockMutation.mutate()}
+                >
+                  Unblock customer
+                </Button>
+              </FormActions>
             ) : (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Field
                     label="Block reason"
+                    required
                     value={blockReason}
                     onChange={(e) => setBlockReason(e.target.value)}
                     placeholder="Reason for blocking this account"
+                    hint="Recorded to the audit trail."
                   />
                 </div>
-                <Button
-                  variant="danger"
-                  disabled={!blockReason.trim() || blockMutation.isPending}
-                  onClick={() => blockMutation.mutate(blockReason.trim())}
-                >
-                  {blockMutation.isPending ? "Blocking…" : "Block customer"}
+                <Button variant="danger" disabled={!blockReason.trim()} onClick={() => setConfirmBlock(true)}>
+                  Block customer
                 </Button>
               </div>
             )}
@@ -207,15 +210,16 @@ export default function CustomerDetailPage() {
 
       <Card title="Addresses" description="SRS 12.4.2">
         {customer.addresses.length === 0 ? (
-          <p className="text-sm text-neutral-500">No saved addresses.</p>
+          <EmptyState title="No saved addresses" description="This customer has not saved a service address yet." />
         ) : (
-          <ul className="flex flex-col gap-3 text-sm">
+          <ul className="flex flex-col gap-2 text-sm">
             {customer.addresses.map((address) => (
-              <li key={address.id} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
-                <p className="font-medium">
-                  {address.label} {address.isDefault ? "(default)" : ""}
+              <li key={address.id} className="rounded-xl border border-line p-3">
+                <p className="flex flex-wrap items-center gap-2 font-medium text-fg">
+                  {address.label}
+                  {address.isDefault ? <Badge tone="brand">Default</Badge> : null}
                 </p>
-                <p className="text-neutral-600 dark:text-neutral-400">
+                <p className="mt-1 text-fg-muted">
                   {[address.line1, address.line2, address.landmark, address.city, address.state, address.pincode]
                     .filter(Boolean)
                     .join(", ")}
@@ -228,37 +232,47 @@ export default function CustomerDetailPage() {
 
       <Card title="Booking history" description="SRS 12.4.2">
         {customer.bookings.length === 0 ? (
-          <p className="text-sm text-neutral-500">No bookings yet.</p>
+          <EmptyState title="No bookings yet" description="This customer has not completed a booking." />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {customer.bookings.map((booking) => (
               <li
                 key={booking.id}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-3 dark:border-white/15"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
               >
-                <span>{booking.slotDate}</span>
-                <span>{BOOKING_STATUS_LABELS[booking.status]}</span>
-                <span className="font-medium">₹{booking.totalPayableSnapshot.toFixed(2)}</span>
+                <span className="nums text-fg">{booking.slotDate}</span>
+                <BookingStatusBadge status={booking.status} label={BOOKING_STATUS_LABELS[booking.status]} />
+                <span className="nums font-medium text-fg">{formatCurrency(booking.totalPayableSnapshot)}</span>
               </li>
             ))}
           </ul>
         )}
       </Card>
 
-      <Card title="Wallet / refund history" description={`Current balance: ₹${customer.walletBalance.toFixed(2)}`}>
+      <Card
+        title="Wallet / refund history"
+        description={`Current balance: ${formatCurrency(customer.walletBalance)}`}
+      >
         {customer.walletEntries.length === 0 ? (
-          <p className="text-sm text-neutral-500">No wallet activity.</p>
+          <EmptyState title="No wallet activity" description="Refunds and wallet credits will appear here." />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {customer.walletEntries.map((entry) => (
               <li
                 key={entry.id}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-3 dark:border-white/15"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
               >
-                <span>{entry.description}</span>
-                <span>{new Date(entry.createdAtUtc).toLocaleDateString()}</span>
-                <span className={entry.entryType === WalletEntryType.Credit ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"}>
-                  {entry.entryType === WalletEntryType.Credit ? "+" : "-"}₹{entry.amount.toFixed(2)}
+                <span className="min-w-0 flex-1 text-fg">{entry.description}</span>
+                <span className="nums text-xs text-fg-subtle">{formatDate(entry.createdAtUtc)}</span>
+                <span
+                  className={
+                    entry.entryType === WalletEntryType.Credit
+                      ? "nums font-medium text-success"
+                      : "nums font-medium text-danger"
+                  }
+                >
+                  {entry.entryType === WalletEntryType.Credit ? "+" : "−"}
+                  {formatCurrency(entry.amount)}
                 </span>
               </li>
             ))}
@@ -268,17 +282,17 @@ export default function CustomerDetailPage() {
 
       <Card title="Coupons used" description="SRS 12.4.2">
         {customer.coupons.length === 0 ? (
-          <p className="text-sm text-neutral-500">No coupons redeemed.</p>
+          <EmptyState title="No coupons redeemed" description="Discounts this customer has claimed appear here." />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {customer.coupons.map((coupon, index) => (
               <li
                 key={`${coupon.couponId}-${coupon.bookingId}-${index}`}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-3 dark:border-white/15"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
               >
-                <span className="font-mono">{coupon.couponCode}</span>
-                <span>{new Date(coupon.redeemedAtUtc).toLocaleDateString()}</span>
-                <span>-₹{coupon.discountAmount.toFixed(2)}</span>
+                <span className="font-mono text-fg">{coupon.couponCode}</span>
+                <span className="nums text-xs text-fg-subtle">{formatDate(coupon.redeemedAtUtc)}</span>
+                <span className="nums font-medium text-fg">−{formatCurrency(coupon.discountAmount)}</span>
               </li>
             ))}
           </ul>
@@ -287,16 +301,16 @@ export default function CustomerDetailPage() {
 
       <Card title="Support tickets" description="SRS 12.4.2">
         {customer.supportTickets.length === 0 ? (
-          <p className="text-sm text-neutral-500">No support tickets.</p>
+          <EmptyState title="No support tickets" description="This customer has never raised a ticket." />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {customer.supportTickets.map((ticket) => (
               <li
                 key={ticket.id}
-                className="flex items-center justify-between rounded-lg border border-black/10 p-3 dark:border-white/15"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
               >
-                <span>{ticket.subject}</span>
-                <span>{SUPPORT_STATUS_LABELS[ticket.status]}</span>
+                <span className="min-w-0 flex-1 text-fg">{ticket.subject}</span>
+                <TicketStatusBadge status={ticket.status} label={SUPPORT_STATUS_LABELS[ticket.status]} />
               </li>
             ))}
           </ul>
@@ -305,32 +319,61 @@ export default function CustomerDetailPage() {
 
       <Card title="Internal notes" description="SRS 12.4.2, 12.4.3">
         {canWrite ? (
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <Field label="Add a note" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+              <Field
+                label="Add a note"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                hint="Visible to admins only, and attributed to you."
+              />
             </div>
             <Button
-              disabled={!noteText.trim() || addNoteMutation.isPending}
+              disabled={!noteText.trim()}
+              loading={addNoteMutation.isPending}
               onClick={() => addNoteMutation.mutate(noteText.trim())}
             >
-              {addNoteMutation.isPending ? "Saving…" : "Add note"}
+              Add note
             </Button>
           </div>
         ) : null}
 
         {customer.notes.length === 0 ? (
-          <p className="text-sm text-neutral-500">No notes yet.</p>
+          <EmptyState
+            title="No notes yet"
+            description={
+              canWrite
+                ? "Record context here so the next admin picking up this account has it."
+                : "An admin with customer write access can add one."
+            }
+          />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {customer.notes.map((note) => (
-              <li key={note.id} className="rounded-lg border border-black/10 p-3 dark:border-white/15">
-                <p>{note.note}</p>
-                <p className="mt-1 text-xs text-neutral-500">{new Date(note.createdAtUtc).toLocaleString()}</p>
+              <li key={note.id} className="rounded-xl border border-line p-3">
+                <p className="text-fg">{note.note}</p>
+                <p className="mt-1 text-xs text-fg-subtle">{formatDateTime(note.createdAtUtc)}</p>
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={confirmBlock}
+        title="Block this customer?"
+        description="They are signed out and cannot book, sign in or raise a ticket until unblocked."
+        confirmLabel="Block customer"
+        cancelLabel="Keep active"
+        loading={blockMutation.isPending}
+        error={blockMutation.isError ? describeError(blockMutation.error) : null}
+        onCancel={() => setConfirmBlock(false)}
+        onConfirm={() => blockMutation.mutate(blockReason.trim())}
+      >
+        <p className="text-sm text-fg-muted">
+          Reason: <span className="font-medium text-fg">{blockReason}</span>
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -2,18 +2,18 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Field, PageHeading, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, Field, PageHeading, Textarea } from "@/components/ui";
+import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid } from "@/components/data-table";
+import { StatusBadge } from "@/components/entity-table";
+import { DetailError, DetailSkeleton } from "@/components/screen-states";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { getCategory, setCategoryActive, setCategoryFeatured, updateCategory } from "@/lib/catalog-api";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { StatusBadge } from "../../../serviceability/_components/EntityTable";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 
 const categorySchema = z.object({
   name: z.string().min(1, "Category name is required").max(200),
@@ -35,13 +35,8 @@ type CategoryFormValues = z.infer<typeof categorySchema>;
 export default function EditCategoryPage() {
   const { categoryId } = useParams<{ categoryId: string }>();
   const queryClient = useQueryClient();
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
+  const claims = useAdminClaims();
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
 
   const canWrite = canWriteModule(claims, "catalog");
 
@@ -82,7 +77,10 @@ export default function EditCategoryPage() {
 
   const activeMutation = useMutation({
     mutationFn: (isActive: boolean) => setCategoryActive(categoryId, isActive),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["categories"] }),
+    onSuccess: () => {
+      setConfirmDeactivate(false);
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
   });
 
   const featuredMutation = useMutation({
@@ -92,66 +90,97 @@ export default function EditCategoryPage() {
 
   const onSubmit = form.handleSubmit((values) => updateMutation.mutate(values));
 
-  if (categoryQuery.isLoading) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>;
+  const breadcrumbs = [
+    { label: "Catalog", href: "/catalog" },
+    { label: "Categories", href: "/catalog" },
+    { label: categoryQuery.data?.name ?? "Category" },
+  ];
+
+  if (categoryQuery.isPending) {
+    return <DetailSkeleton />;
   }
 
   if (categoryQuery.error || !categoryQuery.data) {
-    return <Alert>{describeError(categoryQuery.error ?? new Error("Category not found."))}</Alert>;
+    return (
+      <DetailError
+        title="Category"
+        breadcrumbs={breadcrumbs}
+        error={categoryQuery.error}
+        message={categoryQuery.error ? undefined : "This category no longer exists."}
+        onRetry={() => categoryQuery.refetch()}
+      />
+    );
   }
 
   const category = categoryQuery.data;
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <PageHeading title={`Edit category: ${category.name}`} subtitle="SRS 12.5.2 - full field set." />
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <PageHeading
+        title={category.name}
+        subtitle="Category details — SRS 12.5.2, full field set."
+        breadcrumbs={<Breadcrumbs items={breadcrumbs} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusBadge isActive={category.isActive} />
+            {category.isFeatured ? <Badge tone="accent">Featured</Badge> : null}
+          </div>
+        }
+      />
 
-      <Link href="/catalog" className="mb-4 inline-block text-sm text-neutral-600 hover:underline dark:text-neutral-400">
-        ← Back to categories
-      </Link>
-
-      <Card
-        title="Details"
-        description="Status and featuring are changed instantly and recorded to the audit trail; other fields save together on Submit."
-      >
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <StatusBadge isActive={category.isActive} />
-          {category.isFeatured ? (
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-              Featured
-            </span>
-          ) : null}
-
-          {canWrite ? (
-            <div className="ml-auto flex gap-2">
+      {canWrite ? (
+        <Card
+          title="Visibility"
+          description="Applied instantly and recorded to the audit trail — unlike the fields below, which save together."
+        >
+          <FormActions align="start">
+            <Button
+              type="button"
+              variant="secondary"
+              loading={featuredMutation.isPending}
+              onClick={() => featuredMutation.mutate(!category.isFeatured)}
+            >
+              {category.isFeatured ? "Remove from featured" : "Mark as featured"}
+            </Button>
+            {category.isActive ? (
+              <Button type="button" variant="danger" onClick={() => setConfirmDeactivate(true)}>
+                Deactivate
+              </Button>
+            ) : (
               <Button
                 type="button"
-                variant="secondary"
-                disabled={featuredMutation.isPending}
-                onClick={() => featuredMutation.mutate(!category.isFeatured)}
+                variant="subtle"
+                loading={activeMutation.isPending}
+                onClick={() => activeMutation.mutate(true)}
               >
-                {category.isFeatured ? "Unfeature" : "Feature"}
+                Activate
               </Button>
-              <Button
-                type="button"
-                variant={category.isActive ? "danger" : "secondary"}
-                disabled={activeMutation.isPending}
-                onClick={() => activeMutation.mutate(!category.isActive)}
-              >
-                {category.isActive ? "Deactivate" : "Activate"}
-              </Button>
+            )}
+          </FormActions>
+          {featuredMutation.isError ? (
+            <div className="mt-4">
+              <Alert>{describeError(featuredMutation.error)}</Alert>
             </div>
           ) : null}
-        </div>
+        </Card>
+      ) : null}
 
+      <Card title="Details" description={canWrite ? undefined : "Read-only — you do not hold catalog write access."}>
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           {updateMutation.isError ? <Alert>{describeError(updateMutation.error)}</Alert> : null}
           {updateMutation.isSuccess ? <Alert tone="success">Category saved.</Alert> : null}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} disabled={!canWrite} />
-            <Field label="Slug" error={form.formState.errors.slug?.message} {...form.register("slug")} disabled={!canWrite} />
-          </div>
+          <FormGrid>
+            <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} disabled={!canWrite} />
+            <Field
+              label="Slug"
+              required
+              hint="Lowercase letters, numbers and hyphens — this is the customer-facing URL."
+              error={form.formState.errors.slug?.message}
+              {...form.register("slug")}
+              disabled={!canWrite}
+            />
+          </FormGrid>
 
           <Textarea
             label="Description"
@@ -160,7 +189,7 @@ export default function EditCategoryPage() {
             disabled={!canWrite}
           />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field label="Icon URL" error={form.formState.errors.iconUrl?.message} {...form.register("iconUrl")} disabled={!canWrite} />
             <Field
               label="Banner URL"
@@ -168,9 +197,9 @@ export default function EditCategoryPage() {
               {...form.register("bannerUrl")}
               disabled={!canWrite}
             />
-          </div>
+          </FormGrid>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <FormGrid columns={3}>
             <Field
               label="Sort order"
               type="number"
@@ -190,17 +219,33 @@ export default function EditCategoryPage() {
               {...form.register("seoMetaDescription")}
               disabled={!canWrite}
             />
-          </div>
+          </FormGrid>
 
           {canWrite ? (
-            <div>
-              <Button type="submit" disabled={form.formState.isSubmitting || updateMutation.isPending}>
-                {updateMutation.isPending ? "Saving…" : "Save changes"}
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting || updateMutation.isPending}>
+                Save changes
               </Button>
-            </div>
+            </FormActions>
           ) : null}
         </form>
       </Card>
+
+      <ConfirmDialog
+        open={confirmDeactivate}
+        title="Deactivate this category?"
+        description="It disappears from the customer app immediately, along with everything filed under it."
+        confirmLabel="Deactivate"
+        cancelLabel="Keep active"
+        loading={activeMutation.isPending}
+        error={activeMutation.isError ? describeError(activeMutation.error) : null}
+        onCancel={() => setConfirmDeactivate(false)}
+        onConfirm={() => activeMutation.mutate(false)}
+      >
+        <p className="text-sm text-fg-muted">
+          Deactivating <span className="font-medium text-fg">{category.name}</span>.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

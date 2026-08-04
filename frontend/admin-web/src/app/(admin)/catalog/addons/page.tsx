@@ -3,17 +3,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Card, CheckboxField, Field, PageHeading, Select } from "@/components/ui";
+import { FormActions, FormGrid, formatCurrency } from "@/components/data-table";
+import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { createServiceAddOn, listServiceAddOns, listServices, setServiceAddOnActive } from "@/lib/catalog-api";
 import type { ServiceAddOnAdminResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { EntityTable } from "../../serviceability/_components/EntityTable";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { CatalogTabs } from "../_components/CatalogTabs";
 
 const addOnSchema = z.object({
@@ -33,15 +33,9 @@ type AddOnFormValues = z.infer<typeof addOnSchema>;
  * happens on its own page (`/catalog/addons/[id]`).
  */
 export default function CatalogAddOnsPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
+  const claims = useAdminClaims();
   const [serviceFilter, setServiceFilter] = useState("");
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
 
   const canWrite = canWriteModule(claims, "catalog");
 
@@ -92,69 +86,112 @@ export default function CatalogAddOnsPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div>
+        <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
+        <CatalogTabs />
+      </div>
 
-      <CatalogTabs />
+      <EntityTable<ServiceAddOnAdminResponse>
+        title="Add-ons"
+        description="Optional or mandatory extras mapped to a service (SRS 12.7)."
+        actions={
+          <div className="w-56">
+            <Select
+              label="Filter by service"
+              value={serviceFilter}
+              onChange={(e) => setServiceFilter(e.target.value)}
+              options={[{ value: "", label: "All services" }, ...serviceOptions]}
+            />
+          </div>
+        }
+        items={addOnsQuery.data}
+        isLoading={addOnsQuery.isPending}
+        isFetching={addOnsQuery.isFetching}
+        error={addOnsQuery.error}
+        onRetry={() => addOnsQuery.refetch()}
+        emptyMessage={serviceFilter ? "No add-ons for this service" : "No add-ons yet"}
+        emptyAction={
+          serviceFilter ? (
+            <Button variant="secondary" onClick={() => setServiceFilter("")}>
+              Show all services
+            </Button>
+          ) : undefined
+        }
+        canWrite={canWrite}
+        entityLabel="add-on"
+        labelOf={(addOn) => addOn.name}
+        minWidth="900px"
+        togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        toggleError={toggleMutation.error}
+        onToggleActive={(addOn) => toggleMutation.mutate({ id: addOn.id, isActive: !addOn.isActive })}
+        columns={[
+          {
+            header: "Name",
+            sortValue: (addOn) => addOn.name,
+            render: (addOn) => (
+              <Link
+                href={`/catalog/addons/${addOn.id}`}
+                className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+              >
+                {addOn.name}
+              </Link>
+            ),
+          },
+          { header: "Service", sortValue: (addOn) => addOn.serviceName, render: (addOn) => addOn.serviceName },
+          {
+            header: "Price",
+            numeric: true,
+            sortValue: (addOn) => addOn.price,
+            render: (addOn) => formatCurrency(addOn.price),
+          },
+          {
+            header: "Mandatory",
+            sortValue: (addOn) => addOn.isMandatory,
+            render: (addOn) => (addOn.isMandatory ? "Yes" : "No"),
+          },
+          {
+            header: "Quantity allowed",
+            sortValue: (addOn) => addOn.isQuantityAllowed,
+            render: (addOn) => (addOn.isQuantityAllowed ? "Yes" : "No"),
+          },
+        ]}
+      />
 
-      <Card title="Add-ons" description="Optional or mandatory extras mapped to a service (SRS 12.7).">
-        <div className="mb-4 w-64">
-          <Select
-            label="Filter by service"
-            value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
-            options={[{ value: "", label: "All services" }, ...serviceOptions]}
-          />
-        </div>
-
-        <EntityTable<ServiceAddOnAdminResponse>
-          items={addOnsQuery.data}
-          isLoading={addOnsQuery.isLoading}
-          errorMessage={addOnsQuery.error ? describeError(addOnsQuery.error) : null}
-          emptyMessage="No add-ons yet."
-          canWrite={canWrite}
-          togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
-          onToggleActive={(addOn) => toggleMutation.mutate({ id: addOn.id, isActive: !addOn.isActive })}
-          columns={[
-            {
-              header: "Name",
-              render: (addOn) => (
-                <Link href={`/catalog/addons/${addOn.id}`} className="font-medium underline-offset-2 hover:underline">
-                  {addOn.name}
-                </Link>
-              ),
-            },
-            { header: "Service", render: (addOn) => addOn.serviceName },
-            { header: "Price", render: (addOn) => `₹${addOn.price.toFixed(2)}` },
-            { header: "Mandatory", render: (addOn) => (addOn.isMandatory ? "Yes" : "No") },
-            { header: "Quantity allowed", render: (addOn) => (addOn.isQuantityAllowed ? "Yes" : "No") },
-          ]}
-        />
-
-        {canWrite ? (
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4 border-t border-black/10 pt-6 dark:border-white/15" noValidate>
-            <h3 className="text-sm font-semibold">Add add-on</h3>
+      {canWrite ? (
+        <Card title="Add add-on" description="Creates the add-on immediately; it is offered once activated.">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
             {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormGrid>
               <Select
                 label="Service"
+                required
                 placeholder="Select a service…"
                 error={form.formState.errors.serviceId?.message}
                 options={serviceOptions}
                 {...form.register("serviceId")}
               />
-              <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} />
-            </div>
+              <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} />
+            </FormGrid>
 
             <Field label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Price (₹)" type="number" step="0.01" error={form.formState.errors.price?.message} {...form.register("price", { valueAsNumber: true })} />
+            <FormGrid>
+              <Field
+                label="Price"
+                type="number"
+                step="0.01"
+                required
+                leading="₹"
+                error={form.formState.errors.price?.message}
+                {...form.register("price", { valueAsNumber: true })}
+              />
               <Field label="Sort order" type="number" error={form.formState.errors.sortOrder?.message} {...form.register("sortOrder", { valueAsNumber: true })} />
-            </div>
+            </FormGrid>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <legend className="mb-2 text-sm font-medium text-fg">Add-on options</legend>
               <CheckboxField
                 label="Quantity allowed"
                 checked={form.watch("isQuantityAllowed")}
@@ -166,16 +203,16 @@ export default function CatalogAddOnsPage() {
                 checked={form.watch("isMandatory")}
                 onChange={(v) => form.setValue("isMandatory", v)}
               />
-            </div>
+            </fieldset>
 
-            <div>
-              <Button type="submit" disabled={form.formState.isSubmitting || createMutation.isPending}>
-                {createMutation.isPending ? "Adding…" : "Add add-on"}
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting || createMutation.isPending}>
+                Add add-on
               </Button>
-            </div>
+            </FormActions>
           </form>
-        ) : null}
-      </Card>
+        </Card>
+      ) : null}
     </div>
   );
 }

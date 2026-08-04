@@ -2,14 +2,27 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, CheckboxField, Field, PageHeading, Select, Textarea } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  CheckboxField,
+  EmptyState,
+  Field,
+  PageHeading,
+  Select,
+  SkeletonText,
+  Textarea,
+} from "@/components/ui";
+import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid } from "@/components/data-table";
+import { StatusBadge } from "@/components/entity-table";
+import { DetailError, DetailSkeleton, SectionError } from "@/components/screen-states";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import {
   addServiceMedia,
   getService,
@@ -21,8 +34,7 @@ import {
   updateService,
 } from "@/lib/catalog-api";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { StatusBadge } from "../../../serviceability/_components/EntityTable";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 
 const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -59,13 +71,9 @@ type MediaFormValues = z.infer<typeof mediaSchema>;
 export default function EditServicePage() {
   const { serviceId } = useParams<{ serviceId: string }>();
   const queryClient = useQueryClient();
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
+  const claims = useAdminClaims();
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [pendingMediaRemoval, setPendingMediaRemoval] = useState<{ id: string; url: string } | null>(null);
 
   const canWrite = canWriteModule(claims, "catalog");
 
@@ -136,7 +144,10 @@ export default function EditServicePage() {
 
   const activeMutation = useMutation({
     mutationFn: (isActive: boolean) => setServiceActive(serviceId, isActive),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
+    onSuccess: () => {
+      setConfirmDeactivate(false);
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+    },
   });
 
   const featuredMutation = useMutation({
@@ -156,85 +167,122 @@ export default function EditServicePage() {
 
   const removeMediaMutation = useMutation({
     mutationFn: (mediaId: string) => removeServiceMedia(serviceId, mediaId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-media", serviceId] }),
+    onSuccess: () => {
+      setPendingMediaRemoval(null);
+      queryClient.invalidateQueries({ queryKey: ["service-media", serviceId] });
+    },
   });
 
   const onSubmit = form.handleSubmit((values) => updateMutation.mutate(values));
   const onAddMedia = mediaForm.handleSubmit((values) => addMediaMutation.mutate(values));
 
-  if (serviceQuery.isLoading) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>;
+  const breadcrumbs = [
+    { label: "Catalog", href: "/catalog" },
+    { label: "Services", href: "/catalog/services" },
+    { label: serviceQuery.data?.name ?? "Service" },
+  ];
+
+  if (serviceQuery.isPending) {
+    return <DetailSkeleton cards={3} />;
   }
 
   if (serviceQuery.error || !serviceQuery.data) {
-    return <Alert>{describeError(serviceQuery.error ?? new Error("Service not found."))}</Alert>;
+    return (
+      <DetailError
+        title="Service"
+        breadcrumbs={breadcrumbs}
+        error={serviceQuery.error}
+        message={serviceQuery.error ? undefined : "This service no longer exists."}
+        onRetry={() => serviceQuery.refetch()}
+      />
+    );
   }
 
   const service = serviceQuery.data;
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      <PageHeading title={`Edit service: ${service.name}`} subtitle="SRS 12.6.2/12.6.3 - full field set and option flags." />
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <PageHeading
+        title={service.name}
+        subtitle="Service details — SRS 12.6.2/12.6.3, full field set and option flags."
+        breadcrumbs={<Breadcrumbs items={breadcrumbs} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusBadge isActive={service.isActive} />
+            {service.isFeatured ? <Badge tone="accent">Featured</Badge> : null}
+          </div>
+        }
+      />
 
-      <Link href="/catalog/services" className="mb-4 inline-block text-sm text-neutral-600 hover:underline dark:text-neutral-400">
-        ← Back to services
-      </Link>
-
-      <Card
-        title="Details"
-        description="Status and featuring are changed instantly and recorded to the audit trail; other fields save together on Submit."
-      >
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <StatusBadge isActive={service.isActive} />
-          {service.isFeatured ? (
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-              Featured
-            </span>
-          ) : null}
-
-          {canWrite ? (
-            <div className="ml-auto flex gap-2">
+      {canWrite ? (
+        <Card
+          title="Visibility"
+          description="Applied instantly and recorded to the audit trail — unlike the fields below, which save together."
+        >
+          <FormActions align="start">
+            <Button
+              type="button"
+              variant="secondary"
+              loading={featuredMutation.isPending}
+              onClick={() => featuredMutation.mutate(!service.isFeatured)}
+            >
+              {service.isFeatured ? "Remove from featured" : "Mark as featured"}
+            </Button>
+            {service.isActive ? (
+              <Button type="button" variant="danger" onClick={() => setConfirmDeactivate(true)}>
+                Deactivate
+              </Button>
+            ) : (
               <Button
                 type="button"
-                variant="secondary"
-                disabled={featuredMutation.isPending}
-                onClick={() => featuredMutation.mutate(!service.isFeatured)}
+                variant="subtle"
+                loading={activeMutation.isPending}
+                onClick={() => activeMutation.mutate(true)}
               >
-                {service.isFeatured ? "Unfeature" : "Feature"}
+                Activate
               </Button>
-              <Button
-                type="button"
-                variant={service.isActive ? "danger" : "secondary"}
-                disabled={activeMutation.isPending}
-                onClick={() => activeMutation.mutate(!service.isActive)}
-              >
-                {service.isActive ? "Deactivate" : "Activate"}
-              </Button>
+            )}
+          </FormActions>
+          {featuredMutation.isError ? (
+            <div className="mt-4">
+              <Alert>{describeError(featuredMutation.error)}</Alert>
             </div>
           ) : null}
-        </div>
+        </Card>
+      ) : null}
 
+      <Card title="Details" description={canWrite ? undefined : "Read-only — you do not hold catalog write access."}>
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           {updateMutation.isError ? <Alert>{describeError(updateMutation.error)}</Alert> : null}
           {updateMutation.isSuccess ? <Alert tone="success">Service saved.</Alert> : null}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Select
               label="Category"
+              required
               options={categoryOptions}
               error={form.formState.errors.categoryId?.message}
               {...form.register("categoryId")}
               disabled={!canWrite}
             />
-            <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} disabled={!canWrite} />
-          </div>
+            <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} disabled={!canWrite} />
+          </FormGrid>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Field label="Slug" error={form.formState.errors.slug?.message} {...form.register("slug")} disabled={!canWrite} />
+          <FormGrid columns={3}>
             <Field
-              label="Price (₹)"
+              label="Slug"
+              required
+              hint="Lowercase letters, numbers and hyphens."
+              error={form.formState.errors.slug?.message}
+              {...form.register("slug")}
+              disabled={!canWrite}
+            />
+            <Field
+              label="Price"
               type="number"
               step="0.01"
+              required
+              leading="₹"
               error={form.formState.errors.price?.message}
               {...form.register("price", { valueAsNumber: true })}
               disabled={!canWrite}
@@ -242,11 +290,12 @@ export default function EditServicePage() {
             <Field
               label="Duration (minutes)"
               type="number"
+              required
               error={form.formState.errors.durationMinutes?.message}
               {...form.register("durationMinutes", { valueAsNumber: true })}
               disabled={!canWrite}
             />
-          </div>
+          </FormGrid>
 
           <Field
             label="Short description"
@@ -260,32 +309,34 @@ export default function EditServicePage() {
             {...form.register("description")}
             disabled={!canWrite}
           />
-          <Textarea
-            label="Inclusions"
-            error={form.formState.errors.inclusions?.message}
-            {...form.register("inclusions")}
-            disabled={!canWrite}
-          />
-          <Textarea
-            label="Exclusions"
-            error={form.formState.errors.exclusions?.message}
-            {...form.register("exclusions")}
-            disabled={!canWrite}
-          />
-          <Textarea
-            label="Cancellation policy"
-            error={form.formState.errors.cancellationPolicy?.message}
-            {...form.register("cancellationPolicy")}
-            disabled={!canWrite}
-          />
-          <Textarea
-            label="Reschedule policy"
-            error={form.formState.errors.reschedulePolicy?.message}
-            {...form.register("reschedulePolicy")}
-            disabled={!canWrite}
-          />
+          <FormGrid>
+            <Textarea
+              label="Inclusions"
+              error={form.formState.errors.inclusions?.message}
+              {...form.register("inclusions")}
+              disabled={!canWrite}
+            />
+            <Textarea
+              label="Exclusions"
+              error={form.formState.errors.exclusions?.message}
+              {...form.register("exclusions")}
+              disabled={!canWrite}
+            />
+            <Textarea
+              label="Cancellation policy"
+              error={form.formState.errors.cancellationPolicy?.message}
+              {...form.register("cancellationPolicy")}
+              disabled={!canWrite}
+            />
+            <Textarea
+              label="Reschedule policy"
+              error={form.formState.errors.reschedulePolicy?.message}
+              {...form.register("reschedulePolicy")}
+              disabled={!canWrite}
+            />
+          </FormGrid>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field
               label="Sort order"
               type="number"
@@ -302,9 +353,9 @@ export default function EditServicePage() {
               {...form.register("pricingType")}
               disabled={!canWrite}
             />
-          </div>
+          </FormGrid>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormGrid>
             <Field label="SEO title" error={form.formState.errors.seoTitle?.message} {...form.register("seoTitle")} disabled={!canWrite} />
             <Field
               label="SEO meta description"
@@ -312,9 +363,10 @@ export default function EditServicePage() {
               {...form.register("seoMetaDescription")}
               disabled={!canWrite}
             />
-          </div>
+          </FormGrid>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <legend className="mb-2 text-sm font-medium text-fg">Booking options</legend>
             <CheckboxField
               label="Tax applicable"
               checked={form.watch("isTaxApplicable")}
@@ -357,64 +409,106 @@ export default function EditServicePage() {
               onChange={(v) => form.setValue("isCustomerNoteAllowed", v)}
               disabled={!canWrite}
             />
-          </div>
+          </fieldset>
 
           {canWrite ? (
-            <div>
-              <Button type="submit" disabled={form.formState.isSubmitting || updateMutation.isPending}>
-                {updateMutation.isPending ? "Saving…" : "Save changes"}
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting || updateMutation.isPending}>
+                Save changes
               </Button>
-            </div>
+            </FormActions>
           ) : null}
         </form>
       </Card>
 
-      <div className="mt-6">
-        <Card title="Gallery" description="Images shown on the service detail page (SRS 12.6.2 &quot;Gallery images&quot;).">
-          {mediaQuery.isLoading ? (
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>
-          ) : mediaQuery.error ? (
-            <Alert>{describeError(mediaQuery.error)}</Alert>
-          ) : !mediaQuery.data || mediaQuery.data.length === 0 ? (
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">No gallery images yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {mediaQuery.data.map((media) => (
-                <li key={media.id} className="flex items-center justify-between gap-3 rounded-lg border border-black/10 px-3 py-2 text-sm dark:border-white/15">
-                  <span className="truncate">{media.url}</span>
-                  {canWrite ? (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      className="shrink-0 px-2 py-1 text-xs"
-                      disabled={removeMediaMutation.isPending && removeMediaMutation.variables === media.id}
-                      onClick={() => removeMediaMutation.mutate(media.id)}
-                    >
-                      Remove
-                    </Button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
+      <Card title="Gallery" description="Images shown on the service detail page (SRS 12.6.2 &quot;Gallery images&quot;).">
+        {mediaQuery.isPending ? (
+          <SkeletonText lines={3} />
+        ) : mediaQuery.error ? (
+          <SectionError error={mediaQuery.error} onRetry={() => mediaQuery.refetch()} />
+        ) : !mediaQuery.data || mediaQuery.data.length === 0 ? (
+          <EmptyState
+            title="No gallery images yet"
+            description={
+              canWrite
+                ? "Add an image URL below — the service detail page falls back to the category banner until then."
+                : "An admin with catalog write access can add one."
+            }
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {mediaQuery.data.map((media) => (
+              <li
+                key={media.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2 text-sm"
+              >
+                <span className="min-w-0 truncate text-fg">{media.url}</span>
+                {canWrite ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => setPendingMediaRemoval({ id: media.id, url: media.url })}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
 
-          {canWrite ? (
-            <form onSubmit={onAddMedia} className="mt-4 flex flex-wrap items-end gap-3" noValidate>
-              {addMediaMutation.isError ? (
-                <div className="w-full">
-                  <Alert>{describeError(addMediaMutation.error)}</Alert>
-                </div>
-              ) : null}
-              <div className="min-w-64 flex-1">
-                <Field label="Image URL" error={mediaForm.formState.errors.url?.message} {...mediaForm.register("url")} />
+        {canWrite ? (
+          <form onSubmit={onAddMedia} className="mt-5 flex flex-wrap items-end gap-3 border-t border-line pt-5" noValidate>
+            {addMediaMutation.isError ? (
+              <div className="w-full">
+                <Alert>{describeError(addMediaMutation.error)}</Alert>
               </div>
-              <Button type="submit" disabled={mediaForm.formState.isSubmitting || addMediaMutation.isPending}>
-                {addMediaMutation.isPending ? "Adding…" : "Add image"}
-              </Button>
-            </form>
-          ) : null}
-        </Card>
-      </div>
+            ) : null}
+            <div className="min-w-64 flex-1">
+              <Field label="Image URL" error={mediaForm.formState.errors.url?.message} {...mediaForm.register("url")} />
+            </div>
+            <Button type="submit" loading={mediaForm.formState.isSubmitting || addMediaMutation.isPending}>
+              Add image
+            </Button>
+          </form>
+        ) : null}
+      </Card>
+
+      <ConfirmDialog
+        open={confirmDeactivate}
+        title="Deactivate this service?"
+        description="It stops being bookable immediately. Bookings already placed against it are unaffected."
+        confirmLabel="Deactivate"
+        cancelLabel="Keep active"
+        loading={activeMutation.isPending}
+        error={activeMutation.isError ? describeError(activeMutation.error) : null}
+        onCancel={() => setConfirmDeactivate(false)}
+        onConfirm={() => activeMutation.mutate(false)}
+      >
+        <p className="text-sm text-fg-muted">
+          Deactivating <span className="font-medium text-fg">{service.name}</span>.
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingMediaRemoval !== null}
+        title="Remove this image?"
+        description="It disappears from the service's gallery immediately."
+        confirmLabel="Remove image"
+        cancelLabel="Keep image"
+        loading={removeMediaMutation.isPending}
+        error={removeMediaMutation.isError ? describeError(removeMediaMutation.error) : null}
+        onCancel={() => setPendingMediaRemoval(null)}
+        onConfirm={() => {
+          if (pendingMediaRemoval) removeMediaMutation.mutate(pendingMediaRemoval.id);
+        }}
+      >
+        {pendingMediaRemoval ? (
+          <p className="break-all text-sm text-fg-muted">{pendingMediaRemoval.url}</p>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

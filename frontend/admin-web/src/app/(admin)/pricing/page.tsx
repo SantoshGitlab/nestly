@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { PageHeading } from "@/components/ui";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { AddOnPricesSection } from "./_components/AddOnPricesSection";
 import { CityPricesSection } from "./_components/CityPricesSection";
 import { CityPricingPolicySection } from "./_components/CityPricingPolicySection";
@@ -25,24 +23,17 @@ import { ServicePricesSection } from "./_components/ServicePricesSection";
  * `PricingManagementService`.
  */
 export default function PricingPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-
+  const claims = useAdminClaims();
   const canWrite = canWriteModule(claims, "pricing");
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-6xl">
       <PageHeading
         title="Pricing"
         subtitle="Base, add-on, city-wise and promotional pricing, plus per-city tax rate, visit charge and platform fee (SRS 12.8)."
       />
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-8">
         <ServicePricesSection canWrite={canWrite} />
         <AddOnPricesSection canWrite={canWrite} />
         <CityPricesSection canWrite={canWrite} />

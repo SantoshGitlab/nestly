@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Field, Select } from "@/components/ui";
+import { Alert, Button, Card, Field, Select, cx } from "@/components/ui";
+import { ActiveBadge, ConfirmDialog, DataTable, FormActions, FormGrid } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
 import { describeError } from "@/lib/api";
 import {
   createSlotWindow,
@@ -56,18 +58,20 @@ function CapacityCell({ window, canWrite }: { window: SlotWindowAdminResponse; c
     },
   });
 
+  const display = window.maxBookingsPerSlot ?? "Unlimited";
+
   if (!canWrite) {
-    return <span>{window.maxBookingsPerSlot ?? "Unlimited"}</span>;
+    return <span className="nums">{display}</span>;
   }
 
   if (!isEditing) {
     return (
       <button
         type="button"
-        className="underline decoration-dotted underline-offset-2 hover:text-black dark:hover:text-white"
+        className="nums rounded underline decoration-dotted underline-offset-4 transition-colors duration-fast ease-out hover:text-brand-600 dark:hover:text-brand-400"
         onClick={() => setIsEditing(true)}
       >
-        {window.maxBookingsPerSlot ?? "Unlimited"}
+        {display}
       </button>
     );
   }
@@ -80,20 +84,17 @@ function CapacityCell({ window, canWrite }: { window: SlotWindowAdminResponse; c
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Unlimited"
-        className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+        aria-label={`Capacity for ${window.name}`}
+        autoFocus
+        className="nums w-24 rounded-lg border border-line bg-surface px-2 py-1 text-sm text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25"
       />
-      <Button
-        type="button"
-        className="px-2 py-1 text-xs"
-        disabled={mutation.isPending}
-        onClick={() => mutation.mutate()}
-      >
-        {mutation.isPending ? "Saving…" : "Save"}
+      <Button type="button" size="sm" loading={mutation.isPending} onClick={() => mutation.mutate()}>
+        Save
       </Button>
       <Button
         type="button"
-        variant="secondary"
-        className="px-2 py-1 text-xs"
+        size="sm"
+        variant="ghost"
         onClick={() => {
           setValue(window.maxBookingsPerSlot?.toString() ?? "");
           setIsEditing(false);
@@ -110,6 +111,7 @@ export function WindowsSection({ canWrite }: { canWrite: boolean }) {
   const queryClient = useQueryClient();
   const [cityFilter, setCityFilter] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingSuspend, setPendingSuspend] = useState<SlotWindowAdminResponse | null>(null);
 
   const citiesQuery = useQuery({ queryKey: ["slot-cities"], queryFn: listSlotCityLookups });
   const windowsQuery = useQuery({
@@ -155,7 +157,10 @@ export function WindowsSection({ canWrite }: { canWrite: boolean }) {
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setSlotWindowActive(id, isActive),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["slot-windows"] }),
+    onSuccess: () => {
+      setPendingSuspend(null);
+      queryClient.invalidateQueries({ queryKey: ["slot-windows"] });
+    },
   });
 
   const cityOptions = (citiesQuery.data ?? []).map((city) => ({ value: city.id, label: city.name }));
@@ -197,157 +202,207 @@ export function WindowsSection({ canWrite }: { canWrite: boolean }) {
   const activeMutationError = editingId ? updateMutation.error : createMutation.error;
   const isSubmitting = editingId ? updateMutation.isPending : createMutation.isPending;
 
-  return (
-    <Card title="Slot Windows" description="Recurring time-of-day booking windows and the days of week they run on (SRS 12.10.1).">
-      <div className="mb-4 w-64">
-        <Select
-          label="Filter by city"
-          value={cityFilter}
-          onChange={(e) => setCityFilter(e.target.value)}
-          options={[{ value: "", label: "All cities" }, ...cityOptions]}
-        />
-      </div>
+  const columns: DataTableColumn<SlotWindowAdminResponse>[] = [
+    { key: "city", header: "City", sortValue: (w) => w.cityName, cell: (w) => w.cityName },
+    {
+      key: "name",
+      header: "Name",
+      sortValue: (w) => w.name,
+      cell: (w) => <span className="font-medium text-fg">{w.name}</span>,
+    },
+    {
+      key: "time",
+      header: "Time",
+      sortValue: (w) => w.startTime,
+      cell: (w) => (
+        <span className="nums whitespace-nowrap">
+          {toTimeInputValue(w.startTime)}–{toTimeInputValue(w.endTime)}
+        </span>
+      ),
+    },
+    {
+      key: "days",
+      header: "Days",
+      cell: (w) =>
+        w.daysOfWeek.length === 0 ? (
+          <span className="text-fg-subtle">Not scheduled</span>
+        ) : (
+          w.daysOfWeek.map((d) => DAY_OF_WEEK_LABELS[d]).join(", ")
+        ),
+    },
+    {
+      key: "capacity",
+      header: "Capacity",
+      cell: (w) => <CapacityCell window={w} canWrite={canWrite} />,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (w) => w.isActive,
+      cell: (w) => <ActiveBadge active={w.isActive} inactiveLabel="Suspended" />,
+    },
+  ];
 
-      {windowsQuery.isLoading ? (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>
-      ) : windowsQuery.error ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{describeError(windowsQuery.error)}</p>
-      ) : !windowsQuery.data || windowsQuery.data.length === 0 ? (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">No slot windows yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-black/10 text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15 dark:text-neutral-400">
-                <th className="px-3 py-2 font-medium">City</th>
-                <th className="px-3 py-2 font-medium">Name</th>
-                <th className="px-3 py-2 font-medium">Time</th>
-                <th className="px-3 py-2 font-medium">Days</th>
-                <th className="px-3 py-2 font-medium">Capacity</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                {canWrite ? <th className="px-3 py-2 font-medium"><span className="sr-only">Actions</span></th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {windowsQuery.data.map((window) => (
-                <tr key={window.id} className="border-b border-black/5 last:border-0 dark:border-white/10">
-                  <td className="px-3 py-2">{window.cityName}</td>
-                  <td className="px-3 py-2">{window.name}</td>
-                  <td className="px-3 py-2 tabular-nums">
-                    {toTimeInputValue(window.startTime)}–{toTimeInputValue(window.endTime)}
-                  </td>
-                  <td className="px-3 py-2">
-                    {window.daysOfWeek.length === 0
-                      ? <span className="text-neutral-500 dark:text-neutral-400">Not scheduled</span>
-                      : window.daysOfWeek.map((d) => DAY_OF_WEEK_LABELS[d]).join(", ")}
-                  </td>
-                  <td className="px-3 py-2">
-                    <CapacityCell window={window} canWrite={canWrite} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        window.isActive
-                          ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
-                          : "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
-                      }`}
+  return (
+    <div className="flex flex-col gap-4">
+      <DataTable
+        title="Slot windows"
+        description="Recurring time-of-day booking windows and the days of week they run on (SRS 12.10.1)."
+        actions={
+          <div className="w-56">
+            <Select
+              label="Filter by city"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              options={[{ value: "", label: "All cities" }, ...cityOptions]}
+            />
+          </div>
+        }
+        columns={columns}
+        rows={windowsQuery.data}
+        rowKey={(w) => w.id}
+        isLoading={windowsQuery.isPending}
+        isFetching={windowsQuery.isFetching}
+        error={windowsQuery.error}
+        onRetry={() => windowsQuery.refetch()}
+        caption="Slot windows"
+        emptyTitle={cityFilter ? "No slot windows in this city" : "No slot windows yet"}
+        emptyDescription="Without a window, nothing in this city is bookable."
+        emptyAction={
+          cityFilter ? (
+            <Button variant="secondary" onClick={() => setCityFilter("")}>
+              Show all cities
+            </Button>
+          ) : undefined
+        }
+        skeletonRows={5}
+        minWidth="1000px"
+        rowActions={
+          canWrite
+            ? (w) => (
+                <>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => startEditing(w)}>
+                    Edit
+                  </Button>
+                  {w.isActive ? (
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setPendingSuspend(w)}>
+                      Suspend
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="subtle"
+                      loading={toggleMutation.isPending && toggleMutation.variables?.id === w.id}
+                      onClick={() => toggleMutation.mutate({ id: w.id, isActive: true })}
                     >
-                      {window.isActive ? "Active" : "Suspended"}
-                    </span>
-                  </td>
-                  {canWrite ? (
-                    <td className="px-3 py-2">
-                      <div className="flex gap-2">
-                        <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => startEditing(window)}>
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={window.isActive ? "danger" : "secondary"}
-                          className="px-2 py-1 text-xs"
-                          disabled={toggleMutation.isPending && toggleMutation.variables?.id === window.id}
-                          onClick={() => toggleMutation.mutate({ id: window.id, isActive: !window.isActive })}
-                        >
-                          {window.isActive ? "Suspend" : "Activate"}
-                        </Button>
-                      </div>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                      Activate
+                    </Button>
+                  )}
+                </>
+              )
+            : undefined
+        }
+      />
 
       {canWrite ? (
-        <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-3 border-t border-black/10 pt-4 dark:border-white/15" noValidate>
-          <h3 className="text-sm font-semibold">{editingId ? "Edit window" : "Add a window"}</h3>
-          {activeMutationError ? <Alert>{describeError(activeMutationError)}</Alert> : null}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-48">
+        <Card
+          title={editingId ? "Edit window" : "Add a window"}
+          description={
+            editingId
+              ? "The city cannot be changed on an existing window — create a new one instead."
+              : "A window is only bookable on the days of week you select below."
+          }
+        >
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            {activeMutationError ? <Alert>{describeError(activeMutationError)}</Alert> : null}
+
+            <FormGrid columns={3}>
               <Select
                 label="City"
+                required
                 placeholder="Select a city…"
                 disabled={!!editingId}
                 error={form.formState.errors.cityId?.message}
                 options={cityOptions}
                 {...form.register("cityId")}
               />
-            </div>
-            <div className="w-40">
-              <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} />
-            </div>
-            <div className="w-32">
-              <Field label="Start time" type="time" error={form.formState.errors.startTime?.message} {...form.register("startTime")} />
-            </div>
-            <div className="w-32">
-              <Field label="End time" type="time" error={form.formState.errors.endTime?.message} {...form.register("endTime")} />
-            </div>
-            {!editingId ? (
-              <div className="w-36">
+              <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} />
+              {!editingId ? (
                 <Field
-                  label="Capacity (optional)"
+                  label="Capacity"
                   type="number"
                   min={1}
                   placeholder="Unlimited"
+                  hint="Leave empty for unlimited bookings per slot."
                   {...form.register("maxBookingsPerSlot")}
                 />
+              ) : null}
+              <Field label="Start time" type="time" required error={form.formState.errors.startTime?.message} {...form.register("startTime")} />
+              <Field label="End time" type="time" required error={form.formState.errors.endTime?.message} {...form.register("endTime")} />
+            </FormGrid>
+
+            <fieldset>
+              <legend className="mb-2 text-sm font-medium text-fg">Days of week</legend>
+              <div className="flex flex-wrap gap-2">
+                {ALL_DAYS_OF_WEEK.map((day) => {
+                  const selected = daysOfWeek.includes(day);
+                  return (
+                    <label
+                      key={day}
+                      className={cx(
+                        "cursor-pointer select-none rounded-lg border px-3 py-1.5 text-sm font-medium transition duration-fast ease-out",
+                        selected
+                          ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                          : "border-line bg-surface text-fg-muted hover:border-line-strong hover:bg-surface-2 hover:text-fg",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={selected}
+                        onChange={() => toggleDay(day)}
+                      />
+                      {DAY_OF_WEEK_LABELS[day]}
+                    </label>
+                  );
+                })}
               </div>
-            ) : null}
-          </div>
+            </fieldset>
 
-          <div>
-            <p className="mb-1.5 text-sm font-medium">Days of week</p>
-            <div className="flex flex-wrap gap-2">
-              {ALL_DAYS_OF_WEEK.map((day) => (
-                <label
-                  key={day}
-                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                    daysOfWeek.includes(day)
-                      ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                      : "border-black/15 dark:border-white/20"
-                  }`}
-                >
-                  <input type="checkbox" className="sr-only" checked={daysOfWeek.includes(day)} onChange={() => toggleDay(day)} />
-                  {DAY_OF_WEEK_LABELS[day]}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving…" : editingId ? "Save changes" : "Add window"}
-            </Button>
-            {editingId ? (
-              <Button type="button" variant="secondary" onClick={cancelEditing}>
-                Cancel
+            <FormActions align="start">
+              <Button type="submit" loading={isSubmitting}>
+                {editingId ? "Save changes" : "Add window"}
               </Button>
-            ) : null}
-          </div>
-        </form>
+              {editingId ? (
+                <Button type="button" variant="secondary" onClick={cancelEditing}>
+                  Cancel
+                </Button>
+              ) : null}
+            </FormActions>
+          </form>
+        </Card>
       ) : null}
-    </Card>
+
+      <ConfirmDialog
+        open={pendingSuspend !== null}
+        title="Suspend this slot window?"
+        description="Customers stop being offered it immediately. Bookings already made in it are unaffected."
+        confirmLabel="Suspend"
+        cancelLabel="Keep active"
+        loading={toggleMutation.isPending}
+        error={toggleMutation.isError ? describeError(toggleMutation.error) : null}
+        onCancel={() => setPendingSuspend(null)}
+        onConfirm={() => {
+          if (pendingSuspend) toggleMutation.mutate({ id: pendingSuspend.id, isActive: false });
+        }}
+      >
+        {pendingSuspend ? (
+          <p className="text-sm text-fg-muted">
+            <span className="font-medium text-fg">{pendingSuspend.name}</span> in {pendingSuspend.cityName}.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+    </div>
   );
 }

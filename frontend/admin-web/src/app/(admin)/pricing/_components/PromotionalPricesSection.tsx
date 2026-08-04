@@ -5,11 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Card, Field, Select } from "@/components/ui";
+import { FormActions, FormGrid, formatCurrency } from "@/components/data-table";
+import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
 import { createPromotionalPrice, listPromotionalPrices, setPromotionalPriceActive } from "@/lib/pricing-api";
 import type { PromotionalPriceResponse } from "@/lib/pricing-types";
 import { listCities, listServiceLookups } from "@/lib/serviceability-api";
-import { EntityTable } from "../../serviceability/_components/EntityTable";
 
 const promotionSchema = z
   .object({
@@ -66,78 +67,107 @@ export function PromotionalPricesSection({ canWrite }: { canWrite: boolean }) {
   const onSubmit = form.handleSubmit((values) => createMutation.mutate(values));
 
   return (
-    <Card title="Promotional Price" description="A scheduled discounted price for a service, optionally scoped to one city (SRS 12.8.1).">
+    <div className="flex flex-col gap-4">
       <EntityTable<PromotionalPriceResponse>
+        title="Promotional price"
+        description="A scheduled discounted price for a service, optionally scoped to one city (SRS 12.8.1)."
         items={promotionsQuery.data}
-        isLoading={promotionsQuery.isLoading}
-        errorMessage={promotionsQuery.error ? describeError(promotionsQuery.error) : null}
-        emptyMessage="No promotional prices yet."
+        isLoading={promotionsQuery.isPending}
+        isFetching={promotionsQuery.isFetching}
+        error={promotionsQuery.error}
+        onRetry={() => promotionsQuery.refetch()}
+        emptyMessage="No promotional prices yet"
         canWrite={canWrite}
+        entityLabel="promotion"
+        labelOf={(promotion) => `${promotion.serviceName} · ${promotion.cityName ?? "All cities"}`}
+        hideDensityToggle
+        skeletonRows={4}
+        minWidth="880px"
         togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        toggleError={toggleMutation.error}
         onToggleActive={(promotion) => toggleMutation.mutate({ id: promotion.id, isActive: !promotion.isActive })}
         columns={[
-          { header: "Service", render: (promotion) => promotion.serviceName },
-          { header: "City", render: (promotion) => promotion.cityName ?? "All cities" },
-          { header: "Discounted price", render: (promotion) => `₹${promotion.discountedPrice.toFixed(2)}` },
-          { header: "Starts", render: (promotion) => promotion.startDate },
-          { header: "Ends", render: (promotion) => promotion.endDate },
+          {
+            header: "Service",
+            sortValue: (promotion) => promotion.serviceName,
+            render: (promotion) => <span className="font-medium text-fg">{promotion.serviceName}</span>,
+          },
+          {
+            header: "City",
+            sortValue: (promotion) => promotion.cityName,
+            render: (promotion) => promotion.cityName ?? <span className="text-fg-subtle">All cities</span>,
+          },
+          {
+            header: "Discounted price",
+            numeric: true,
+            sortValue: (promotion) => promotion.discountedPrice,
+            render: (promotion) => formatCurrency(promotion.discountedPrice),
+          },
+          {
+            header: "Starts",
+            sortValue: (promotion) => promotion.startDate,
+            render: (promotion) => <span className="nums">{promotion.startDate}</span>,
+          },
+          {
+            header: "Ends",
+            sortValue: (promotion) => promotion.endDate,
+            render: (promotion) => <span className="nums">{promotion.endDate}</span>,
+          },
         ]}
       />
 
       {canWrite ? (
-        <form onSubmit={onSubmit} className="mt-4 flex flex-wrap items-end gap-3" noValidate>
-          {createMutation.isError ? (
-            <div className="w-full">
-              <Alert>{describeError(createMutation.error)}</Alert>
-            </div>
-          ) : null}
-          <div className="w-48">
-            <Select
-              label="Service"
-              placeholder="Select a service…"
-              error={form.formState.errors.serviceId?.message}
-              options={serviceOptions}
-              {...form.register("serviceId")}
-            />
-          </div>
-          <div className="w-48">
-            <Select
-              label="City (optional)"
-              options={[{ value: "", label: "All cities" }, ...cityOptions]}
-              {...form.register("cityId")}
-            />
-          </div>
-          <div className="w-28">
-            <Field
-              label="Discounted price"
-              type="number"
-              step="0.01"
-              min="0.01"
-              error={form.formState.errors.discountedPrice?.message}
-              {...form.register("discountedPrice")}
-            />
-          </div>
-          <div className="w-40">
-            <Field
-              label="Start date"
-              type="date"
-              error={form.formState.errors.startDate?.message}
-              {...form.register("startDate")}
-            />
-          </div>
-          <div className="w-40">
-            <Field
-              label="End date"
-              type="date"
-              error={form.formState.errors.endDate?.message}
-              {...form.register("endDate")}
-            />
-          </div>
-          <Button type="submit" disabled={form.formState.isSubmitting || createMutation.isPending}>
-            {createMutation.isPending ? "Adding…" : "Add promotion"}
-          </Button>
-        </form>
+        <Card title="Add a promotion" description="Leave the city empty to run the discount everywhere.">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
+            <FormGrid columns={3}>
+              <Select
+                label="Service"
+                required
+                placeholder="Select a service…"
+                error={form.formState.errors.serviceId?.message}
+                options={serviceOptions}
+                {...form.register("serviceId")}
+              />
+              <Select
+                label="City"
+                hint="Optional — applies everywhere if left as All cities."
+                options={[{ value: "", label: "All cities" }, ...cityOptions]}
+                {...form.register("cityId")}
+              />
+              <Field
+                label="Discounted price"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                leading="₹"
+                error={form.formState.errors.discountedPrice?.message}
+                {...form.register("discountedPrice")}
+              />
+              <Field
+                label="Start date"
+                type="date"
+                required
+                error={form.formState.errors.startDate?.message}
+                {...form.register("startDate")}
+              />
+              <Field
+                label="End date"
+                type="date"
+                required
+                error={form.formState.errors.endDate?.message}
+                {...form.register("endDate")}
+              />
+            </FormGrid>
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting || createMutation.isPending}>
+                Add promotion
+              </Button>
+            </FormActions>
+          </form>
+        </Card>
       ) : null}
-    </Card>
+    </div>
   );
 }

@@ -3,17 +3,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Card, Field, PageHeading, Textarea } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
+import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { createCategory, listCategories, setCategoryActive } from "@/lib/catalog-api";
 import type { CategoryResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { EntityTable } from "../serviceability/_components/EntityTable";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { CatalogTabs } from "./_components/CatalogTabs";
 
 const categorySchema = z.object({
@@ -39,14 +38,8 @@ type CategoryFormValues = z.infer<typeof categorySchema>;
  * since a category carries too many fields for an inline row form.
  */
 export default function CatalogCategoriesPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
+  const claims = useAdminClaims();
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
 
   const canWrite = canWriteModule(claims, "catalog");
 
@@ -93,49 +86,76 @@ export default function CatalogCategoriesPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div>
+        <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
+        <CatalogTabs />
+      </div>
 
-      <CatalogTabs />
+      <EntityTable<CategoryResponse>
+        title="Categories"
+        description="Top-level catalog grouping shown to customers (SRS 12.5.1)."
+        items={categoriesQuery.data}
+        isLoading={categoriesQuery.isPending}
+        isFetching={categoriesQuery.isFetching}
+        error={categoriesQuery.error}
+        onRetry={() => categoriesQuery.refetch()}
+        emptyMessage="No categories yet"
+        canWrite={canWrite}
+        entityLabel="category"
+        labelOf={(category) => category.name}
+        minWidth="760px"
+        togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        toggleError={toggleMutation.error}
+        onToggleActive={(category) => toggleMutation.mutate({ id: category.id, isActive: !category.isActive })}
+        columns={[
+          {
+            header: "Name",
+            sortValue: (category) => category.name,
+            render: (category) => (
+              <Link
+                href={`/catalog/categories/${category.id}`}
+                className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+              >
+                {category.name}
+              </Link>
+            ),
+          },
+          { header: "Slug", sortValue: (category) => category.slug, render: (category) => category.slug },
+          {
+            header: "Sort order",
+            numeric: true,
+            sortValue: (category) => category.sortOrder,
+            render: (category) => category.sortOrder,
+          },
+          {
+            header: "Featured",
+            sortValue: (category) => category.isFeatured,
+            render: (category) => (category.isFeatured ? "Yes" : "No"),
+          },
+        ]}
+      />
 
-      <Card title="Categories" description="Top-level catalog grouping shown to customers (SRS 12.5.1).">
-        <EntityTable<CategoryResponse>
-          items={categoriesQuery.data}
-          isLoading={categoriesQuery.isLoading}
-          errorMessage={categoriesQuery.error ? describeError(categoriesQuery.error) : null}
-          emptyMessage="No categories yet."
-          canWrite={canWrite}
-          togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
-          onToggleActive={(category) => toggleMutation.mutate({ id: category.id, isActive: !category.isActive })}
-          columns={[
-            {
-              header: "Name",
-              render: (category) => (
-                <Link href={`/catalog/categories/${category.id}`} className="font-medium underline-offset-2 hover:underline">
-                  {category.name}
-                </Link>
-              ),
-            },
-            { header: "Slug", render: (category) => category.slug },
-            { header: "Sort order", render: (category) => category.sortOrder },
-            { header: "Featured", render: (category) => (category.isFeatured ? "Yes" : "No") },
-          ]}
-        />
-
-        {canWrite ? (
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3 border-t border-black/10 pt-6 dark:border-white/15" noValidate>
-            <h3 className="text-sm font-semibold">Add category</h3>
+      {canWrite ? (
+        <Card title="Add category" description="Creates the category immediately; it is live once activated.">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
             {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} />
-              <Field label="Slug" error={form.formState.errors.slug?.message} {...form.register("slug")} />
-            </div>
+            <FormGrid>
+              <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} />
+              <Field
+                label="Slug"
+                required
+                hint="Lowercase letters, numbers and hyphens — this becomes the customer-facing URL."
+                error={form.formState.errors.slug?.message}
+                {...form.register("slug")}
+              />
+            </FormGrid>
             <Textarea label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormGrid>
               <Field label="Icon URL" error={form.formState.errors.iconUrl?.message} {...form.register("iconUrl")} />
               <Field label="Banner URL" error={form.formState.errors.bannerUrl?.message} {...form.register("bannerUrl")} />
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            </FormGrid>
+            <FormGrid columns={3}>
               <Field
                 label="Sort order"
                 type="number"
@@ -148,15 +168,15 @@ export default function CatalogCategoriesPage() {
                 error={form.formState.errors.seoMetaDescription?.message}
                 {...form.register("seoMetaDescription")}
               />
-            </div>
-            <div>
-              <Button type="submit" disabled={form.formState.isSubmitting || createMutation.isPending}>
-                {createMutation.isPending ? "Adding…" : "Add category"}
+            </FormGrid>
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting || createMutation.isPending}>
+                Add category
               </Button>
-            </div>
+            </FormActions>
           </form>
-        ) : null}
-      </Card>
+        </Card>
+      ) : null}
     </div>
   );
 }

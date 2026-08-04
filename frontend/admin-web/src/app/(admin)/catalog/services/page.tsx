@@ -3,17 +3,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Card, CheckboxField, Field, PageHeading, Select, Textarea } from "@/components/ui";
+import { FormActions, FormGrid, formatCurrency } from "@/components/data-table";
+import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { createService, listCategories, listServices, setServiceActive } from "@/lib/catalog-api";
 import type { ServiceAdminResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { EntityTable } from "../../serviceability/_components/EntityTable";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { CatalogTabs } from "../_components/CatalogTabs";
 
 const slugPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -47,15 +47,9 @@ type ServiceFormValues = z.infer<typeof serviceSchema>;
  * page (`/catalog/services/[id]`).
  */
 export default function CatalogServicesPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
+  const claims = useAdminClaims();
   const [categoryFilter, setCategoryFilter] = useState("");
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
 
   const canWrite = canWriteModule(claims, "catalog");
 
@@ -132,72 +126,130 @@ export default function CatalogServicesPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div>
+        <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
+        <CatalogTabs />
+      </div>
 
-      <CatalogTabs />
+      <EntityTable<ServiceAdminResponse>
+        title="Services"
+        description="Packages offered under a category, with duration, pricing and booking options (SRS 12.6)."
+        actions={
+          <div className="w-56">
+            <Select
+              label="Filter by category"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              options={[{ value: "", label: "All categories" }, ...categoryOptions]}
+            />
+          </div>
+        }
+        items={servicesQuery.data}
+        isLoading={servicesQuery.isPending}
+        isFetching={servicesQuery.isFetching}
+        error={servicesQuery.error}
+        onRetry={() => servicesQuery.refetch()}
+        emptyMessage={categoryFilter ? "No services in this category" : "No services yet"}
+        emptyAction={
+          categoryFilter ? (
+            <Button variant="secondary" onClick={() => setCategoryFilter("")}>
+              Show all categories
+            </Button>
+          ) : undefined
+        }
+        canWrite={canWrite}
+        entityLabel="service"
+        labelOf={(service) => service.name}
+        minWidth="960px"
+        togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        toggleError={toggleMutation.error}
+        onToggleActive={(service) => toggleMutation.mutate({ id: service.id, isActive: !service.isActive })}
+        columns={[
+          {
+            header: "Name",
+            sortValue: (service) => service.name,
+            render: (service) => (
+              <Link
+                href={`/catalog/services/${service.id}`}
+                className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+              >
+                {service.name}
+              </Link>
+            ),
+          },
+          {
+            header: "Category",
+            sortValue: (service) => service.categoryName,
+            render: (service) => service.categoryName,
+          },
+          {
+            header: "Price",
+            numeric: true,
+            sortValue: (service) => service.price,
+            render: (service) => formatCurrency(service.price),
+          },
+          {
+            header: "Duration",
+            numeric: true,
+            sortValue: (service) => service.durationMinutes,
+            render: (service) => `${service.durationMinutes} min`,
+          },
+          {
+            header: "Pricing",
+            sortValue: (service) => service.pricingType,
+            render: (service) => service.pricingType,
+          },
+          {
+            header: "Featured",
+            sortValue: (service) => service.isFeatured,
+            render: (service) => (service.isFeatured ? "Yes" : "No"),
+          },
+        ]}
+      />
 
-      <Card title="Services" description="Packages offered under a category, with duration, pricing and booking options (SRS 12.6).">
-        <div className="mb-4 w-64">
-          <Select
-            label="Filter by category"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            options={[{ value: "", label: "All categories" }, ...categoryOptions]}
-          />
-        </div>
-
-        <EntityTable<ServiceAdminResponse>
-          items={servicesQuery.data}
-          isLoading={servicesQuery.isLoading}
-          errorMessage={servicesQuery.error ? describeError(servicesQuery.error) : null}
-          emptyMessage="No services yet."
-          canWrite={canWrite}
-          togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
-          onToggleActive={(service) => toggleMutation.mutate({ id: service.id, isActive: !service.isActive })}
-          columns={[
-            {
-              header: "Name",
-              render: (service) => (
-                <Link href={`/catalog/services/${service.id}`} className="font-medium underline-offset-2 hover:underline">
-                  {service.name}
-                </Link>
-              ),
-            },
-            { header: "Category", render: (service) => service.categoryName },
-            { header: "Price", render: (service) => `₹${service.price.toFixed(2)}` },
-            { header: "Duration", render: (service) => `${service.durationMinutes} min` },
-            { header: "Pricing", render: (service) => service.pricingType },
-            { header: "Featured", render: (service) => (service.isFeatured ? "Yes" : "No") },
-          ]}
-        />
-
-        {canWrite ? (
-          <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4 border-t border-black/10 pt-6 dark:border-white/15" noValidate>
-            <h3 className="text-sm font-semibold">Add service</h3>
+      {canWrite ? (
+        <Card title="Add service" description="Creates the service immediately; it is bookable once activated and priced.">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
             {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormGrid>
               <Select
                 label="Category"
+                required
                 placeholder="Select a category…"
                 error={form.formState.errors.categoryId?.message}
                 options={categoryOptions}
                 {...form.register("categoryId")}
               />
-              <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} />
-            </div>
+              <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} />
+            </FormGrid>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field label="Slug" error={form.formState.errors.slug?.message} {...form.register("slug")} />
-              <Field label="Price (₹)" type="number" step="0.01" error={form.formState.errors.price?.message} {...form.register("price", { valueAsNumber: true })} />
+            <FormGrid columns={3}>
+              <Field
+                label="Slug"
+                required
+                hint="Lowercase letters, numbers and hyphens."
+                error={form.formState.errors.slug?.message}
+                {...form.register("slug")}
+              />
+              <Field
+                label="Price"
+                type="number"
+                step="0.01"
+                required
+                leading="₹"
+                error={form.formState.errors.price?.message}
+                {...form.register("price", { valueAsNumber: true })}
+              />
               <Field
                 label="Duration (minutes)"
                 type="number"
+                required
                 error={form.formState.errors.durationMinutes?.message}
                 {...form.register("durationMinutes", { valueAsNumber: true })}
               />
-            </div>
+            </FormGrid>
 
             <Field
               label="Short description"
@@ -205,10 +257,12 @@ export default function CatalogServicesPage() {
               {...form.register("shortDescription")}
             />
             <Textarea label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
-            <Textarea label="Inclusions" error={form.formState.errors.inclusions?.message} {...form.register("inclusions")} />
-            <Textarea label="Exclusions" error={form.formState.errors.exclusions?.message} {...form.register("exclusions")} />
+            <FormGrid>
+              <Textarea label="Inclusions" error={form.formState.errors.inclusions?.message} {...form.register("inclusions")} />
+              <Textarea label="Exclusions" error={form.formState.errors.exclusions?.message} {...form.register("exclusions")} />
+            </FormGrid>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormGrid>
               <Field
                 label="Sort order"
                 type="number"
@@ -223,9 +277,10 @@ export default function CatalogServicesPage() {
                 ]}
                 {...form.register("pricingType")}
               />
-            </div>
+            </FormGrid>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <legend className="mb-2 text-sm font-medium text-fg">Booking options</legend>
               <CheckboxField
                 label="Tax applicable"
                 checked={form.watch("isTaxApplicable")}
@@ -261,16 +316,16 @@ export default function CatalogServicesPage() {
                 checked={form.watch("isCustomerNoteAllowed")}
                 onChange={(v) => form.setValue("isCustomerNoteAllowed", v)}
               />
-            </div>
+            </fieldset>
 
-            <div>
-              <Button type="submit" disabled={form.formState.isSubmitting || createMutation.isPending}>
-                {createMutation.isPending ? "Adding…" : "Add service"}
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting || createMutation.isPending}>
+                Add service
               </Button>
-            </div>
+            </FormActions>
           </form>
-        ) : null}
-      </Card>
+        </Card>
+      ) : null}
     </div>
   );
 }
