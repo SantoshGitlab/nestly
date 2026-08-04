@@ -13,7 +13,7 @@ without a real passing `npm run build` (all three frontends are Next projects;
 
 ---
 
-## State as of 2026-08-02
+## State as of 2026-08-04
 
 | Row | Title | Status |
 |---|---|---|
@@ -26,26 +26,38 @@ without a real passing `npm run build` (all three frontends are Next projects;
 | 215 | Auth screens (all 3 apps) | **done** |
 | 216 | Customer home & discovery | **done** |
 | 217 | Service detail & slots | **done** |
+| 218 | Customer booking flow | **done** |
+| 219 | Customer post-booking screens | **done** |
+| 223 | Partner screens | **done** |
 | 221 | Admin table system | **partial** |
-| 222 | Admin module pass | **barely started** — 1 of 16 |
-| 223 | Partner screens | **partial** |
+| 222 | Admin module pass | **partial** — 4 of 16 modules |
 | 228 | Bug sweep | **partial** — date class closed |
-| 218, 219, 220, 224–227, 229 | — | **todo** |
+| 220, 224–227, 229 | — | **todo** |
 
 Every row's `tasks.csv` note carries the exact remaining-file list. Read it
 before starting — several rows are further along than the status suggests, and
-`222` is far less along.
+`222` is further behind.
 
 ## Highest-value next step
 
-**Row 222.** `admin-web/src/components/data-table.tsx` already provides
-`DataTable`, `FilterBar`, `Pagination`, `ConfirmDialog`, `Breadcrumbs`,
-`DescriptionList`, `FormGrid`/`FormActions` and formatters, and the **bookings
-list + booking detail screens are the worked reference implementation**.
-Applying that same pattern to the remaining 15 modules (catalog, customers,
-partners, pricing, slots, serviceability, coupons, cms, support, reviews,
-referral, nestly-coins, admin-users, audit, settings) is mechanical and is the
-single biggest remaining chunk of Phase 12.
+**Row 222's remaining modules.** Done so far: catalog, customers, partners,
+pricing. `cms`, `coupons` and `serviceability` have had only their `*Tabs.tsx`
+converted; `slots` has only `_components/WindowsSection.tsx`. Untouched:
+support, reviews, admin-users, settings, referral, nestly-coins,
+subscription-plans, reports, audit, notifications.
+
+`admin-web/src/components/` now carries the whole pattern library —
+`data-table.tsx` (`DataTable`, `FilterBar`, `Pagination`, `ConfirmDialog`,
+`Breadcrumbs`, `DescriptionList`, `FormGrid`/`FormActions`, formatters),
+`entity-table.tsx` (`EntityTable`, `StatusBadge`), `nav-tabs.tsx` and
+`screen-states.tsx` — and the bookings list + booking detail + catalog screens
+are the worked reference implementations. The rest is mechanical.
+
+> **Known drift to clear:** `serviceability/_components/EntityTable.tsx` is a
+> local duplicate still imported by all seven serviceability sections, even
+> though `src/components/entity-table.tsx` documents itself as replacing it.
+> Migrate those imports and delete the local file when serviceability is
+> converted.
 
 ## Note on subagents
 
@@ -123,13 +135,9 @@ file trees never touch and can be worked simultaneously:
 
 | Session | Scope | Rows |
 |---|---|---|
-| A | `frontend/customer-web/` | 217, 218, 219, 220 |
+| A | `frontend/customer-web/` | 220 |
 | B | `frontend/admin-web/` | 221, 222 |
-| C | `frontend/partner-web/` | 223 |
-
-Row 215 (auth screens) spans all three — split it, each session does its own
-app's login/register/OTP/forgot-password. Preserve row 206's unified-login mode
-selector and the fragment-based handoff to `/auth/callback` exactly.
+| C | `frontend/partner-web/` | — (223 complete) |
 
 **Coordination rules**
 
