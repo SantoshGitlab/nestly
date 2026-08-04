@@ -1,10 +1,10 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Button, Card, PageHeading, Select } from "@/components/ui";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { FilterBar, countActiveFilters } from "@/components/data-table";
+import { Button, Card, PageHeading, Select, useToast } from "@/components/ui";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import {
   createNotificationTemplate,
   listNotificationTemplates,
@@ -22,26 +22,37 @@ import {
   type NotificationTemplateUpdateRequest,
 } from "@/lib/notification-template-types";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { NotificationTemplateForm, type NotificationTemplateFormValues } from "./_components/NotificationTemplateForm";
+import { useAdminClaims } from "@/lib/use-admin-claims";
+import {
+  NotificationTemplateForm,
+  type NotificationTemplateFormValues,
+} from "./_components/NotificationTemplateForm";
 import { NotificationTemplatePreviewPanel } from "./_components/NotificationTemplatePreviewPanel";
 import { NotificationTemplatesTable } from "./_components/NotificationTemplatesTable";
 
 const CHANNEL_FILTER_OPTIONS = [
   { value: "", label: "All channels" },
   ...Object.entries(NOTIFICATION_CHANNEL_LABELS).map(([value, label]) => ({ value, label })),
-] as const;
+];
 
 const EVENT_TYPE_FILTER_OPTIONS = [
   { value: "", label: "All events" },
   ...Object.entries(NOTIFICATION_EVENT_TYPE_LABELS).map(([value, label]) => ({ value, label })),
-] as const;
+];
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "All statuses" },
   { value: "true", label: "Active" },
   { value: "false", label: "Inactive" },
-] as const;
+];
+
+interface TemplateFilters {
+  channel: string;
+  eventType: string;
+  status: string;
+}
+
+const EMPTY_FILTERS: TemplateFilters = { channel: "", eventType: "", status: "" };
 
 /**
  * Notification template management (SRS 12.17, tasks 126a-d, 127): channel-
@@ -51,41 +62,46 @@ const STATUS_FILTER_OPTIONS = [
  * "notifications" permission module the same way every other admin screen
  * gates itself - see CouponsPage's doc comment for the pattern this mirrors.
  *
- * The create/edit form and its live preview panel are laid out side by side
- * while a template is being authored, so an admin sees the rendered result
- * update as they type (task 127's "editor and preview screens") without
- * having to save first; `NotificationTemplateForm`'s `onValuesChange` is
- * what feeds the panel that draft.
+ * The create/edit form and its live preview panel sit side by side while a
+ * template is being authored, so an admin sees the rendered result update as
+ * they type (task 127's "editor and preview screens") without having to save
+ * first; `NotificationTemplateForm`'s `onValuesChange` feeds the panel that
+ * draft. That pairing is why the editor is not a `Modal` like the other admin
+ * create forms: a modal would push the preview below the fold, which is the
+ * one thing this screen exists to avoid.
  */
 export default function NotificationTemplatesPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  const [channelFilter, setChannelFilter] = useState("");
-  const [eventTypeFilter, setEventTypeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const claims = useAdminClaims();
+  const canWrite = canWriteModule(claims, "notifications");
+  const queryClient = useQueryClient();
+  const pushToast = useToast();
+
+  const [filters, setFilters] = useState<TemplateFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<TemplateFilters>(EMPTY_FILTERS);
   const [editingTemplate, setEditingTemplate] = useState<NotificationTemplateResponse | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [draftValues, setDraftValues] = useState<NotificationTemplateFormValues | null>(null);
 
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-
-  const canWrite = canWriteModule(claims, "notifications");
-  const queryClient = useQueryClient();
-
-  const channel = channelFilter === "" ? undefined : (Number(channelFilter) as NotificationChannel);
-  const eventType = eventTypeFilter === "" ? undefined : (Number(eventTypeFilter) as NotificationEventType);
-  const isActive = statusFilter === "" ? undefined : statusFilter === "true";
-
   const templatesQuery = useQuery({
-    queryKey: ["notification-templates", "list", channelFilter, eventTypeFilter, statusFilter] as const,
-    queryFn: () => listNotificationTemplates({ channel, eventType, isActive }),
+    queryKey: ["notification-templates", "list", appliedFilters] as const,
+    queryFn: () =>
+      listNotificationTemplates({
+        channel:
+          appliedFilters.channel === "" ? undefined : (Number(appliedFilters.channel) as NotificationChannel),
+        eventType:
+          appliedFilters.eventType === ""
+            ? undefined
+            : (Number(appliedFilters.eventType) as NotificationEventType),
+        isActive: appliedFilters.status === "" ? undefined : appliedFilters.status === "true",
+      }),
+    // Applying a filter dims the current rows rather than replacing the whole
+    // table with a skeleton.
+    placeholderData: keepPreviousData,
   });
 
-  const invalidateTemplates = () => queryClient.invalidateQueries({ queryKey: ["notification-templates", "list"] });
+  const invalidateTemplates = () =>
+    queryClient.invalidateQueries({ queryKey: ["notification-templates", "list"] });
 
   const closeEditor = () => {
     setEditingTemplate(null);
@@ -99,7 +115,9 @@ export default function NotificationTemplatesPage() {
     onSuccess: () => {
       invalidateTemplates();
       closeEditor();
+      pushToast("success", "Template created.");
     },
+    // The form keeps everything that was typed — only the error banner changes.
     onError: (error) => setFormError(describeError(error)),
   });
 
@@ -109,16 +127,19 @@ export default function NotificationTemplatesPage() {
     onSuccess: () => {
       invalidateTemplates();
       closeEditor();
+      pushToast("success", "Template saved.");
     },
     onError: (error) => setFormError(describeError(error)),
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setNotificationTemplateActive(id, isActive),
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      setNotificationTemplateActive(id, isActive),
     onSuccess: invalidateTemplates,
   });
 
   const handleSubmit = (request: NotificationTemplateCreateRequest | NotificationTemplateUpdateRequest) => {
+    setFormError(null);
     if (editingTemplate) {
       updateMutation.mutate({ id: editingTemplate.id, request: request as NotificationTemplateUpdateRequest });
     } else {
@@ -126,32 +147,37 @@ export default function NotificationTemplatesPage() {
     }
   };
 
+  const applyFilters = () => setAppliedFilters(filters);
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+  };
+
   const isEditorOpen = canWrite && (isCreating || editingTemplate !== null);
+  const activeFilterCount = countActiveFilters(appliedFilters);
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-7xl">
       <PageHeading
-        title="Notification Templates"
+        title="Notification templates"
         subtitle="Channel-specific templates with variable placeholders, preview/test rendering, and full change history (SRS 12.17)."
+        actions={
+          canWrite && !isEditorOpen ? (
+            <Button
+              type="button"
+              onClick={() => {
+                setIsCreating(true);
+                setFormError(null);
+              }}
+            >
+              New template
+            </Button>
+          ) : undefined
+        }
       />
 
       <div className="flex flex-col gap-6">
-        {canWrite ? (
-          <div className="flex justify-end">
-            {isEditorOpen ? null : (
-              <Button
-                type="button"
-                onClick={() => {
-                  setIsCreating(true);
-                  setFormError(null);
-                }}
-              >
-                New template
-              </Button>
-            )}
-          </div>
-        ) : null}
-
         {isEditorOpen ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <Card
@@ -159,7 +185,7 @@ export default function NotificationTemplatesPage() {
               description={
                 editingTemplate
                   ? "The trigger event, channel and template key cannot be changed once created."
-                  : "Pick an (event, channel) combination not already covered - each pair may have at most one template."
+                  : "Pick an (event, channel) combination not already covered — each pair may have at most one template."
               }
             >
               <NotificationTemplateForm
@@ -190,48 +216,69 @@ export default function NotificationTemplatesPage() {
           </div>
         ) : null}
 
-        <Card title="Templates" description="Every (event, channel) template currently defined (SRS 12.17.1).">
-          <div className="mb-4 flex flex-wrap items-end gap-3">
-            <div className="w-48">
-              <Select
-                label="Channel"
-                options={CHANNEL_FILTER_OPTIONS}
-                value={channelFilter}
-                onChange={(event) => setChannelFilter(event.target.value)}
-              />
-            </div>
-            <div className="w-56">
-              <Select
-                label="Trigger event"
-                options={EVENT_TYPE_FILTER_OPTIONS}
-                value={eventTypeFilter}
-                onChange={(event) => setEventTypeFilter(event.target.value)}
-              />
-            </div>
-            <div className="w-40">
-              <Select
-                label="Status"
-                options={STATUS_FILTER_OPTIONS}
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <NotificationTemplatesTable
-            templates={templatesQuery.data}
-            isLoading={templatesQuery.isLoading}
-            errorMessage={templatesQuery.error ? describeError(templatesQuery.error) : null}
-            canWrite={canWrite}
-            onEdit={(template) => {
-              setIsCreating(false);
-              setEditingTemplate(template);
-              setFormError(null);
-            }}
-            onToggleActive={(template) => toggleMutation.mutate({ id: template.id, isActive: !template.isActive })}
-            togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        <FilterBar
+          columns={3}
+          onSubmit={applyFilters}
+          onClear={clearFilters}
+          activeCount={activeFilterCount}
+          busy={templatesQuery.isFetching}
+        >
+          <Select
+            label="Channel"
+            options={CHANNEL_FILTER_OPTIONS}
+            value={filters.channel}
+            onChange={(event) => setFilters((current) => ({ ...current, channel: event.target.value }))}
           />
-        </Card>
+          <Select
+            label="Trigger event"
+            options={EVENT_TYPE_FILTER_OPTIONS}
+            value={filters.eventType}
+            onChange={(event) => setFilters((current) => ({ ...current, eventType: event.target.value }))}
+          />
+          <Select
+            label="Status"
+            options={STATUS_FILTER_OPTIONS}
+            value={filters.status}
+            onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+          />
+        </FilterBar>
+
+        <NotificationTemplatesTable
+          templates={templatesQuery.data}
+          isLoading={templatesQuery.isPending}
+          isFetching={templatesQuery.isFetching}
+          error={templatesQuery.error}
+          onRetry={() => templatesQuery.refetch()}
+          canWrite={canWrite}
+          onEdit={(template) => {
+            setIsCreating(false);
+            setEditingTemplate(template);
+            setFormError(null);
+          }}
+          onToggleActive={(template) =>
+            toggleMutation.mutate({ id: template.id, isActive: !template.isActive })
+          }
+          togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+          // Previously dropped on the floor: a failed activate/deactivate left
+          // the row unchanged with no message anywhere on the screen.
+          toggleError={toggleMutation.error}
+          emptyAction={
+            activeFilterCount > 0 ? (
+              <Button variant="secondary" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : canWrite ? (
+              <Button
+                onClick={() => {
+                  setIsCreating(true);
+                  setFormError(null);
+                }}
+              >
+                New template
+              </Button>
+            ) : undefined
+          }
+        />
       </div>
     </div>
   );

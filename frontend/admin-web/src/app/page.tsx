@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Spinner } from "@/components/ui";
 import { isAuthenticated } from "@/lib/auth";
 
 /**
@@ -15,5 +16,10 @@ export default function RootPage() {
     router.replace(isAuthenticated() ? "/dashboard" : "/login");
   }, [router]);
 
-  return <p className="p-8 text-sm text-neutral-500">Loading…</p>;
+  return (
+    <p aria-live="polite" className="flex items-center gap-2 p-8 text-sm text-fg-muted">
+      <Spinner />
+      Loading…
+    </p>
+  );
 }

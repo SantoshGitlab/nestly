@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { Spinner } from "@/components/ui";
 import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
 
 /**
@@ -36,12 +37,18 @@ export function RequireAdminAuth({ children }: { children: ReactNode }) {
     }
   }, [authed, router]);
 
-  if (authed === undefined) {
-    return <p className="p-8 text-sm text-neutral-500">Loading…</p>;
-  }
-
-  if (!authed) {
-    return <p className="p-8 text-sm text-neutral-500">Redirecting to sign in…</p>;
+  if (authed === undefined || !authed) {
+    // aria-live so a screen reader hears the transition rather than landing on
+    // a silently-changed page; polite because neither state is an alert.
+    return (
+      <p
+        aria-live="polite"
+        className="flex items-center gap-2 p-8 text-sm text-fg-muted"
+      >
+        <Spinner />
+        {authed === undefined ? "Loading…" : "Redirecting to sign in…"}
+      </p>
+    );
   }
 
   return <>{children}</>;

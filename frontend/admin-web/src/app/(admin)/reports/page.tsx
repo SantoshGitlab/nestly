@@ -1,13 +1,19 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import { Alert, Button, Card, Field, PageHeading, Select } from "@/components/ui";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { Alert, Field, PageHeading, StatTile } from "@/components/ui";
+import { DataTable, FilterBar, countActiveFilters, formatCurrency } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { CustomerStatusBadge } from "@/components/status-badges";
 import { describeError } from "@/lib/api";
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
+import { isoDateOffsetFromToday, todayIsoDate } from "@/lib/date";
+import { canWriteModule } from "@/lib/permissions";
+import { categoryLabel } from "@/lib/support";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import {
   downloadBlob,
-  downloadExportJob,
   exportBookingRevenueCsv,
   exportCouponUsageCsv,
   exportCustomerSegmentationCsv,
@@ -18,435 +24,464 @@ import {
   getCustomerSegmentationReport,
   getRefundReport,
   getSupportTicketReport,
-  listMyExportJobs,
-  requestExportJob,
 } from "@/lib/reports-api";
-import { ExportJobStatus, ExportReportType } from "@/lib/reports-types";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
-import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
-import { isoDateOffsetFromToday, todayIsoDate } from "@/lib/date";
-
-function useAdminClaims(): AdminSessionClaims | null {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-  return claims;
-}
-
-/** `yyyy-mm-dd` -> a UTC day-start/day-end instant, same convention as lib/audit.ts's date filters. */
-function toUtcStart(dateOnly: string): string {
-  return `${dateOnly}T00:00:00.000Z`;
-}
-
-function toUtcEnd(dateOnly: string): string {
-  return `${dateOnly}T23:59:59.999Z`;
-}
-
-function defaultFromDate(): string {
-  return isoDateOffsetFromToday(-30);
-}
-
-function defaultToDate(): string {
-  return todayIsoDate();
-}
-
-const REPORT_TYPE_OPTIONS = [
-  { value: String(ExportReportType.BookingRevenue), label: "Booking & Revenue" },
-  { value: String(ExportReportType.RefundUsage), label: "Refunds" },
-  { value: String(ExportReportType.CouponUsage), label: "Coupon Usage" },
-  { value: String(ExportReportType.CustomerSegmentation), label: "Customer Segmentation" },
-  { value: String(ExportReportType.SupportTicket), label: "Support Tickets" },
-];
-
-function exportJobStatusLabel(status: ExportJobStatus): string {
-  switch (status) {
-    case ExportJobStatus.Pending:
-      return "Pending";
-    case ExportJobStatus.Processing:
-      return "Processing";
-    case ExportJobStatus.Completed:
-      return "Completed";
-    case ExportJobStatus.Failed:
-      return "Failed";
-    default:
-      return "Unknown";
-  }
-}
+import type {
+  CouponUsageReportRow,
+  CustomerCitySegmentRow,
+  CustomerStatusSegmentRow,
+  SupportTicketCategoryVolumeRow,
+} from "@/lib/reports-types";
+import { ExportQueueCard } from "./_components/ExportQueueCard";
+import { ReportCard, StatGrid, StatGridSkeleton, TableSkeleton } from "./_components/ReportCard";
 
 /**
- * Reports and exports (SRS 12.18, tasks 128a-129): standard report screens
- * with a shared date-range filter and instant CSV export for 128a-c, plus a
- * permission-gated async export queue (128d) for large date ranges. Instant
- * export buttons are visible to any admin holding "reports.read" (mirrors
- * ReviewsController's CSV export, which needs only Read); the async export
- * request form is gated on "reports.write" since it creates a persisted job
- * and occupies a background worker slot.
+ * Reports and exports (SRS 12.18, tasks 128a-129): the standard admin reports
+ * over one shared date range, each with an instant CSV export, plus the
+ * permission-gated async export queue (128d) for ranges too large to render.
+ *
+ * Instant export is visible to any admin holding "reports.read" (mirrors
+ * `ReviewsController`'s CSV export, which needs only Read); requesting an
+ * async job is gated on "reports.write" since it persists a job and occupies
+ * a background worker slot.
+ *
+ * Every date on this screen is a *local calendar day*. The range is converted
+ * to instants with `lib/day-range`, not `${date}T00:00:00.000Z` — the latter
+ * declares the admin's day boundary to be a UTC one and, in IST, shifts every
+ * report's window by 5h30m.
  */
+
+interface ReportRange {
+  fromDate: string;
+  toDate: string;
+  city: string;
+}
+
+function defaultRange(): ReportRange {
+  return { fromDate: isoDateOffsetFromToday(-30), toDate: todayIsoDate(), city: "" };
+}
+
 export default function ReportsPage() {
   const claims = useAdminClaims();
   const canRequestAsyncExport = canWriteModule(claims, "reports");
-  const queryClient = useQueryClient();
 
-  const [fromDate, setFromDate] = useState(defaultFromDate());
-  const [toDate, setToDate] = useState(defaultToDate());
-  const [city, setCity] = useState("");
-  const [appliedRange, setAppliedRange] = useState({ fromDate: defaultFromDate(), toDate: defaultToDate(), city: "" });
+  // One initialiser, evaluated once. Calling the defaults separately for the
+  // draft and the applied range meant a page opened across midnight could
+  // start with the form and the query disagreeing about "today".
+  const [draft, setDraft] = useState<ReportRange>(defaultRange);
+  const [applied, setApplied] = useState<ReportRange>(draft);
+  const [rangeError, setRangeError] = useState<string | null>(null);
 
-  const onApplyRange = (e: FormEvent) => {
-    e.preventDefault();
-    setAppliedRange({ fromDate, toDate, city });
-  };
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [runningExport, setRunningExport] = useState<string | null>(null);
 
-  const dateRangeFilters = { fromUtc: toUtcStart(appliedRange.fromDate), toUtc: toUtcEnd(appliedRange.toDate) };
-  const bookingRevenueFilters = { ...dateRangeFilters, city: appliedRange.city || undefined };
+  // `applied` is only ever set from a validated range, so these cannot be
+  // null in practice; `?? ""` keeps that unreachable branch type-safe and the
+  // API client drops empty query values rather than sending "null".
+  const fromUtc = startOfLocalDayUtc(applied.fromDate) ?? "";
+  const toUtc = endOfLocalDayUtc(applied.toDate) ?? "";
+
+  const dateRangeFilters = { fromUtc, toUtc };
+  const bookingRevenueFilters = { fromUtc, toUtc, city: applied.city || undefined };
+  const segmentationFilters = { registeredFromUtc: fromUtc, registeredToUtc: toUtc };
 
   const bookingRevenueQuery = useQuery({
-    queryKey: ["reports", "booking-revenue", bookingRevenueFilters],
+    queryKey: ["reports", "booking-revenue", bookingRevenueFilters] as const,
     queryFn: () => getBookingRevenueReport(bookingRevenueFilters),
   });
   const refundQuery = useQuery({
-    queryKey: ["reports", "refunds", dateRangeFilters],
+    queryKey: ["reports", "refunds", dateRangeFilters] as const,
     queryFn: () => getRefundReport(dateRangeFilters),
   });
   const couponUsageQuery = useQuery({
-    queryKey: ["reports", "coupon-usage", dateRangeFilters],
+    queryKey: ["reports", "coupon-usage", dateRangeFilters] as const,
     queryFn: () => getCouponUsageReport(dateRangeFilters),
   });
-  const customerSegmentationQuery = useQuery({
-    queryKey: ["reports", "customer-segmentation", dateRangeFilters],
-    queryFn: () =>
-      getCustomerSegmentationReport({
-        registeredFromUtc: dateRangeFilters.fromUtc,
-        registeredToUtc: dateRangeFilters.toUtc,
-      }),
+  const segmentationQuery = useQuery({
+    queryKey: ["reports", "customer-segmentation", dateRangeFilters] as const,
+    queryFn: () => getCustomerSegmentationReport(segmentationFilters),
   });
   const supportTicketQuery = useQuery({
-    queryKey: ["reports", "support-tickets", dateRangeFilters],
+    queryKey: ["reports", "support-tickets", dateRangeFilters] as const,
     queryFn: () => getSupportTicketReport(dateRangeFilters),
   });
 
-  const [exportError, setExportError] = useState<string | null>(null);
-
-  async function runExport(exportFn: () => Promise<Blob>, fileNamePrefix: string) {
+  /**
+   * CSV export. The previous version had no in-flight state at all, so a
+   * double-click on a slow connection fired two requests and saved two copies
+   * of the same file; one export at a time now, with the button showing it.
+   */
+  async function runExport(key: string, exportFn: () => Promise<Blob>, fileNamePrefix: string) {
+    if (runningExport) return;
+    setRunningExport(key);
     setExportError(null);
     try {
       const blob = await exportFn();
       downloadBlob(blob, `${fileNamePrefix}-${todayIsoDate()}.csv`);
     } catch (err) {
       setExportError(describeError(err));
+    } finally {
+      setRunningExport(null);
     }
   }
 
-  // Async export queue (task 128d)
-  const [asyncReportType, setAsyncReportType] = useState(String(ExportReportType.BookingRevenue));
-  const [asyncRequestError, setAsyncRequestError] = useState<string | null>(null);
-
-  const myExportsQuery = useQuery({
-    queryKey: ["reports", "my-exports"],
-    queryFn: listMyExportJobs,
-    refetchInterval: (query) => {
-      const jobs = query.state.data ?? [];
-      const hasInFlight = jobs.some(
-        (j) => j.status === ExportJobStatus.Pending || j.status === ExportJobStatus.Processing,
-      );
-      return hasInFlight ? 3000 : false;
-    },
-  });
-
-  const requestExportMutation = useMutation({
-    mutationFn: () =>
-      requestExportJob({
-        reportType: Number(asyncReportType) as ExportReportType,
-        fromUtc: dateRangeFilters.fromUtc,
-        toUtc: dateRangeFilters.toUtc,
-        city: Number(asyncReportType) === ExportReportType.BookingRevenue ? appliedRange.city || null : null,
-      }),
-    onSuccess: () => {
-      setAsyncRequestError(null);
-      queryClient.invalidateQueries({ queryKey: ["reports", "my-exports"] });
-    },
-    onError: (err) => setAsyncRequestError(describeError(err)),
-  });
-
-  const onDownloadExportJob = async (jobId: string, reportType: ExportReportType) => {
-    setExportError(null);
-    try {
-      const blob = await downloadExportJob(jobId);
-      const label = REPORT_TYPE_OPTIONS.find((o) => Number(o.value) === reportType)?.label ?? "export";
-      downloadBlob(blob, `${label.toLowerCase().replace(/\s+/g, "-")}-${jobId}.csv`);
-    } catch (err) {
-      setExportError(describeError(err));
+  function applyRange() {
+    if (!draft.fromDate || !draft.toDate) {
+      setRangeError("Pick both a start and an end date.");
+      return;
     }
-  };
+    if (draft.fromDate > draft.toDate) {
+      setRangeError("The start date must not be after the end date.");
+      return;
+    }
+    setRangeError(null);
+    setApplied(draft);
+  }
+
+  const couponColumns: DataTableColumn<CouponUsageReportRow>[] = [
+    {
+      key: "code",
+      header: "Code",
+      sortValue: (row) => row.couponCode,
+      cell: (row) => <span className="nums font-medium text-fg">{row.couponCode}</span>,
+    },
+    {
+      key: "redemptions",
+      header: "Redemptions",
+      numeric: true,
+      sortValue: (row) => row.redemptionCount,
+      cell: (row) => row.redemptionCount.toLocaleString("en-IN"),
+    },
+    {
+      key: "discount",
+      header: "Discount given",
+      numeric: true,
+      sortValue: (row) => row.totalDiscountAmount,
+      cell: (row) => formatCurrency(row.totalDiscountAmount),
+    },
+  ];
+
+  const statusColumns: DataTableColumn<CustomerStatusSegmentRow>[] = [
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (row) => row.status,
+      cell: (row) => <CustomerStatusBadge status={row.status} />,
+    },
+    {
+      key: "count",
+      header: "Customers",
+      numeric: true,
+      sortValue: (row) => row.count,
+      cell: (row) => row.count.toLocaleString("en-IN"),
+    },
+  ];
+
+  const cityColumns: DataTableColumn<CustomerCitySegmentRow>[] = [
+    {
+      key: "city",
+      header: "City",
+      sortValue: (row) => row.city,
+      cell: (row) => row.city || <span className="text-fg-subtle">Not set</span>,
+    },
+    {
+      key: "count",
+      header: "Customers",
+      numeric: true,
+      sortValue: (row) => row.count,
+      cell: (row) => row.count.toLocaleString("en-IN"),
+    },
+  ];
+
+  const categoryColumns: DataTableColumn<SupportTicketCategoryVolumeRow>[] = [
+    {
+      key: "category",
+      header: "Category",
+      sortValue: (row) => categoryLabel(row.category),
+      cell: (row) => categoryLabel(row.category),
+    },
+    {
+      key: "count",
+      header: "Tickets",
+      numeric: true,
+      sortValue: (row) => row.count,
+      cell: (row) => row.count.toLocaleString("en-IN"),
+    },
+  ];
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className="mx-auto w-full max-w-6xl">
       <PageHeading
         title="Reports & Exports"
-        subtitle="Standard admin reports with filters and CSV export, plus an async export queue for large date ranges (SRS 12.18)."
+        subtitle="Standard admin reports over one shared date range with CSV export, plus an async export queue for large ranges (SRS 12.18)."
       />
 
-      {exportError ? <Alert>{exportError}</Alert> : null}
-
-      <Card title="Date range" description="Applies to every report below (Customer Segmentation uses it as a registration window).">
-        <form onSubmit={onApplyRange} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="From" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-          <Field label="To" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-          <Field
-            label="City (Booking & Revenue only)"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="Optional"
-          />
-          <div className="flex items-end">
-            <Button type="submit">Apply</Button>
-          </div>
-        </form>
-      </Card>
-
-      <Card title="Booking & Revenue report" description="SRS 12.18.1, task 128a.">
-        {bookingRevenueQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : bookingRevenueQuery.isError ? (
-          <Alert>{describeError(bookingRevenueQuery.error)}</Alert>
-        ) : (
-          <>
-            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-neutral-500">Bookings</dt>
-                <dd className="text-lg font-semibold">{bookingRevenueQuery.data.totalBookingsCount}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Revenue</dt>
-                <dd className="text-lg font-semibold">₹{bookingRevenueQuery.data.totalRevenue.toFixed(2)}</dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <Button
-                variant="secondary"
-                onClick={() => runExport(() => exportBookingRevenueCsv(bookingRevenueFilters), "booking-revenue")}
-              >
-                Export CSV
-              </Button>
-            </div>
-          </>
-        )}
-      </Card>
-
-      <Card title="Refund report" description="SRS 12.18.1, task 128b.">
-        {refundQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : refundQuery.isError ? (
-          <Alert>{describeError(refundQuery.error)}</Alert>
-        ) : (
-          <>
-            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-neutral-500">Refunds</dt>
-                <dd className="text-lg font-semibold">{refundQuery.data.totalCount}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Total refunded</dt>
-                <dd className="text-lg font-semibold">₹{refundQuery.data.totalRefundedAmount.toFixed(2)}</dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <Button variant="secondary" onClick={() => runExport(() => exportRefundCsv(dateRangeFilters), "refunds")}>
-                Export CSV
-              </Button>
-            </div>
-          </>
-        )}
-      </Card>
-
-      <Card title="Coupon usage report" description="SRS 12.18.1, task 128b.">
-        {couponUsageQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : couponUsageQuery.isError ? (
-          <Alert>{describeError(couponUsageQuery.error)}</Alert>
-        ) : (
-          <>
-            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-neutral-500">Redemptions</dt>
-                <dd className="text-lg font-semibold">{couponUsageQuery.data.totalRedemptions}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Total discount</dt>
-                <dd className="text-lg font-semibold">₹{couponUsageQuery.data.totalDiscountAmount.toFixed(2)}</dd>
-              </div>
-            </dl>
-            {couponUsageQuery.data.rows.length > 0 ? (
-              <ul className="mt-4 flex flex-col gap-2 text-sm">
-                {couponUsageQuery.data.rows.map((row) => (
-                  <li
-                    key={row.couponId}
-                    className="flex items-center justify-between rounded-lg border border-black/10 p-3 dark:border-white/15"
-                  >
-                    <span className="font-mono">{row.couponCode}</span>
-                    <span>{row.redemptionCount} redemptions</span>
-                    <span>₹{row.totalDiscountAmount.toFixed(2)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <div className="mt-4">
-              <Button variant="secondary" onClick={() => runExport(() => exportCouponUsageCsv(dateRangeFilters), "coupon-usage")}>
-                Export CSV
-              </Button>
-            </div>
-          </>
-        )}
-      </Card>
-
-      <Card title="Customer segmentation report" description="SRS 12.18.1, task 128c.">
-        {customerSegmentationQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : customerSegmentationQuery.isError ? (
-          <Alert>{describeError(customerSegmentationQuery.error)}</Alert>
-        ) : (
-          <>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              {customerSegmentationQuery.data.totalCustomers} customers registered in this window.
-            </p>
-            <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div>
-                <h3 className="text-sm font-medium">By status</h3>
-                <ul className="mt-2 flex flex-col gap-1 text-sm">
-                  {customerSegmentationQuery.data.byStatus.map((row) => (
-                    <li key={row.status} className="flex justify-between">
-                      <span>{["Active", "Blocked", "Unverified", "Deleted"][row.status] ?? "Unknown"}</span>
-                      <span>{row.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium">By city</h3>
-                <ul className="mt-2 flex flex-col gap-1 text-sm">
-                  {customerSegmentationQuery.data.byCity.slice(0, 10).map((row) => (
-                    <li key={row.city} className="flex justify-between">
-                      <span>{row.city}</span>
-                      <span>{row.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="mt-4">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  runExport(
-                    () =>
-                      exportCustomerSegmentationCsv({
-                        registeredFromUtc: dateRangeFilters.fromUtc,
-                        registeredToUtc: dateRangeFilters.toUtc,
-                      }),
-                    "customer-segmentation",
-                  )
+      <div className="flex flex-col gap-6">
+        <FilterBar
+          columns={3}
+          submitLabel="Apply"
+          activeCount={countActiveFilters({ city: applied.city })}
+          busy={
+            bookingRevenueQuery.isFetching ||
+            refundQuery.isFetching ||
+            couponUsageQuery.isFetching ||
+            segmentationQuery.isFetching ||
+            supportTicketQuery.isFetching
+          }
+          onSubmit={applyRange}
+          onClear={
+            draft.city
+              ? () => {
+                  const cleared = { ...draft, city: "" };
+                  setDraft(cleared);
+                  setApplied(cleared);
                 }
-              >
-                Export CSV
-              </Button>
-            </div>
-          </>
-        )}
-      </Card>
-
-      <Card title="Support ticket report" description="SRS 12.18.1, task 128c.">
-        {supportTicketQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : supportTicketQuery.isError ? (
-          <Alert>{describeError(supportTicketQuery.error)}</Alert>
-        ) : (
-          <>
-            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-              <div>
-                <dt className="text-neutral-500">Total tickets</dt>
-                <dd className="text-lg font-semibold">{supportTicketQuery.data.totalTickets}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Resolved/closed</dt>
-                <dd className="text-lg font-semibold">{supportTicketQuery.data.resolvedCount}</dd>
-              </div>
-              <div>
-                <dt className="text-neutral-500">Avg. resolution time</dt>
-                <dd className="text-lg font-semibold">
-                  {supportTicketQuery.data.averageResolutionHours === null
-                    ? "—"
-                    : `${supportTicketQuery.data.averageResolutionHours.toFixed(1)}h`}
-                </dd>
-              </div>
-            </dl>
-            <div className="mt-4">
-              <Button
-                variant="secondary"
-                onClick={() => runExport(() => exportSupportTicketCsv(dateRangeFilters), "support-tickets")}
-              >
-                Export CSV
-              </Button>
-            </div>
-          </>
-        )}
-      </Card>
-
-      {canRequestAsyncExport ? (
-        <Card
-          title="Async export queue"
-          description="For a large date range: a background job generates the file - poll or come back later to download it (SRS 12.18.2, task 128d)."
+              : undefined
+          }
         >
-          {asyncRequestError ? <Alert>{asyncRequestError}</Alert> : null}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Select
-                label="Report"
-                options={REPORT_TYPE_OPTIONS}
-                value={asyncReportType}
-                onChange={(e) => setAsyncReportType(e.target.value)}
+          <Field
+            label="From"
+            type="date"
+            max={draft.toDate || undefined}
+            value={draft.fromDate}
+            onChange={(event) => setDraft({ ...draft, fromDate: event.target.value })}
+          />
+          <Field
+            label="To"
+            type="date"
+            min={draft.fromDate || undefined}
+            value={draft.toDate}
+            onChange={(event) => setDraft({ ...draft, toDate: event.target.value })}
+          />
+          <Field
+            label="City"
+            hint="Booking & Revenue only. Leave blank for every city."
+            placeholder="Optional"
+            value={draft.city}
+            onChange={(event) => setDraft({ ...draft, city: event.target.value })}
+          />
+        </FilterBar>
+
+        {rangeError ? <Alert>{rangeError}</Alert> : null}
+        {exportError ? (
+          <Alert title="The export could not be downloaded">{exportError}</Alert>
+        ) : null}
+
+        <ReportCard
+          title="Booking & Revenue"
+          description="Bookings created in the selected window and the revenue they represent (SRS 12.18.1, task 128a)."
+          isLoading={bookingRevenueQuery.isPending}
+          error={bookingRevenueQuery.error}
+          onRetry={() => void bookingRevenueQuery.refetch()}
+          skeleton={<StatGridSkeleton count={2} columns={2} />}
+          exporting={runningExport === "booking-revenue"}
+          onExport={() =>
+            void runExport(
+              "booking-revenue",
+              () => exportBookingRevenueCsv(bookingRevenueFilters),
+              "booking-revenue",
+            )
+          }
+        >
+          <StatGrid columns={2}>
+            <StatTile
+              label="Bookings"
+              value={(bookingRevenueQuery.data?.totalBookingsCount ?? 0).toLocaleString("en-IN")}
+            />
+            <StatTile
+              label="Revenue"
+              value={formatCurrency(bookingRevenueQuery.data?.totalRevenue ?? 0)}
+              title={formatCurrency(bookingRevenueQuery.data?.totalRevenue ?? 0)}
+            />
+          </StatGrid>
+        </ReportCard>
+
+        <ReportCard
+          title="Refunds"
+          description="Refunds raised in the selected window and the total value returned (SRS 12.18.1, task 128b)."
+          isLoading={refundQuery.isPending}
+          error={refundQuery.error}
+          onRetry={() => void refundQuery.refetch()}
+          skeleton={<StatGridSkeleton count={2} columns={2} />}
+          exporting={runningExport === "refunds"}
+          onExport={() => void runExport("refunds", () => exportRefundCsv(dateRangeFilters), "refunds")}
+        >
+          <StatGrid columns={2}>
+            <StatTile
+              label="Refunds"
+              value={(refundQuery.data?.totalCount ?? 0).toLocaleString("en-IN")}
+            />
+            <StatTile
+              label="Total refunded"
+              value={formatCurrency(refundQuery.data?.totalRefundedAmount ?? 0)}
+              title={formatCurrency(refundQuery.data?.totalRefundedAmount ?? 0)}
+            />
+          </StatGrid>
+        </ReportCard>
+
+        <ReportCard
+          title="Coupon usage"
+          description="Redemptions and discount given, in total and per coupon (SRS 12.18.1, task 128b)."
+          isLoading={couponUsageQuery.isPending}
+          error={couponUsageQuery.error}
+          onRetry={() => void couponUsageQuery.refetch()}
+          skeleton={
+            <div className="flex flex-col gap-5">
+              <StatGridSkeleton count={2} columns={2} />
+              <TableSkeleton />
+            </div>
+          }
+          exporting={runningExport === "coupon-usage"}
+          onExport={() =>
+            void runExport("coupon-usage", () => exportCouponUsageCsv(dateRangeFilters), "coupon-usage")
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <StatGrid columns={2}>
+              <StatTile
+                label="Redemptions"
+                value={(couponUsageQuery.data?.totalRedemptions ?? 0).toLocaleString("en-IN")}
+              />
+              <StatTile
+                label="Total discount"
+                value={formatCurrency(couponUsageQuery.data?.totalDiscountAmount ?? 0)}
+                title={formatCurrency(couponUsageQuery.data?.totalDiscountAmount ?? 0)}
+              />
+            </StatGrid>
+            <DataTable
+              columns={couponColumns}
+              rows={couponUsageQuery.data?.rows}
+              rowKey={(row) => row.couponId}
+              isFetching={couponUsageQuery.isFetching}
+              caption="Redemptions per coupon in the selected window"
+              defaultSort={{ key: "redemptions", direction: "desc" }}
+              emptyTitle="No coupon was redeemed in this window"
+              emptyDescription="Widen the date range to see earlier redemptions."
+              maxHeight="24rem"
+              minWidth="560px"
+              hideDensityToggle
+            />
+          </div>
+        </ReportCard>
+
+        <ReportCard
+          title="Customer segmentation"
+          description="Customers who registered in the selected window, split by status and by city (SRS 12.18.1, task 128c)."
+          isLoading={segmentationQuery.isPending}
+          error={segmentationQuery.error}
+          onRetry={() => void segmentationQuery.refetch()}
+          skeleton={
+            <div className="flex flex-col gap-5">
+              <StatGridSkeleton count={1} columns={2} />
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <TableSkeleton />
+                <TableSkeleton />
+              </div>
+            </div>
+          }
+          exporting={runningExport === "customer-segmentation"}
+          onExport={() =>
+            void runExport(
+              "customer-segmentation",
+              () => exportCustomerSegmentationCsv(segmentationFilters),
+              "customer-segmentation",
+            )
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <StatGrid columns={2}>
+              <StatTile
+                label="Customers registered"
+                value={(segmentationQuery.data?.totalCustomers ?? 0).toLocaleString("en-IN")}
+              />
+            </StatGrid>
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              <DataTable
+                title="By status"
+                columns={statusColumns}
+                rows={segmentationQuery.data?.byStatus}
+                rowKey={(row) => String(row.status)}
+                isFetching={segmentationQuery.isFetching}
+                caption="Registered customers by account status"
+                defaultSort={{ key: "count", direction: "desc" }}
+                emptyTitle="No customers in this window"
+                hideDensityToggle
+              />
+              <DataTable
+                title="By city"
+                columns={cityColumns}
+                rows={segmentationQuery.data?.byCity}
+                rowKey={(row) => row.city || "__unset"}
+                isFetching={segmentationQuery.isFetching}
+                caption="Registered customers by city"
+                defaultSort={{ key: "count", direction: "desc" }}
+                emptyTitle="No customers in this window"
+                maxHeight="22rem"
+                hideDensityToggle
               />
             </div>
-            <Button disabled={requestExportMutation.isPending} onClick={() => requestExportMutation.mutate()}>
-              {requestExportMutation.isPending ? "Requesting…" : "Request export"}
-            </Button>
           </div>
+        </ReportCard>
 
-          <div className="mt-6 border-t border-black/10 pt-5 dark:border-white/15">
-            <h3 className="text-sm font-medium">My exports</h3>
-            {myExportsQuery.isPending ? (
-              <p className="mt-2 text-sm text-neutral-500">Loading…</p>
-            ) : myExportsQuery.isError ? (
-              <Alert>{describeError(myExportsQuery.error)}</Alert>
-            ) : myExportsQuery.data.length === 0 ? (
-              <p className="mt-2 text-sm text-neutral-500">No exports requested yet.</p>
-            ) : (
-              <ul className="mt-2 flex flex-col gap-2 text-sm">
-                {myExportsQuery.data.map((job) => (
-                  <li
-                    key={job.id}
-                    className="flex items-center justify-between rounded-lg border border-black/10 p-3 dark:border-white/15"
-                  >
-                    <span>{REPORT_TYPE_OPTIONS.find((o) => Number(o.value) === job.reportType)?.label ?? "Report"}</span>
-                    <span>{exportJobStatusLabel(job.status)}</span>
-                    <span>{new Date(job.requestedAtUtc).toLocaleString()}</span>
-                    {job.status === ExportJobStatus.Completed ? (
-                      <Button variant="secondary" onClick={() => onDownloadExportJob(job.id, job.reportType)}>
-                        Download
-                      </Button>
-                    ) : job.status === ExportJobStatus.Failed ? (
-                      <span className="text-red-600 dark:text-red-400">{job.errorMessage ?? "Failed"}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
+        <ReportCard
+          title="Support tickets"
+          description="Ticket volume, resolution rate and average time to resolve, with the category breakdown (SRS 12.18.1, task 128c)."
+          isLoading={supportTicketQuery.isPending}
+          error={supportTicketQuery.error}
+          onRetry={() => void supportTicketQuery.refetch()}
+          skeleton={
+            <div className="flex flex-col gap-5">
+              <StatGridSkeleton count={3} />
+              <TableSkeleton rows={5} />
+            </div>
+          }
+          exporting={runningExport === "support-tickets"}
+          onExport={() =>
+            void runExport(
+              "support-tickets",
+              () => exportSupportTicketCsv(dateRangeFilters),
+              "support-tickets",
+            )
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <StatGrid>
+              <StatTile
+                label="Total tickets"
+                value={(supportTicketQuery.data?.totalTickets ?? 0).toLocaleString("en-IN")}
+              />
+              <StatTile
+                label="Resolved or closed"
+                value={(supportTicketQuery.data?.resolvedCount ?? 0).toLocaleString("en-IN")}
+              />
+              <StatTile
+                label="Avg. resolution time"
+                value={
+                  supportTicketQuery.data?.averageResolutionHours == null
+                    ? "—"
+                    : `${supportTicketQuery.data.averageResolutionHours.toFixed(1)}h`
+                }
+                hint="Across tickets resolved in this window."
+              />
+            </StatGrid>
+            <DataTable
+              columns={categoryColumns}
+              rows={supportTicketQuery.data?.byCategory}
+              rowKey={(row) => String(row.category)}
+              isFetching={supportTicketQuery.isFetching}
+              caption="Ticket volume by category"
+              defaultSort={{ key: "count", direction: "desc" }}
+              emptyTitle="No tickets in this window"
+              maxHeight="22rem"
+              minWidth="420px"
+              hideDensityToggle
+            />
           </div>
-        </Card>
-      ) : null}
+        </ReportCard>
+
+        {canRequestAsyncExport ? (
+          <ExportQueueCard fromUtc={fromUtc} toUtc={toUtc} city={applied.city} />
+        ) : null}
+      </div>
     </div>
   );
 }

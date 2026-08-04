@@ -9,8 +9,14 @@ import type { AdminSessionClaims } from "@/lib/types";
 
 /**
  * Sidebar nav, filtered by the current admin's role/permissions (task 98c).
- * See lib/permissions.ts for the filtering rule and why some of these links
- * currently 404 - the pages are separate, not-yet-implemented tasks.
+ * See lib/permissions.ts for the filtering rule.
+ *
+ * Every NAV_MODULES href now resolves to a real page - verified in task 228,
+ * which is when the note that used to sit here (several links 404, pages not
+ * yet implemented) stopped being true. Adding a NavModule without its route is
+ * still the way to reintroduce a dead link; it now lands on the branded
+ * not-found.tsx rather than Next's bare default, but that is a fallback and
+ * not a licence to ship one.
  *
  * Twenty modules in one flat list is not navigable, so they are grouped here
  * rather than in lib/permissions.ts: grouping is presentation, and keeping it

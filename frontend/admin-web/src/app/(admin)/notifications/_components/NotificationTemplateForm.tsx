@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Field, Select, Textarea } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
 import {
   NOTIFICATION_CHANNEL_LABELS,
   NOTIFICATION_EVENT_TYPE_LABELS,
@@ -136,12 +137,13 @@ export function NotificationTemplateForm({
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {submitError ? <Alert>{submitError}</Alert> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <FormGrid columns={3}>
         <Select
           label="Trigger event"
           error={form.formState.errors.eventType?.message}
           options={EVENT_TYPE_OPTIONS}
           disabled={isEditing}
+          hint={isEditing ? "Fixed after creation." : undefined}
           title={isEditing ? "The trigger event cannot be changed after creation." : undefined}
           {...form.register("eventType", { valueAsNumber: true })}
         />
@@ -150,21 +152,28 @@ export function NotificationTemplateForm({
           error={form.formState.errors.channel?.message}
           options={CHANNEL_OPTIONS}
           disabled={isEditing}
+          hint={isEditing ? "Fixed after creation." : undefined}
           title={isEditing ? "The channel cannot be changed after creation." : undefined}
           {...form.register("channel", { valueAsNumber: true })}
         />
         <Field
           label="Template key"
+          required
           error={form.formState.errors.templateKey?.message}
+          hint={isEditing ? "Fixed after creation." : undefined}
+          // readOnly, not disabled: a disabled react-hook-form field is
+          // excluded from the submitted values entirely, which would fail this
+          // field's own "required" rule on every edit-mode submit.
           readOnly={isEditing}
           title={isEditing ? "The template key cannot be changed after creation." : undefined}
           {...form.register("templateKey")}
         />
-      </div>
+      </FormGrid>
 
       {!isSms ? (
         <Field
           label="Subject / push title"
+          required
           error={form.formState.errors.subject?.message}
           {...form.register("subject")}
         />
@@ -174,26 +183,24 @@ export function NotificationTemplateForm({
 
       <Textarea
         label="Body"
-        rows={6}
+        rows={8}
+        required
         error={form.formState.errors.body?.message}
+        hint="Use {{VariableName}} placeholders — they are substituted with real values at send time (SRS 12.17.2)."
         placeholder="Hi {{CustomerName}}, ..."
         {...form.register("body")}
       />
 
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">
-        Use <code>{"{{VariableName}}"}</code> placeholders - they are substituted with real values at send time (SRS 12.17.2).
-      </p>
-
-      <div className="flex gap-3">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create template"}
-        </Button>
+      <FormActions>
         {onCancel ? (
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         ) : null}
-      </div>
+        <Button type="submit" loading={isSubmitting}>
+          {isEditing ? "Save changes" : "Create template"}
+        </Button>
+      </FormActions>
     </form>
   );
 }

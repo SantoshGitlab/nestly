@@ -16,6 +16,8 @@
  * still sent as the readable names below ("AdminUser", "Deny", ...).
  */
 
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
+
 export type AuditActorTypeName = "Anonymous" | "Customer" | "AdminUser" | "System";
 
 /** Order matches `Nestly.Domain.AuditActorType`'s declaration order (its numeric value). */
@@ -105,8 +107,20 @@ export function buildAuditLogQuery(filters: AuditLogFilters): string {
   // instant, so pin From to the start of that day and To to its end -
   // otherwise "toDate=2026-07-31" would exclude every event that actually
   // happened during that day.
-  if (filters.fromDate) params.set("fromUtc", `${filters.fromDate}T00:00:00.000Z`);
-  if (filters.toDate) params.set("toUtc", `${filters.toDate}T23:59:59.999Z`);
+  //
+  // Both boundaries come from lib/day-range, which builds them from *local*
+  // time components (task 228). Interpolating the date straight into
+  // `${date}T00:00:00.000Z` instead - as this did until then - declares the
+  // admin's local calendar day to be a UTC day, which in IST (UTC+05:30)
+  // shifts the whole window by 5h30m: "from 4 August" starts at 05:30 IST on
+  // the 4th and sweeps in the evening of the 3rd, while "to 4 August" keeps
+  // returning entries until 05:29 IST on the 5th. On an audit trail - the one
+  // screen whose entire job is saying exactly when something happened - that
+  // is a correctness bug, not a cosmetic one.
+  const fromUtc = filters.fromDate ? startOfLocalDayUtc(filters.fromDate) : null;
+  const toUtc = filters.toDate ? endOfLocalDayUtc(filters.toDate) : null;
+  if (fromUtc) params.set("fromUtc", fromUtc);
+  if (toUtc) params.set("toUtc", toUtc);
 
   params.set("page", String(filters.page));
   params.set("pageSize", String(filters.pageSize));

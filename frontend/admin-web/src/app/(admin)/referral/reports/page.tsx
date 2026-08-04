@@ -1,109 +1,178 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { RequireAdminAuth } from "@/components/RequireAdminAuth";
-import { Alert, Card, Field, PageHeading, StatTile } from "@/components/ui";
-import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { FilterBar, countActiveFilters, formatCurrency } from "@/components/data-table";
+import { SectionError } from "@/components/screen-states";
+import { Card, Field, PageHeading, Skeleton, StatTile } from "@/components/ui";
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
+import { ReferralTabs } from "../_components/ReferralTabs";
+import { getReferralCostReport, getReferralFunnelReport } from "../_lib/referral-api";
 
-interface ReferralFunnelReportResponse {
-  invitedCount: number;
-  registeredCount: number;
-  qualifiedCount: number;
-  rewardedCount: number;
+interface DateRangeFilters {
+  fromDate: string;
+  toDate: string;
 }
 
-interface ReferralCostReportResponse {
-  totalWalletCreditCost: number;
-  totalCouponCost: number;
-  totalCost: number;
-  rewardedReferralCount: number;
-  milestoneBonusCount: number;
-}
+const EMPTY_FILTERS: DateRangeFilters = { fromDate: "", toDate: "" };
 
 /**
- * Admin funnel + total program cost reports (task 171). GET
- * /admin/referral/reports/funnel and /reports/cost, both accepting an
- * optional [fromUtc, toUtc] date range.
+ * Referral funnel and total program cost (task 171).
+ *
+ * Both endpoints take UTC instants. The previous version passed the raw
+ * `yyyy-mm-dd` from the date control straight through as `fromUtc`, which
+ * declares the admin's local day boundary to be a UTC one — in IST that shifts
+ * the reported window by 5h30m, so "from 4 August" quietly included the
+ * evening of the 3rd. `lib/day-range.ts` converts each boundary from local
+ * time components instead.
  */
 export default function ReferralReportsPage() {
-  return (
-    <RequireAdminAuth>
-      <ReferralReportsScreen />
-    </RequireAdminAuth>
-  );
-}
+  const [filters, setFilters] = useState<DateRangeFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<DateRangeFilters>(EMPTY_FILTERS);
+  const [rangeError, setRangeError] = useState<string | null>(null);
 
-function ReferralReportsScreen() {
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-
-  const query = `${fromDate ? `fromUtc=${fromDate}` : ""}${fromDate && toDate ? "&" : ""}${toDate ? `toUtc=${toDate}` : ""}`;
-  const suffix = query ? `?${query}` : "";
+  const range = {
+    fromUtc: appliedFilters.fromDate ? startOfLocalDayUtc(appliedFilters.fromDate) ?? undefined : undefined,
+    toUtc: appliedFilters.toDate ? endOfLocalDayUtc(appliedFilters.toDate) ?? undefined : undefined,
+  };
 
   const funnelQuery = useQuery({
-    queryKey: ["referral-funnel-report", fromDate, toDate],
-    queryFn: () =>
-      apiFetch<ReferralFunnelReportResponse>(`${API_V1}/referral/reports/funnel${suffix}`, { authenticated: true }),
+    // The applied range, not the live one: the report used to re-fetch on every
+    // keystroke inside the date control, including the half-typed years a date
+    // input emits while it is being filled in.
+    queryKey: ["referral-reports", "funnel", appliedFilters] as const,
+    queryFn: () => getReferralFunnelReport(range),
+    placeholderData: keepPreviousData,
   });
 
   const costQuery = useQuery({
-    queryKey: ["referral-cost-report", fromDate, toDate],
-    queryFn: () =>
-      apiFetch<ReferralCostReportResponse>(`${API_V1}/referral/reports/cost${suffix}`, { authenticated: true }),
+    queryKey: ["referral-reports", "cost", appliedFilters] as const,
+    queryFn: () => getReferralCostReport(range),
+    placeholderData: keepPreviousData,
   });
 
+  const applyFilters = () => {
+    if (filters.fromDate && filters.toDate && filters.toDate < filters.fromDate) {
+      setRangeError("The end date cannot be before the start date.");
+      return;
+    }
+    setRangeError(null);
+    setAppliedFilters(filters);
+  };
+
+  const clearFilters = () => {
+    setRangeError(null);
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+  };
+
+  const isBusy = funnelQuery.isFetching || costQuery.isFetching;
+
   return (
-    <main className="flex flex-col gap-6">
-      <PageHeading title="Referral Reports" subtitle="Funnel and total program cost." />
-      <div>
-        <Link href="/referral" className="text-sm font-medium hover:underline">
-          ← Referrals & fraud queue
-        </Link>
-        {" · "}
-        <Link href="/referral/config" className="text-sm font-medium hover:underline">
-          Program config
-        </Link>
+    <div className="mx-auto w-full max-w-5xl">
+      <PageHeading
+        title="Referral reports"
+        subtitle="How far referrals get through the funnel, and what the programme has paid out."
+      />
+
+      <ReferralTabs />
+
+      <div className="flex flex-col gap-6">
+        <FilterBar
+          columns={2}
+          submitLabel="Apply range"
+          onSubmit={applyFilters}
+          onClear={clearFilters}
+          activeCount={countActiveFilters(appliedFilters)}
+          busy={isBusy}
+        >
+          <Field
+            label="From"
+            type="date"
+            max={filters.toDate || undefined}
+            value={filters.fromDate}
+            error={rangeError ?? undefined}
+            onChange={(event) => setFilters((current) => ({ ...current, fromDate: event.target.value }))}
+          />
+          <Field
+            label="To"
+            type="date"
+            min={filters.fromDate || undefined}
+            value={filters.toDate}
+            onChange={(event) => setFilters((current) => ({ ...current, toDate: event.target.value }))}
+          />
+        </FilterBar>
+
+        <Card
+          title="Funnel"
+          description="Of the referrals registered in this range, how many have since progressed further."
+        >
+          {funnelQuery.isPending ? (
+            <StatTileSkeleton count={4} />
+          ) : funnelQuery.error ? (
+            <SectionError error={funnelQuery.error} onRetry={() => funnelQuery.refetch()} />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatTile label="Invited" value={count(funnelQuery.data.invitedCount)} hint="Same as registered — invite clicks are not tracked." />
+              <StatTile label="Registered" value={count(funnelQuery.data.registeredCount)} />
+              <StatTile
+                label="Qualified"
+                value={count(funnelQuery.data.qualifiedCount)}
+                hint={share(funnelQuery.data.qualifiedCount, funnelQuery.data.registeredCount)}
+              />
+              <StatTile
+                label="Rewarded"
+                value={count(funnelQuery.data.rewardedCount)}
+                hint={share(funnelQuery.data.rewardedCount, funnelQuery.data.registeredCount)}
+              />
+            </div>
+          )}
+        </Card>
+
+        <Card title="Programme cost" description="Every reward actually disbursed within this range.">
+          {costQuery.isPending ? (
+            <StatTileSkeleton count={3} />
+          ) : costQuery.error ? (
+            <SectionError error={costQuery.error} onRetry={() => costQuery.refetch()} />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <StatTile label="Wallet credit" value={formatCurrency(costQuery.data.totalWalletCreditCost)} />
+              <StatTile label="Coupons" value={formatCurrency(costQuery.data.totalCouponCost)} />
+              <StatTile
+                label="Total cost"
+                value={formatCurrency(costQuery.data.totalCost)}
+                hint={`${count(costQuery.data.rewardedReferralCount)} referral rewards · ${count(
+                  costQuery.data.milestoneBonusCount,
+                )} milestone bonuses`}
+              />
+            </div>
+          )}
+        </Card>
       </div>
+    </div>
+  );
+}
 
-      <Card title="Date range (optional)">
-        <div className="flex items-end gap-3">
-          <Field label="From" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-          <Field label="To" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+function count(value: number): string {
+  return value.toLocaleString("en-IN");
+}
+
+/** Conversion against the registered cohort — omitted rather than shown as 0% of nothing. */
+function share(value: number, total: number): string | undefined {
+  if (total <= 0) return undefined;
+  return `${Math.round((value / total) * 100)}% of registered`;
+}
+
+/** Matches the real tile's box so applying a range does not jump the layout. */
+function StatTileSkeleton({ count: tiles }: { count: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: tiles }, (_, index) => (
+        <div key={index} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="mt-3 h-8 w-20" />
         </div>
-      </Card>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">Funnel</h2>
-        {funnelQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : funnelQuery.isError ? (
-          <Alert>{describeError(funnelQuery.error)}</Alert>
-        ) : (
-          <div className="grid grid-cols-4 gap-4">
-            <StatTile label="Invited" value={String(funnelQuery.data.invitedCount)} />
-            <StatTile label="Registered" value={String(funnelQuery.data.registeredCount)} />
-            <StatTile label="Qualified" value={String(funnelQuery.data.qualifiedCount)} />
-            <StatTile label="Rewarded" value={String(funnelQuery.data.rewardedCount)} />
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">Program cost</h2>
-        {costQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : costQuery.isError ? (
-          <Alert>{describeError(costQuery.error)}</Alert>
-        ) : (
-          <div className="grid grid-cols-3 gap-4">
-            <StatTile label="Wallet credit cost" value={`₹${costQuery.data.totalWalletCreditCost.toFixed(2)}`} />
-            <StatTile label="Coupon cost" value={`₹${costQuery.data.totalCouponCost.toFixed(2)}`} />
-            <StatTile label="Total cost" value={`₹${costQuery.data.totalCost.toFixed(2)}`} />
-          </div>
-        )}
-      </section>
-    </main>
+      ))}
+    </div>
   );
 }

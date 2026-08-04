@@ -2,10 +2,12 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { Controller, useForm, type FieldValues, type Resolver, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, CheckboxField, Field, PageHeading } from "@/components/ui";
+import { Alert, Button, Card, CheckboxField, Field, PageHeading, Skeleton, useToast } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
+import { SectionError } from "@/components/screen-states";
 import { apiFetch, describeError } from "@/lib/api";
 import type {
   AllSystemSettingsResponse,
@@ -35,6 +37,20 @@ function emptyStringToNull(value: string): number | null {
 
 function nullableNumberToInputValue(value: number | null): string {
   return value === null || value === undefined ? "" : String(value);
+}
+
+/**
+ * A boolean setting spans the whole field grid. A boxed toggle carrying its
+ * own explanation reads badly squeezed into one half-width column next to a
+ * numeric input, and the feature flags here are the highest-consequence
+ * controls on the page.
+ */
+function ToggleRow(props: ComponentProps<typeof CheckboxField>) {
+  return (
+    <div className="sm:col-span-2">
+      <CheckboxField {...props} />
+    </div>
+  );
 }
 
 function useAllSettings() {
@@ -79,8 +95,8 @@ function SettingsGroupCard<T extends FieldValues>({
   onSaved: (value: T) => void;
   children: (form: UseFormReturn<T>) => ReactNode;
 }) {
+  const toast = useToast();
   const [error, setError] = useState<string | null>(null);
-  const [justSaved, setJustSaved] = useState(false);
   const form = useForm<T>({
     resolver: zodResolver(schema as never) as unknown as Resolver<T>,
     defaultValues: defaultValues as never,
@@ -88,32 +104,37 @@ function SettingsGroupCard<T extends FieldValues>({
 
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
-    setJustSaved(false);
     try {
       const updated = await apiFetch<T>(`${SETTINGS_PATH}/${groupPath}`, {
         method: "PUT",
         authenticated: true,
         body: JSON.stringify(values),
       });
+      // `reset` to the server's echo, not the submitted values: it clears the
+      // dirty state and makes the card show what was actually persisted.
       form.reset(updated);
       onSaved(updated);
-      setJustSaved(true);
+      // A toast rather than a persistent inline alert. The old "Saved." alert
+      // had no way to clear itself, so it stayed under a card the admin had
+      // since edited again, asserting a save that had not happened.
+      toast("success", `${title} saved.`);
     } catch (err) {
+      // The form keeps its values, so a rejected save can be corrected and
+      // resubmitted rather than retyped.
       setError(describeError(err));
     }
   });
 
   return (
     <Card title={title} description={description}>
-      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         {error ? <Alert>{error}</Alert> : null}
-        {justSaved && !error ? <Alert tone="success">Saved.</Alert> : null}
-        {children(form)}
-        <div>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? "Saving…" : "Save changes"}
+        <FormGrid columns={2}>{children(form)}</FormGrid>
+        <FormActions>
+          <Button type="submit" loading={form.formState.isSubmitting}>
+            Save changes
           </Button>
-        </div>
+        </FormActions>
       </form>
     </Card>
   );
@@ -161,7 +182,7 @@ function BookingSettingsSection({ initial, queryClient }: { initial: BookingSett
             control={form.control}
             name="allowSameDayBooking"
             render={({ field }) => (
-              <CheckboxField label="Allow same-day booking" checked={field.value} onChange={field.onChange} />
+              <ToggleRow label="Allow same-day booking" checked={field.value} onChange={field.onChange} />
             )}
           />
         </>
@@ -218,7 +239,7 @@ function SlotSettingsSection({ initial, queryClient }: { initial: SlotSettings; 
             control={form.control}
             name="allowOverbooking"
             render={({ field }) => (
-              <CheckboxField label="Allow overbooking" checked={field.value} onChange={field.onChange} />
+              <ToggleRow label="Allow overbooking" checked={field.value} onChange={field.onChange} />
             )}
           />
         </>
@@ -263,7 +284,7 @@ function CancellationSettingsSection({ initial, queryClient }: { initial: Cancel
             control={form.control}
             name="allowAdminOverride"
             render={({ field }) => (
-              <CheckboxField label="Allow admin override of the late fee" checked={field.value} onChange={field.onChange} />
+              <ToggleRow label="Allow admin override of the late fee" checked={field.value} onChange={field.onChange} />
             )}
           />
         </>
@@ -362,7 +383,7 @@ function TaxSettingsSection({ initial, queryClient }: { initial: TaxSettings; qu
             control={form.control}
             name="taxInclusivePricing"
             render={({ field }) => (
-              <CheckboxField label="Displayed prices already include tax" checked={field.value} onChange={field.onChange} />
+              <ToggleRow label="Displayed prices already include tax" checked={field.value} onChange={field.onChange} />
             )}
           />
         </>
@@ -415,7 +436,7 @@ function WalletSettingsSection({ initial, queryClient }: { initial: WalletSettin
             control={form.control}
             name="allowWalletTopUp"
             render={({ field }) => (
-              <CheckboxField label="Allow customers to top up their wallet directly" checked={field.value} onChange={field.onChange} />
+              <ToggleRow label="Allow customers to top up their wallet directly" checked={field.value} onChange={field.onChange} />
             )}
           />
         </>
@@ -461,14 +482,14 @@ function CouponSettingsSection({ initial, queryClient }: { initial: CouponSettin
             control={form.control}
             name="allowCouponStacking"
             render={({ field }) => (
-              <CheckboxField label="Allow more than one coupon per booking" checked={field.value} onChange={field.onChange} />
+              <ToggleRow label="Allow more than one coupon per booking" checked={field.value} onChange={field.onChange} />
             )}
           />
           <Controller
             control={form.control}
             name="couponsEnabled"
             render={({ field }) => (
-              <CheckboxField
+              <ToggleRow
                 label="Coupons enabled"
                 description="Feature flag: turning this off disables coupon redemption everywhere, regardless of individual coupon state."
                 checked={field.value}
@@ -482,21 +503,52 @@ function CouponSettingsSection({ initial, queryClient }: { initial: CouponSettin
   );
 }
 
+/**
+ * Shaped like a real settings card — header, a two-column field grid, a
+ * button row — so the page does not reflow when the settings land.
+ */
+function SettingsCardSkeleton({ fields = 4 }: { fields?: number }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+      <Skeleton className="h-4 w-40" />
+      <Skeleton className="mt-2 h-3.5 w-72 max-w-full" />
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {Array.from({ length: fields }, (_, index) => (
+          <div key={index} className="flex flex-col gap-2">
+            <Skeleton className="h-3.5 w-40" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex justify-end">
+        <Skeleton className="h-10 w-32" />
+      </div>
+    </div>
+  );
+}
+
 export default function SystemSettingsPage() {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error } = useAllSettings();
+  const { data, isPending, isError, error, refetch } = useAllSettings();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <PageHeading
         title="System settings"
         subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet and coupon rules (SRS 12.19)."
       />
 
-      {isLoading ? <Alert tone="info">Loading settings…</Alert> : null}
-      {isError ? <Alert>{describeError(error)}</Alert> : null}
-
-      {data ? (
+      {isPending ? (
+        <>
+          <SettingsCardSkeleton fields={4} />
+          <SettingsCardSkeleton fields={5} />
+          <SettingsCardSkeleton fields={3} />
+        </>
+      ) : isError ? (
+        // Previously a bare Alert with no way out: a transient failure left
+        // the whole screen empty until the admin reloaded the browser.
+        <SectionError error={error} onRetry={() => void refetch()} />
+      ) : (
         <>
           <BookingSettingsSection initial={data.booking} queryClient={queryClient} />
           <SlotSettingsSection initial={data.slot} queryClient={queryClient} />
@@ -506,7 +558,7 @@ export default function SystemSettingsPage() {
           <WalletSettingsSection initial={data.wallet} queryClient={queryClient} />
           <CouponSettingsSection initial={data.coupon} queryClient={queryClient} />
         </>
-      ) : null}
+      )}
     </div>
   );
 }

@@ -1,267 +1,124 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Alert, Button, Card, Field, PageHeading, Select } from "@/components/ui";
-import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
+import { useState } from "react";
+import { Button, PageHeading, useToast } from "@/components/ui";
+import { describeError } from "@/lib/api";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
+import { PlanFormModal } from "./_components/PlanFormModal";
+import { PlansTable } from "./_components/PlansTable";
+import {
+  createSubscriptionPlan,
+  listSubscriptionPlans,
+  setSubscriptionPlanActive,
+  updateSubscriptionPlan,
+  type SubscriptionPlan,
+  type SubscriptionPlanRequest,
+} from "./_lib/plans-api";
 
-enum SubscriptionBillingCycle {
-  Monthly = 0,
-  Quarterly = 1,
-  Yearly = 2,
-}
-
-const BILLING_CYCLE_OPTIONS = [
-  { value: String(SubscriptionBillingCycle.Monthly), label: "Monthly" },
-  { value: String(SubscriptionBillingCycle.Quarterly), label: "Quarterly" },
-  { value: String(SubscriptionBillingCycle.Yearly), label: "Yearly" },
-] as const;
-
-interface SubscriptionPlanAdminResponse {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  billingCycle: SubscriptionBillingCycle;
-  freeVisitsIncluded: number;
-  discountPercent: number;
-  prioritySlotFlag: boolean;
-  isActive: boolean;
-  createdAtUtc: string;
-  updatedAtUtc: string;
-}
-
-interface PlanFormValues {
-  name: string;
-  description: string;
-  price: number;
-  billingCycle: SubscriptionBillingCycle;
-  freeVisitsIncluded: number;
-  discountPercent: number;
-  prioritySlotFlag: boolean;
-}
-
-const EMPTY_FORM: PlanFormValues = {
-  name: "",
-  description: "",
-  price: 0,
-  billingCycle: SubscriptionBillingCycle.Monthly,
-  freeVisitsIncluded: 0,
-  discountPercent: 0,
-  prioritySlotFlag: false,
-};
-
-const PLANS_BASE = `${API_V1}/subscription-plans`;
+const PLANS_QUERY_KEY = ["admin-subscription-plans"] as const;
 
 /**
  * Admin CRUD for subscription plans (PRODUCT-ENHANCEMENTS.md #1, task 180):
- * price, billing cycle, benefits, active window.
+ * price, billing cycle, benefits, and the active window.
+ *
+ * Mutating controls are gated on "subscription.write" exactly the way every
+ * other admin module gates its own; the route itself is only reachable once
+ * `AdminSidebar` has already filtered it in by "subscription.read", and the
+ * API authorises every call again server-side.
  */
 export default function SubscriptionPlansPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
+  const claims = useAdminClaims();
   const canWrite = canWriteModule(claims, "subscription");
-
   const queryClient = useQueryClient();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<PlanFormValues>(EMPTY_FORM);
+  const toast = useToast();
 
-  const plansQuery = useQuery({
-    queryKey: ["admin-subscription-plans"],
-    queryFn: () => apiFetch<SubscriptionPlanAdminResponse[]>(PLANS_BASE, { authenticated: true }),
-  });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-subscription-plans"] });
+  const plansQuery = useQuery({ queryKey: PLANS_QUERY_KEY, queryFn: listSubscriptionPlans });
+
+  const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: PLANS_QUERY_KEY });
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingPlan(null);
+    setFormError(null);
+  };
 
   const saveMutation = useMutation({
-    mutationFn: () => {
-      const body = JSON.stringify({
-        name: form.name,
-        description: form.description || null,
-        price: form.price,
-        billingCycle: form.billingCycle,
-        freeVisitsIncluded: form.freeVisitsIncluded,
-        discountPercent: form.discountPercent,
-        prioritySlotFlag: form.prioritySlotFlag,
-      });
-      return editingId
-        ? apiFetch<SubscriptionPlanAdminResponse>(`${PLANS_BASE}/${editingId}`, { method: "PUT", authenticated: true, body })
-        : apiFetch<SubscriptionPlanAdminResponse>(PLANS_BASE, { method: "POST", authenticated: true, body });
+    mutationFn: (request: SubscriptionPlanRequest) =>
+      editingPlan
+        ? updateSubscriptionPlan(editingPlan.id, request)
+        : createSubscriptionPlan(request),
+    onSuccess: (_plan, request) => {
+      void invalidatePlans();
+      toast("success", editingPlan ? `${request.name} updated.` : `${request.name} created.`);
+      closeForm();
     },
-    onSuccess: () => {
-      setForm(EMPTY_FORM);
-      setEditingId(null);
-      invalidate();
-    },
+    // Keeps the dialog open with everything the admin typed still in it.
+    onError: (error) => setFormError(describeError(error)),
   });
 
-  const toggleActiveMutation = useMutation({
-    mutationFn: ({ id, activate }: { id: string; activate: boolean }) =>
-      apiFetch(`${PLANS_BASE}/${id}/${activate ? "activate" : "deactivate"}`, { method: "POST", authenticated: true }),
-    onSuccess: invalidate,
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      setSubscriptionPlanActive(id, isActive),
+    // The list is the only source of truth for `isActive`, so it must be
+    // refetched — without this the row kept showing its previous state until
+    // the next full page load.
+    onSuccess: () => void invalidatePlans(),
   });
 
-  function startEdit(plan: SubscriptionPlanAdminResponse) {
-    setEditingId(plan.id);
-    setForm({
-      name: plan.name,
-      description: plan.description ?? "",
-      price: plan.price,
-      billingCycle: plan.billingCycle,
-      freeVisitsIncluded: plan.freeVisitsIncluded,
-      discountPercent: plan.discountPercent,
-      prioritySlotFlag: plan.prioritySlotFlag,
-    });
-  }
+  const openCreate = () => {
+    setEditingPlan(null);
+    setFormError(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (plan: SubscriptionPlan) => {
+    setEditingPlan(plan);
+    setFormError(null);
+    setFormOpen(true);
+  };
+
+  const newPlanButton = canWrite ? (
+    <Button type="button" size="sm" onClick={openCreate}>
+      New plan
+    </Button>
+  ) : undefined;
 
   return (
-    <main className="flex flex-col gap-6">
-      <PageHeading title="Subscription Plans" subtitle="Price, billing cycle, and benefits for Nestly Plus tiers." />
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeading
+        title="Subscription Plans"
+        subtitle="Price, billing cycle and benefits for the Nestly Plus tiers (PRODUCT-ENHANCEMENTS.md #1)."
+        actions={newPlanButton}
+      />
 
-      <Card title="Plans">
-        {plansQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading…</p>
-        ) : plansQuery.isError ? (
-          <Alert>{describeError(plansQuery.error)}</Alert>
-        ) : plansQuery.data.length === 0 ? (
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">No plans yet.</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="text-neutral-600 dark:text-neutral-400">
-              <tr>
-                <th className="pb-2">Name</th>
-                <th className="pb-2">Price</th>
-                <th className="pb-2">Cycle</th>
-                <th className="pb-2">Free visits</th>
-                <th className="pb-2">Discount</th>
-                <th className="pb-2">Status</th>
-                {canWrite ? <th className="pb-2">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {plansQuery.data.map((plan) => (
-                <tr key={plan.id} className="border-t border-black/10 dark:border-white/10">
-                  <td className="py-2">{plan.name}</td>
-                  <td className="py-2">₹{plan.price.toFixed(2)}</td>
-                  <td className="py-2">{BILLING_CYCLE_OPTIONS.find((o) => Number(o.value) === plan.billingCycle)?.label}</td>
-                  <td className="py-2">{plan.freeVisitsIncluded}</td>
-                  <td className="py-2">{plan.discountPercent}%</td>
-                  <td className="py-2">{plan.isActive ? "Active" : "Inactive"}</td>
-                  {canWrite ? (
-                    <td className="py-2">
-                      <div className="flex gap-2">
-                        <Button type="button" variant="secondary" onClick={() => startEdit(plan)}>
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={toggleActiveMutation.isPending}
-                          onClick={() => toggleActiveMutation.mutate({ id: plan.id, activate: !plan.isActive })}
-                        >
-                          {plan.isActive ? "Deactivate" : "Activate"}
-                        </Button>
-                      </div>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+      <PlansTable
+        plans={plansQuery.data}
+        isLoading={plansQuery.isPending}
+        isFetching={plansQuery.isFetching}
+        error={plansQuery.error}
+        onRetry={() => void plansQuery.refetch()}
+        canWrite={canWrite}
+        onEdit={openEdit}
+        onToggleActive={(plan) => toggleMutation.mutate({ id: plan.id, isActive: !plan.isActive })}
+        togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        toggleError={toggleMutation.error}
+        emptyAction={newPlanButton}
+      />
 
-      {canWrite ? (
-        <Card title={editingId ? "Edit plan" : "New plan"}>
-          {saveMutation.isError ? (
-            <div className="mb-3">
-              <Alert>{describeError(saveMutation.error)}</Alert>
-            </div>
-          ) : null}
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveMutation.mutate();
-            }}
-          >
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <Select
-                label="Billing cycle"
-                options={BILLING_CYCLE_OPTIONS}
-                value={String(form.billingCycle)}
-                onChange={(e) => setForm({ ...form, billingCycle: Number(e.target.value) })}
-              />
-              <Field
-                label="Price"
-                type="number"
-                step="0.01"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
-              />
-              <Field
-                label="Free visits included"
-                type="number"
-                value={form.freeVisitsIncluded}
-                onChange={(e) => setForm({ ...form, freeVisitsIncluded: Number(e.target.value) })}
-              />
-              <Field
-                label="Discount percent"
-                type="number"
-                step="0.01"
-                value={form.discountPercent}
-                onChange={(e) => setForm({ ...form, discountPercent: Number(e.target.value) })}
-              />
-            </div>
-            <div>
-              <label htmlFor="plan-description" className="text-sm font-medium">
-                Description
-              </label>
-              <textarea
-                id="plan-description"
-                rows={2}
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="mt-1.5 w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.prioritySlotFlag}
-                onChange={(e) => setForm({ ...form, prioritySlotFlag: e.target.checked })}
-              />
-              Priority slot access
-            </label>
-            <div className="flex gap-2">
-              <Button type="submit" disabled={saveMutation.isPending || form.name.trim() === ""} className="w-fit">
-                {saveMutation.isPending ? "Saving…" : editingId ? "Save changes" : "Create plan"}
-              </Button>
-              {editingId ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-fit"
-                  onClick={() => {
-                    setEditingId(null);
-                    setForm(EMPTY_FORM);
-                  }}
-                >
-                  Cancel edit
-                </Button>
-              ) : null}
-            </div>
-          </form>
-        </Card>
-      ) : null}
-    </main>
+      <PlanFormModal
+        open={formOpen}
+        plan={editingPlan}
+        isSubmitting={saveMutation.isPending}
+        submitError={formError}
+        onSubmit={(request) => saveMutation.mutate(request)}
+        onClose={closeForm}
+      />
+    </div>
   );
 }
