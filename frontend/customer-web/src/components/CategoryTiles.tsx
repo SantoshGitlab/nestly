@@ -97,7 +97,7 @@ function CityCategoryGrid({ cityId }: { cityId: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+      <div className="grid animate-fade-in grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
         {visible.map((category) => (
           <CategoryTile key={category.id} category={category} />
         ))}

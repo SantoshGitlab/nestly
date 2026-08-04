@@ -101,7 +101,7 @@ export default function CategoryDetailPage() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid animate-fade-in grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {category.services.map((service) => (
               <ServiceCard
                 key={service.id}

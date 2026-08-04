@@ -1073,7 +1073,13 @@ interface Toast {
   id: number;
   tone: keyof typeof ALERT_TONES;
   message: string;
+  /** Set once its timer expires; drives the exit transition before removal. */
+  leaving: boolean;
 }
+
+// Must be >= the CSS exit transition duration below (duration-fast = 120ms)
+// so the toast is fully faded before it is removed from state.
+const TOAST_EXIT_MS = 150;
 
 const ToastContext = createContext<((tone: Toast["tone"], message: string) => void) | null>(null);
 
@@ -1088,9 +1094,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = (tone: Toast["tone"], message: string) => {
     const id = nextId.current++;
-    setToasts((current) => [...current, { id, tone, message }]);
+    setToasts((current) => [...current, { id, tone, message, leaving: false }]);
     window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
+      setToasts((current) =>
+        current.map((toast) => (toast.id === id ? { ...toast, leaving: true } : toast)),
+      );
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((toast) => toast.id !== id));
+      }, TOAST_EXIT_MS);
     }, 4000);
   };
 
@@ -1105,7 +1116,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-atomic="false"
       >
         {toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto w-full max-w-sm animate-rise">
+          <div
+            key={toast.id}
+            className={cx(
+              "pointer-events-auto w-full max-w-sm transition duration-fast ease-out",
+              toast.leaving ? "translate-y-1 opacity-0" : "animate-rise",
+            )}
+          >
             <div className="rounded-xl border border-line bg-surface shadow-lg">
               <Alert tone={toast.tone}>{toast.message}</Alert>
             </div>

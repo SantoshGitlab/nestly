@@ -280,7 +280,7 @@ export function DataTable<T>({
   return (
     <section
       className={cx(
-        "w-full overflow-hidden rounded-2xl border border-line bg-surface shadow-sm",
+        "w-full animate-fade-in overflow-hidden rounded-2xl border border-line bg-surface shadow-sm",
         className,
       )}
     >

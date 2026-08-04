@@ -293,7 +293,7 @@ export default function DashboardPage() {
             </p>
             <div
               className={cx(
-                "grid grid-cols-2 gap-4 transition-opacity duration-fast ease-out sm:grid-cols-3 lg:grid-cols-5",
+                "grid animate-fade-in grid-cols-2 gap-4 transition-opacity duration-fast ease-out sm:grid-cols-3 lg:grid-cols-5",
                 query.isFetching && "opacity-60",
               )}
             >

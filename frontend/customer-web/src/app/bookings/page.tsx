@@ -111,7 +111,7 @@ function BookingsScreen() {
           }
         />
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex animate-fade-in flex-col gap-3">
           {query.data.map((booking) => (
             <li key={booking.id}>
               <Link

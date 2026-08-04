@@ -149,7 +149,7 @@ export default function JobsPage() {
             }
           />
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid animate-fade-in gap-3 sm:grid-cols-2">
             {query.data.map((job) => (
               <li key={job.assignmentId}>
                 <JobCard job={job} />
