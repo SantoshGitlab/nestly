@@ -3,21 +3,51 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import type { ReactNode } from "react";
 import { ChatWidget } from "@/components/ChatWidget";
+import {
+  BookingStatusBadge,
+  DetailList,
+  DetailRow,
+  PriceBreakdownList,
+  ScreenSkeleton,
+  bookingStatusTone,
+  formatCalendarDate,
+  formatInstant,
+  formatTimeRange,
+  inr,
+  partnerAssignmentLabel,
+  partnerAssignmentTone,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import { Alert, Badge, Button, Card, PageHeading, Skeleton, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { BookingStatus, ChatContextType, RefundMethod, RefundStatus, RefundType } from "@/lib/types";
+import {
+  BookingPartnerAssignmentStatus,
+  BookingStatus,
+  ChatContextType,
+  RefundMethod,
+  RefundStatus,
+  RefundType,
+} from "@/lib/types";
 import type {
   BookingCompletionProofResponse,
   BookingDetail,
   BookingStatusTimelineEntry,
-  PriceBreakdown,
   RefundTransactionResponse,
 } from "@/lib/types";
 
 /** Both reachable only via RefundPending/Refunded in BookingLifecycle - see BookingStatusMapper.cs. */
 const REFUND_STATUSES: BookingStatus[] = [BookingStatus.RefundPending, BookingStatus.Refunded];
+
+/** Cancelling is pointless once the booking is already in a terminal state. */
+const CLOSED_STATUSES: BookingStatus[] = [
+  BookingStatus.Completed,
+  BookingStatus.CancelledByCustomer,
+  BookingStatus.CancelledByAdmin,
+  BookingStatus.RefundPending,
+  BookingStatus.Refunded,
+];
 
 /**
  * Booking detail with status timeline, refund info, and action CTAs (SRS
@@ -40,62 +70,170 @@ function BookingDetailScreen() {
   });
 
   if (query.isPending) {
-    return <main className="mx-auto w-full max-w-3xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
   }
 
   if (query.isError || !query.data) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-12">
-        <Alert>{describeError(query.error)}</Alert>
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+        <Alert
+          tone="error"
+          title="Couldn't load this booking"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
       </main>
     );
   }
 
   const booking = query.data;
+  const isClosed = CLOSED_STATUSES.includes(booking.status);
 
   return (
-    <main className="mx-auto grid w-full max-w-4xl gap-6 px-6 py-10 md:grid-cols-[1fr_320px]">
-      <div className="flex flex-col gap-6">
-        <PageHeading title={booking.service.name} subtitle={`Booking ID: ${booking.id}`} />
+    <main className="mx-auto grid w-full max-w-4xl gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_20rem]">
+      <div className="flex min-w-0 flex-col gap-6">
+        {/* The heading is the service name and the subtitle carries the
+            booking id as one text node - both are addressed by name in the
+            E2E suite, so neither shape changes. */}
+        <PageHeading
+          title={booking.service.name}
+          subtitle={`Booking ID: ${booking.id}`}
+          actions={<BookingStatusBadge status={booking.status} label={booking.statusLabel} />}
+        />
+
+        <StatusSummaryCard booking={booking} />
+
+        <Card title="Slot">
+          <DetailList>
+            <DetailRow label="Date">{formatCalendarDate(booking.slot.date)}</DetailRow>
+            <DetailRow label="Time window" numeric>
+              {booking.slot.name} · {formatTimeRange(booking.slot.startTime, booking.slot.endTime)}
+            </DetailRow>
+            <DetailRow label="Booked on">{formatInstant(booking.createdAtUtc)}</DetailRow>
+          </DetailList>
+        </Card>
 
         <Card title="Address">
-          <address className="text-sm not-italic leading-relaxed text-neutral-700 dark:text-neutral-300">
+          <address className="text-sm not-italic leading-relaxed text-fg-muted">
+            <span className="font-medium text-fg">{booking.address.label}</span>
+            <br />
             {booking.address.line1}
             {booking.address.line2 ? <>, {booking.address.line2}</> : null}
             {booking.address.landmark ? <>, near {booking.address.landmark}</> : null}
             <br />
-            {booking.address.city}, {booking.address.state} {booking.address.pincode}
+            {booking.address.city}, {booking.address.state}{" "}
+            <span className="nums">{booking.address.pincode}</span>
             <br />
-            {booking.address.contactName} · {booking.address.contactMobile}
+            {booking.address.contactName} · <span className="nums">{booking.address.contactMobile}</span>
           </address>
         </Card>
 
-        <Card title="Slot">
-          <p className="text-sm">
-            {booking.slot.date} · {booking.slot.name} ({booking.slot.startTime.slice(0, 5)}–
-            {booking.slot.endTime.slice(0, 5)})
-          </p>
-        </Card>
-
         <Card title="Price & payment">
-          <PriceRows breakdown={booking.price} />
+          <PriceBreakdownList
+            breakdown={booking.price}
+            discount={
+              booking.couponDiscountAmount
+                ? { code: booking.couponCode, amount: booking.couponDiscountAmount }
+                : null
+            }
+            total={booking.finalPayable}
+            totalLabel="Amount paid"
+          />
         </Card>
 
         {REFUND_STATUSES.includes(booking.status) ? <RefundInfoCard booking={booking} /> : null}
 
-        {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+        {booking.status === BookingStatus.Completed ? (
+          <CompletionProofCard bookingId={booking.id} />
+        ) : null}
 
         <Card title="Status timeline">
-          <Timeline entries={booking.timeline} />
+          <Timeline
+            entries={booking.timeline}
+            currentStatus={booking.status}
+            partnerAssignmentStatus={booking.partnerAssignmentStatus}
+          />
         </Card>
 
         <ChatWidget contextType={ChatContextType.Booking} contextId={booking.id} />
       </div>
 
-      <aside className="flex flex-col gap-3 md:sticky md:top-6 md:self-start">
-        <ActionCtas booking={booking} />
+      <aside className="flex flex-col gap-4 md:sticky md:top-20 md:self-start">
+        <ActionCtas booking={booking} isClosed={isClosed} />
       </aside>
     </main>
+  );
+}
+
+/**
+ * The "where is my booking right now" card. Surfaces
+ * `partnerAssignmentStatus` (task 208) — the booking's own status stays
+ * "Assigned" across both the offer to a professional and their acceptance, so
+ * without this the customer has no way to tell an accepted job from one still
+ * waiting on a response.
+ */
+function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
+  const assignment = booking.partnerAssignmentStatus;
+
+  return (
+    <Card>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
+              Current status
+            </p>
+            <p className="mt-1 text-lg font-semibold text-fg">{booking.statusLabel}</p>
+          </div>
+          <BookingStatusBadge status={booking.status} label={booking.statusLabel} />
+        </div>
+
+        <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3">
+          <span
+            aria-hidden
+            className={cx(
+              "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+              assignment === BookingPartnerAssignmentStatus.Accepted
+                ? "bg-success-soft text-success"
+                : assignment === null
+                  ? "bg-surface-3 text-fg-subtle"
+                  : "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+            )}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-fg">Your professional</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">
+              {assignment === null
+                ? "Not assigned yet — we'll match a professional to this slot shortly."
+                : partnerAssignmentLabel(assignment)}
+            </p>
+          </div>
+          {assignment !== null ? (
+            <Badge tone={partnerAssignmentTone(assignment)} className="ml-auto shrink-0">
+              {assignment === BookingPartnerAssignmentStatus.Accepted ? "Confirmed" : "In progress"}
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -116,7 +254,10 @@ function RefundInfoCard({ booking }: { booking: BookingDetail }) {
   if (refundsQuery.isPending) {
     return (
       <Card title="Refund">
-        <p className="text-sm text-neutral-500">Loading refund details…</p>
+        <div className="flex flex-col gap-2.5" aria-hidden>
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-2/3" />
+        </div>
       </Card>
     );
   }
@@ -124,7 +265,17 @@ function RefundInfoCard({ booking }: { booking: BookingDetail }) {
   if (refundsQuery.isError) {
     return (
       <Card title="Refund">
-        <Alert>{describeError(refundsQuery.error)}</Alert>
+        <Alert
+          tone="error"
+          title="Couldn't load refund details"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => refundsQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(refundsQuery.error)}
+        </Alert>
       </Card>
     );
   }
@@ -137,50 +288,36 @@ function RefundInfoCard({ booking }: { booking: BookingDetail }) {
     // rather than rendering nothing.
     return (
       <Card title="Refund">
-        <dl className="flex flex-col gap-2 text-sm">
-          <div className="flex items-center justify-between">
-            <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
-            <dd className="font-medium">{booking.statusLabel}</dd>
-          </div>
-        </dl>
-        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+        <Alert tone="info" title={booking.statusLabel}>
           Your refund is being processed. We&apos;ll update this page once it&apos;s initiated.
-        </p>
+        </Alert>
       </Card>
     );
   }
 
   return (
     <Card title="Refund">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         {refunds.map((refund) => (
-          <dl
-            key={refund.id}
-            className="flex flex-col gap-2 border-t border-black/10 pt-3 text-sm first:border-t-0 first:pt-0 dark:border-white/15"
-          >
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Amount</dt>
-              <dd className="font-medium">₹{refund.amount.toFixed(2)}</dd>
+          <div key={refund.id} className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="nums text-xl font-semibold text-fg">{inr(refund.amount)}</span>
+              <Badge tone={refundStatusTone(refund.status)}>{refundStatusLabel(refund.status)}</Badge>
             </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Type</dt>
-              <dd className="font-medium">{refundTypeLabel(refund.type)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Method</dt>
-              <dd className="font-medium">{refundMethodLabel(refund.method)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
-              <dd className="font-medium">{refundStatusLabel(refund.status)}</dd>
-            </div>
-            {refund.gatewayRefundRef ? (
-              <div className="flex items-center justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">Reference</dt>
-                <dd className="font-medium">{refund.gatewayRefundRef}</dd>
-              </div>
-            ) : null}
-          </dl>
+            <DetailList>
+              <DetailRow label="Refund amount" numeric>
+                {inr(refund.amount)}
+              </DetailRow>
+              <DetailRow label="Type">{refundTypeLabel(refund.type)}</DetailRow>
+              <DetailRow label="Method">{refundMethodLabel(refund.method)}</DetailRow>
+              <DetailRow label="Initiated">{formatInstant(refund.createdAtUtc)}</DetailRow>
+              {refund.gatewayRefundRef ? (
+                <DetailRow label="Reference" numeric>
+                  <span className="break-all">{refund.gatewayRefundRef}</span>
+                </DetailRow>
+              ) : null}
+            </DetailList>
+          </div>
         ))}
       </div>
     </Card>
@@ -210,126 +347,233 @@ function refundStatusLabel(status: RefundStatus): string {
   }
 }
 
-function Timeline({ entries }: { entries: BookingStatusTimelineEntry[] }) {
-  if (entries.length === 0) {
-    return <p className="text-sm text-neutral-500">No status history yet.</p>;
+function refundStatusTone(status: RefundStatus) {
+  switch (status) {
+    case RefundStatus.Refunded:
+      return "success" as const;
+    case RefundStatus.Failed:
+      return "danger" as const;
+    default:
+      return "info" as const;
+  }
+}
+
+/**
+ * Vertical status rail. The last recorded transition is the booking's current
+ * state, so it carries the filled marker; everything before it is history.
+ *
+ * `partnerAssignmentStatus` is appended as a live node rather than folded
+ * into the history list: it is not a BookingStatusHistory row (it tracks the
+ * separate BookingPartnerAssignment entity, task 208) and it has no
+ * changed-at of its own, so presenting it as a dated history entry would be
+ * inventing data.
+ */
+function Timeline({
+  entries,
+  currentStatus,
+  partnerAssignmentStatus,
+}: {
+  entries: BookingStatusTimelineEntry[];
+  currentStatus: BookingStatus;
+  partnerAssignmentStatus: BookingPartnerAssignmentStatus | null;
+}) {
+  const hasAssignment = partnerAssignmentStatus !== null;
+
+  if (entries.length === 0 && !hasAssignment) {
+    return <p className="text-sm text-fg-muted">No status history yet.</p>;
   }
 
+  const lastIndex = entries.length - 1;
+
   return (
-    <ol className="flex flex-col gap-4">
-      {entries.map((entry, i) => (
-        <li key={`${entry.toStatus}-${entry.changedAtUtc}-${i}`} className="flex gap-3">
-          <div className="flex flex-col items-center">
-            <span className="mt-1 h-2.5 w-2.5 rounded-full bg-black dark:bg-white" aria-hidden="true" />
-            {i < entries.length - 1 ? <span className="w-px flex-1 bg-black/15 dark:bg-white/20" /> : null}
-          </div>
-          <div className="pb-2 text-sm">
-            <p className="font-medium">{entry.toStatusLabel}</p>
-            <p className="text-neutral-500">{new Date(entry.changedAtUtc).toLocaleString()}</p>
-            {entry.reason ? <p className="mt-1 text-neutral-600 dark:text-neutral-400">{entry.reason}</p> : null}
-          </div>
-        </li>
-      ))}
+    <ol className="flex flex-col">
+      {entries.map((entry, index) => {
+        const isLast = index === lastIndex;
+        const isCurrent = isLast && !hasAssignment;
+        return (
+          <TimelineNode
+            key={`${entry.toStatus}-${entry.changedAtUtc}-${index}`}
+            tone={bookingStatusTone(entry.toStatus)}
+            filled={isLast}
+            isCurrent={isCurrent}
+            showRail={!isLast || hasAssignment}
+            title={entry.toStatusLabel}
+            meta={formatInstant(entry.changedAtUtc)}
+          >
+            {entry.reason ? <p className="mt-1 text-sm text-fg-muted">{entry.reason}</p> : null}
+          </TimelineNode>
+        );
+      })}
+
+      {hasAssignment ? (
+        <TimelineNode
+          tone={partnerAssignmentTone(partnerAssignmentStatus)}
+          filled
+          isCurrent
+          showRail={false}
+          title={partnerAssignmentLabel(partnerAssignmentStatus)}
+          meta="Professional assignment"
+        >
+          <p className="mt-1 text-sm text-fg-muted">
+            {partnerAssignmentStatus === BookingPartnerAssignmentStatus.Accepted
+              ? "Your professional has confirmed and will arrive in your slot window."
+              : "This updates on its own — no action needed from you."}
+          </p>
+        </TimelineNode>
+      ) : null}
+
+      {/* A booking sitting in a status with no recorded history at all would
+          otherwise render an empty rail. */}
+      {entries.length === 0 && hasAssignment ? (
+        <li className="sr-only">Current status: {currentStatus}</li>
+      ) : null}
     </ol>
   );
 }
 
+const NODE_TONES = {
+  neutral: "bg-surface-3 text-fg-subtle ring-line",
+  brand: "bg-brand-600 text-fg-on-brand ring-brand-600/25",
+  success: "bg-success text-bg ring-success/25",
+  warning: "bg-warning text-bg ring-warning/25",
+  danger: "bg-danger text-bg ring-danger/25",
+  info: "bg-info text-bg ring-info/25",
+  accent: "bg-accent-500 text-bg ring-accent-500/25",
+} as const;
+
+function TimelineNode({
+  tone,
+  filled,
+  isCurrent,
+  showRail,
+  title,
+  meta,
+  children,
+}: {
+  tone: keyof typeof NODE_TONES;
+  filled: boolean;
+  isCurrent: boolean;
+  showRail: boolean;
+  title: string;
+  meta: string;
+  children?: ReactNode;
+}) {
+  return (
+    <li className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span
+          aria-hidden
+          className={cx(
+            "mt-1 h-3 w-3 shrink-0 rounded-full ring-4",
+            filled ? NODE_TONES[tone] : "bg-line-strong ring-transparent",
+            isCurrent && "animate-pop",
+          )}
+        />
+        {showRail ? <span className="w-px flex-1 bg-line" /> : null}
+      </div>
+      <div className={cx("min-w-0 flex-1", showRail ? "pb-5" : "pb-0")}>
+        <p className="text-sm font-medium text-fg">
+          {title}
+          {isCurrent ? <span className="sr-only"> (current)</span> : null}
+        </p>
+        <p className="mt-0.5 text-xs text-fg-subtle">{meta}</p>
+        {children}
+      </div>
+    </li>
+  );
+}
+
 /**
- * Action CTAs (task 65c, SRS 11.13.2), now wired to the real post-booking
- * flows (tasks 89a-c, 90, 91, 92): cancellation, reschedule, review and
- * support ticketing all have live endpoints, so every CTA here points at a
- * real route. Cancel/reschedule/review are shown unconditionally - each
- * target page gates on its own eligibility endpoint and explains why an
- * action isn't available, the same pattern the review flow requires.
+ * Action CTAs (task 65c, SRS 11.13.2), wired to the real post-booking flows
+ * (tasks 89a-c, 90, 91, 92). Every action is a styled `Link` rather than
+ * `<Link><Button/></Link>` — a button inside an anchor is invalid HTML and
+ * exposes two nested controls for one action. The accessible names
+ * "Cancel booking" and "Reschedule booking" are addressed by the E2E suite
+ * and must stay exactly as written.
+ *
+ * Cancel is separated below a rule and carries the danger tone: it is the one
+ * irreversible action here, and grouping it with "Book again" invites the
+ * mis-click. Each target page still gates on its own eligibility endpoint and
+ * explains why an action isn't available.
  */
-function ActionCtas({ booking }: { booking: BookingDetail }) {
+function ActionCtas({ booking, isClosed }: { booking: BookingDetail; isClosed: boolean }) {
   const canRebook = !!booking.service.slug;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5 dark:border-white/15 dark:bg-neutral-900">
+    <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-4 shadow-sm">
       {canRebook ? (
-        <Link href={`/services/${booking.service.slug}`}>
-          <Button type="button" className="w-full">
-            Book again
-          </Button>
-        </Link>
+        <ActionLink href={`/services/${booking.service.slug}`} variant="primary">
+          Book again
+        </ActionLink>
       ) : null}
-      <Link href={`/bookings/${booking.id}/reschedule`}>
-        <Button type="button" variant="secondary" className="w-full">
-          Reschedule booking
-        </Button>
-      </Link>
+
+      {!isClosed ? (
+        <ActionLink href={`/bookings/${booking.id}/reschedule`}>Reschedule booking</ActionLink>
+      ) : null}
+
       {canRebook ? (
-        <Link href={`/recurring-bookings/new?serviceSlug=${booking.service.slug}`}>
-          <Button type="button" variant="secondary" className="w-full">
-            Set up recurring booking
-          </Button>
-        </Link>
+        <ActionLink href={`/recurring-bookings/new?serviceSlug=${booking.service.slug}`}>
+          Set up recurring booking
+        </ActionLink>
       ) : null}
-      <Link href={`/bookings/${booking.id}/cancel`}>
-        <Button type="button" variant="secondary" className="w-full">
-          Cancel booking
-        </Button>
-      </Link>
-      <Link href={`/bookings/${booking.id}/review`}>
-        <Button type="button" variant="secondary" className="w-full">
-          Leave a review
-        </Button>
-      </Link>
+
+      <ActionLink href={`/bookings/${booking.id}/review`}>Leave a review</ActionLink>
+
       {booking.status === BookingStatus.Completed ? (
-        <Link href="/refer-earn">
-          <Button type="button" variant="secondary" className="w-full">
-            Refer a friend & earn
-          </Button>
-        </Link>
+        <ActionLink href="/refer-earn">Refer a friend &amp; earn</ActionLink>
       ) : null}
-      <Link href="/bookings">
-        <Button type="button" variant="secondary" className="w-full">
-          Back to my bookings
-        </Button>
-      </Link>
-      <Link href={`/support/new?bookingId=${booking.id}`}>
-        <Button type="button" variant="secondary" className="w-full">
-          Raise an issue
-        </Button>
-      </Link>
+
+      <ActionLink href={`/support/new?bookingId=${booking.id}`}>Raise an issue</ActionLink>
+
+      <ActionLink href="/bookings">Back to my bookings</ActionLink>
+
       {/* Kept as an unconditional fallback alongside the real ticketing flow
           above - useful if the in-app flow itself is the thing that's broken. */}
-      <a href={`mailto:support@nestly.app?subject=${encodeURIComponent(`Booking ${booking.id}`)}`}>
-        <Button type="button" variant="secondary" className="w-full">
-          Email support
-        </Button>
+      <a
+        href={`mailto:support@nestly.app?subject=${encodeURIComponent(`Booking ${booking.id}`)}`}
+        className="inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium text-fg-muted transition duration-fast ease-out hover:bg-surface-3 hover:text-fg"
+      >
+        Email support
       </a>
+
+      {!isClosed ? (
+        <div className="mt-1 border-t border-line pt-3">
+          <ActionLink href={`/bookings/${booking.id}/cancel`} variant="danger">
+            Cancel booking
+          </ActionLink>
+          <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
+            Cancelling can&apos;t be undone. You&apos;ll see the exact refund before you confirm.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-// Mirrors PriceCalculator.tsx's PriceSummary intentionally rather than
-// importing it - see booking/summary/page.tsx's PriceRows for the same note.
-function PriceRows({ breakdown }: { breakdown: PriceBreakdown }) {
+function ActionLink({
+  href,
+  children,
+  variant = "secondary",
+}: {
+  href: string;
+  children: ReactNode;
+  variant?: "primary" | "secondary" | "danger";
+}) {
   return (
-    <dl className="flex flex-col gap-1.5 text-sm">
-      <Row label={`Base price × ${breakdown.quantity}`} value={breakdown.baseTotal} />
-      {breakdown.addOnLineItems.map((item) => (
-        <Row key={item.addOnId} label={`${item.name} × ${item.quantity}`} value={item.lineTotal} />
-      ))}
-      {breakdown.visitCharge > 0 ? <Row label="Visit charge" value={breakdown.visitCharge} /> : null}
-      <Row label={`Tax (${breakdown.taxPercentage}%)`} value={breakdown.taxAmount} />
-      {breakdown.platformFee > 0 ? <Row label="Platform fee" value={breakdown.platformFee} /> : null}
-      <div className="mt-1 flex items-center justify-between border-t border-black/10 pt-2 font-semibold dark:border-white/15">
-        <dt>Total payable</dt>
-        <dd>₹{breakdown.totalPayable.toFixed(2)}</dd>
-      </div>
-    </dl>
-  );
-}
-
-function Row({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-400">
-      <dt>{label}</dt>
-      <dd>₹{value.toFixed(2)}</dd>
-    </div>
+    <Link
+      href={href}
+      className={cx(
+        "inline-flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition duration-fast ease-out active:scale-[0.98]",
+        variant === "primary" &&
+          "bg-brand-600 text-fg-on-brand shadow-brand hover:bg-brand-700",
+        variant === "secondary" &&
+          "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
+        variant === "danger" &&
+          "border border-danger/30 bg-danger-soft text-danger hover:border-danger/50",
+      )}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -338,15 +582,19 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
   const query = useQuery({
     queryKey: ["booking-completion-proof", bookingId],
     queryFn: () =>
-      apiFetch<BookingCompletionProofResponse | undefined>(`${API_V1}/bookings/${bookingId}/completion-proof`, {
-        authenticated: true,
-      }),
+      apiFetch<BookingCompletionProofResponse | undefined>(
+        `${API_V1}/bookings/${bookingId}/completion-proof`,
+        { authenticated: true },
+      ),
   });
 
   if (query.isPending) {
     return (
       <Card title="Completion proof">
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <div className="flex flex-col gap-2.5" aria-hidden>
+          <Skeleton className="h-3.5 w-2/3" />
+          <Skeleton className="h-3.5 w-1/2" />
+        </div>
       </Card>
     );
   }
@@ -354,7 +602,17 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
   if (query.isError) {
     return (
       <Card title="Completion proof">
-        <Alert>{describeError(query.error)}</Alert>
+        <Alert
+          tone="error"
+          title="Couldn't load the completion proof"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
       </Card>
     );
   }
@@ -366,15 +624,43 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
 
   return (
     <Card title="Completion proof">
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
-        Submitted {new Date(proof.submittedAtUtc).toLocaleString()} · {proof.photoRefs.length} photo(s)
+      <p className="text-sm text-fg-muted">
+        Submitted {formatInstant(proof.submittedAtUtc)} ·{" "}
+        <span className="nums">{proof.photoRefs.length}</span> photo
+        {proof.photoRefs.length === 1 ? "" : "s"}
       </p>
       {proof.checklistAnswers.length > 0 ? (
-        <ul className="mt-3 flex flex-col gap-1 text-sm">
-          {proof.checklistAnswers.map((answer, i) => (
-            <li key={i}>
-              {answer.completed ? "✓" : "○"} {answer.item}
-              {answer.notes ? ` — ${answer.notes}` : ""}
+        <ul className="mt-3 flex flex-col gap-2">
+          {proof.checklistAnswers.map((answer, index) => (
+            <li key={index} className="flex items-start gap-2 text-sm text-fg">
+              <span
+                aria-hidden
+                className={cx(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
+                  answer.completed ? "bg-success-soft text-success" : "bg-surface-3 text-fg-subtle",
+                )}
+              >
+                {answer.completed ? (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-2.5 w-2.5"
+                  >
+                    <path d="m5 13 4 4L19 7" />
+                  </svg>
+                ) : null}
+              </span>
+              <span className="min-w-0">
+                <span className="sr-only">{answer.completed ? "Done: " : "Not done: "}</span>
+                {answer.item}
+                {answer.notes ? (
+                  <span className="block text-fg-muted">{answer.notes}</span>
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>

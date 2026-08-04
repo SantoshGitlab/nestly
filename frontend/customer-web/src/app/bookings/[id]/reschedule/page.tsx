@@ -3,14 +3,15 @@
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
+import { STICKY_BAR_SPACER, ScreenSkeleton, StickyActionBar } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import { Alert, Button, Card, PageHeading, Skeleton, Textarea, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { toLocalIsoDate, todayIsoDate } from "@/lib/date";
+import { isoDateOffsetFromToday, todayIsoDate } from "@/lib/date";
 import type {
   RescheduleEligibilityResponse,
   RescheduleOutcomeResponse,
@@ -41,6 +42,9 @@ function RescheduleBookingScreen() {
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
 
+  /** Synchronous double-submit guard - see booking/summary/page.tsx. */
+  const inFlight = useRef(false);
+
   const eligibilityQuery = useQuery({
     queryKey: ["reschedule-eligibility", id],
     queryFn: () =>
@@ -61,6 +65,11 @@ function RescheduleBookingScreen() {
           reason: reason.trim() ? reason.trim() : null,
         }),
       }),
+    onError: () => {
+      // Nothing entered is lost - the chosen date, slot and reason are all
+      // component state and stay exactly as they were.
+      inFlight.current = false;
+    },
     onSuccess: async () => {
       // The booking detail page must reflect the new slot immediately.
       await queryClient.invalidateQueries({ queryKey: ["booking", id] });
@@ -69,13 +78,24 @@ function RescheduleBookingScreen() {
   });
 
   if (eligibilityQuery.isPending) {
-    return <main className="mx-auto w-full max-w-2xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
   }
 
   if (eligibilityQuery.isError || !eligibilityQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <Alert>{describeError(eligibilityQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <PageHeading title="Reschedule booking" />
+        <Alert
+          tone="error"
+          title="Couldn't check reschedule eligibility"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => eligibilityQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(eligibilityQuery.error)}
+        </Alert>
       </main>
     );
   }
@@ -84,14 +104,19 @@ function RescheduleBookingScreen() {
 
   if (!eligibility.isEligible) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
+      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Reschedule booking" />
-        <Alert>{eligibility.ineligibilityReason ?? "This booking cannot be rescheduled."}</Alert>
-        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+        <Alert tone="warning" title="This booking can't be rescheduled">
+          {eligibility.ineligibilityReason ?? "Rescheduling isn't available for this booking."}
+        </Alert>
+        <p className="nums mt-4 text-sm text-fg-muted">
           Reschedules used: {eligibility.reschedulesUsed} of {eligibility.maxReschedulesPerBooking}
         </p>
         <div className="mt-5">
-          <Link href={`/bookings/${id}`} className="text-sm font-medium hover:underline">
+          <Link
+            href={`/bookings/${id}`}
+            className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+          >
             Back to booking
           </Link>
         </div>
@@ -105,21 +130,32 @@ function RescheduleBookingScreen() {
       return;
     }
     setReasonError(null);
+    if (inFlight.current) return;
+    inFlight.current = true;
     rescheduleMutation.mutate();
   };
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
+    <main className={cx("mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", STICKY_BAR_SPACER)}>
       <PageHeading
         title="Reschedule booking"
         subtitle={`Reschedules used: ${eligibility.reschedulesUsed} of ${eligibility.maxReschedulesPerBooking}`}
       />
 
       <div className="flex flex-col gap-6">
+        <Alert tone="info">
+          Your booking stays live until you confirm — pick a new window below and nothing changes
+          before then. Moving a slot within{" "}
+          <span className="nums">{eligibility.minHoursBeforeSlot}</span> hours of the original may
+          count as a late reschedule.
+        </Alert>
+
         <Card title="New slot" description="Pick the locality and date/time you'd like to move to.">
-          {city === undefined ? null : city === null ? (
-            <div className="flex flex-col items-start gap-2">
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">Select your city first.</p>
+          {city === undefined ? (
+            <Skeleton className="h-24 rounded-xl" />
+          ) : city === null ? (
+            <div className="flex flex-col items-start gap-2.5">
+              <p className="text-sm text-fg-muted">Select your city first.</p>
               <CitySelector />
             </div>
           ) : locality === null ? (
@@ -137,42 +173,48 @@ function RescheduleBookingScreen() {
         </Card>
 
         <Card title="Reason (optional)">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="reschedule-reason" className="text-sm font-medium">
-              Why are you rescheduling?
-            </label>
-            <textarea
-              id="reschedule-reason"
-              rows={3}
-              maxLength={500}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              aria-invalid={reasonError ? true : undefined}
-              aria-describedby={reasonError ? "reschedule-reason-error" : undefined}
-              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-            />
-            {reasonError ? (
-              <p id="reschedule-reason-error" className="text-xs text-red-600 dark:text-red-400">
-                {reasonError}
-              </p>
-            ) : null}
-          </div>
+          {/* id="reschedule-reason" is addressed directly by the E2E suite. */}
+          <Textarea
+            id="reschedule-reason"
+            label="Why are you rescheduling?"
+            rows={3}
+            maxLength={500}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            error={reasonError ?? undefined}
+            hint="Helps us hold a better window for you next time."
+          />
         </Card>
 
-        {rescheduleMutation.isError ? <Alert>{describeError(rescheduleMutation.error)}</Alert> : null}
+        {rescheduleMutation.isError ? (
+          <Alert tone="error" title="We couldn't move this booking">
+            {describeError(rescheduleMutation.error)} Your new slot selection is still here — try
+            again.
+          </Alert>
+        ) : null}
 
-        <div className="flex gap-3">
-          <Button
-            type="button"
-            disabled={!locality || !selectedSlotWindowId || rescheduleMutation.isPending}
-            onClick={submit}
-          >
-            {rescheduleMutation.isPending ? "Rescheduling…" : "Confirm reschedule"}
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => router.back()}>
-            Go back
-          </Button>
-        </div>
+        <StickyActionBar>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {/* The accessible name is load-bearing for the E2E suite, so it
+                stays constant while the request is in flight. */}
+            <Button
+              type="button"
+              size="lg"
+              className="flex-1"
+              disabled={!locality || !selectedSlotWindowId}
+              loading={rescheduleMutation.isPending}
+              onClick={submit}
+            >
+              Confirm reschedule
+            </Button>
+            <Button type="button" size="lg" variant="secondary" onClick={() => router.back()}>
+              Go back
+            </Button>
+          </div>
+          <p role="status" aria-live="polite" className="sr-only">
+            {rescheduleMutation.isPending ? "Moving your booking, please wait." : ""}
+          </p>
+        </StickyActionBar>
       </div>
     </main>
   );
@@ -181,22 +223,20 @@ function RescheduleBookingScreen() {
 /** How many upcoming days are offered in the date strip - mirrors SlotPicker's VISIBLE_DAYS. */
 const VISIBLE_DAYS = 7;
 
-const isoDate = toLocalIsoDate;
-
+/**
+ * Local calendar dates for the strip. Built through lib/date.ts rather than
+ * `toISOString().slice(0, 10)`, which converts to UTC first and returns
+ * yesterday for every IST morning before 05:30.
+ */
 function upcomingDates(): string[] {
-  const today = new Date();
-  return Array.from({ length: VISIBLE_DAYS }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    return isoDate(d);
-  });
+  return Array.from({ length: VISIBLE_DAYS }, (_, index) => isoDateOffsetFromToday(index));
 }
 
 function formatDateLabel(iso: string): { weekday: string; day: string } {
-  const d = new Date(`${iso}T00:00:00`);
+  const date = new Date(`${iso}T00:00:00`);
   return {
-    weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
-    day: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+    weekday: date.toLocaleDateString(undefined, { weekday: "short" }),
+    day: date.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
   };
 }
 
@@ -208,6 +248,9 @@ function formatDateLabel(iso: string): { weekday: string; day: string } {
  * every visible date is prefetched) as a dedicated component rather than
  * generalising SlotPicker itself, to avoid any risk of regressing the
  * existing booking flow that depends on it.
+ *
+ * The `<h3>Date</h3>` immediately followed by a sibling `<div>` of buttons is
+ * the shape the E2E suite walks to reach the strip — keep it.
  */
 function RescheduleSlotPicker({
   bookingId,
@@ -241,13 +284,16 @@ function RescheduleSlotPicker({
   const selectedQuery = selectedIndex >= 0 ? queries[selectedIndex] : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-medium">Date</h3>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {dates.map((date, i) => {
-            const query = queries[i];
+        <h3 className="mb-2.5 text-sm font-medium text-fg">Date</h3>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+          {dates.map((date, index) => {
+            const query = queries[index];
             const { weekday, day } = formatDateLabel(date);
+            // A date is disabled once we know for certain it has nothing
+            // bookable; while still loading (or on a fetch error) it stays
+            // selectable rather than guessing.
             const knownEmpty = query.isSuccess && query.data.slots.length === 0;
             const notServiceable = query.isSuccess && !query.data.isServiceable;
             const disabled = knownEmpty || notServiceable;
@@ -259,18 +305,30 @@ function RescheduleSlotPicker({
                 type="button"
                 disabled={disabled}
                 aria-pressed={isSelected}
+                title={
+                  notServiceable
+                    ? "Not available at this address"
+                    : knownEmpty
+                      ? "Fully booked"
+                      : undefined
+                }
                 onClick={() => {
                   onDateChange(date);
                   onSlotChange(null);
                 }}
-                className={`flex min-w-[4.5rem] flex-col items-center rounded-lg border px-3 py-2 text-xs transition-colors ${
+                className={cx(
+                  "flex min-w-[4.75rem] shrink-0 flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-xs transition duration-fast ease-out",
                   isSelected
-                    ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                    : "border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                } disabled:cursor-not-allowed disabled:opacity-40`}
+                    ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                    : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                  disabled &&
+                    "cursor-not-allowed border-line bg-surface-2 text-fg-subtle line-through opacity-60 hover:bg-surface-2",
+                )}
               >
                 <span className="font-medium">{weekday}</span>
-                <span>{day}</span>
+                <span className={cx(isSelected ? "text-fg-on-brand/85" : "text-fg-muted")}>
+                  {day}
+                </span>
               </button>
             );
           })}
@@ -278,32 +336,62 @@ function RescheduleSlotPicker({
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-medium">Time window</h3>
+        <h3 className="mb-2.5 text-sm font-medium text-fg">Time window</h3>
         {!selectedQuery || selectedQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading time windows…</p>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-11 w-36 rounded-xl" />
+            ))}
+          </div>
         ) : selectedQuery.isError ? (
-          <Alert>{describeError(selectedQuery.error)}</Alert>
+          <Alert
+            tone="error"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => selectedQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            {describeError(selectedQuery.error)}
+          </Alert>
         ) : !selectedQuery.data.isServiceable ? (
-          <Alert tone="error">This service isn&apos;t available at this locality.</Alert>
+          <Alert tone="error" title="Not available here">
+            This service isn&apos;t available at this locality.
+          </Alert>
         ) : selectedQuery.data.slots.length === 0 ? (
-          <p className="text-sm text-neutral-500">No slots available on this date. Try another date.</p>
+          <Alert tone="info" title="Fully booked">
+            No slots left on this date — pick another day from the strip above.
+          </Alert>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {selectedQuery.data.slots.map((slot) => (
-              <button
-                key={slot.slotWindowId}
-                type="button"
-                aria-pressed={slot.slotWindowId === selectedSlotWindowId}
-                onClick={() => onSlotChange(slot.slotWindowId)}
-                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  slot.slotWindowId === selectedSlotWindowId
-                    ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                    : "border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                }`}
-              >
-                {slot.name} · {slot.startTime.slice(0, 5)}–{slot.endTime.slice(0, 5)}
-              </button>
-            ))}
+            {selectedQuery.data.slots.map((slot) => {
+              const isSelected = slot.slotWindowId === selectedSlotWindowId;
+              const range = `${slot.startTime.slice(0, 5)}–${slot.endTime.slice(0, 5)}`;
+              return (
+                <button
+                  key={slot.slotWindowId}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => onSlotChange(slot.slotWindowId)}
+                  className={cx(
+                    "flex flex-col items-start rounded-xl border px-3.5 py-2 text-sm transition duration-fast ease-out",
+                    isSelected
+                      ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                      : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                  )}
+                >
+                  <span className="font-medium">{slot.name}</span>
+                  <span
+                    className={cx(
+                      "nums text-xs",
+                      isSelected ? "text-fg-on-brand/85" : "text-fg-muted",
+                    )}
+                  >
+                    {range}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

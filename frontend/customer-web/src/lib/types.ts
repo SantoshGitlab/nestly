@@ -322,6 +322,25 @@ export enum BookingStatus {
 /** Matches Nestly.Domain.BookingStatusBucket's member names - passed as the `bucket` query string value, which ASP.NET binds by name. */
 export type BookingStatusBucket = "Upcoming" | "Completed" | "Cancelled";
 
+/**
+ * Mirrors Nestly.Domain.BookingPartnerAssignmentStatus's declaration order
+ * exactly (no JsonStringEnumConverter is registered - see BookingStatus's doc
+ * comment above for the same pattern).
+ *
+ * This is the live state of the booking's current BookingPartnerAssignment
+ * row (task 208), not the booking's own status: BookingStatus stays
+ * "Assigned" across both the offer to a partner and that partner's accept, so
+ * this is the only field that tells a customer their professional has
+ * actually confirmed.
+ */
+export enum BookingPartnerAssignmentStatus {
+  Assigned = 0,
+  Accepted = 1,
+  Rejected = 2,
+  Reassigned = 3,
+  Withdrawn = 4,
+}
+
 export interface BookingStatusTimelineEntry {
   fromStatus: BookingStatus | null;
   toStatus: BookingStatus;
@@ -345,6 +364,8 @@ export interface BookingDetail {
   couponDiscountAmount: number | null;
   /** Equals price.totalPayable on a persisted booking - both already reflect the discounted amount actually charged. */
   finalPayable: number;
+  /** Null until a partner is assigned; then tracks the live assignment row (task 208). */
+  partnerAssignmentStatus: BookingPartnerAssignmentStatus | null;
 }
 
 export interface BookingListItem {

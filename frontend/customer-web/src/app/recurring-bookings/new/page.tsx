@@ -1,20 +1,35 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
+import {
+  STICKY_BAR_SPACER,
+  ScreenSkeleton,
+  StickyActionBar,
+  inr,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SlotPicker } from "@/components/SlotPicker";
-import { Alert, Button, Card, Checkbox, PageHeading } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Card,
+  CheckboxField,
+  EmptyState,
+  Field,
+  PageHeading,
+  Select,
+  Skeleton,
+  cx,
+} from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { todayIsoDate } from "@/lib/date";
-import {
-  DAY_OF_WEEK_LABELS,
-  RecurringBookingRecurrenceFrequency,
-} from "@/lib/types";
+import { DAY_OF_WEEK_LABELS, RecurringBookingRecurrenceFrequency } from "@/lib/types";
 import type {
   CreateRecurringBookingPlanRequestBody,
   CustomerAddress,
@@ -45,7 +60,7 @@ const FREQUENCY_OPTIONS: { value: RecurringBookingRecurrenceFrequency; label: st
  */
 export default function NewRecurringBookingPlanPage() {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-4xl px-6 py-10" />}>
+    <Suspense fallback={<ScreenSkeleton cards={4} />}>
       <RequireAuth>
         <NewRecurringBookingPlanScreen />
       </RequireAuth>
@@ -70,6 +85,9 @@ function NewRecurringBookingPlanScreen() {
   const [occurrenceCount, setOccurrenceCount] = useState<string>("4");
   const [endDate, setEndDate] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  /** Synchronous double-submit guard - see booking/summary/page.tsx. */
+  const inFlight = useRef(false);
 
   const serviceQuery = useQuery({
     queryKey: ["service", serviceSlug],
@@ -106,6 +124,10 @@ function NewRecurringBookingPlanScreen() {
         authenticated: true,
         body: JSON.stringify(body),
       }),
+    onError: () => {
+      // Everything entered stays in component state, so a retry is one click.
+      inFlight.current = false;
+    },
     onSuccess: () => router.push("/recurring-bookings"),
   });
 
@@ -123,6 +145,9 @@ function NewRecurringBookingPlanScreen() {
       return;
     }
 
+    // Local midnight, not `new Date(selectedDate)` - that parses a bare
+    // YYYY-MM-DD as UTC and shifts the derived weekday/day-of-month by one
+    // for anyone behind UTC.
     const anchor = new Date(`${selectedDate}T00:00:00`);
     const isMonthly = frequency === RecurringBookingRecurrenceFrequency.Monthly;
 
@@ -142,79 +167,126 @@ function NewRecurringBookingPlanScreen() {
       addOns: Array.from(selectedAddOnIds, (addOnId) => ({ addOnId, quantity: 1 })),
     };
 
+    if (inFlight.current) return;
+    inFlight.current = true;
     createMutation.mutate(body);
   };
 
   if (!serviceSlug) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-12">
-        <Alert>No service selected. Go back and choose a service to book.</Alert>
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+        <EmptyState
+          title="No service selected"
+          description="Pick the service you'd like on a repeating schedule."
+          action={
+            <Link
+              href="/categories"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
+            >
+              Browse services
+            </Link>
+          }
+        />
       </main>
     );
   }
 
   if (serviceQuery.isPending) {
-    return <main className="mx-auto w-full max-w-3xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10" />;
   }
 
   if (serviceQuery.isError || !service) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-12">
-        <Alert>{describeError(serviceQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+        <Alert
+          tone="error"
+          title="Couldn't load this service"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => serviceQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(serviceQuery.error)}
+        </Alert>
       </main>
     );
   }
 
+  const anchorDate = new Date(`${selectedDate}T00:00:00`);
   const dayLabel =
     frequency === RecurringBookingRecurrenceFrequency.Monthly
-      ? `day ${new Date(`${selectedDate}T00:00:00`).getDate()} of the month`
-      : DAY_OF_WEEK_LABELS[new Date(`${selectedDate}T00:00:00`).getDay()];
+      ? `day ${anchorDate.getDate()} of the month`
+      : DAY_OF_WEEK_LABELS[anchorDate.getDay()];
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10">
+    <main
+      className={cx(
+        "mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10",
+        STICKY_BAR_SPACER,
+      )}
+    >
       <PageHeading title="Set up a recurring booking" subtitle={service.name} />
 
-      <Card title="Service address">
+      <Card title="Service address" description="Every visit in this plan goes to this address.">
         {addressesQuery.isPending ? (
-          <p className="text-sm text-neutral-500">Loading addresses…</p>
+          <Skeleton className="h-10 rounded-lg" />
         ) : addressesQuery.isError ? (
-          <Alert>{describeError(addressesQuery.error)}</Alert>
+          <Alert
+            tone="error"
+            title="Couldn't load your addresses"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => addressesQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            {describeError(addressesQuery.error)}
+          </Alert>
         ) : addressesQuery.data.length === 0 ? (
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            You don&apos;t have any saved addresses yet. Add one from the Addresses page first.
-          </p>
+          <EmptyState
+            title="No saved addresses"
+            description="Add an address before setting up a repeating plan."
+            action={
+              <Link
+                href="/addresses/new"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
+              >
+                Add an address
+              </Link>
+            }
+          />
         ) : (
-          <select
+          <Select
+            label="Address"
             value={selectedAddressId ?? ""}
             onChange={(e) => setSelectedAddressId(e.target.value)}
-            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-          >
-            {addressesQuery.data.map((address) => (
-              <option key={address.id} value={address.id}>
-                {address.label} - {address.line1}, {address.city} {address.pincode}
-              </option>
-            ))}
-          </select>
+            options={addressesQuery.data.map((address) => ({
+              value: address.id,
+              label: `${address.label} — ${address.line1}, ${address.city} ${address.pincode}`,
+            }))}
+          />
         )}
       </Card>
 
       <Card title="Quantity">
-        <input
+        <Field
+          label="Units per visit"
           type="number"
           min={1}
+          className="max-w-[8rem]"
           value={quantity}
           onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-          className="w-24 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
         />
       </Card>
 
       {service.addOns.length > 0 ? (
-        <Card title="Add-ons">
+        <Card title="Add-ons" description="Applied to every visit in the plan.">
           <div className="flex flex-col gap-2">
             {service.addOns.map((addOn) => (
-              <Checkbox
+              <CheckboxField
                 key={addOn.id}
-                label={`${addOn.name} (+₹${addOn.price})`}
+                label={`${addOn.name} (+${inr(addOn.price)})`}
                 checked={selectedAddOnIds.has(addOn.id)}
                 onChange={() => toggleAddOn(addOn.id)}
               />
@@ -223,10 +295,15 @@ function NewRecurringBookingPlanScreen() {
         </Card>
       ) : null}
 
-      <Card title="Slot" description="This day and time window repeats on the schedule you choose below.">
-        {city === undefined ? null : city === null ? (
-          <div className="flex flex-col items-start gap-2">
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">Select your city first.</p>
+      <Card
+        title="Slot"
+        description="This day and time window repeats on the schedule you choose below."
+      >
+        {city === undefined ? (
+          <Skeleton className="h-24 rounded-xl" />
+        ) : city === null ? (
+          <div className="flex flex-col items-start gap-2.5">
+            <p className="text-sm text-fg-muted">Select your city first.</p>
             <CitySelector />
           </div>
         ) : locality === null ? (
@@ -244,70 +321,83 @@ function NewRecurringBookingPlanScreen() {
       </Card>
 
       <Card title="Recurrence" description={`Repeats every ${dayLabel.toLowerCase()}.`}>
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-2">
-            {FREQUENCY_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={frequency === option.value}
-                onClick={() => setFrequency(option.value)}
-                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  frequency === option.value
-                    ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
-                    : "border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+        <div className="flex flex-col gap-5">
+          <div role="radiogroup" aria-label="Frequency" className="flex flex-wrap gap-2">
+            {FREQUENCY_OPTIONS.map((option) => {
+              const isSelected = frequency === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => setFrequency(option.value)}
+                  className={cx(
+                    "rounded-xl border px-3.5 py-2 text-sm font-medium transition duration-fast ease-out",
+                    isSelected
+                      ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                      : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="occurrence-count" className="text-sm font-medium">
-                Number of visits (optional)
-              </label>
-              <input
-                id="occurrence-count"
-                type="number"
-                min={1}
-                value={occurrenceCount}
-                onChange={(e) => setOccurrenceCount(e.target.value)}
-                className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="end-date" className="text-sm font-medium">
-                End date (optional)
-              </label>
-              <input
-                id="end-date"
-                type="date"
-                min={selectedDate}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-              />
-            </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              id="occurrence-count"
+              label="Number of visits (optional)"
+              type="number"
+              min={1}
+              value={occurrenceCount}
+              onChange={(e) => setOccurrenceCount(e.target.value)}
+            />
+            <Field
+              id="end-date"
+              label="End date (optional)"
+              type="date"
+              min={selectedDate}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
-          <p className="text-xs text-neutral-500">
-            Set at least one so the plan has a definite end - you can always cancel early from the manage screen.
+
+          <p className="text-xs leading-relaxed text-fg-subtle">
+            Set at least one so the plan has a definite end — you can always cancel early from the
+            manage screen.
           </p>
         </div>
       </Card>
 
-      {formError ? <Alert>{formError}</Alert> : null}
-      {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
+      {formError ? (
+        <Alert tone="warning" title="Almost there">
+          {formError}
+        </Alert>
+      ) : null}
+      {createMutation.isError ? (
+        <Alert tone="error" title="We couldn't set up this plan">
+          {describeError(createMutation.error)} Nothing you entered has been lost.
+        </Alert>
+      ) : null}
 
-      <div className="flex gap-3">
-        <Button type="button" disabled={createMutation.isPending} onClick={handleSubmit}>
-          {createMutation.isPending ? "Setting up…" : "Set up recurring booking"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => router.back()}>
-          Cancel
-        </Button>
-      </div>
+      <StickyActionBar>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button
+            type="button"
+            size="lg"
+            className="flex-1"
+            loading={createMutation.isPending}
+            onClick={handleSubmit}
+          >
+            Set up recurring booking
+          </Button>
+          <Button type="button" size="lg" variant="secondary" onClick={() => router.back()}>
+            Cancel
+          </Button>
+        </div>
+      </StickyActionBar>
     </main>
   );
 }

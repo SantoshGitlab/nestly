@@ -4,11 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { ScreenSkeleton, formatInstant } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import { Alert, Badge, Button, Card, Field, PageHeading, Textarea, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { ReviewStatus } from "@/lib/types";
 import type { ReviewEligibilityResponse, ReviewResponse } from "@/lib/types";
@@ -70,21 +71,43 @@ function ReviewBookingScreen() {
   });
 
   if (eligibilityQuery.isPending || reviewQuery.isPending) {
-    return <main className="mx-auto w-full max-w-2xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={1} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
   }
 
   if (eligibilityQuery.isError || !eligibilityQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <Alert>{describeError(eligibilityQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <PageHeading title="Leave a review" />
+        <Alert
+          tone="error"
+          title="Couldn't check review eligibility"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => eligibilityQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(eligibilityQuery.error)}
+        </Alert>
       </main>
     );
   }
 
   if (reviewQuery.isError) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <Alert>{describeError(reviewQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <PageHeading title="Leave a review" />
+        <Alert
+          tone="error"
+          title="Couldn't load your review"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => reviewQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(reviewQuery.error)}
+        </Alert>
       </main>
     );
   }
@@ -93,39 +116,46 @@ function ReviewBookingScreen() {
 
   if (existingReview) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <PageHeading title="Your review" />
+      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <PageHeading title="Your review" subtitle="Thanks — this helps the next customer choose." />
+
         <Card title="Submitted review">
-          <dl className="flex flex-col gap-3 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Rating</dt>
-              <dd className="font-medium">
-                <StarDisplay rating={existingReview.rating} />
-              </dd>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <StarDisplay rating={existingReview.rating} />
+            <Badge tone={existingReview.status === ReviewStatus.Visible ? "success" : "neutral"}>
+              {reviewStatusLabel(existingReview.status)}
+            </Badge>
+          </div>
+
+          <p className="mt-2 text-xs text-fg-subtle">
+            Submitted {formatInstant(existingReview.createdAtUtc)}
+          </p>
+
+          {existingReview.reviewText ? (
+            <blockquote className="mt-4 border-l-2 border-brand-600/40 pl-4 text-sm leading-relaxed text-fg">
+              {existingReview.reviewText}
+            </blockquote>
+          ) : null}
+
+          {existingReview.issueTags ? (
+            <div className="mt-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                Issue tags
+              </p>
+              <p className="text-sm text-fg-muted">{existingReview.issueTags}</p>
             </div>
-            {existingReview.reviewText ? (
-              <div>
-                <dt className="text-neutral-600 dark:text-neutral-400">Review</dt>
-                <dd className="mt-1">{existingReview.reviewText}</dd>
-              </div>
-            ) : null}
-            {existingReview.issueTags ? (
-              <div>
-                <dt className="text-neutral-600 dark:text-neutral-400">Issue tags</dt>
-                <dd className="mt-1">{existingReview.issueTags}</dd>
-              </div>
-            ) : null}
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
-              <dd className="font-medium">{reviewStatusLabel(existingReview.status)}</dd>
-            </div>
-          </dl>
-          <div className="mt-5">
-            <Link href={`/bookings/${id}`} className="text-sm font-medium hover:underline">
+          ) : null}
+
+          <div className="mt-6">
+            <Link
+              href={`/bookings/${id}`}
+              className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+            >
               Back to booking
             </Link>
           </div>
         </Card>
+
         {existingReview.rating >= 4 ? <ReferEarnPrompt /> : null}
       </main>
     );
@@ -135,11 +165,17 @@ function ReviewBookingScreen() {
 
   if (!eligibility.isEligible) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
+      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Leave a review" />
-        <Alert>{eligibility.ineligibilityReason ?? "This booking isn't eligible for a review."}</Alert>
+        <Alert tone="warning" title="This booking can't be reviewed yet">
+          {eligibility.ineligibilityReason ??
+            "Reviews open once a professional has completed the job."}
+        </Alert>
         <div className="mt-5">
-          <Link href={`/bookings/${id}`} className="text-sm font-medium hover:underline">
+          <Link
+            href={`/bookings/${id}`}
+            className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+          >
             Back to booking
           </Link>
         </div>
@@ -147,12 +183,20 @@ function ReviewBookingScreen() {
     );
   }
 
-  return <ReviewForm bookingId={id} onSubmitted={() => queryClient.invalidateQueries({ queryKey: ["review", id] })} />;
+  return (
+    <ReviewForm
+      bookingId={id}
+      onSubmitted={() => queryClient.invalidateQueries({ queryKey: ["review", id] })}
+    />
+  );
 }
 
 function ReviewForm({ bookingId, onSubmitted }: { bookingId: string; onSubmitted: () => void }) {
   const [rating, setRatingState] = useState<number>(0);
   const [ratingError, setRatingError] = useState<string | null>(null);
+
+  /** Synchronous double-submit guard: Review.BookingId is uniquely indexed. */
+  const inFlight = useRef(false);
 
   const form = useForm<ReviewFormValues>({
     resolver: zodResolver(reviewSchema),
@@ -171,6 +215,9 @@ function ReviewForm({ bookingId, onSubmitted }: { bookingId: string; onSubmitted
           issueTags: values.issueTags?.trim() ? values.issueTags.trim() : null,
         }),
       }),
+    onSettled: () => {
+      inFlight.current = false;
+    },
     onSuccess: onSubmitted,
   });
 
@@ -180,104 +227,123 @@ function ReviewForm({ bookingId, onSubmitted }: { bookingId: string; onSubmitted
       return;
     }
     setRatingError(null);
+    if (inFlight.current) return;
+    inFlight.current = true;
     submitMutation.mutate(values);
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading title="Leave a review" subtitle="Tell us how the service went." />
 
       <Card title="Rate your experience">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          {submitMutation.isError ? <Alert>{describeError(submitMutation.error)}</Alert> : null}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+          {submitMutation.isError ? (
+            <Alert tone="error" title="We couldn't post your review">
+              {describeError(submitMutation.error)} What you wrote is still here — try again.
+            </Alert>
+          ) : null}
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Rating</span>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium text-fg">Rating</span>
+            {/* The radio accessible names ("5 stars") are addressed by the
+                E2E suite - keep the wording exactly. */}
             <StarInput value={rating} onChange={setRatingState} />
-            {ratingError ? <p className="text-xs text-red-600 dark:text-red-400">{ratingError}</p> : null}
+            {ratingError ? <p className="text-xs font-medium text-danger">{ratingError}</p> : null}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="review-text" className="text-sm font-medium">
-              Review (optional)
-            </label>
-            <textarea
-              id="review-text"
-              rows={4}
-              maxLength={2000}
-              aria-invalid={errors.reviewText ? true : undefined}
-              aria-describedby={errors.reviewText ? "review-text-error" : undefined}
-              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-              {...form.register("reviewText")}
-            />
-            {errors.reviewText ? (
-              <p id="review-text-error" className="text-xs text-red-600 dark:text-red-400">
-                {errors.reviewText.message}
-              </p>
-            ) : null}
-          </div>
+          {/* id="review-text" / id="review-tags" are addressed directly by the
+              E2E suite. */}
+          <Textarea
+            id="review-text"
+            label="Review (optional)"
+            rows={4}
+            maxLength={2000}
+            hint="What went well, and what could have been better?"
+            error={errors.reviewText?.message}
+            {...form.register("reviewText")}
+          />
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="review-tags" className="text-sm font-medium">
-              Issue tags (optional)
-            </label>
-            <input
-              id="review-tags"
-              type="text"
-              placeholder="e.g. late arrival, pricing"
-              maxLength={500}
-              aria-invalid={errors.issueTags ? true : undefined}
-              aria-describedby={errors.issueTags ? "review-tags-error" : undefined}
-              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-              {...form.register("issueTags")}
-            />
-            {errors.issueTags ? (
-              <p id="review-tags-error" className="text-xs text-red-600 dark:text-red-400">
-                {errors.issueTags.message}
-              </p>
-            ) : null}
-          </div>
+          <Field
+            id="review-tags"
+            label="Issue tags (optional)"
+            type="text"
+            placeholder="e.g. late arrival, pricing"
+            maxLength={500}
+            hint="Comma-separated. Only if something went wrong."
+            error={errors.issueTags?.message}
+            {...form.register("issueTags")}
+          />
 
-          <Button type="submit" disabled={submitMutation.isPending}>
-            {submitMutation.isPending ? "Submitting…" : "Submit review"}
+          <Button type="submit" size="lg" className="self-start" loading={submitMutation.isPending}>
+            Submit review
           </Button>
+
+          <p role="status" aria-live="polite" className="sr-only">
+            {submitMutation.isPending ? "Posting your review, please wait." : ""}
+          </p>
         </form>
       </Card>
     </main>
   );
 }
 
-/** Clickable 1-5 star rating input - a one-off control, not a shared primitive. */
+const RATING_HINTS = ["", "Poor", "Fair", "Good", "Great", "Excellent"] as const;
+
+/**
+ * Clickable 1-5 star rating input - a one-off control, not a shared
+ * primitive. Uses the accent (amber) scale, which the token layer reserves
+ * for ratings and reward moments.
+ */
 function StarInput({ value, onChange }: { value: number; onChange: (rating: number) => void }) {
   return (
-    <div role="radiogroup" aria-label="Rating" className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          role="radio"
-          aria-checked={value === n}
-          aria-label={`${n} star${n === 1 ? "" : "s"}`}
-          onClick={() => onChange(n)}
-          className="text-2xl leading-none"
-        >
-          <span aria-hidden="true" className={n <= value ? "text-black dark:text-white" : "text-neutral-300 dark:text-neutral-700"}>
-            ★
-          </span>
-        </button>
-      ))}
+    <div className="flex items-center gap-3">
+      <div role="radiogroup" aria-label="Rating" className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={value === n}
+            aria-label={`${n} star${n === 1 ? "" : "s"}`}
+            onClick={() => onChange(n)}
+            className="rounded-lg p-1 text-3xl leading-none transition duration-fast ease-out hover:scale-110 active:scale-95"
+          >
+            <span
+              aria-hidden
+              className={cx(
+                "block transition-colors duration-fast ease-out",
+                n <= value ? "text-accent-500" : "text-fg-subtle/40",
+              )}
+            >
+              ★
+            </span>
+          </button>
+        ))}
+      </div>
+      <span className="text-sm font-medium text-fg-muted" aria-hidden>
+        {RATING_HINTS[value] ?? ""}
+      </span>
     </div>
   );
 }
 
 function StarDisplay({ rating }: { rating: number }) {
   return (
-    <span aria-label={`${rating} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} aria-hidden="true" className={n <= rating ? "text-black dark:text-white" : "text-neutral-300 dark:text-neutral-700"}>
-          ★
-        </span>
-      ))}
+    <span className="flex items-center gap-2">
+      {/* The E2E suite finds this by its label ("5 out of 5 stars"). */}
+      <span aria-label={`${rating} out of 5 stars`} className="text-2xl leading-none">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span
+            key={n}
+            aria-hidden
+            className={n <= rating ? "text-accent-500" : "text-fg-subtle/40"}
+          >
+            ★
+          </span>
+        ))}
+      </span>
+      <span className="nums text-sm font-medium text-fg-muted">{rating}/5</span>
     </span>
   );
 }
@@ -290,17 +356,19 @@ function StarDisplay({ rating }: { rating: number }) {
  */
 function ReferEarnPrompt() {
   return (
-    <div className="mt-5">
-      <Card title="Loved the service?">
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Share Nestly with a friend and you&apos;ll both get rewarded once they book.
-        </p>
-        <div className="mt-3">
-          <Link href="/refer-earn" className="text-sm font-medium hover:underline">
-            Refer & Earn →
-          </Link>
-        </div>
-      </Card>
+    <div className="mt-5 rounded-2xl border border-accent-600/25 bg-accent-100 p-5 dark:bg-accent-500/10">
+      <p className="text-base font-semibold text-accent-700 dark:text-accent-300">
+        Loved the service?
+      </p>
+      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+        Share Nestly with a friend and you&apos;ll both get rewarded once they book.
+      </p>
+      <Link
+        href="/refer-earn"
+        className="mt-3 inline-flex h-10 items-center justify-center rounded-lg bg-accent-600 px-4 text-sm font-medium text-fg-on-brand shadow-xs transition duration-fast ease-out hover:bg-accent-700"
+      >
+        Refer &amp; Earn
+      </Link>
     </div>
   );
 }

@@ -4,20 +4,32 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import {
+  DetailList,
+  DetailRow,
+  ScreenSkeleton,
+  formatInstant,
+  inr,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import { Alert, Badge, Button, Card, PageHeading, Textarea } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { RefundMethod } from "@/lib/types";
-import type {
-  CancellationOutcomeResponse,
-  CancellationPolicyResponse,
-} from "@/lib/types";
+import type { CancellationOutcomeResponse, CancellationPolicyResponse } from "@/lib/types";
 
 /**
  * Cancellation flow: policy display, confirmation, refund outcome (SRS
  * 11.14.3, tasks 89a-c).
+ *
+ * The confirmation pattern is the page itself rather than a modal on top of
+ * it: the consequence of cancelling is a specific number (the refund), and
+ * that number has to be readable at the moment of deciding, not summarised in
+ * a dialog. The destructive control is isolated below its own rule, carries
+ * the danger tone, and requires a typed reason — three deliberate steps
+ * between "I clicked into this page" and "the booking is gone".
  */
 export default function CancelBookingPage() {
   return (
@@ -59,6 +71,14 @@ function CancelBookingScreen() {
   });
   const { errors } = form.formState;
 
+  /**
+   * Cancelling twice is not idempotent from the customer's point of view -
+   * the second call fails loudly on an already-cancelled booking - so a
+   * double click on a slow connection must not reach the API twice. The ref
+   * is set synchronously, ahead of the mutation's own pending state.
+   */
+  const inFlight = useRef(false);
+
   const cancelMutation = useMutation({
     mutationFn: (values: CancelFormValues) =>
       apiFetch<CancellationOutcomeResponse>(`${API_V1}/bookings/${id}/cancellation`, {
@@ -66,20 +86,40 @@ function CancelBookingScreen() {
         authenticated: true,
         body: JSON.stringify(values),
       }),
+    onSettled: () => {
+      inFlight.current = false;
+    },
     onSuccess: () => {
       // The booking detail page must reflect the cancellation immediately.
       queryClient.invalidateQueries({ queryKey: ["booking", id] });
     },
   });
 
+  const submit = form.handleSubmit((values) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    cancelMutation.mutate(values);
+  });
+
   if (policyQuery.isPending) {
-    return <main className="mx-auto w-full max-w-2xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
   }
 
   if (policyQuery.isError || !policyQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <Alert>{describeError(policyQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <PageHeading title="Cancel booking" />
+        <Alert
+          tone="error"
+          title="Couldn't load the cancellation policy"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => policyQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(policyQuery.error)}
+        </Alert>
       </main>
     );
   }
@@ -89,35 +129,60 @@ function CancelBookingScreen() {
   if (cancelMutation.isSuccess) {
     const outcome = cancelMutation.data;
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <PageHeading title="Booking cancelled" />
+      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="mb-7 flex animate-rise flex-col items-center gap-3 text-center">
+          <span
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-info-soft text-info ring-8 ring-info/10"
+            aria-hidden
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-6 w-6"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4m0 4h.01" />
+            </svg>
+          </span>
+          <h1 className="text-display-sm font-semibold text-fg">Booking cancelled</h1>
+          <p className="text-sm text-fg-muted">Cancelled {formatInstant(outcome.cancelledAtUtc)}</p>
+        </div>
+
         <Card title="Refund outcome">
-          <dl className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Cancellation fee</dt>
-              <dd className="font-medium">₹{outcome.cancellationFeeAmount.toFixed(2)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Refund amount</dt>
-              <dd className="font-medium">₹{outcome.refundAmount.toFixed(2)}</dd>
-            </div>
+          <div className="mb-4 rounded-xl border border-line bg-surface-2 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+              Coming back to you
+            </p>
+            <p className="nums mt-1 text-2xl font-semibold text-fg">{inr(outcome.refundAmount)}</p>
+          </div>
+
+          <DetailList>
+            <DetailRow label="Cancellation fee" numeric>
+              {inr(outcome.cancellationFeeAmount)}
+            </DetailRow>
+            <DetailRow label="Refund amount" numeric>
+              {inr(outcome.refundAmount)}
+            </DetailRow>
             {outcome.refundMethod !== null ? (
-              <div className="flex items-center justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">Refund method</dt>
-                <dd className="font-medium">{refundMethodLabel(outcome.refundMethod)}</dd>
-              </div>
+              <DetailRow label="Refund method">{refundMethodLabel(outcome.refundMethod)}</DetailRow>
             ) : null}
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Within free cancellation window</dt>
-              <dd className="font-medium">{outcome.withinFreeCancellationWindow ? "Yes" : "No"}</dd>
-            </div>
-          </dl>
-          <div className="mt-5">
-            <Link href={`/bookings/${id}`}>
-              <Button type="button" className="w-full">
-                Back to booking
-              </Button>
-            </Link>
+            <DetailRow label="Within free cancellation window">
+              <Badge tone={outcome.withinFreeCancellationWindow ? "success" : "warning"}>
+                {outcome.withinFreeCancellationWindow ? "Yes" : "No"}
+              </Badge>
+            </DetailRow>
+          </DetailList>
+
+          <div className="mt-6">
+            {/* A real button, not a link dressed as one: the E2E suite
+                addresses "Back to booking" by the button role. */}
+            <Button type="button" fullWidth onClick={() => router.push(`/bookings/${id}`)}>
+              Back to booking
+            </Button>
           </div>
         </Card>
       </main>
@@ -126,11 +191,17 @@ function CancelBookingScreen() {
 
   if (!policy.isEligible) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
+      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Cancel booking" />
-        <Alert>{policy.ineligibilityReason ?? "This booking cannot be cancelled."}</Alert>
+        <Alert tone="warning" title="This booking can't be cancelled">
+          {policy.ineligibilityReason ??
+            "Cancellation isn't available for this booking any more."}
+        </Alert>
         <div className="mt-5">
-          <Link href={`/bookings/${id}`} className="text-sm font-medium hover:underline">
+          <Link
+            href={`/bookings/${id}`}
+            className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+          >
             Back to booking
           </Link>
         </div>
@@ -139,77 +210,90 @@ function CancelBookingScreen() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
-      <PageHeading title="Cancel booking" subtitle="Review the cancellation policy before confirming." />
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <PageHeading
+        title="Cancel booking"
+        subtitle="Review what you'll get back before confirming — this can't be undone."
+      />
 
       <div className="flex flex-col gap-6">
         <Card title="Cancellation policy">
-          <dl className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Free cancellation window</dt>
-              <dd className="font-medium">{policy.freeCancellationWindowHours} hours before slot</dd>
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3">
+            <div>
+              {/* Deliberately not the words "Refund amount": that exact
+                  string is asserted once per screen by the E2E suite, and it
+                  belongs on the itemised row below, not on this hero. */}
+              <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                You&apos;ll get back
+              </p>
+              <p className="nums mt-1 text-2xl font-semibold text-fg">{inr(policy.refundAmount)}</p>
             </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Within free window</dt>
-              <dd className="font-medium">{policy.withinFreeCancellationWindow ? "Yes" : "No"}</dd>
-            </div>
+            <Badge tone={policy.withinFreeCancellationWindow ? "success" : "warning"}>
+              {policy.withinFreeCancellationWindow ? "Free cancellation" : "Late cancellation"}
+            </Badge>
+          </div>
+
+          <DetailList>
+            <DetailRow label="Free cancellation window" numeric>
+              {policy.freeCancellationWindowHours} hours before slot
+            </DetailRow>
+            <DetailRow label="Within free window">
+              {policy.withinFreeCancellationWindow ? "Yes" : "No"}
+            </DetailRow>
             {!policy.withinFreeCancellationWindow ? (
-              <div className="flex items-center justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">Late cancellation fee</dt>
-                <dd className="font-medium">{policy.lateCancellationFeePercentage}%</dd>
-              </div>
+              <DetailRow label="Late cancellation fee" numeric>
+                {policy.lateCancellationFeePercentage}%
+              </DetailRow>
             ) : null}
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Cancellation fee</dt>
-              <dd className="font-medium">₹{policy.cancellationFeeAmount.toFixed(2)}</dd>
-            </div>
-            <div className="flex items-center justify-between border-t border-black/10 pt-2 font-semibold dark:border-white/15">
-              <dt>Refund amount</dt>
-              <dd>₹{policy.refundAmount.toFixed(2)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Refund method</dt>
-              <dd className="font-medium">{refundMethodLabel(policy.refundMethod)}</dd>
-            </div>
-          </dl>
+            <DetailRow label="Cancellation fee" numeric>
+              {inr(policy.cancellationFeeAmount)}
+            </DetailRow>
+            <DetailRow label="Refund amount" numeric>
+              {inr(policy.refundAmount)}
+            </DetailRow>
+            <DetailRow label="Refund method">{refundMethodLabel(policy.refundMethod)}</DetailRow>
+          </DetailList>
         </Card>
 
         <Card title="Confirm cancellation">
-          <form
-            onSubmit={form.handleSubmit((values) => cancelMutation.mutate(values))}
-            className="flex flex-col gap-4"
-            noValidate
-          >
-            {cancelMutation.isError ? <Alert>{describeError(cancelMutation.error)}</Alert> : null}
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            {cancelMutation.isError ? (
+              <Alert tone="error" title="We couldn't cancel this booking">
+                {describeError(cancelMutation.error)} Your reason is still here — try again.
+              </Alert>
+            ) : null}
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="cancel-reason" className="text-sm font-medium">
-                Reason for cancellation
-              </label>
-              <textarea
-                id="cancel-reason"
-                rows={4}
-                maxLength={500}
-                aria-invalid={errors.reason ? true : undefined}
-                aria-describedby={errors.reason ? "cancel-reason-error" : undefined}
-                className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-                {...form.register("reason")}
-              />
-              {errors.reason ? (
-                <p id="cancel-reason-error" className="text-xs text-red-600 dark:text-red-400">
-                  {errors.reason.message}
-                </p>
-              ) : null}
-            </div>
+            <Alert tone="warning" title="This is permanent">
+              Cancelling releases your slot immediately. Rebooking the same window later isn&apos;t
+              guaranteed.
+            </Alert>
 
-            <div className="flex gap-3">
-              <Button type="submit" variant="danger" disabled={cancelMutation.isPending}>
-                {cancelMutation.isPending ? "Cancelling…" : "Confirm cancellation"}
+            {/* id="cancel-reason" is addressed directly by the E2E suite. */}
+            <Textarea
+              id="cancel-reason"
+              label="Reason for cancellation"
+              rows={4}
+              maxLength={500}
+              hint="Tells us what went wrong so we can do better."
+              error={errors.reason?.message}
+              {...form.register("reason")}
+            />
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              {/* The accessible name is load-bearing for the E2E suite, so it
+                  stays constant while the request is in flight — `loading`
+                  carries the busy state via a spinner and aria-busy. */}
+              <Button type="submit" variant="danger" loading={cancelMutation.isPending}>
+                Confirm cancellation
               </Button>
               <Button type="button" variant="secondary" onClick={() => router.back()}>
                 Go back
               </Button>
             </div>
+
+            <p role="status" aria-live="polite" className="sr-only">
+              {cancelMutation.isPending ? "Cancelling your booking, please wait." : ""}
+            </p>
           </form>
         </Card>
       </div>

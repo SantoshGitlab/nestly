@@ -3,12 +3,30 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
+import {
+  BookingProgress,
+  PriceBreakdownList,
+  PriceBreakdownSkeleton,
+  STICKY_BAR_SPACER,
+  ScreenSkeleton,
+  StickyActionBar,
+  inr,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SlotPicker } from "@/components/SlotPicker";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import {
+  Alert,
+  Button,
+  Card,
+  EmptyState,
+  PageHeading,
+  Skeleton,
+  cx,
+} from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { todayIsoDate } from "@/lib/date";
@@ -16,7 +34,6 @@ import type {
   BookingSummary,
   BookingSummaryRequestBody,
   CustomerAddress,
-  PriceBreakdown,
   ServiceDetail,
   SlotRevalidation,
 } from "@/lib/types";
@@ -36,7 +53,7 @@ import type {
  */
 export default function BookingSummaryPage() {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-4xl px-6 py-10" />}>
+    <Suspense fallback={<ScreenSkeleton cards={4} />}>
       <RequireAuth>
         <BookingSummaryScreen />
       </RequireAuth>
@@ -57,6 +74,15 @@ function BookingSummaryScreen() {
   const [selectedSlotWindowId, setSelectedSlotWindowId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  /**
+   * Double-submit guard. `isSubmitting` disables the button, but on a slow
+   * connection a second click can land in the same tick as the first, before
+   * React has re-rendered the disabled state - and a duplicate POST /bookings
+   * creates a second real booking the customer then has to cancel. A ref is
+   * checked and set synchronously, so the second call returns immediately.
+   */
+  const inFlight = useRef(false);
 
   // Coupon (task 77, SRS 11.10.3). appliedCouponCode is the code the backend
   // has confirmed - couponInput is just the text box's draft value, kept
@@ -142,7 +168,7 @@ function BookingSummaryScreen() {
       });
       setAppliedCouponCode(code);
       const discount = result.coupon?.discountAmount ?? 0;
-      setCouponMessage(`${result.coupon?.code ?? code} applied - you saved ₹${discount.toFixed(2)}.`);
+      setCouponMessage(`${result.coupon?.code ?? code} applied — you saved ${inr(discount)}.`);
     } catch (err) {
       setCouponError(describeError(err));
     } finally {
@@ -159,6 +185,10 @@ function BookingSummaryScreen() {
 
   const handleProceed = async () => {
     if (!request || !service) return;
+    // Synchronous re-entry guard - see `inFlight` above.
+    if (inFlight.current) return;
+    inFlight.current = true;
+
     setSubmitError(null);
     setIsSubmitting(true);
 
@@ -173,8 +203,9 @@ function BookingSummaryScreen() {
 
       if (!revalidation.isValid) {
         setSelectedSlotWindowId(null);
-        setSubmitError(revalidation.reason ?? "This slot is no longer available. Please choose another.");
-        setIsSubmitting(false);
+        setSubmitError(
+          revalidation.reason ?? "This slot is no longer available. Please choose another.",
+        );
         return;
       }
 
@@ -185,84 +216,134 @@ function BookingSummaryScreen() {
       });
 
       router.push(`/booking/payment/${booking.id}?serviceSlug=${service.slug}`);
+      // Deliberately no reset here: the navigation is in flight and leaving
+      // the button busy stops a second submit during the route transition.
+      return;
     } catch (err) {
+      // Everything the customer entered - quantity, add-ons, address, slot,
+      // coupon - is component state and is untouched by a failure, so a retry
+      // costs one click and no re-entry.
       setSubmitError(describeError(err));
+    } finally {
+      if (!inFlight.current) return;
+      inFlight.current = false;
       setIsSubmitting(false);
     }
   };
 
   if (!serviceSlug) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-12">
-        <Alert>No service selected. Go back and choose a service to book.</Alert>
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+        <EmptyState
+          title="No service selected"
+          description="Choose a service first and we'll bring you straight back here to review it."
+          action={
+            <Link
+              href="/categories"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
+            >
+              Browse services
+            </Link>
+          }
+        />
       </main>
     );
   }
 
   if (serviceQuery.isPending) {
-    return <main className="mx-auto w-full max-w-3xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
   }
 
   if (serviceQuery.isError || !service) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-12">
-        <Alert>{describeError(serviceQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+        <Alert
+          tone="error"
+          title="Couldn't load this service"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => serviceQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(serviceQuery.error)}
+        </Alert>
       </main>
     );
   }
 
+  const summary = summaryQuery.data;
+  const payable = summary ? (summary.coupon ? summary.finalPayable : summary.price.totalPayable) : null;
+
   return (
-    <main className="mx-auto grid w-full max-w-4xl gap-6 px-6 py-10 md:grid-cols-[1fr_360px]">
-      <div className="flex flex-col gap-6">
-        <PageHeading title="Review your booking" subtitle={service.name} />
+    <main
+      className={cx(
+        "mx-auto grid w-full max-w-4xl gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_22rem]",
+        STICKY_BAR_SPACER,
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-6 md:col-start-1">
+        <div>
+          <BookingProgress current={0} />
+          <PageHeading title="Review your booking" subtitle={service.name} />
+        </div>
 
         {/* Cart: service + add-ons (task 62a). */}
         <Card title="Service">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="font-medium">{service.name}</span>
-            <span>₹{service.price}</span>
+          <div className="flex items-baseline justify-between gap-4">
+            <span className="text-sm font-medium text-fg">{service.name}</span>
+            <span className="nums text-sm text-fg-muted">{inr(service.price)}</span>
           </div>
 
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm font-medium">Quantity</span>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                aria-label="Decrease quantity"
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <span className="text-sm font-medium text-fg">Quantity</span>
+            <div className="flex items-center gap-2">
+              <QuantityButton
+                label="Decrease quantity"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="h-8 w-8 rounded-lg border border-black/15 text-sm dark:border-white/20"
+                disabled={quantity <= 1}
               >
                 −
-              </button>
-              <span className="w-6 text-center text-sm">{quantity}</span>
-              <button
-                type="button"
-                aria-label="Increase quantity"
-                onClick={() => setQuantity((q) => q + 1)}
-                className="h-8 w-8 rounded-lg border border-black/15 text-sm dark:border-white/20"
-              >
+              </QuantityButton>
+              <span className="nums w-8 text-center text-sm font-medium text-fg" aria-live="polite">
+                {quantity}
+              </span>
+              <QuantityButton label="Increase quantity" onClick={() => setQuantity((q) => q + 1)}>
                 +
-              </button>
+              </QuantityButton>
             </div>
           </div>
 
           {service.addOns.length > 0 ? (
-            <fieldset className="mt-4 flex flex-col gap-2 border-t border-black/10 pt-4 dark:border-white/15">
-              <legend className="mb-1 text-sm font-medium">Add-ons</legend>
-              {service.addOns.map((addOn) => (
-                <label key={addOn.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedAddOnIds.has(addOn.id)}
-                      onChange={() => toggleAddOn(addOn.id)}
-                      className="h-4 w-4 rounded border-black/25 dark:border-white/30"
-                    />
-                    {addOn.name}
-                  </span>
-                  <span className="text-neutral-500">+₹{addOn.price}</span>
-                </label>
-              ))}
+            <fieldset className="mt-5 border-t border-line pt-4">
+              <legend className="mb-2.5 text-sm font-medium text-fg">Add-ons</legend>
+              <div className="flex flex-col gap-2">
+                {service.addOns.map((addOn) => {
+                  const checked = selectedAddOnIds.has(addOn.id);
+                  return (
+                    <label
+                      key={addOn.id}
+                      className={cx(
+                        "flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-sm transition duration-fast ease-out",
+                        checked
+                          ? "border-brand-600/40 bg-brand-50 dark:bg-brand-500/10"
+                          : "border-line bg-surface hover:border-line-strong hover:bg-surface-2",
+                      )}
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAddOn(addOn.id)}
+                          className="h-4 w-4 shrink-0 cursor-pointer rounded border-line-strong accent-brand-600"
+                        />
+                        <span className="min-w-0 truncate text-fg">{addOn.name}</span>
+                      </span>
+                      <span className="nums shrink-0 text-fg-muted">+{inr(addOn.price)}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </fieldset>
           ) : null}
         </Card>
@@ -270,49 +351,78 @@ function BookingSummaryScreen() {
         {/* Address selection (task 62b). */}
         <Card title="Service address" description="Where should we send your professional?">
           {addressesQuery.isPending ? (
-            <p className="text-sm text-neutral-500">Loading addresses…</p>
-          ) : addressesQuery.isError ? (
-            <Alert>{describeError(addressesQuery.error)}</Alert>
-          ) : addressesQuery.data.length === 0 ? (
-            <div className="flex flex-col items-start gap-2">
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                You don&apos;t have any saved addresses yet.
-              </p>
-              <Link href="/addresses/new">
-                <Button type="button" variant="secondary">
-                  Add an address
-                </Button>
-              </Link>
+            <div className="flex flex-col gap-2" aria-hidden>
+              <Skeleton className="h-[4.5rem] rounded-xl" />
+              <Skeleton className="h-[4.5rem] rounded-xl" />
             </div>
+          ) : addressesQuery.isError ? (
+            <Alert
+              tone="error"
+              title="Couldn't load your addresses"
+              action={
+                <Button size="sm" variant="secondary" onClick={() => addressesQuery.refetch()}>
+                  Retry
+                </Button>
+              }
+            >
+              {describeError(addressesQuery.error)}
+            </Alert>
+          ) : addressesQuery.data.length === 0 ? (
+            <EmptyState
+              title="No saved addresses"
+              description="Add the address you'd like this service delivered to."
+              action={
+                <Link
+                  href="/addresses/new"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
+                >
+                  Add an address
+                </Link>
+              }
+            />
           ) : (
             <div className="flex flex-col gap-2">
-              {addressesQuery.data.map((address) => (
-                <label
-                  key={address.id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${
-                    address.id === selectedAddressId
-                      ? "border-black dark:border-white"
-                      : "border-black/15 dark:border-white/20"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="address"
-                    className="mt-1"
-                    checked={address.id === selectedAddressId}
-                    onChange={() => setSelectedAddressId(address.id)}
-                  />
-                  <span>
-                    <span className="font-medium">{address.label}</span>
-                    <br />
-                    <span className="text-neutral-600 dark:text-neutral-400">
-                      {address.line1}
-                      {address.line2 ? `, ${address.line2}` : ""}, {address.city} {address.pincode}
+              {addressesQuery.data.map((address) => {
+                const isSelected = address.id === selectedAddressId;
+                return (
+                  <label
+                    key={address.id}
+                    className={cx(
+                      "flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 text-sm transition duration-fast ease-out",
+                      isSelected
+                        ? "border-brand-600 bg-brand-50 shadow-xs dark:bg-brand-500/10"
+                        : "border-line bg-surface hover:border-line-strong hover:bg-surface-2",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="address"
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand-600"
+                      checked={isSelected}
+                      onChange={() => setSelectedAddressId(address.id)}
+                    />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-2 font-medium text-fg">
+                        {address.label}
+                        {address.isDefault ? (
+                          <span className="rounded-full bg-surface-3 px-2 py-0.5 text-xs font-medium text-fg-muted">
+                            Default
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-0.5 block leading-relaxed text-fg-muted">
+                        {address.line1}
+                        {address.line2 ? `, ${address.line2}` : ""}, {address.city}{" "}
+                        <span className="nums">{address.pincode}</span>
+                      </span>
                     </span>
-                  </span>
-                </label>
-              ))}
-              <Link href="/addresses/new" className="text-sm font-medium hover:underline">
+                  </label>
+                );
+              })}
+              <Link
+                href="/addresses/new"
+                className="mt-1 inline-flex w-fit items-center gap-1 text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+              >
                 + Add a new address
               </Link>
             </div>
@@ -321,9 +431,11 @@ function BookingSummaryScreen() {
 
         {/* Slot selection (task 62c, 63a-c). */}
         <Card title="Slot" description="Pick a date and time window.">
-          {city === undefined ? null : city === null ? (
-            <div className="flex flex-col items-start gap-2">
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">Select your city first.</p>
+          {city === undefined ? (
+            <Skeleton className="h-24 rounded-xl" />
+          ) : city === null ? (
+            <div className="flex flex-col items-start gap-2.5">
+              <p className="text-sm text-fg-muted">Select your city first.</p>
               <CitySelector />
             </div>
           ) : locality === null ? (
@@ -341,12 +453,14 @@ function BookingSummaryScreen() {
         </Card>
 
         {/* Coupon (task 62d, 77; SRS 11.10.3). */}
-        <Card title="Coupon">
+        <Card title="Coupon" description="Have a code? Apply it before you pay.">
           <div className="flex flex-col gap-3">
             {appliedCouponCode ? (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-black/15 px-3 py-2 text-sm dark:border-white/20">
-                <span className="font-medium">{appliedCouponCode}</span>
-                <Button type="button" variant="secondary" onClick={handleRemoveCoupon}>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-success/25 bg-success-soft px-3.5 py-2.5">
+                <span className="font-mono text-sm font-semibold uppercase tracking-wide text-success">
+                  {appliedCouponCode}
+                </span>
+                <Button type="button" size="sm" variant="secondary" onClick={handleRemoveCoupon}>
                   Remove
                 </Button>
               </div>
@@ -354,65 +468,143 @@ function BookingSummaryScreen() {
               <div className="flex gap-2">
                 <input
                   type="text"
+                  id="coupon-code"
+                  aria-label="Coupon code"
                   value={couponInput}
                   onChange={(e) => setCouponInput(e.target.value)}
                   placeholder="Enter coupon code"
-                  className="flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm uppercase text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:normal-case placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25"
                 />
                 <Button
                   type="button"
                   variant="secondary"
-                  disabled={!request || !couponInput.trim() || isApplyingCoupon}
+                  loading={isApplyingCoupon}
+                  disabled={!request || !couponInput.trim()}
                   onClick={handleApplyCoupon}
                 >
-                  {isApplyingCoupon ? "Applying…" : "Apply"}
+                  Apply
                 </Button>
               </div>
             )}
+            {!appliedCouponCode && !request ? (
+              <p className="text-xs text-fg-subtle">
+                Choose an address and a slot first — a coupon is validated against the full booking.
+              </p>
+            ) : null}
             {couponMessage ? <Alert tone="success">{couponMessage}</Alert> : null}
-            {couponError ? <Alert>{couponError}</Alert> : null}
+            {couponError ? <Alert tone="error">{couponError}</Alert> : null}
           </div>
         </Card>
       </div>
 
-      <aside className="flex flex-col gap-4 md:sticky md:top-6 md:self-start">
+      <aside className="flex flex-col gap-4 md:sticky md:top-20 md:col-start-2 md:row-start-1 md:self-start">
         {summaryQuery.isPending && request !== null ? (
           <Card title="Price summary">
-            <p className="text-sm text-neutral-500">Calculating…</p>
+            <PriceBreakdownSkeleton />
           </Card>
         ) : summaryQuery.isError ? (
           <Card title="Price summary">
-            <Alert>{describeError(summaryQuery.error)}</Alert>
+            <Alert
+              tone="error"
+              title="Couldn't price this booking"
+              action={
+                <Button size="sm" variant="secondary" onClick={() => summaryQuery.refetch()}>
+                  Retry
+                </Button>
+              }
+            >
+              {describeError(summaryQuery.error)}
+            </Alert>
           </Card>
-        ) : summaryQuery.data ? (
-          <BookingSummaryCard summary={summaryQuery.data} />
+        ) : summary ? (
+          <BookingSummaryCard summary={summary} />
         ) : (
           <Card title="Price summary">
-            <p className="text-sm text-neutral-500">
-              Choose your address and slot to see the price breakdown.
+            <p className="text-sm leading-relaxed text-fg-muted">
+              Choose your address and slot to see the full price breakdown.
             </p>
           </Card>
         )}
 
-        {submitError ? <Alert>{submitError}</Alert> : null}
+        {submitError ? (
+          <Alert
+            tone="error"
+            title="We couldn't place your booking"
+            action={
+              <Button size="sm" variant="secondary" onClick={handleProceed} disabled={!request}>
+                Try again
+              </Button>
+            }
+          >
+            {submitError} Nothing you entered has been lost.
+          </Alert>
+        ) : null}
 
-        <Button
-          type="button"
-          className="w-full"
-          disabled={!summaryQuery.data || isSubmitting}
-          onClick={handleProceed}
-        >
-          {isSubmitting ? "Placing booking…" : "Proceed to book"}
-        </Button>
+        <StickyActionBar>
+          {payable !== null ? (
+            <div className="flex items-baseline justify-between gap-3 md:hidden">
+              <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                Total payable
+              </span>
+              <span className="nums text-lg font-semibold text-fg">{inr(payable)}</span>
+            </div>
+          ) : null}
 
-        {/* Entry point into task 187's recurring-plan setup flow - same service, no booking placed yet. */}
-        <Link href={`/recurring-bookings/new?serviceSlug=${service.slug}`}>
-          <Button type="button" variant="secondary" className="w-full">
-            Set up as recurring instead
+          <Button
+            type="button"
+            size="lg"
+            fullWidth
+            loading={isSubmitting}
+            disabled={!summary}
+            onClick={handleProceed}
+          >
+            Proceed to book
           </Button>
+
+          {/* Announced rather than shown as a blocking overlay: the button's
+              own spinner covers the visual case, this covers screen readers. */}
+          <p role="status" aria-live="polite" className="sr-only">
+            {isSubmitting ? "Placing your booking, please wait." : ""}
+          </p>
+
+        </StickyActionBar>
+
+        {/* Entry point into task 187's recurring-plan setup flow - same
+            service, no booking placed yet. A styled Link rather than
+            <Link><Button/></Link>: a button inside an anchor is invalid HTML
+            and gives assistive tech two nested controls for one action. */}
+        <Link
+          href={`/recurring-bookings/new?serviceSlug=${service.slug}`}
+          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+        >
+          Set up as recurring instead
         </Link>
       </aside>
     </main>
+  );
+}
+
+function QuantityButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-base text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-45 disabled:active:scale-100"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -425,60 +617,36 @@ function BookingSummaryScreen() {
 function BookingSummaryCard({ summary }: { summary: BookingSummary }) {
   return (
     <Card title="Price summary">
-      <div className="flex flex-col gap-3">
-        <PriceRows breakdown={summary.price} />
+      <div className="flex flex-col gap-4">
+        <PriceBreakdownList
+          breakdown={summary.price}
+          discount={
+            summary.coupon
+              ? { code: summary.coupon.code, amount: summary.coupon.discountAmount }
+              : null
+          }
+          total={summary.coupon ? summary.finalPayable : summary.price.totalPayable}
+        />
 
         {summary.coupon ? (
-          <dl className="flex flex-col gap-1.5 border-t border-black/10 pt-3 text-sm dark:border-white/15">
-            <div className="flex items-center justify-between text-green-700 dark:text-green-400">
-              <dt>Coupon ({summary.coupon.code})</dt>
-              <dd>-₹{summary.coupon.discountAmount.toFixed(2)}</dd>
-            </div>
-            <div className="flex items-center justify-between font-semibold">
-              <dt>Final payable</dt>
-              <dd>₹{summary.finalPayable.toFixed(2)}</dd>
-            </div>
-          </dl>
+          <p className="rounded-lg bg-success-soft px-3 py-2 text-xs font-medium text-success">
+            You saved <span className="nums">{inr(summary.coupon.discountAmount)}</span> with{" "}
+            {summary.coupon.code}.
+          </p>
         ) : null}
 
         {summary.cancellationPolicy || summary.reschedulePolicy ? (
-          <div className="border-t border-black/10 pt-3 text-xs text-neutral-600 dark:border-white/15 dark:text-neutral-400">
-            <p className="mb-1 font-medium uppercase tracking-wide text-neutral-500">Policy</p>
-            {summary.cancellationPolicy ? <p>{summary.cancellationPolicy}</p> : null}
-            {summary.reschedulePolicy ? <p>{summary.reschedulePolicy}</p> : null}
+          <div className="border-t border-line pt-3">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+              Policy
+            </p>
+            <div className="flex flex-col gap-1 text-xs leading-relaxed text-fg-muted">
+              {summary.cancellationPolicy ? <p>{summary.cancellationPolicy}</p> : null}
+              {summary.reschedulePolicy ? <p>{summary.reschedulePolicy}</p> : null}
+            </div>
           </div>
         ) : null}
       </div>
     </Card>
-  );
-}
-
-// Mirrors PriceCalculator.tsx's PriceSummary intentionally rather than
-// importing it - that component's internal layout is verified/working and
-// not worth coupling to this page's needs.
-function PriceRows({ breakdown }: { breakdown: PriceBreakdown }) {
-  return (
-    <dl className="flex flex-col gap-1.5 text-sm">
-      <Row label={`Base price × ${breakdown.quantity}`} value={breakdown.baseTotal} />
-      {breakdown.addOnLineItems.map((item) => (
-        <Row key={item.addOnId} label={`${item.name} × ${item.quantity}`} value={item.lineTotal} />
-      ))}
-      {breakdown.visitCharge > 0 ? <Row label="Visit charge" value={breakdown.visitCharge} /> : null}
-      <Row label={`Tax (${breakdown.taxPercentage}%)`} value={breakdown.taxAmount} />
-      {breakdown.platformFee > 0 ? <Row label="Platform fee" value={breakdown.platformFee} /> : null}
-      <div className="mt-1 flex items-center justify-between border-t border-black/10 pt-2 font-semibold dark:border-white/15">
-        <dt>Total payable</dt>
-        <dd>₹{breakdown.totalPayable.toFixed(2)}</dd>
-      </div>
-    </dl>
-  );
-}
-
-function Row({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-400">
-      <dt>{label}</dt>
-      <dd>₹{value.toFixed(2)}</dd>
-    </div>
   );
 }

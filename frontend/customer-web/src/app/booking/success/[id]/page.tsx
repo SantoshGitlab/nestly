@@ -4,8 +4,19 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import type { ReactNode } from "react";
+import {
+  BookingProgress,
+  BookingStatusBadge,
+  DetailList,
+  DetailRow,
+  PriceBreakdownList,
+  ScreenSkeleton,
+  formatCalendarDate,
+  formatTimeRange,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import { Alert, Button, Card } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { BookingDetail, ServiceDetail } from "@/lib/types";
 
@@ -17,7 +28,7 @@ import type { BookingDetail, ServiceDetail } from "@/lib/types";
  */
 export default function BookingSuccessPage() {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-2xl px-6 py-12" />}>
+    <Suspense fallback={<ScreenSkeleton cards={2} />}>
       <RequireAuth>
         <BookingSuccessScreen />
       </RequireAuth>
@@ -45,13 +56,23 @@ function BookingSuccessScreen() {
   });
 
   if (bookingQuery.isPending) {
-    return <main className="mx-auto w-full max-w-2xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
   }
 
   if (bookingQuery.isError || !bookingQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <Alert>{describeError(bookingQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <Alert
+          tone="error"
+          title="Couldn't load your confirmation"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => bookingQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(bookingQuery.error)}
+        </Alert>
       </main>
     );
   }
@@ -59,70 +80,133 @@ function BookingSuccessScreen() {
   const booking = bookingQuery.data;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
-      <div className="mb-6 flex flex-col items-center gap-2 text-center">
-        <span className="text-4xl" aria-hidden="true">
-          ✅
+    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <BookingProgress current={2} />
+
+      <div className="mb-7 flex animate-rise flex-col items-center gap-3 text-center">
+        <span
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-success ring-8 ring-success/10"
+          aria-hidden
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-7 w-7"
+          >
+            <path d="m5 13 4 4L19 7" />
+          </svg>
         </span>
-        <PageHeading title="Booking placed!" subtitle={`Booking ID: ${booking.id}`} />
+        {/* The E2E suite addresses this by accessible name ("Booking placed!")
+            and reads the booking id out of a single text node underneath it,
+            so both stay exactly as they are. */}
+        <h1 className="text-display-sm font-semibold text-fg">Booking placed!</h1>
+        <p className="nums text-sm text-fg-muted">{`Booking ID: ${booking.id}`}</p>
+        <BookingStatusBadge status={booking.status} label={booking.statusLabel} />
       </div>
 
-      <Card title="Booking summary">
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label="Service" value={booking.service.name} />
-          <Row label="Date" value={booking.slot.date} />
-          <Row
-            label="Time"
-            value={`${booking.slot.name} · ${booking.slot.startTime.slice(0, 5)}–${booking.slot.endTime.slice(0, 5)}`}
-          />
-          <Row
-            label="Address"
-            value={`${booking.address.line1}, ${booking.address.city} ${booking.address.pincode}`}
-          />
-          <Row label="Status" value={booking.statusLabel} />
-          <div className="mt-1 flex items-center justify-between border-t border-black/10 pt-2 font-semibold dark:border-white/15">
-            <dt>Amount payable</dt>
-            <dd>₹{booking.price.totalPayable.toFixed(2)}</dd>
-          </div>
-        </dl>
-      </Card>
+      <div className="flex flex-col gap-5">
+        <Card title="Booking summary">
+          <DetailList>
+            <DetailRow label="Service">{booking.service.name}</DetailRow>
+            <DetailRow label="Date">{formatCalendarDate(booking.slot.date)}</DetailRow>
+            <DetailRow label="Time" numeric>
+              {booking.slot.name} · {formatTimeRange(booking.slot.startTime, booking.slot.endTime)}
+            </DetailRow>
+            <DetailRow label="Address">
+              {booking.address.line1}, {booking.address.city} {booking.address.pincode}
+            </DetailRow>
+          </DetailList>
 
-      <div className="mt-6 flex flex-col gap-3 rounded-xl border border-black/10 bg-white p-5 text-sm text-neutral-600 dark:border-white/15 dark:bg-neutral-900 dark:text-neutral-400">
-        <p className="font-medium text-neutral-900 dark:text-neutral-100">What happens next</p>
-        <p>
-          We&apos;ll assign a professional for your slot and keep you updated on the status of this
-          booking. You can track progress anytime from your bookings page.
-        </p>
-        {policyQuery.data?.cancellationPolicy || policyQuery.data?.reschedulePolicy ? (
-          <div>
-            <p className="mb-1 font-medium text-neutral-900 dark:text-neutral-100">
-              Cancellation &amp; rescheduling
-            </p>
-            {policyQuery.data.cancellationPolicy ? <p>{policyQuery.data.cancellationPolicy}</p> : null}
-            {policyQuery.data.reschedulePolicy ? <p>{policyQuery.data.reschedulePolicy}</p> : null}
+          <div className="mt-5 border-t border-line pt-4">
+            <PriceBreakdownList
+              breakdown={booking.price}
+              discount={
+                booking.couponDiscountAmount
+                  ? { code: booking.couponCode, amount: booking.couponDiscountAmount }
+                  : null
+              }
+              total={booking.finalPayable}
+              totalLabel="Amount paid"
+            />
           </div>
-        ) : null}
-      </div>
+        </Card>
 
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Link href={`/bookings/${booking.id}`}>
-          <Button type="button">View booking details</Button>
-        </Link>
-        <Link href="/bookings">
-          <Button type="button" variant="secondary">
+        <Card title="What happens next">
+          <ol className="flex flex-col gap-3">
+            <NextStep index={1} title="We assign a professional">
+              You&apos;ll see their confirmation on this booking as soon as they accept.
+            </NextStep>
+            <NextStep index={2} title="We keep you posted">
+              Status changes appear on the booking page and in your notifications.
+            </NextStep>
+            <NextStep index={3} title="Plans change? No problem">
+              Reschedule or cancel from the booking page, subject to the policy below.
+            </NextStep>
+          </ol>
+
+          {policyQuery.data?.cancellationPolicy || policyQuery.data?.reschedulePolicy ? (
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                Cancellation &amp; rescheduling
+              </p>
+              <div className="flex flex-col gap-1 text-sm leading-relaxed text-fg-muted">
+                {policyQuery.data.cancellationPolicy ? (
+                  <p>{policyQuery.data.cancellationPolicy}</p>
+                ) : null}
+                {policyQuery.data.reschedulePolicy ? <p>{policyQuery.data.reschedulePolicy}</p> : null}
+              </div>
+            </div>
+          ) : null}
+        </Card>
+
+        {/* Styled links rather than <Link><Button/></Link>: a button inside an
+            anchor is invalid HTML and gives assistive tech two nested
+            interactive elements for one action. Both names are addressed by
+            the E2E suite. */}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href={`/bookings/${booking.id}`}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-lg bg-brand-600 px-5 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
+          >
+            View booking details
+          </Link>
+          <Link
+            href="/bookings"
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-lg border border-line bg-surface px-5 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 active:scale-[0.98]"
+          >
             Go to my bookings
-          </Button>
-        </Link>
+          </Link>
+        </div>
       </div>
     </main>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function NextStep({
+  index,
+  title,
+  children,
+}: {
+  index: number;
+  title: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex items-center justify-between gap-4 text-neutral-600 dark:text-neutral-400">
-      <dt>{label}</dt>
-      <dd className="text-right text-neutral-900 dark:text-neutral-100">{value}</dd>
-    </div>
+    <li className="flex gap-3">
+      <span
+        aria-hidden
+        className="nums mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+      >
+        {index}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-fg">{title}</p>
+        <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{children}</p>
+      </div>
+    </li>
   );
 }

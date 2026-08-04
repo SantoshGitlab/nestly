@@ -2,9 +2,22 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import {
+  BookingProgress,
+  BookingStatusBadge,
+  DetailList,
+  DetailRow,
+  PriceBreakdownList,
+  STICKY_BAR_SPACER,
+  ScreenSkeleton,
+  StickyActionBar,
+  formatCalendarDate,
+  formatTimeRange,
+  inr,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import { Alert, Button, Card, PageHeading, Skeleton, Spinner, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { BookingStatus } from "@/lib/types";
 import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } from "@/lib/types";
@@ -21,7 +34,7 @@ import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } 
  */
 export default function BookingPaymentPage() {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-2xl px-6 py-12" />}>
+    <Suspense fallback={<ScreenSkeleton cards={2} />}>
       <RequireAuth>
         <BookingPaymentScreen />
       </RequireAuth>
@@ -45,6 +58,14 @@ function BookingPaymentScreen() {
   const [payError, setPayError] = useState<string | null>(null);
   const [paymentFailed, setPaymentFailed] = useState(false);
   const [failureReason, setFailureReason] = useState<string | null>(null);
+
+  /**
+   * Double-charge guard. The button is disabled while `isPaying`, but a
+   * second click can be dispatched in the same tick as the first before that
+   * state has rendered - and on a payment screen the cost of losing that race
+   * is a duplicate gateway attempt, not just a duplicate request.
+   */
+  const inFlight = useRef(false);
 
   const bookingQuery = useQuery({
     queryKey: ["booking", id],
@@ -73,6 +94,9 @@ function BookingPaymentScreen() {
 
   const handlePay = async () => {
     if (!orderQuery.data) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
+
     setIsPaying(true);
     setPayError(null);
     setPaymentFailed(false);
@@ -93,6 +117,8 @@ function BookingPaymentScreen() {
 
       if (status === BookingStatus.Confirmed) {
         router.push(successHref);
+        // Left busy through the route transition so the button cannot be
+        // pressed a second time while the next screen is loading.
         return;
       }
 
@@ -109,11 +135,15 @@ function BookingPaymentScreen() {
           // Failure reason is a nice-to-have; the retry flow works without it.
         }
       } else {
-        setPayError("We couldn't confirm the payment outcome. Please check your bookings page shortly.");
+        setPayError(
+          "We couldn't confirm the payment outcome. Please check your bookings page shortly.",
+        );
       }
     } catch (err) {
       setPayError(describeError(err));
     } finally {
+      if (!inFlight.current) return;
+      inFlight.current = false;
       setIsPaying(false);
     }
   };
@@ -126,91 +156,181 @@ function BookingPaymentScreen() {
   };
 
   if (bookingQuery.isPending) {
-    return <main className="mx-auto w-full max-w-2xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
   }
 
   if (bookingQuery.isError || !booking) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12">
-        <Alert>{describeError(bookingQuery.error)}</Alert>
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <Alert
+          tone="error"
+          title="Couldn't load this booking"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => bookingQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(bookingQuery.error)}
+        </Alert>
       </main>
     );
   }
 
   if (isConfirmed) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-6 py-12 text-sm text-neutral-500">Redirecting…</main>
+      <main className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-12 text-sm text-fg-muted sm:px-6">
+        <Spinner />
+        Taking you to your confirmation…
+      </main>
     );
   }
 
+  const amount = orderQuery.data?.amount ?? booking.price.totalPayable;
+
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
-      <PageHeading title="Sandbox Payment" subtitle={booking.service.name} />
+    <main
+      className={cx(
+        "mx-auto grid w-full max-w-4xl gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_22rem]",
+        STICKY_BAR_SPACER,
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-6">
+        <div>
+          <BookingProgress current={1} />
+          <PageHeading title="Confirm and pay" subtitle={booking.service.name} />
+        </div>
 
-      <Card title="Booking">
-        <dl className="flex flex-col gap-2 text-sm">
-          <div className="flex items-center justify-between">
-            <dt className="text-neutral-600 dark:text-neutral-400">Booking ID</dt>
-            <dd className="font-medium">{booking.id}</dd>
-          </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
-            <dd className="font-medium">{booking.statusLabel}</dd>
-          </div>
-          <div className="mt-1 flex items-center justify-between border-t border-black/10 pt-2 font-semibold dark:border-white/15">
-            <dt>Amount payable</dt>
-            <dd>₹{booking.price.totalPayable.toFixed(2)}</dd>
-          </div>
-        </dl>
-      </Card>
+        <Card title="Booking">
+          <DetailList>
+            <DetailRow label="Booking ID" numeric>
+              <span className="break-all">{booking.id}</span>
+            </DetailRow>
+            <DetailRow label="Status">
+              <BookingStatusBadge status={booking.status} label={booking.statusLabel} />
+            </DetailRow>
+            <DetailRow label="Date">{formatCalendarDate(booking.slot.date)}</DetailRow>
+            <DetailRow label="Time" numeric>
+              {booking.slot.name} · {formatTimeRange(booking.slot.startTime, booking.slot.endTime)}
+            </DetailRow>
+            <DetailRow label="Address">
+              {booking.address.line1}, {booking.address.city} {booking.address.pincode}
+            </DetailRow>
+          </DetailList>
+        </Card>
 
-      <div className="mt-6">
+        <Card title="Price breakdown">
+          <PriceBreakdownList
+            breakdown={booking.price}
+            discount={
+              booking.couponDiscountAmount
+                ? { code: booking.couponCode, amount: booking.couponDiscountAmount }
+                : null
+            }
+            total={booking.finalPayable}
+            totalLabel="Amount payable"
+          />
+        </Card>
+      </div>
+
+      <aside className="flex flex-col gap-4 md:sticky md:top-20 md:self-start">
         {orderQuery.isPending ? (
-          <Card title="Sandbox Payment">
-            <p className="text-sm text-neutral-500">Preparing payment…</p>
+          <Card title="Payment">
+            <div className="flex flex-col gap-3" aria-hidden>
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-12 rounded-lg" />
+            </div>
+            <p role="status" className="mt-3 text-sm text-fg-muted">
+              Preparing your payment…
+            </p>
           </Card>
         ) : orderQuery.isError ? (
-          <Card title="Sandbox Payment">
-            <div className="flex flex-col gap-3">
-              <Alert>{describeError(orderQuery.error)}</Alert>
-              <Button type="button" variant="secondary" onClick={handleRetry}>
-                Try again
-              </Button>
-            </div>
+          <Card title="Payment">
+            <Alert
+              tone="error"
+              title="Couldn't start the payment"
+              action={
+                <Button size="sm" variant="secondary" onClick={handleRetry}>
+                  Try again
+                </Button>
+              }
+            >
+              {describeError(orderQuery.error)}
+            </Alert>
           </Card>
         ) : paymentFailed ? (
           <Card title="Payment failed">
             <div className="flex flex-col gap-3">
-              <Alert>
-                {failureReason ?? "Your payment could not be completed. No amount was deducted."}
+              <Alert tone="error" title="Your payment didn't go through">
+                {failureReason ?? "No amount was deducted. You can try again right away."}
               </Alert>
-              <Button type="button" onClick={handleRetry}>
+              <p className="text-sm leading-relaxed text-fg-muted">
+                Your slot is still held on this booking — retrying starts a fresh attempt with
+                everything you already entered.
+              </p>
+              <Button type="button" fullWidth onClick={handleRetry}>
                 Retry payment
               </Button>
             </div>
           </Card>
         ) : orderQuery.data ? (
           <Card
-            title="Sandbox Payment"
-            description="This is a sandbox simulation of the payment gateway - no real payment is processed."
+            title="Payment"
+            description="Sandbox simulation of the payment gateway — no real payment is processed."
           >
             <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-neutral-600 dark:text-neutral-400">Amount</span>
-                <span className="text-lg font-semibold">
-                  ₹{orderQuery.data.amount.toFixed(2)} {orderQuery.data.currency}
-                </span>
+              <div className="rounded-xl border border-line bg-surface-2 px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                  Amount payable
+                </p>
+                <p className="nums mt-1 text-2xl font-semibold text-fg">
+                  {inr(orderQuery.data.amount)}{" "}
+                  <span className="text-sm font-medium text-fg-subtle">
+                    {orderQuery.data.currency}
+                  </span>
+                </p>
               </div>
 
-              {payError ? <Alert>{payError}</Alert> : null}
-
-              <Button type="button" className="w-full" disabled={isPaying} onClick={handlePay}>
-                {isPaying ? "Processing…" : `Pay ₹${orderQuery.data.amount.toFixed(2)} (Sandbox)`}
-              </Button>
+              {payError ? (
+                <Alert
+                  tone="error"
+                  title="Payment status unclear"
+                  action={
+                    <Button size="sm" variant="secondary" onClick={handleRetry}>
+                      Start over
+                    </Button>
+                  }
+                >
+                  {payError}
+                </Alert>
+              ) : null}
             </div>
           </Card>
         ) : null}
-      </div>
+
+        {orderQuery.data && !paymentFailed ? (
+          <StickyActionBar>
+            <div className="flex items-baseline justify-between gap-3 md:hidden">
+              <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">
+                Amount payable
+              </span>
+              <span className="nums text-lg font-semibold text-fg">{inr(amount)}</span>
+            </div>
+
+            {/* The accessible name is load-bearing for the E2E suite
+                (/Pay ₹.*\(Sandbox\)/), so it stays constant while the request
+                is in flight - the busy state is carried by the spinner and
+                aria-busy that `loading` adds, not by relabelling the button. */}
+            <Button type="button" size="lg" fullWidth loading={isPaying} onClick={handlePay}>
+              {`Pay ${inr(orderQuery.data.amount)} (Sandbox)`}
+            </Button>
+
+            <p role="status" aria-live="polite" className="sr-only">
+              {isPaying ? "Processing your payment, please wait." : ""}
+            </p>
+          </StickyActionBar>
+        ) : null}
+      </aside>
     </main>
   );
 }
