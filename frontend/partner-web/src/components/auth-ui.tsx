@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
 
@@ -134,18 +134,25 @@ export function Segmented<T extends string>({
  * `autoComplete="one-time-code"` plus `inputMode="numeric"` is what actually
  * makes iOS and Android offer the code from the message.
  */
-export function OtpField({
-  label = "Verification code",
-  length = 6,
-  error,
-  hint,
-  ...props
-}: {
+type OtpFieldProps = {
   label?: string;
   length?: number;
   error?: string;
   hint?: string;
-} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">) {
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">;
+
+/**
+ * forwardRef, not a plain function component: every call site spreads
+ * `{...form.register("otpCode")}`, and `register` returns a `ref` alongside
+ * name/onChange/onBlur. React drops `ref` from the props of a non-forwardRef
+ * component, so react-hook-form never got a handle on the input and could not
+ * write to it - `reset()` and `setValue()` updated the form store while the
+ * box on screen kept its old digits.
+ */
+export const OtpField = forwardRef<HTMLInputElement, OtpFieldProps>(function OtpField(
+  { label = "Verification code", length = 6, error, hint, ...props },
+  ref,
+) {
   const id = props.id ?? `field-${props.name ?? "otp"}`;
 
   return (
@@ -155,6 +162,7 @@ export function OtpField({
       </label>
       <input
         {...props}
+        ref={ref}
         id={id}
         type="text"
         inputMode="numeric"
@@ -182,7 +190,7 @@ export function OtpField({
       ) : null}
     </div>
   );
-}
+});
 
 /**
  * Countdown gating a "resend code" action.
