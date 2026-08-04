@@ -56,7 +56,7 @@ function EditAddress() {
       <PageHeading title="Edit address" />
 
       {query.isPending ? (
-        <p className="text-sm text-neutral-500">Loading address…</p>
+        <p className="text-sm text-fg-muted">Loading address…</p>
       ) : query.isError ? (
         <Alert>{describeError(query.error)}</Alert>
       ) : !address ? (

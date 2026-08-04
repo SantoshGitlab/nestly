@@ -581,11 +581,21 @@ function ActionLink({
 function CompletionProofCard({ bookingId }: { bookingId: string }) {
   const query = useQuery({
     queryKey: ["booking-completion-proof", bookingId],
-    queryFn: () =>
-      apiFetch<BookingCompletionProofResponse | undefined>(
+    queryFn: async () => {
+      const proof = await apiFetch<BookingCompletionProofResponse | undefined>(
         `${API_V1}/bookings/${bookingId}/completion-proof`,
         { authenticated: true },
-      ),
+      );
+      /**
+       * The endpoint answers 204 until the partner has actually submitted
+       * proof, and `apiFetch` maps that to `undefined`. React Query treats an
+       * `undefined` resolution as a thrown failure, so this card used to show
+       * "Couldn't load the completion proof" for every booking that simply
+       * did not have any yet — which is most of them. Normalising to `null`
+       * makes "none submitted" a value rather than an error.
+       */
+      return proof ?? null;
+    },
   });
 
   if (query.isPending) {

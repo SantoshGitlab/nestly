@@ -3,7 +3,7 @@
 import * as signalR from "@microsoft/signalr";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card } from "@/components/ui";
+import { Alert, Button, Card, cx } from "@/components/ui";
 import { API_BASE_URL, API_V1, apiFetch, describeError } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth";
 import { ChatContextType, ChatSenderType } from "@/lib/types";
@@ -127,7 +127,7 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
   if (threadQuery.isPending || historyQuery.isPending) {
     return (
       <Card title="Chat">
-        <p className="text-sm text-neutral-500">Loading chat…</p>
+        <p className="text-sm text-fg-muted">Loading chat…</p>
       </Card>
     );
   }
@@ -142,23 +142,37 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
 
   return (
     <Card title="Chat">
-      <div className="flex max-h-96 flex-col gap-3 overflow-y-auto rounded-lg border border-black/10 p-3 dark:border-white/10">
+      <div className="flex max-h-96 flex-col gap-3 overflow-y-auto rounded-lg border border-line p-3">
         {messages.length === 0 ? (
-          <p className="text-sm text-neutral-500">No messages yet - say hello.</p>
+          <p className="text-sm text-fg-muted">No messages yet — say hello.</p>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                message.senderType === ChatSenderType.Customer
-                  ? "self-end bg-black text-white dark:bg-white dark:text-black"
-                  : "self-start bg-neutral-100 dark:bg-neutral-800"
-              }`}
-            >
-              <p>{message.body}</p>
-              <p className="mt-1 text-xs opacity-60">{new Date(message.sentAtUtc).toLocaleTimeString()}</p>
-            </div>
-          ))
+          messages.map((message) => {
+            const fromCustomer = message.senderType === ChatSenderType.Customer;
+            return (
+              <div
+                key={message.id}
+                className={cx(
+                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
+                  fromCustomer
+                    ? "self-end rounded-br-md bg-brand-600 text-fg-on-brand"
+                    : "self-start rounded-bl-md bg-surface-2 text-fg",
+                )}
+              >
+                {/* Side and colour are the only visual cue for who spoke, and
+                    neither reaches a screen reader. */}
+                <span className="sr-only">{fromCustomer ? "You said:" : "Support said:"}</span>
+                <p>{message.body}</p>
+                <p
+                  className={cx(
+                    "nums mt-1 text-xs",
+                    fromCustomer ? "text-fg-on-brand/70" : "text-fg-subtle",
+                  )}
+                >
+                  {new Date(message.sentAtUtc).toLocaleTimeString()}
+                </p>
+              </div>
+            );
+          })
         )}
         <div ref={bottomRef} />
       </div>
@@ -186,9 +200,9 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Type a message…"
-          className="flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
+          className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25"
         />
-        <Button type="submit" disabled={sendMutation.isPending || !draft.trim()}>
+        <Button type="submit" loading={sendMutation.isPending} disabled={!draft.trim()}>
           Send
         </Button>
       </form>
