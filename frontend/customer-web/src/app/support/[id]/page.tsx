@@ -1,16 +1,41 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { ChatWidget } from "@/components/ChatWidget";
+import {
+  DetailList,
+  DetailRow,
+  ScreenSkeleton,
+  formatInstant,
+  supportStatusTone,
+} from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  PageHeading,
+  Textarea,
+  cx,
+} from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { authorTypeLabel, categoryLabel, priorityLabel, statusLabel } from "@/lib/support";
-import { ChatContextType, SupportTicketCommentAuthorType } from "@/lib/types";
-import type { SupportTicketDetailResponse } from "@/lib/types";
+import {
+  ChatContextType,
+  DisputeResolutionOutcome,
+  SupportTicketCommentAuthorType,
+  SupportTicketStatus,
+} from "@/lib/types";
+import type { SupportTicketCommentResponse, SupportTicketDetailResponse } from "@/lib/types";
+
+const REPLY_MAX = 2000;
 
 /** Support ticket detail: thread + reply (SRS 11.18.3, task 92). */
 export default function SupportTicketDetailPage() {
@@ -23,51 +48,35 @@ export default function SupportTicketDetailPage() {
 
 function SupportTicketDetailScreen() {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const [comment, setComment] = useState("");
-  const [commentError, setCommentError] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ["support-ticket", id],
     queryFn: () =>
-      apiFetch<SupportTicketDetailResponse>(`${API_V1}/support-tickets/${id}`, { authenticated: true }),
-  });
-
-  const commentMutation = useMutation({
-    mutationFn: (text: string) =>
-      apiFetch<SupportTicketDetailResponse>(`${API_V1}/support-tickets/${id}/comments`, {
-        method: "POST",
+      apiFetch<SupportTicketDetailResponse>(`${API_V1}/support-tickets/${id}`, {
         authenticated: true,
-        body: JSON.stringify({ comment: text }),
       }),
-    onSuccess: (updated) => {
-      queryClient.setQueryData(["support-ticket", id], updated);
-      setComment("");
-    },
   });
-
-  const submitComment = () => {
-    const trimmed = comment.trim();
-    if (!trimmed) {
-      setCommentError("Enter a reply before sending.");
-      return;
-    }
-    if (trimmed.length > 2000) {
-      setCommentError("Reply must be 2000 characters or fewer.");
-      return;
-    }
-    setCommentError(null);
-    commentMutation.mutate(trimmed);
-  };
 
   if (query.isPending) {
-    return <main className="mx-auto w-full max-w-3xl px-6 py-12 text-sm text-neutral-500">Loading…</main>;
+    return (
+      <ScreenSkeleton cards={3} className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12" />
+    );
   }
 
-  if (query.isError || !query.data) {
+  if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-6 py-12">
-        <Alert>{describeError(query.error)}</Alert>
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+        <Alert
+          tone="error"
+          title="Couldn't load this ticket"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
       </main>
     );
   }
@@ -75,100 +84,215 @@ function SupportTicketDetailScreen() {
   const ticket = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12">
-      <PageHeading title={ticket.subject} subtitle={`Ticket ID: ${ticket.id}`} />
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <PageHeading
+        title={ticket.subject}
+        subtitle={`Ticket ID: ${ticket.id}`}
+        actions={<Badge tone={supportStatusTone(ticket.status)}>{statusLabel(ticket.status)}</Badge>}
+      />
 
       <div className="flex flex-col gap-6">
+        {ticket.resolutionSummary ? (
+          <Alert tone="success" title="Resolution">
+            {ticket.resolutionSummary}
+          </Alert>
+        ) : null}
+
+        {/* `isDisputed` and its outcome were carried on the response and never
+            rendered, so a customer whose refund claim had been reviewed had no
+            way to see the decision anywhere in the app. */}
+        {ticket.isDisputed ? <DisputeAlert outcome={ticket.disputeOutcome} /> : null}
+
         <Card title="Details">
-          <dl className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Category</dt>
-              <dd className="font-medium">{categoryLabel(ticket.category)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Priority</dt>
-              <dd className="font-medium">{priorityLabel(ticket.priority)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-neutral-600 dark:text-neutral-400">Status</dt>
-              <dd className="font-medium">{statusLabel(ticket.status)}</dd>
-            </div>
+          <DetailList>
+            <DetailRow label="Category">{categoryLabel(ticket.category)}</DetailRow>
+            <DetailRow label="Priority">{priorityLabel(ticket.priority)}</DetailRow>
+            <DetailRow label="Status">
+              <Badge tone={supportStatusTone(ticket.status)}>{statusLabel(ticket.status)}</Badge>
+            </DetailRow>
+            <DetailRow label="Raised" numeric>
+              {formatInstant(ticket.createdAtUtc)}
+            </DetailRow>
+            <DetailRow label="Last updated" numeric>
+              {formatInstant(ticket.updatedAtUtc)}
+            </DetailRow>
             {ticket.bookingId ? (
-              <div className="flex items-center justify-between">
-                <dt className="text-neutral-600 dark:text-neutral-400">Booking</dt>
-                <dd className="font-medium">
-                  <Link href={`/bookings/${ticket.bookingId}`} className="hover:underline">
-                    View booking
-                  </Link>
-                </dd>
-              </div>
+              <DetailRow label="Booking">
+                <Link
+                  href={`/bookings/${ticket.bookingId}`}
+                  className="text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                >
+                  View booking
+                </Link>
+              </DetailRow>
             ) : null}
-          </dl>
-          <p className="mt-4 text-sm text-neutral-700 dark:text-neutral-300">{ticket.description}</p>
-          {ticket.resolutionSummary ? (
-            <div className="mt-4 border-t border-black/10 pt-4 text-sm dark:border-white/15">
-              <p className="mb-1 font-medium">Resolution</p>
-              <p className="text-neutral-700 dark:text-neutral-300">{ticket.resolutionSummary}</p>
-            </div>
-          ) : null}
+          </DetailList>
+
+          <Divider className="my-5" />
+
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{ticket.description}</p>
         </Card>
 
         <Card title="Conversation">
-          {ticket.comments.length === 0 ? (
-            <p className="text-sm text-neutral-500">No replies yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {ticket.comments.map((c) => (
-                <li
-                  key={c.id}
-                  className={`rounded-lg border p-3 text-sm ${
-                    c.authorType === SupportTicketCommentAuthorType.Customer
-                      ? "border-black/15 dark:border-white/20"
-                      : "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950"
-                  }`}
-                >
-                  <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
-                    <span className="font-medium">{authorTypeLabel(c.authorType)}</span>
-                    <span>{new Date(c.createdAt).toLocaleString()}</span>
-                  </div>
-                  <p>{c.comment}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="mt-5 flex flex-col gap-2 border-t border-black/10 pt-4 dark:border-white/15">
-            {commentMutation.isError ? <Alert>{describeError(commentMutation.error)}</Alert> : null}
-            <label htmlFor="ticket-reply" className="text-sm font-medium">
-              Reply
-            </label>
-            <textarea
-              id="ticket-reply"
-              rows={3}
-              maxLength={2000}
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              aria-invalid={commentError ? true : undefined}
-              aria-describedby={commentError ? "ticket-reply-error" : undefined}
-              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black focus:ring-1 focus:ring-black dark:border-white/20 dark:focus:border-white dark:focus:ring-white"
-            />
-            {commentError ? (
-              <p id="ticket-reply-error" className="text-xs text-red-600 dark:text-red-400">
-                {commentError}
-              </p>
-            ) : null}
-            <Button type="button" onClick={submitComment} disabled={commentMutation.isPending} className="self-start">
-              {commentMutation.isPending ? "Sending…" : "Send reply"}
-            </Button>
-          </div>
+          <Thread comments={ticket.comments} />
+          <Divider className="my-5" />
+          <ReplyForm ticketId={ticket.id} status={ticket.status} />
         </Card>
 
         <ChatWidget contextType={ChatContextType.SupportTicket} contextId={ticket.id} />
 
-        <Link href="/support" className="text-sm font-medium hover:underline">
+        <Link
+          href="/support"
+          className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+        >
           Back to tickets
         </Link>
       </div>
     </main>
+  );
+}
+
+function DisputeAlert({ outcome }: { outcome: DisputeResolutionOutcome | null }) {
+  if (outcome === null) {
+    return (
+      <Alert tone="info" title="Under dispute review">
+        We&apos;re reviewing this ticket. You&apos;ll see the decision here once it&apos;s made.
+      </Alert>
+    );
+  }
+
+  return outcome === DisputeResolutionOutcome.RefundValid ? (
+    <Alert tone="success" title="Dispute upheld">
+      We agreed with your claim. Any refund due is on its way — check your wallet or original payment
+      method.
+    </Alert>
+  ) : (
+    <Alert tone="warning" title="Dispute closed">
+      After reviewing, we weren&apos;t able to uphold this claim. Reply below if you have anything
+      further to add.
+    </Alert>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Thread                                                                     */
+/* -------------------------------------------------------------------------- */
+
+function Thread({ comments }: { comments: SupportTicketCommentResponse[] }) {
+  if (comments.length === 0) {
+    return (
+      <p className="text-sm text-fg-muted">
+        No replies yet. We usually respond within one working day.
+      </p>
+    );
+  }
+
+  return (
+    <ol className="flex list-none flex-col gap-3">
+      {comments.map((comment) => {
+        const isCustomer = comment.authorType === SupportTicketCommentAuthorType.Customer;
+        return (
+          <li
+            key={comment.id}
+            className={cx(
+              "rounded-xl border px-4 py-3",
+              isCustomer
+                ? "border-line bg-surface-2"
+                : "border-brand-600/20 bg-brand-50 dark:bg-brand-500/10",
+            )}
+          >
+            <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+              {/* The author is named in text, so the side the bubble is tinted
+                  is reinforcement rather than the only signal. */}
+              <span className="text-xs font-semibold text-fg">
+                {authorTypeLabel(comment.authorType)}
+              </span>
+              <span className="nums text-xs text-fg-subtle">{formatInstant(comment.createdAt)}</span>
+            </div>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{comment.comment}</p>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reply                                                                      */
+/* -------------------------------------------------------------------------- */
+
+const replySchema = z.object({
+  comment: z
+    .string()
+    .trim()
+    .min(1, "Enter a reply before sending")
+    .max(REPLY_MAX, `Reply must be ${REPLY_MAX} characters or fewer`),
+});
+
+type ReplyFormValues = z.infer<typeof replySchema>;
+
+function ReplyForm({ ticketId, status }: { ticketId: string; status: SupportTicketStatus }) {
+  const queryClient = useQueryClient();
+
+  const form = useForm<ReplyFormValues>({
+    resolver: zodResolver(replySchema),
+    defaultValues: { comment: "" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (comment: string) =>
+      apiFetch<SupportTicketDetailResponse>(`${API_V1}/support-tickets/${ticketId}/comments`, {
+        method: "POST",
+        authenticated: true,
+        body: JSON.stringify({ comment }),
+      }),
+    onSuccess: (updated) => {
+      // The endpoint answers with the whole ticket, so seeding the cache with
+      // it shows the new reply without a second round trip.
+      queryClient.setQueryData(["support-ticket", ticketId], updated);
+      form.reset({ comment: "" });
+    },
+  });
+
+  return (
+    <form
+      onSubmit={form.handleSubmit((values) => {
+        // `isPending` already disables the button; this drops a click that
+        // lands in the same tick, before that disable has rendered.
+        if (mutation.isPending) return;
+        mutation.mutate(values.comment.trim());
+      })}
+      className="flex flex-col gap-3"
+      noValidate
+    >
+      {mutation.isError ? (
+        <Alert tone="error" title="Couldn't send your reply">
+          {describeError(mutation.error)}
+        </Alert>
+      ) : null}
+
+      {/* The server accepts comments on a closed ticket, so the box stays
+          usable — but saying nothing would leave a customer replying into what
+          they reasonably assume is a live conversation. */}
+      {status === SupportTicketStatus.Closed ? (
+        <Alert tone="info">
+          This ticket is closed. You can still reply, but a new ticket will reach us faster.
+        </Alert>
+      ) : null}
+
+      <Textarea
+        label="Reply"
+        rows={4}
+        maxLength={REPLY_MAX}
+        // The error belongs on the control, not in a detached banner above the
+        // form — `Textarea` wires it to `aria-describedby` and `aria-invalid`.
+        error={form.formState.errors.comment?.message}
+        {...form.register("comment")}
+      />
+
+      <Button type="submit" className="self-start" loading={mutation.isPending}>
+        Send reply
+      </Button>
+    </form>
   );
 }

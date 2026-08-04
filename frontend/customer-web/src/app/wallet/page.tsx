@@ -1,11 +1,41 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
+import Link from "next/link";
+import { formatInstant, inr } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Card, PageHeading } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Skeleton,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Table,
+  PageHeading,
+  cx,
+} from "@/components/ui";
+import type { BadgeTone } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { WalletEntryType, WalletSourceType } from "@/lib/types";
 import type { WalletBalanceResponse, WalletLedgerEntryResponse } from "@/lib/types";
+
+/**
+ * Wallet balance and ledger (tasks 78a-b, SRS 11.17).
+ */
+export default function WalletPage() {
+  return (
+    <RequireAuth>
+      <WalletScreen />
+    </RequireAuth>
+  );
+}
 
 /**
  * Readable label for a ledger entry's source (SRS 11.17, GUIDELINES #4 of
@@ -39,20 +69,30 @@ function sourceLabel(sourceType: WalletSourceType): string {
 }
 
 /**
- * Wallet balance and ledger (tasks 78a-b, SRS 11.17).
+ * `accent` is the reward tone across the product, so the two Nestly Coins
+ * sources carry it and nothing else does — that is the whole point of keeping
+ * the ramp reserved. Everything else takes a neutral pill: the credit/debit
+ * direction is already carried by the amount column, and colouring the source
+ * as well would say the same thing twice in two different vocabularies.
  */
-export default function WalletPage() {
-  return (
-    <RequireAuth>
-      <WalletScreen />
-    </RequireAuth>
-  );
+function sourceTone(sourceType: WalletSourceType): BadgeTone {
+  switch (sourceType) {
+    case WalletSourceType.NestlyCoinsReward:
+    case WalletSourceType.NestlyCoinsClawback:
+      return "accent";
+    case WalletSourceType.ReferralReward:
+    case WalletSourceType.ReferralMilestoneBonus:
+      return "brand";
+    default:
+      return "neutral";
+  }
 }
 
 function WalletScreen() {
   const balanceQuery = useQuery({
     queryKey: ["wallet-balance"],
-    queryFn: () => apiFetch<WalletBalanceResponse>(`${API_V1}/wallet/balance`, { authenticated: true }),
+    queryFn: () =>
+      apiFetch<WalletBalanceResponse>(`${API_V1}/wallet/balance`, { authenticated: true }),
   });
 
   const ledgerQuery = useQuery({
@@ -62,70 +102,194 @@ function WalletScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12">
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading title="Wallet" subtitle="Your Nestly wallet balance and transaction history." />
 
-      <div className="mb-8">
-        {balanceQuery.isPending ? (
-          <Card title="Balance">
-            <p className="text-sm text-neutral-500">Loading…</p>
-          </Card>
-        ) : balanceQuery.isError ? (
-          <Card title="Balance">
-            <Alert>{describeError(balanceQuery.error)}</Alert>
-          </Card>
-        ) : (
-          <Card title="Balance">
-            <p className="text-3xl font-semibold">₹{balanceQuery.data.balance.toFixed(2)}</p>
-          </Card>
-        )}
+      <div className="flex flex-col gap-6">
+        <BalanceCard query={balanceQuery} />
+        <LedgerCard query={ledgerQuery} />
       </div>
-
-      <h2 className="mb-3 text-lg font-semibold">Transaction history</h2>
-
-      {ledgerQuery.isPending ? (
-        <p className="text-sm text-neutral-500">Loading transactions…</p>
-      ) : ledgerQuery.isError ? (
-        <Alert>{describeError(ledgerQuery.error)}</Alert>
-      ) : ledgerQuery.data.length === 0 ? (
-        <Card title="No transactions yet">
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Wallet credits and debits will show up here once you have some.
-          </p>
-        </Card>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {ledgerQuery.data.map((entry) => {
-            const isCredit = entry.entryType === WalletEntryType.Credit;
-            return (
-              <li key={entry.id}>
-                <Card title={sourceLabel(entry.sourceType)}>
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <div className="flex flex-col gap-1 text-neutral-600 dark:text-neutral-400">
-                      <span>{entry.description}</span>
-                      <span>{new Date(entry.createdAtUtc).toLocaleString()}</span>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span
-                        className={`font-semibold ${
-                          isCredit
-                            ? "text-green-700 dark:text-green-400"
-                            : "text-red-700 dark:text-red-400"
-                        }`}
-                      >
-                        {isCredit ? "+" : "-"}₹{entry.amount.toFixed(2)}
-                      </span>
-                      <span className="text-xs text-neutral-500">
-                        Balance: ₹{entry.balanceAfter.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              </li>
-            );
-          })}
-        </ul>
-      )}
     </main>
+  );
+}
+
+function BalanceCard({
+  query,
+}: {
+  query: UseQueryResult<WalletBalanceResponse>;
+}) {
+  if (query.isPending) {
+    return (
+      <Card title="Balance">
+        <div className="flex flex-col gap-2" aria-hidden>
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-3.5 w-64" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Card title="Balance">
+        <Alert
+          tone="error"
+          title="Couldn't load your balance"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="Balance">
+      {/* The figure is refetched in place, so it is announced rather than
+          silently swapped under a customer who is reading it. */}
+      <p className="nums text-display-sm font-semibold text-fg" aria-live="polite">
+        {inr(query.data.balance)}
+      </p>
+      <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
+        Applied automatically at checkout, before any coupon.
+      </p>
+    </Card>
+  );
+}
+
+function LedgerCard({
+  query,
+}: {
+  query: UseQueryResult<WalletLedgerEntryResponse[]>;
+}) {
+  if (query.isPending) {
+    return (
+      <Card title="Transaction history">
+        <div className="flex flex-col gap-4" aria-hidden>
+          {[0, 1, 2, 3].map((row) => (
+            <div key={row} className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skeleton className="h-3.5 w-40" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+              <Skeleton className="h-3.5 w-20" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Card title="Transaction history">
+        <Alert
+          tone="error"
+          title="Couldn't load your transactions"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
+      </Card>
+    );
+  }
+
+  if (query.data.length === 0) {
+    return (
+      <EmptyState
+        icon={<WalletIcon />}
+        title="No wallet activity yet"
+        description="Refunds, promotional credit and referral rewards all land here, and are applied to your next booking automatically."
+        action={
+          <Link
+            href="/categories"
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
+          >
+            Browse services
+          </Link>
+        }
+      />
+    );
+  }
+
+  return (
+    <Card title="Transaction history" flush>
+      <Table>
+        <caption className="sr-only">
+          Wallet transactions, newest first, with the running balance after each one.
+        </caption>
+        <THead>
+          <TR>
+            <TH>Transaction</TH>
+            <TH numeric>Amount</TH>
+            <TH numeric>Balance after</TH>
+          </TR>
+        </THead>
+        <TBody>
+          {query.data.map((entry) => (
+            <LedgerRow key={entry.id} entry={entry} />
+          ))}
+        </TBody>
+      </Table>
+    </Card>
+  );
+}
+
+function LedgerRow({ entry }: { entry: WalletLedgerEntryResponse }) {
+  const isCredit = entry.entryType === WalletEntryType.Credit;
+
+  return (
+    <TR>
+      <TD>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Badge tone={sourceTone(entry.sourceType)} className="self-start">
+            {sourceLabel(entry.sourceType)}
+          </Badge>
+          <span className="text-sm text-fg">{entry.description}</span>
+          <span className="nums text-xs text-fg-subtle">{formatInstant(entry.createdAtUtc)}</span>
+        </div>
+      </TD>
+      <TD numeric>
+        {/* Direction was previously carried by green/red alone, which is
+            invisible to anyone who cannot separate the two. The sign is the
+            primary signal, the colour reinforces it, and the word itself is
+            there for a screen reader. */}
+        <span className={cx("font-semibold", isCredit ? "text-success" : "text-danger")}>
+          <span className="sr-only">{isCredit ? "Credit " : "Debit "}</span>
+          {isCredit ? "+" : "−"}
+          {inr(entry.amount)}
+        </span>
+      </TD>
+      <TD numeric className="text-fg-muted">
+        {inr(entry.balanceAfter)}
+      </TD>
+    </TR>
+  );
+}
+
+function WalletIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18a2 2 0 0 1 2 2v1" />
+      <path d="M3 7.5V17a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
+      <path d="M21 11h-4a2 2 0 0 0 0 4h4z" />
+    </svg>
   );
 }

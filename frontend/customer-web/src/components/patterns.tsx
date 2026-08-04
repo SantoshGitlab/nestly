@@ -80,6 +80,24 @@ export function formatInstant(utc: string): string {
   });
 }
 
+/**
+ * An ISO instant as a local date alone, for values where the time of day is
+ * noise: a billing date, the day a referral signed up.
+ *
+ * Separate from `formatCalendarDate`, which takes a `YYYY-MM-DD` and must not
+ * be handed an instant — appending `T00:00:00` to one produces an unparseable
+ * string and the raw ISO text leaks into the UI.
+ */
+export function formatInstantDate(utc: string): string {
+  const date = new Date(utc);
+  if (Number.isNaN(date.getTime())) return utc;
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Status vocabulary                                                          */
 /* -------------------------------------------------------------------------- */

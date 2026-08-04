@@ -100,5 +100,18 @@ export async function apiFetch<T>(
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  // A 200 with an empty body is not the same as a 204, and several endpoints
+  // return exactly that — ASP.NET's `Ok()` with no argument sends 200 with
+  // Content-Length: 0 (profile mobile/otp and email/otp, auth, payments).
+  // Calling response.json() on those rejects with a SyntaxError, which
+  // surfaced as "Unexpected end of JSON input" on a request that had in fact
+  // succeeded: the OTP really was sent, but the profile screen showed an
+  // error and never advanced to the code-entry step. Read the body as text
+  // first and treat empty as no content.
+  const body = await response.text();
+  if (body === "") {
+    return undefined as T;
+  }
+
+  return JSON.parse(body) as T;
 }

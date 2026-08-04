@@ -1,13 +1,44 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { formatInstantDate, inr } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageHeading,
+  Skeleton,
+  StatTile,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Table,
+} from "@/components/ui";
+import type { BadgeTone } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { ReferralHistoryItemResponse, ReferralSummaryResponse } from "@/lib/types";
 
-/** Readable label for a ReferralStatus enum member name (REFERRAL.md, task 169). */
+/**
+ * Refer & Earn screen: the customer's own referral code/share link,
+ * lifetime stats, and referral history (REFERRAL.md, task 169), calling
+ * GET /referral and /referral/history (task 168).
+ */
+export default function ReferEarnPage() {
+  return (
+    <RequireAuth>
+      <ReferEarnScreen />
+    </RequireAuth>
+  );
+}
+
+/** The status arrives as the ReferralStatus enum *member name*, not a number. */
 function statusLabel(status: string): string {
   switch (status) {
     case "Registered":
@@ -23,17 +54,20 @@ function statusLabel(status: string): string {
   }
 }
 
-/**
- * Refer & Earn screen: the customer's own referral code/share link,
- * lifetime stats, and referral history (REFERRAL.md, task 169), calling
- * GET /referral and /referral/history (task 168).
- */
-export default function ReferEarnPage() {
-  return (
-    <RequireAuth>
-      <ReferEarnScreen />
-    </RequireAuth>
-  );
+/** `accent` is the product's reward tone, so only a paid-out referral wears it. */
+function statusTone(status: string): BadgeTone {
+  switch (status) {
+    case "Rewarded":
+      return "accent";
+    case "Qualified":
+      return "success";
+    case "Registered":
+      return "info";
+    case "Expired":
+      return "neutral";
+    default:
+      return "neutral";
+  }
 }
 
 function ReferEarnScreen() {
@@ -49,117 +83,338 @@ function ReferEarnScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-12">
-      <PageHeading title="Refer & Earn" subtitle="Share Nestly with friends and earn a reward for every qualifying booking." />
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <PageHeading
+        title="Refer & Earn"
+        subtitle="Share Nestly with friends and earn a reward for every qualifying booking."
+      />
 
-      <div className="mb-8">
-        {summaryQuery.isPending ? (
-          <Card title="Your referral code">
-            <p className="text-sm text-neutral-500">Loading…</p>
-          </Card>
-        ) : summaryQuery.isError ? (
-          <Card title="Your referral code">
-            <Alert>{describeError(summaryQuery.error)}</Alert>
-          </Card>
-        ) : (
-          <ReferralSummaryCard summary={summaryQuery.data} />
-        )}
+      <div className="flex flex-col gap-6">
+        <ShareCard query={summaryQuery} />
+        <StatsRow query={summaryQuery} />
+        <HistoryCard query={historyQuery} />
       </div>
-
-      <h2 className="mb-3 text-lg font-semibold">Referral history</h2>
-
-      {historyQuery.isPending ? (
-        <p className="text-sm text-neutral-500">Loading history…</p>
-      ) : historyQuery.isError ? (
-        <Alert>{describeError(historyQuery.error)}</Alert>
-      ) : historyQuery.data.length === 0 ? (
-        <Card title="No referrals yet">
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Share your code above to see your invites show up here.
-          </p>
-        </Card>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {historyQuery.data.map((item) => (
-            <li key={item.id}>
-              <Card title={item.refereeName}>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <div className="flex flex-col gap-1 text-neutral-600 dark:text-neutral-400">
-                    <span>Signed up {new Date(item.registeredAtUtc).toLocaleDateString()}</span>
-                    {item.qualifiedAtUtc ? (
-                      <span>Qualified {new Date(item.qualifiedAtUtc).toLocaleDateString()}</span>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="font-semibold">{statusLabel(item.status)}</span>
-                    {item.rewardEarned ? (
-                      <span className="text-xs text-green-700 dark:text-green-400">
-                        +₹{item.rewardEarned.toFixed(2)}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
     </main>
   );
 }
 
-/** Code display + copy-to-clipboard + native share sheet - the two ways a customer actually shares a link on mobile vs. desktop. */
-function ReferralSummaryCard({ summary }: { summary: ReferralSummaryResponse }) {
-  const [copied, setCopied] = useState(false);
+/* -------------------------------------------------------------------------- */
+/* Code + share                                                               */
+/* -------------------------------------------------------------------------- */
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(summary.shareLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+function ShareCard({ query }: { query: UseQueryResult<ReferralSummaryResponse> }) {
+  if (query.isPending) {
+    return (
+      <Card title="Your referral code">
+        <div className="flex flex-col gap-4" aria-hidden>
+          <Skeleton className="h-14 rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-lg sm:w-64" />
+        </div>
+      </Card>
+    );
   }
 
-  async function handleShare() {
-    if (navigator.share) {
-      await navigator.share({ title: "Join me on Nestly", url: summary.shareLink });
-    } else {
-      await handleCopy();
+  if (query.isError) {
+    return (
+      <Card title="Your referral code">
+        <Alert
+          tone="error"
+          title="Couldn't load your referral code"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
+      </Card>
+    );
+  }
+
+  return <ReferralShare summary={query.data} />;
+}
+
+/** What a share attempt did, so the outcome can be announced rather than mimed. */
+type ShareFeedback = { tone: "success" | "error"; message: string } | null;
+
+function ReferralShare({ summary }: { summary: ReferralSummaryResponse }) {
+  const [feedback, setFeedback] = useState<ShareFeedback>(null);
+  const timeoutRef = useRef<number | null>(null);
+
+  // Clearing the confirmation on a timer means the timer can outlive the
+  // screen — navigating away mid-countdown otherwise sets state on a component
+  // that is already gone.
+  useEffect(
+    () => () => {
+      if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    },
+    [],
+  );
+
+  const announce = (next: ShareFeedback) => {
+    if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
+    setFeedback(next);
+    timeoutRef.current = window.setTimeout(() => setFeedback(null), 4000);
+  };
+
+  /**
+   * `navigator.clipboard` is undefined on an insecure origin and its write can
+   * be refused outright by permissions policy. The unguarded `await` this
+   * replaces produced an unhandled rejection and left the button silently
+   * claiming nothing — so the failure path now says what to do instead.
+   */
+  const copy = async (value: string, label: string) => {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(value);
+      announce({ tone: "success", message: `${label} copied.` });
+    } catch {
+      announce({
+        tone: "error",
+        message: `Couldn't copy automatically — select the ${label.toLowerCase()} above and copy it.`,
+      });
     }
+  };
+
+  const share = async () => {
+    if (!navigator.share) {
+      await copy(summary.shareLink, "Invite link");
+      return;
+    }
+
+    try {
+      await navigator.share({ title: "Join me on Nestly", url: summary.shareLink });
+    } catch (error) {
+      // Dismissing the OS share sheet rejects with AbortError. That is the
+      // user declining, not a failure, and reporting it as one is worse than
+      // saying nothing at all.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      await copy(summary.shareLink, "Invite link");
+    }
+  };
+
+  return (
+    <Card
+      title="Your referral code"
+      description="Your friend gets a welcome offer, and you earn once their first booking completes."
+    >
+      <div className="flex flex-col gap-4">
+        <div className="rounded-xl border border-line bg-surface-2 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">Referral code</p>
+          {/* Selectable rather than decorative: when the clipboard API is
+              unavailable this is the manual fallback. */}
+          <p className="nums mt-1 select-all font-mono text-xl font-semibold text-fg">
+            {summary.referralCode}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface-2 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">Invite link</p>
+          <p className="mt-1 select-all break-all text-sm text-fg-muted">{summary.shareLink}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={share} icon={<ShareIcon />}>
+            Share invite
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => copy(summary.shareLink, "Invite link")}
+          >
+            Copy link
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => copy(summary.referralCode, "Referral code")}
+          >
+            Copy code
+          </Button>
+        </div>
+
+        {/* A live region rather than a label swap on the button: the old
+            "Copied" text changed the button's own accessible name, which
+            renames the control mid-interaction instead of reporting a result. */}
+        <p
+          role="status"
+          aria-live="polite"
+          className={feedback?.tone === "error" ? "text-sm text-danger" : "text-sm text-success"}
+        >
+          {feedback?.message ?? ""}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Lifetime stats                                                             */
+/* -------------------------------------------------------------------------- */
+
+function StatsRow({ query }: { query: UseQueryResult<ReferralSummaryResponse> }) {
+  if (query.isPending) {
+    return (
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4" aria-hidden>
+        {[0, 1, 2, 3].map((tile) => (
+          <Skeleton key={tile} className="h-28 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+
+  // The share card above already reports the failure and owns the retry;
+  // repeating it here would be two alerts for one request.
+  if (query.isError) return null;
+
+  const summary = query.data;
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatTile label="Invited" value={`${summary.invitedCount}`} />
+      <StatTile label="Qualified" value={`${summary.qualifiedCount}`} />
+      <StatTile label="Rewarded" value={`${summary.rewardedCount}`} />
+      <StatTile label="Total earned" value={inr(summary.totalEarned)} />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* History                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function HistoryCard({ query }: { query: UseQueryResult<ReferralHistoryItemResponse[]> }) {
+  if (query.isPending) {
+    return (
+      <Card title="Referral history">
+        <div className="flex flex-col gap-4" aria-hidden>
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skeleton className="h-3.5 w-36" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-5 w-20 rounded-full" />
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <Card title="Referral history">
+        <Alert
+          tone="error"
+          title="Couldn't load your referrals"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
+      </Card>
+    );
+  }
+
+  if (query.data.length === 0) {
+    return (
+      <EmptyState
+        icon={<GiftIcon />}
+        title="No referrals yet"
+        description="Share your code above. Invites appear here as soon as a friend signs up with it, and turn into a reward once their first booking completes."
+      />
+    );
   }
 
   return (
-    <Card title="Your referral code">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-black/10 bg-neutral-50 px-4 py-3 dark:border-white/15 dark:bg-neutral-800">
-          <span className="font-mono text-lg font-semibold tracking-wide">{summary.referralCode}</span>
-          <div className="flex gap-2">
-            <Button type="button" onClick={handleCopy}>
-              {copied ? "Copied" : "Copy link"}
-            </Button>
-            <Button type="button" onClick={handleShare}>
-              Share
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 text-center text-sm">
-          <div>
-            <div className="text-2xl font-semibold">{summary.invitedCount}</div>
-            <div className="text-neutral-600 dark:text-neutral-400">Invited</div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold">{summary.qualifiedCount}</div>
-            <div className="text-neutral-600 dark:text-neutral-400">Qualified</div>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold">{summary.rewardedCount}</div>
-            <div className="text-neutral-600 dark:text-neutral-400">Rewarded</div>
-          </div>
-        </div>
-
-        <div className="text-center text-sm text-neutral-600 dark:text-neutral-400">
-          Total earned: <span className="font-semibold text-black dark:text-white">₹{summary.totalEarned.toFixed(2)}</span>
-        </div>
-      </div>
+    <Card title="Referral history" flush>
+      <Table>
+        <caption className="sr-only">
+          Everyone who signed up with your code, and what each one has earned you.
+        </caption>
+        <THead>
+          <TR>
+            <TH>Friend</TH>
+            <TH>Status</TH>
+            <TH numeric>Reward</TH>
+          </TR>
+        </THead>
+        <TBody>
+          {query.data.map((item) => (
+            <TR key={item.id}>
+              <TD>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="font-medium text-fg">{item.refereeName}</span>
+                  <span className="nums text-xs text-fg-subtle">
+                    Signed up {formatInstantDate(item.registeredAtUtc)}
+                    {item.qualifiedAtUtc
+                      ? ` · Qualified ${formatInstantDate(item.qualifiedAtUtc)}`
+                      : ""}
+                  </span>
+                </div>
+              </TD>
+              <TD>
+                <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+              </TD>
+              <TD numeric>
+                {/* `!= null` rather than truthiness: a genuine ₹0.00 reward is
+                    a real, recorded outcome and should not render as a dash. */}
+                {item.rewardEarned != null ? (
+                  <span className="font-semibold text-success">+{inr(item.rewardEarned)}</span>
+                ) : (
+                  <span className="text-fg-subtle" aria-label="No reward yet">
+                    —
+                  </span>
+                )}
+              </TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
     </Card>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+      aria-hidden
+    >
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />
+    </svg>
+  );
+}
+
+function GiftIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8" />
+      <path d="M2 8h20v4H2zM12 8v13" />
+      <path d="M12 8H7.5a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8ZM12 8h4.5a2.5 2.5 0 0 0 0-5C13 3 12 8 12 8Z" />
+    </svg>
   );
 }
