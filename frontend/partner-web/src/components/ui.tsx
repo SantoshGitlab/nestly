@@ -266,6 +266,13 @@ export function EmptyState({
 }) {
   return (
     <div
+      // Polite live region: this is what mounts once a search, filter or
+      // load settles on "nothing to show," and that result deserves the same
+      // announcement a screen-reader user gets for a non-empty result set.
+      // Harmless on a page where this is present from first paint too - most
+      // screen readers only announce a status region's *changes*, not
+      // content already there when the page settles.
+      role="status"
       className={cx(
         "flex flex-col items-center justify-center rounded-2xl border border-dashed border-line px-6 py-14 text-center",
         className,
@@ -806,6 +813,20 @@ export function TR({
   return (
     <tr
       onClick={onClick}
+      // A `<tr>` is not natively interactive: without tabIndex/onKeyDown a
+      // clickable row is mouse-only, invisible to keyboard and screen-reader
+      // users despite the pointer cursor telling sighted mouse users it acts
+      // like a link.
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onClick();
+            }
+          : undefined
+      }
       className={cx(
         "transition-colors duration-fast ease-out",
         onClick ? "cursor-pointer hover:bg-surface-2" : "hover:bg-surface-2/60",

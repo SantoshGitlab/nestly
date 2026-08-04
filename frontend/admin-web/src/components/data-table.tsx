@@ -391,6 +391,21 @@ export function DataTable<T>({
                 <tr
                   key={rowKey(row)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  // A `<tr>` is not natively interactive: without
+                  // tabIndex/onKeyDown a clickable row is mouse-only,
+                  // invisible to keyboard and screen-reader users despite the
+                  // pointer cursor telling sighted mouse users it acts like a
+                  // link (mirrors the fix in the shared `TR` primitive).
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          event.preventDefault();
+                          onRowClick(row);
+                        }
+                      : undefined
+                  }
                   className={cx(
                     "transition-colors duration-fast ease-out",
                     onRowClick ? "cursor-pointer hover:bg-surface-2" : "hover:bg-surface-2/60",

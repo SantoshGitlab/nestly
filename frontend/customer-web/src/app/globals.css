@@ -49,7 +49,11 @@
   /* Semantic text */
   --fg: 16 20 32;
   --fg-muted: 90 98 116;
-  --fg-subtle: 133 141 158;
+  /* Was 133 141 158: read as low as 3.2:1 on white, well under the 4.5:1 AA
+     floor for the body-sized meta text (timestamps, hints) it's actually used
+     for across the product. Darkened to clear AA against bg/surface/surface-2
+     while staying visibly lighter than --fg-muted. */
+  --fg-subtle: 102 110 128;
   --fg-on-brand: 255 255 255;
 
   /* Lines */
@@ -95,7 +99,10 @@
 
   --fg: 237 239 244;
   --fg-muted: 154 161 176;
-  --fg-subtle: 114 122 138;
+  /* Was 114 122 138: 4.26:1 on --surface, under the 4.5:1 AA floor for the
+     same body-sized meta text as the light-mode value above. Lightened to
+     clear AA against bg/surface/surface-2 while staying below --fg-muted. */
+  --fg-subtle: 132 140 155;
   --fg-on-brand: 255 255 255;
 
   --border: 40 44 56;

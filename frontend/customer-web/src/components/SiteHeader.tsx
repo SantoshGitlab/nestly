@@ -304,19 +304,53 @@ function MobileDrawer({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // This is a hand-rolled dialog rather than the shared `Modal` (a right-side
+  // slide-over, not `Modal`'s centered/bottom-sheet shape), so it has to
+  // reimplement the same two behaviours `Modal` gives every other dialog in
+  // the product: focus can't escape past the drawer via Tab while it's the
+  // overlay content, and closing it must hand focus back to whatever opened
+  // it rather than dropping it on `<body>`.
   useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     panelRef.current?.focus();
 
+    const focusables = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const items = focusables();
+      if (items.length === 0) return;
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
 
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
     };
   }, [onClose]);
 
