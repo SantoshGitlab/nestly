@@ -719,7 +719,7 @@ export function StatTile({
     <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
       <p className="text-sm font-medium text-fg-muted">{label}</p>
       <div className="mt-2 flex items-baseline gap-2">
-        <p className="nums text-3xl font-semibold text-fg" title={title}>
+        <p className="nums min-w-0 truncate text-3xl font-semibold text-fg" title={title}>
           {value}
         </p>
         {delta ? (
