@@ -1,104 +1,140 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
+import { ConfirmDialog, DataTable } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { describeError } from "@/lib/api";
 import { CmsContentStatus, type CmsFaqResponse } from "@/lib/cms-types";
-import { formatPlacement } from "./cmsDisplay";
+import { formatPlacement, formatSchedule } from "./cmsDisplay";
+import { CmsStatusBadge } from "./CmsStatusBadge";
 
-function formatSchedule(faq: CmsFaqResponse): string {
-  if (!faq.publishStartUtc && !faq.publishEndUtc) return "Always";
-  const start = faq.publishStartUtc ? new Date(faq.publishStartUtc).toLocaleString() : "now";
-  const end = faq.publishEndUtc ? new Date(faq.publishEndUtc).toLocaleString() : "indefinitely";
-  return `${start} – ${end}`;
-}
-
+/**
+ * Site-level FAQ list (SRS 12.16.1). Server-paged, so no sortable columns —
+ * see `CmsPagesTable`.
+ */
 export function CmsFaqsTable({
   faqs,
   isLoading,
-  errorMessage,
+  isFetching,
+  error,
+  onRetry,
   canWrite,
   onEdit,
   onTogglePublished,
   togglingId,
+  toggleError,
+  emptyAction,
+  footer,
 }: {
   faqs: CmsFaqResponse[] | undefined;
   isLoading: boolean;
-  errorMessage: string | null;
+  isFetching?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   canWrite: boolean;
   onEdit: (faq: CmsFaqResponse) => void;
   onTogglePublished: (faq: CmsFaqResponse) => void;
   togglingId?: string;
+  toggleError?: unknown;
+  emptyAction?: ReactNode;
+  footer?: ReactNode;
 }) {
-  if (isLoading) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>;
-  }
+  const [pendingUnpublish, setPendingUnpublish] = useState<CmsFaqResponse | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const isUnpublishing = pendingUnpublish !== null && togglingId === pendingUnpublish.id;
 
-  if (errorMessage) {
-    return <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>;
-  }
+  useEffect(() => {
+    if (!confirmed || isUnpublishing) return;
+    setConfirmed(false);
+    if (!toggleError) setPendingUnpublish(null);
+  }, [confirmed, isUnpublishing, toggleError]);
 
-  if (!faqs || faqs.length === 0) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">No FAQs match the current filters.</p>;
-  }
+  const columns: DataTableColumn<CmsFaqResponse>[] = [
+    {
+      key: "question",
+      header: "Question",
+      className: "max-w-md",
+      cell: (faq) => <span className="font-medium text-fg">{faq.question}</span>,
+    },
+    { key: "placement", header: "Placement", cell: (faq) => formatPlacement(faq.placement) },
+    { key: "sortOrder", header: "Sort", numeric: true, cell: (faq) => faq.sortOrder },
+    {
+      key: "schedule",
+      header: "Schedule",
+      cell: (faq) => <span className="nums whitespace-nowrap">{formatSchedule(faq)}</span>,
+    },
+    { key: "status", header: "Status", cell: (faq) => <CmsStatusBadge status={faq.status} /> },
+  ];
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-black/10 text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15 dark:text-neutral-400">
-            <th scope="col" className="px-3 py-2 font-medium">Question</th>
-            <th scope="col" className="px-3 py-2 font-medium">Placement</th>
-            <th scope="col" className="px-3 py-2 font-medium">Sort</th>
-            <th scope="col" className="px-3 py-2 font-medium">Schedule</th>
-            <th scope="col" className="px-3 py-2 font-medium">Status</th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {faqs.map((faq) => (
-            <tr key={faq.id} className="border-b border-black/5 last:border-0 dark:border-white/10">
-              <td className="px-3 py-2 font-medium">{faq.question}</td>
-              <td className="px-3 py-2">{formatPlacement(faq.placement)}</td>
-              <td className="px-3 py-2">{faq.sortOrder}</td>
-              <td className="px-3 py-2">{formatSchedule(faq)}</td>
-              <td className="px-3 py-2">
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    faq.status === CmsContentStatus.Published
-                      ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
-                      : "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
-                  }`}
-                >
-                  {faq.status === CmsContentStatus.Published ? "Published" : "Draft"}
-                </span>
-              </td>
-              <td className="px-3 py-2">
-                {canWrite ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => onEdit(faq)}>
+    <>
+      <DataTable
+        title="FAQs"
+        description="Search and manage every site-level FAQ (SRS 12.16.1)."
+        columns={columns}
+        rows={faqs}
+        rowKey={(faq) => faq.id}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        error={error}
+        onRetry={onRetry}
+        caption="Site-level FAQs"
+        emptyTitle="No FAQs match the current filters"
+        emptyDescription="Clear the filters, or create an FAQ above."
+        emptyAction={emptyAction}
+        skeletonRows={6}
+        minWidth="960px"
+        footer={footer}
+        rowActions={
+          canWrite
+            ? (faq) => {
+                const published = faq.status === CmsContentStatus.Published;
+                return (
+                  <>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => onEdit(faq)}>
                       Edit
                     </Button>
                     <Button
                       type="button"
-                      variant={faq.status === CmsContentStatus.Published ? "danger" : "secondary"}
-                      className="px-2 py-1 text-xs"
+                      size="sm"
+                      variant={published ? "secondary" : "subtle"}
                       disabled={togglingId === faq.id}
-                      onClick={() => onTogglePublished(faq)}
+                      loading={togglingId === faq.id && !published}
+                      onClick={() => (published ? setPendingUnpublish(faq) : onTogglePublished(faq))}
                     >
-                      {togglingId === faq.id
-                        ? "Saving…"
-                        : faq.status === CmsContentStatus.Published
-                          ? "Unpublish"
-                          : "Publish"}
+                      {published ? "Unpublish" : "Publish"}
                     </Button>
-                  </div>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  </>
+                );
+              }
+            : undefined
+        }
+      />
+
+      <ConfirmDialog
+        open={pendingUnpublish !== null}
+        title="Unpublish this FAQ?"
+        description="It disappears from the customer-facing help content immediately."
+        confirmLabel="Unpublish"
+        cancelLabel="Keep published"
+        loading={isUnpublishing}
+        error={toggleError ? describeError(toggleError) : null}
+        onCancel={() => {
+          setConfirmed(false);
+          setPendingUnpublish(null);
+        }}
+        onConfirm={() => {
+          if (!pendingUnpublish) return;
+          setConfirmed(true);
+          onTogglePublished(pendingUnpublish);
+        }}
+      >
+        {pendingUnpublish ? (
+          <p className="text-sm text-fg-muted">{pendingUnpublish.question}</p>
+        ) : null}
+      </ConfirmDialog>
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Field, Select, Textarea } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
 import { CmsPlacement, type CmsFaqCreateRequest, type CmsFaqResponse, type CmsFaqUpdateRequest } from "@/lib/cms-types";
 import { PLACEMENT_OPTIONS, datetimeLocalToUtc, utcToDatetimeLocal } from "./cmsDisplay";
 
@@ -96,11 +97,17 @@ export function CmsFaqForm({
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {submitError ? <Alert>{submitError}</Alert> : null}
 
-      <Field label="Question" error={form.formState.errors.question?.message} {...form.register("question")} />
+      <Field label="Question" required error={form.formState.errors.question?.message} {...form.register("question")} />
 
-      <Textarea label="Answer" rows={6} error={form.formState.errors.answer?.message} {...form.register("answer")} />
+      <Textarea
+        label="Answer"
+        required
+        rows={6}
+        error={form.formState.errors.answer?.message}
+        {...form.register("answer")}
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Select
           label="Placement"
           error={form.formState.errors.placement?.message}
@@ -110,36 +117,40 @@ export function CmsFaqForm({
         <Field
           label="Sort order"
           type="number"
+          min={0}
+          hint="Lower numbers appear first."
           error={form.formState.errors.sortOrder?.message}
           {...form.register("sortOrder", { valueAsNumber: true })}
         />
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Field
-          label="Publish from (optional)"
+          label="Publish from"
           type="datetime-local"
+          hint="Optional — your local time."
           error={form.formState.errors.publishStart?.message}
           {...form.register("publishStart")}
         />
         <Field
-          label="Publish until (optional)"
+          label="Publish until"
           type="datetime-local"
+          hint="Optional — your local time."
           error={form.formState.errors.publishEnd?.message}
           {...form.register("publishEnd")}
         />
-      </div>
+      </FormGrid>
 
-      <div className="flex gap-3">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : faq ? "Save changes" : "Create FAQ"}
+      <FormActions align="start">
+        <Button type="submit" loading={isSubmitting}>
+          {faq ? "Save changes" : "Create FAQ"}
         </Button>
         {onCancel ? (
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         ) : null}
-      </div>
+      </FormActions>
     </form>
   );
 }

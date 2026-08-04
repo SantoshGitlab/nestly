@@ -3,9 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Field, Select } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
 import { describeError } from "@/lib/api";
 import { createCmsMedia, listBannerCategories, listBannerMedia } from "@/lib/cms-api";
 import { CmsPlacement, type BannerCreateRequest, type BannerResponse, type BannerUpdateRequest } from "@/lib/cms-types";
@@ -25,7 +27,15 @@ const bannerFormSchema = z
   .object({
     title: z.string().min(1, "Title is required").max(200, "Title must be 200 characters or fewer"),
     mediaId: z.string().min(1, "An image is required"),
-    linkUrl: z.string().max(2000, "Link URL must be 2000 characters or fewer"),
+    linkUrl: z
+      .string()
+      .max(2000, "Link URL must be 2000 characters or fewer")
+      // A banner whose link is a bare "about-us" resolves against whatever
+      // page the banner happens to be shown on, which is never what was meant.
+      .refine(
+        (value) => value.trim() === "" || /^(https?:\/\/|\/)/.test(value.trim()),
+        "Use a full https:// URL or a path starting with /",
+      ),
     placement: z.number().int(),
     categoryId: z.string(),
     sortOrder: z.number().int().min(0, "Sort order cannot be negative"),
@@ -117,13 +127,26 @@ export function BannerForm({
     onError: (error) => setMediaError(describeError(error)),
   });
 
+  /**
+   * The category picker only exists for the CategoryPage placement, but the
+   * field kept its value when the placement moved away — so switching a
+   * category banner to Home still posted the category id, silently scoping a
+   * site-wide banner to one category. Clearing it on the change is the fix;
+   * the submit guard below is the belt-and-braces half.
+   */
+  function onPlacementChange(next: number) {
+    form.setValue("placement", next, { shouldValidate: true });
+    if (next !== CmsPlacement.CategoryPage) form.setValue("categoryId", "");
+  }
+
   const submit = form.handleSubmit((values) => {
+    const isCategoryScoped = values.placement === CmsPlacement.CategoryPage;
     onSubmit({
       title: values.title.trim(),
       mediaId: values.mediaId,
       linkUrl: values.linkUrl.trim() === "" ? null : values.linkUrl.trim(),
       placement: values.placement as CmsPlacement,
-      categoryId: values.categoryId === "" ? null : values.categoryId,
+      categoryId: isCategoryScoped && values.categoryId !== "" ? values.categoryId : null,
       sortOrder: values.sortOrder,
       publishStartUtc: datetimeLocalToUtc(values.publishStart),
       publishEndUtc: datetimeLocalToUtc(values.publishEnd),
@@ -131,57 +154,105 @@ export function BannerForm({
   });
 
   const mediaOptions = [
-    { value: "", label: "Select an image…" },
+    { value: "", label: mediaQuery.isPending ? "Loading images…" : "Select an image…" },
     ...(mediaQuery.data ?? []).map((media) => ({ value: media.id, label: media.altText ?? media.url })),
   ];
 
   const categoryOptions = [
-    { value: "", label: "Select a category…" },
+    { value: "", label: categoriesQuery.isPending ? "Loading categories…" : "Select a category…" },
     ...(categoriesQuery.data ?? []).map((category) => ({ value: category.id, label: category.name })),
   ];
+
+  const canAddMedia = newMediaUrl.trim() !== "" && !addMediaMutation.isPending;
+
+  /**
+   * The library sub-form is nested inside the banner form, so Enter in either
+   * of its inputs would submit the *banner* — creating a half-filled banner
+   * while the admin thought they were adding an image. Enter is captured and
+   * routed to the sub-action instead.
+   */
+  const onMediaFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (canAddMedia) addMediaMutation.mutate();
+  };
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {submitError ? <Alert>{submitError}</Alert> : null}
-      {mediaQuery.isError ? <Alert tone="info">{describeError(mediaQuery.error)}</Alert> : null}
+      {mediaQuery.isError ? (
+        <Alert
+          tone="warning"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => mediaQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          The image library could not be loaded. {describeError(mediaQuery.error)}
+        </Alert>
+      ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Title" error={form.formState.errors.title?.message} {...form.register("title")} />
-        <Field label="Link URL (optional)" error={form.formState.errors.linkUrl?.message} {...form.register("linkUrl")} />
-      </div>
+      <FormGrid>
+        <Field label="Title" required error={form.formState.errors.title?.message} {...form.register("title")} />
+        <Field
+          label="Link URL"
+          hint="Optional — where tapping the banner goes."
+          error={form.formState.errors.linkUrl?.message}
+          {...form.register("linkUrl")}
+        />
+      </FormGrid>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/15">
+      <fieldset className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4">
+        <legend className="px-1 text-sm font-medium text-fg">Image</legend>
         <Select
           label="Image"
+          required
           error={form.formState.errors.mediaId?.message}
           options={mediaOptions}
           {...form.register("mediaId")}
         />
         {mediaError ? <Alert>{mediaError}</Alert> : null}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <Field label="New image URL" value={newMediaUrl} onChange={(event) => setNewMediaUrl(event.target.value)} />
-          <Field label="Alt text (optional)" value={newMediaAlt} onChange={(event) => setNewMediaAlt(event.target.value)} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <Field
+            label="New image URL"
+            hint="Adds to the library and selects it."
+            value={newMediaUrl}
+            onChange={(event) => setNewMediaUrl(event.target.value)}
+            onKeyDown={onMediaFieldKeyDown}
+          />
+          <Field
+            label="Alt text"
+            hint="Optional but recommended."
+            value={newMediaAlt}
+            onChange={(event) => setNewMediaAlt(event.target.value)}
+            onKeyDown={onMediaFieldKeyDown}
+          />
           <Button
             type="button"
             variant="secondary"
-            disabled={newMediaUrl.trim() === "" || addMediaMutation.isPending}
+            disabled={!canAddMedia}
+            loading={addMediaMutation.isPending}
             onClick={() => addMediaMutation.mutate()}
           >
-            {addMediaMutation.isPending ? "Adding…" : "Add to library"}
+            Add to library
           </Button>
         </div>
-      </div>
+      </fieldset>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <FormGrid columns={3}>
         <Select
           label="Placement"
           error={form.formState.errors.placement?.message}
           options={PLACEMENT_OPTIONS}
-          {...form.register("placement", { valueAsNumber: true })}
+          name="placement"
+          value={String(placement)}
+          onChange={(event) => onPlacementChange(Number(event.target.value))}
         />
         {placement === CmsPlacement.CategoryPage ? (
           <Select
             label="Category"
+            required
             error={form.formState.errors.categoryId?.message}
             options={categoryOptions}
             {...form.register("categoryId")}
@@ -190,36 +261,40 @@ export function BannerForm({
         <Field
           label="Sort order"
           type="number"
+          min={0}
+          hint="Lower numbers appear first."
           error={form.formState.errors.sortOrder?.message}
           {...form.register("sortOrder", { valueAsNumber: true })}
         />
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Field
-          label="Publish from (optional)"
+          label="Publish from"
           type="datetime-local"
+          hint="Optional — your local time."
           error={form.formState.errors.publishStart?.message}
           {...form.register("publishStart")}
         />
         <Field
-          label="Publish until (optional)"
+          label="Publish until"
           type="datetime-local"
+          hint="Optional — your local time."
           error={form.formState.errors.publishEnd?.message}
           {...form.register("publishEnd")}
         />
-      </div>
+      </FormGrid>
 
-      <div className="flex gap-3">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : banner ? "Save changes" : "Create banner"}
+      <FormActions align="start">
+        <Button type="submit" loading={isSubmitting}>
+          {banner ? "Save changes" : "Create banner"}
         </Button>
         {onCancel ? (
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         ) : null}
-      </div>
+      </FormActions>
     </form>
   );
 }

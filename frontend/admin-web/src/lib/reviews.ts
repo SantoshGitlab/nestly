@@ -1,3 +1,4 @@
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "./day-range";
 import { ReviewStatus } from "./types";
 
 /**
@@ -71,10 +72,14 @@ export function buildReviewModerationQuery(
   if (filters.categoryId.trim()) params.set("categoryId", filters.categoryId.trim());
 
   // <input type="date"> yields "yyyy-mm-dd"; the API filters on a full UTC
-  // instant, so pin From to the start of that day and To to its end -
+  // instant, so pin From to the start of that *local* day and To to its end -
   // otherwise "toUtc=2026-07-31" would exclude every review posted that day.
-  if (filters.fromDate) params.set("fromUtc", `${filters.fromDate}T00:00:00.000Z`);
-  if (filters.toDate) params.set("toUtc", `${filters.toDate}T23:59:59.999Z`);
+  // Appending "Z" to the raw value (the previous version) makes the boundary
+  // a UTC midnight, which in IST is 05:30 on the wrong side of the day.
+  const fromUtc = filters.fromDate ? startOfLocalDayUtc(filters.fromDate) : null;
+  const toUtc = filters.toDate ? endOfLocalDayUtc(filters.toDate) : null;
+  if (fromUtc) params.set("fromUtc", fromUtc);
+  if (toUtc) params.set("toUtc", toUtc);
 
   params.set("page", String(paging.page));
   params.set("pageSize", String(paging.pageSize));

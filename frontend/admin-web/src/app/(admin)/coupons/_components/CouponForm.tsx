@@ -6,9 +6,11 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Field, Select } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
 import { describeError } from "@/lib/api";
 import { listApplicableCategories } from "@/lib/coupon-api";
 import { todayIsoDate } from "@/lib/date";
+import { endOfLocalDayUtc, startOfLocalDayUtc, utcToLocalDateInput } from "@/lib/day-range";
 import {
   CouponCustomerSegment,
   CouponDiscountType,
@@ -62,26 +64,14 @@ const couponFormSchema = z
     path: ["discountValue"],
     message: "A percentage discount cannot exceed 100.",
   })
-  .refine((values) => values.validToDate > values.validFromDate, {
+  // Inclusive whole days, so equal dates are a legitimate one-day campaign.
+  // A strict `>` here rejected exactly that.
+  .refine((values) => values.validToDate >= values.validFromDate, {
     path: ["validToDate"],
-    message: "The end date must be after the start date.",
+    message: "The end date cannot be before the start date.",
   });
 
 type CouponFormValues = z.infer<typeof couponFormSchema>;
-
-/** `<input type="date">` yields "yyyy-mm-dd" - the API stores full UTC instants, so the boundary is pinned to the start/end of that day (same convention lib/audit.ts uses for its date-range filter). */
-function dateInputToStartOfDayUtc(date: string): string {
-  return `${date}T00:00:00.000Z`;
-}
-
-function dateInputToEndOfDayUtc(date: string): string {
-  return `${date}T23:59:59.999Z`;
-}
-
-/** An ISO instant's date portion, for populating a date input when editing. */
-function toDateInputValue(iso: string): string {
-  return iso.slice(0, 10);
-}
 
 function emptyStringToNull(value: string): number | null {
   return value === "" ? null : Number(value);
@@ -117,8 +107,8 @@ function defaultValuesFor(coupon: CouponAdminResponse | null): CouponFormValues 
     discountValue: coupon.discountValue,
     maxDiscountAmount: coupon.maxDiscountAmount,
     minOrderAmount: coupon.minOrderAmount,
-    validFromDate: toDateInputValue(coupon.validFromUtc),
-    validToDate: toDateInputValue(coupon.validToUtc),
+    validFromDate: utcToLocalDateInput(coupon.validFromUtc),
+    validToDate: utcToLocalDateInput(coupon.validToUtc),
     usageLimitTotal: coupon.usageLimitTotal,
     usageLimitPerCustomer: coupon.usageLimitPerCustomer,
     applicableCategoryId: coupon.applicableCategoryId ?? "",
@@ -155,16 +145,30 @@ export function CouponForm({
   }, [coupon, form]);
 
   const isEditing = coupon !== null;
+  // Drives the value field's ₹/% adornment, so the unit is never ambiguous.
+  const isPercentage = form.watch("discountType") === CouponDiscountType.Percentage;
 
   const submit = form.handleSubmit((values) => {
+    const validFromUtc = startOfLocalDayUtc(values.validFromDate);
+    const validToUtc = endOfLocalDayUtc(values.validToDate);
+    // The date controls are already validated as required, so this only fires
+    // if a browser hands back something that is not `yyyy-mm-dd`. Reporting it
+    // on the control beats posting a null validity window.
+    if (!validFromUtc || !validToUtc) {
+      form.setError(validFromUtc ? "validToDate" : "validFromDate", {
+        message: "Enter a valid date.",
+      });
+      return;
+    }
+
     const shared = {
       description: values.description.trim() === "" ? null : values.description.trim(),
       discountType: values.discountType as CouponDiscountType,
       discountValue: values.discountValue,
       maxDiscountAmount: values.maxDiscountAmount,
       minOrderAmount: values.minOrderAmount,
-      validFromUtc: dateInputToStartOfDayUtc(values.validFromDate),
-      validToUtc: dateInputToEndOfDayUtc(values.validToDate),
+      validFromUtc,
+      validToUtc,
       usageLimitTotal: values.usageLimitTotal,
       usageLimitPerCustomer: values.usageLimitPerCustomer,
       applicableCategoryId: values.applicableCategoryId === "" ? null : values.applicableCategoryId,
@@ -182,12 +186,26 @@ export function CouponForm({
   return (
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {submitError ? <Alert>{submitError}</Alert> : null}
-      {categoriesQuery.isError ? <Alert tone="info">{describeError(categoriesQuery.error)}</Alert> : null}
+      {categoriesQuery.isError ? (
+        <Alert
+          tone="warning"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => categoriesQuery.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          Categories could not be loaded, so the coupon can only be saved without a category
+          restriction. {describeError(categoriesQuery.error)}
+        </Alert>
+      ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid>
         <Field
           label="Coupon code"
+          required
           error={form.formState.errors.code?.message}
+          hint={isEditing ? "The code cannot be changed after creation." : undefined}
           // readOnly, not disabled: a disabled react-hook-form field is
           // excluded from the submitted values entirely, which would fail
           // this field's own "required" rule on every edit-mode submit.
@@ -198,9 +216,9 @@ export function CouponForm({
           {...form.register("code")}
         />
         <Field label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <FormGrid columns={3}>
         <Select
           label="Discount type"
           error={form.formState.errors.discountType?.message}
@@ -211,52 +229,67 @@ export function CouponForm({
           label="Discount value"
           type="number"
           step="0.01"
+          min={0}
+          required
+          leading={isPercentage ? "%" : "₹"}
           error={form.formState.errors.discountValue?.message}
           {...form.register("discountValue", { valueAsNumber: true })}
         />
         <Field
-          label="Max discount cap (optional)"
+          label="Max discount cap"
           type="number"
           step="0.01"
+          min={0}
+          leading="₹"
+          hint={isPercentage ? "Optional — caps a percentage discount." : "Optional."}
           error={form.formState.errors.maxDiscountAmount?.message}
           {...form.register("maxDiscountAmount", { setValueAs: emptyStringToNull })}
           defaultValue={nullableNumberToInputValue(form.getValues("maxDiscountAmount"))}
         />
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <FormGrid columns={3}>
         <Field
           label="Minimum order amount"
           type="number"
           step="0.01"
+          min={0}
+          leading="₹"
           error={form.formState.errors.minOrderAmount?.message}
           {...form.register("minOrderAmount", { valueAsNumber: true })}
         />
         <Field
           label="Valid from"
           type="date"
+          required
           error={form.formState.errors.validFromDate?.message}
           {...form.register("validFromDate")}
         />
         <Field
           label="Valid to"
           type="date"
+          required
+          hint="Inclusive — the coupon runs to the end of this day."
           error={form.formState.errors.validToDate?.message}
           {...form.register("validToDate")}
         />
-      </div>
+      </FormGrid>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <FormGrid columns={3}>
         <Field
-          label="Global usage limit (optional)"
+          label="Global usage limit"
           type="number"
+          min={1}
+          hint="Optional — leave empty for unlimited."
           error={form.formState.errors.usageLimitTotal?.message}
           {...form.register("usageLimitTotal", { setValueAs: emptyStringToNull })}
           defaultValue={nullableNumberToInputValue(form.getValues("usageLimitTotal"))}
         />
         <Field
-          label="Per-customer usage limit (optional)"
+          label="Per-customer usage limit"
           type="number"
+          min={1}
+          hint="Optional — leave empty for unlimited."
           error={form.formState.errors.usageLimitPerCustomer?.message}
           {...form.register("usageLimitPerCustomer", { setValueAs: emptyStringToNull })}
           defaultValue={nullableNumberToInputValue(form.getValues("usageLimitPerCustomer"))}
@@ -267,7 +300,7 @@ export function CouponForm({
           options={categoryOptions}
           {...form.register("applicableCategoryId")}
         />
-      </div>
+      </FormGrid>
 
       <Select
         label="Customer segment"
@@ -276,16 +309,16 @@ export function CouponForm({
         {...form.register("customerSegment", { valueAsNumber: true })}
       />
 
-      <div className="flex gap-3">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create coupon"}
+      <FormActions align="start">
+        <Button type="submit" loading={isSubmitting}>
+          {isEditing ? "Save changes" : "Create coupon"}
         </Button>
         {onCancel ? (
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         ) : null}
-      </div>
+      </FormActions>
     </form>
   );
 }

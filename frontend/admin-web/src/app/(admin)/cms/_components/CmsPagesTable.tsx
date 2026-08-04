@@ -1,104 +1,147 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
+import { ConfirmDialog, DataTable } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { describeError } from "@/lib/api";
 import { CmsContentStatus, type CmsPageResponse } from "@/lib/cms-types";
-import { formatPlacement } from "./cmsDisplay";
+import { formatPlacement, formatSchedule } from "./cmsDisplay";
+import { CmsStatusBadge } from "./CmsStatusBadge";
 
-function formatSchedule(page: CmsPageResponse): string {
-  if (!page.publishStartUtc && !page.publishEndUtc) return "Always";
-  const start = page.publishStartUtc ? new Date(page.publishStartUtc).toLocaleString() : "now";
-  const end = page.publishEndUtc ? new Date(page.publishEndUtc).toLocaleString() : "indefinitely";
-  return `${start} – ${end}`;
-}
-
+/**
+ * Static page list (SRS 12.16.1). Columns are deliberately not sortable: the
+ * list is paged server-side and the endpoint takes no sort parameter, so a
+ * header sort would reorder only the rows on screen.
+ */
 export function CmsPagesTable({
   pages,
   isLoading,
-  errorMessage,
+  isFetching,
+  error,
+  onRetry,
   canWrite,
   onEdit,
   onTogglePublished,
   togglingId,
+  toggleError,
+  emptyAction,
+  footer,
 }: {
   pages: CmsPageResponse[] | undefined;
   isLoading: boolean;
-  errorMessage: string | null;
+  isFetching?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   canWrite: boolean;
   onEdit: (page: CmsPageResponse) => void;
   onTogglePublished: (page: CmsPageResponse) => void;
   togglingId?: string;
+  toggleError?: unknown;
+  emptyAction?: ReactNode;
+  footer?: ReactNode;
 }) {
-  if (isLoading) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>;
-  }
+  // Unpublishing takes a live page off the customer site, so it is confirmed.
+  // Publishing is not — it is the recoverable direction.
+  const [pendingUnpublish, setPendingUnpublish] = useState<CmsPageResponse | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const isUnpublishing = pendingUnpublish !== null && togglingId === pendingUnpublish.id;
 
-  if (errorMessage) {
-    return <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>;
-  }
+  // Dismiss only once the request it started has finished, and only when it
+  // succeeded — closing on click would hide both the in-flight state and the
+  // failure reason.
+  useEffect(() => {
+    if (!confirmed || isUnpublishing) return;
+    setConfirmed(false);
+    if (!toggleError) setPendingUnpublish(null);
+  }, [confirmed, isUnpublishing, toggleError]);
 
-  if (!pages || pages.length === 0) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">No pages match the current filters.</p>;
-  }
+  const columns: DataTableColumn<CmsPageResponse>[] = [
+    {
+      key: "title",
+      header: "Title",
+      cell: (page) => <span className="font-medium text-fg">{page.title}</span>,
+    },
+    { key: "slug", header: "Slug", cell: (page) => <span className="text-fg-muted">/{page.slug}</span> },
+    { key: "placement", header: "Placement", cell: (page) => formatPlacement(page.placement) },
+    {
+      key: "schedule",
+      header: "Schedule",
+      cell: (page) => <span className="nums whitespace-nowrap">{formatSchedule(page)}</span>,
+    },
+    { key: "status", header: "Status", cell: (page) => <CmsStatusBadge status={page.status} /> },
+  ];
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-black/10 text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15 dark:text-neutral-400">
-            <th scope="col" className="px-3 py-2 font-medium">Title</th>
-            <th scope="col" className="px-3 py-2 font-medium">Slug</th>
-            <th scope="col" className="px-3 py-2 font-medium">Placement</th>
-            <th scope="col" className="px-3 py-2 font-medium">Schedule</th>
-            <th scope="col" className="px-3 py-2 font-medium">Status</th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {pages.map((page) => (
-            <tr key={page.id} className="border-b border-black/5 last:border-0 dark:border-white/10">
-              <td className="px-3 py-2 font-medium">{page.title}</td>
-              <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">/{page.slug}</td>
-              <td className="px-3 py-2">{formatPlacement(page.placement)}</td>
-              <td className="px-3 py-2">{formatSchedule(page)}</td>
-              <td className="px-3 py-2">
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    page.status === CmsContentStatus.Published
-                      ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
-                      : "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
-                  }`}
-                >
-                  {page.status === CmsContentStatus.Published ? "Published" : "Draft"}
-                </span>
-              </td>
-              <td className="px-3 py-2">
-                {canWrite ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => onEdit(page)}>
+    <>
+      <DataTable
+        title="Pages"
+        description="Search and manage every static page (SRS 12.16.1)."
+        columns={columns}
+        rows={pages}
+        rowKey={(page) => page.id}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        error={error}
+        onRetry={onRetry}
+        caption="Static CMS pages"
+        emptyTitle="No pages match the current filters"
+        emptyDescription="Clear the filters, or create a page above."
+        emptyAction={emptyAction}
+        skeletonRows={6}
+        minWidth="960px"
+        footer={footer}
+        rowActions={
+          canWrite
+            ? (page) => {
+                const published = page.status === CmsContentStatus.Published;
+                return (
+                  <>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => onEdit(page)}>
                       Edit
                     </Button>
                     <Button
                       type="button"
-                      variant={page.status === CmsContentStatus.Published ? "danger" : "secondary"}
-                      className="px-2 py-1 text-xs"
+                      size="sm"
+                      variant={published ? "secondary" : "subtle"}
                       disabled={togglingId === page.id}
-                      onClick={() => onTogglePublished(page)}
+                      loading={togglingId === page.id && !published}
+                      onClick={() => (published ? setPendingUnpublish(page) : onTogglePublished(page))}
                     >
-                      {togglingId === page.id
-                        ? "Saving…"
-                        : page.status === CmsContentStatus.Published
-                          ? "Unpublish"
-                          : "Publish"}
+                      {published ? "Unpublish" : "Publish"}
                     </Button>
-                  </div>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  </>
+                );
+              }
+            : undefined
+        }
+      />
+
+      <ConfirmDialog
+        open={pendingUnpublish !== null}
+        title="Unpublish this page?"
+        description="It stops being reachable on the customer site immediately. The content is kept as a draft."
+        confirmLabel="Unpublish"
+        cancelLabel="Keep published"
+        loading={isUnpublishing}
+        error={toggleError ? describeError(toggleError) : null}
+        onCancel={() => {
+          setConfirmed(false);
+          setPendingUnpublish(null);
+        }}
+        onConfirm={() => {
+          if (!pendingUnpublish) return;
+          setConfirmed(true);
+          onTogglePublished(pendingUnpublish);
+        }}
+      >
+        {pendingUnpublish ? (
+          <p className="text-sm text-fg-muted">
+            <span className="font-medium text-fg">{pendingUnpublish.title}</span> at /{pendingUnpublish.slug}.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+    </>
   );
 }

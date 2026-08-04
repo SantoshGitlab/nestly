@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Field, Select, Textarea } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
 import { CmsPlacement, type CmsPageCreateRequest, type CmsPageResponse, type CmsPageUpdateRequest } from "@/lib/cms-types";
 import { PLACEMENT_OPTIONS, datetimeLocalToUtc, utcToDatetimeLocal } from "./cmsDisplay";
 
@@ -111,64 +112,75 @@ export function CmsPageForm({
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       {submitError ? <Alert>{submitError}</Alert> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Title" error={form.formState.errors.title?.message} {...form.register("title")} />
+      <FormGrid>
+        <Field label="Title" required error={form.formState.errors.title?.message} {...form.register("title")} />
         <Field
           label="Slug"
+          required
           placeholder="about-us"
+          hint="Lowercase letters, numbers and hyphens — this becomes the customer-facing URL."
           error={form.formState.errors.slug?.message}
           {...form.register("slug")}
         />
-      </div>
+      </FormGrid>
 
-      <Textarea label="Body" rows={8} error={form.formState.errors.body?.message} {...form.register("body")} />
+      <Textarea
+        label="Body"
+        required
+        rows={8}
+        error={form.formState.errors.body?.message}
+        {...form.register("body")}
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Field label="SEO title (optional)" error={form.formState.errors.seoTitle?.message} {...form.register("seoTitle")} />
+      <FormGrid columns={3}>
+        <Field label="SEO title" hint="Optional." error={form.formState.errors.seoTitle?.message} {...form.register("seoTitle")} />
         <Field
-          label="SEO description (optional)"
+          label="SEO description"
+          hint="Optional."
           error={form.formState.errors.seoDescription?.message}
           {...form.register("seoDescription")}
         />
         <Field
-          label="SEO keywords (optional)"
+          label="SEO keywords"
+          hint="Optional."
           error={form.formState.errors.seoKeywords?.message}
           {...form.register("seoKeywords")}
         />
-      </div>
+      </FormGrid>
 
-      <Select
-        label="Placement"
-        error={form.formState.errors.placement?.message}
-        options={PLACEMENT_OPTIONS}
-        {...form.register("placement", { valueAsNumber: true })}
-      />
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormGrid columns={3}>
+        <Select
+          label="Placement"
+          error={form.formState.errors.placement?.message}
+          options={PLACEMENT_OPTIONS}
+          {...form.register("placement", { valueAsNumber: true })}
+        />
         <Field
-          label="Publish from (optional)"
+          label="Publish from"
           type="datetime-local"
+          hint="Optional — your local time."
           error={form.formState.errors.publishStart?.message}
           {...form.register("publishStart")}
         />
         <Field
-          label="Publish until (optional)"
+          label="Publish until"
           type="datetime-local"
+          hint="Optional — your local time."
           error={form.formState.errors.publishEnd?.message}
           {...form.register("publishEnd")}
         />
-      </div>
+      </FormGrid>
 
-      <div className="flex gap-3">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : page ? "Save changes" : "Create page"}
+      <FormActions align="start">
+        <Button type="submit" loading={isSubmitting}>
+          {page ? "Save changes" : "Create page"}
         </Button>
         {onCancel ? (
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
         ) : null}
-      </div>
+      </FormActions>
     </form>
   );
 }

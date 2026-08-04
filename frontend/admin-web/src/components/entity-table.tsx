@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { ActiveBadge, ConfirmDialog, DataTable } from "@/components/data-table";
@@ -105,6 +105,22 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
   footer?: ReactNode;
 }) {
   const [pendingSuspend, setPendingSuspend] = useState<T | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const isSuspending = pendingSuspend !== null && togglingId === pendingSuspend.id;
+
+  /**
+   * Close the confirmation only once the suspension it started has actually
+   * finished, and only if it succeeded. Closing on click — which is what this
+   * did — meant `loading` was never true and the `toggleError` every caller
+   * passes could never render: a failed suspend dismissed the dialog and left
+   * the row looking active with no explanation anywhere on screen.
+   */
+  useEffect(() => {
+    if (!confirmed || isSuspending) return;
+    setConfirmed(false);
+    if (!toggleError) setPendingSuspend(null);
+  }, [confirmed, isSuspending, toggleError]);
 
   const tableColumns: DataTableColumn<T>[] = [
     ...columns.map((column) => ({
@@ -122,8 +138,6 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
       sortValue: (item: T) => item.isActive,
     },
   ];
-
-  const busy = pendingSuspend ? togglingId === pendingSuspend.id : false;
 
   return (
     <>
@@ -178,13 +192,16 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
         description="It stops being available to customers immediately. You can activate it again at any time."
         confirmLabel="Suspend"
         cancelLabel="Keep active"
-        loading={busy}
+        loading={isSuspending}
         error={toggleError ? describeError(toggleError) : null}
-        onCancel={() => setPendingSuspend(null)}
+        onCancel={() => {
+          setConfirmed(false);
+          setPendingSuspend(null);
+        }}
         onConfirm={() => {
           if (!pendingSuspend) return;
+          setConfirmed(true);
           onToggleActive(pendingSuspend);
-          setPendingSuspend(null);
         }}
       >
         {pendingSuspend && labelOf ? (

@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { PageHeading } from "@/components/ui";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { BlackoutsSection } from "./_components/BlackoutsSection";
 import { CutoffsSection } from "./_components/CutoffsSection";
 import { OverridesSection } from "./_components/OverridesSection";
@@ -21,14 +19,7 @@ import { WindowsSection } from "./_components/WindowsSection";
  * grant (`canWriteModule`), same as the Serviceability screen.
  */
 export default function SlotsPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-
+  const claims = useAdminClaims();
   const canWrite = canWriteModule(claims, "slots");
 
   return (

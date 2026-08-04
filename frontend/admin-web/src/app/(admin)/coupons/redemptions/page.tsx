@@ -3,18 +3,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { Card, Field, PageHeading, StatTile } from "@/components/ui";
-import { describeError } from "@/lib/api";
+import { Badge, Button, Card, Field, PageHeading, Skeleton, StatTile } from "@/components/ui";
+import { DataTable, formatCurrency } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
 import { getCouponRedemptionReport } from "@/lib/coupon-api";
+import type { CouponRedemptionReportRow } from "@/lib/coupon-types";
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
 import { CouponsTabs } from "../_components/CouponsTabs";
 
-/** `<input type="date">` yields "yyyy-mm-dd" - pinned to the start/end of that day in UTC, same convention CouponForm and lib/audit.ts use. */
-function dateInputToStartOfDayUtc(date: string): string {
-  return `${date}T00:00:00.000Z`;
-}
-
-function dateInputToEndOfDayUtc(date: string): string {
-  return `${date}T23:59:59.999Z`;
+/**
+ * Redemptions per unique customer. Returns `null` rather than a number when
+ * there is no customer to divide by — the previous version divided straight
+ * through and rendered a literal "Infinity" (or "NaN") in the column for any
+ * coupon the report returned with a zero customer count.
+ */
+function redemptionsPerCustomer(row: CouponRedemptionReportRow): number | null {
+  return row.uniqueCustomerCount > 0 ? row.redemptionCount / row.uniqueCustomerCount : null;
 }
 
 /**
@@ -52,8 +56,9 @@ function CouponRedemptionReport() {
     queryFn: () =>
       getCouponRedemptionReport({
         couponId,
-        fromUtc: fromDate ? dateInputToStartOfDayUtc(fromDate) : undefined,
-        toUtc: toDate ? dateInputToEndOfDayUtc(toDate) : undefined,
+        // Local day boundaries, not `${date}T00:00:00Z` — see lib/day-range.
+        fromUtc: fromDate ? (startOfLocalDayUtc(fromDate) ?? undefined) : undefined,
+        toUtc: toDate ? (endOfLocalDayUtc(toDate) ?? undefined) : undefined,
       }),
   });
 
@@ -64,8 +69,74 @@ function CouponRedemptionReport() {
     } else {
       next.delete(key);
     }
-    router.push(`/coupons/redemptions${next.toString() ? `?${next.toString()}` : ""}`);
+    // `replace`, not `push`: a date control fires on every component change,
+    // so pushing buried the previous screen under a dozen history entries.
+    router.replace(`/coupons/redemptions${next.toString() ? `?${next.toString()}` : ""}`);
   }
+
+  const columns: DataTableColumn<CouponRedemptionReportRow>[] = [
+    {
+      key: "code",
+      header: "Code",
+      sortValue: (row) => row.code,
+      cell: (row) => <span className="nums font-medium text-fg">{row.code}</span>,
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortValue: (row) => row.isActive,
+      cell: (row) => (
+        <Badge tone={row.isActive ? "success" : "neutral"}>{row.isActive ? "Active" : "Suspended"}</Badge>
+      ),
+    },
+    {
+      key: "redemptions",
+      header: "Redemptions",
+      numeric: true,
+      sortValue: (row) => row.redemptionCount,
+      cell: (row) => row.redemptionCount.toLocaleString("en-IN"),
+    },
+    {
+      key: "discount",
+      header: "Discount total",
+      numeric: true,
+      sortValue: (row) => row.totalDiscountAmount,
+      cell: (row) => formatCurrency(row.totalDiscountAmount),
+    },
+    {
+      key: "customers",
+      header: "Unique customers",
+      numeric: true,
+      sortValue: (row) => row.uniqueCustomerCount,
+      cell: (row) => row.uniqueCustomerCount.toLocaleString("en-IN"),
+    },
+    {
+      key: "concentration",
+      header: "Redemptions / customer",
+      numeric: true,
+      sortValue: (row) => redemptionsPerCustomer(row),
+      cell: (row) => {
+        const ratio = redemptionsPerCustomer(row);
+        if (ratio === null) return <span className="text-fg-subtle">—</span>;
+        return (
+          <span className="inline-flex items-center justify-end gap-2">
+            {ratio.toFixed(2)}
+            {ratio > 1.5 ? (
+              // The threshold is a heuristic, so the reason it fired travels
+              // with it rather than sitting in a legend elsewhere on the page.
+              <span title="Usage is concentrated in relatively few customers - the closest abuse signal this report can surface (SRS 12.12.2).">
+                <Badge tone="warning" className="whitespace-nowrap">
+                  Watch
+                </Badge>
+              </span>
+            ) : null}
+          </span>
+        );
+      },
+    },
+  ];
+
+  const hasTotals = reportQuery.data !== undefined;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -78,11 +149,12 @@ function CouponRedemptionReport() {
 
       <div className="flex flex-col gap-6">
         <Card title="Filters" description="Scope the report to a date range and, optionally, a single coupon.">
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-4">
             <div className="w-44">
               <Field
                 label="From"
                 type="date"
+                max={toDate || undefined}
                 value={fromDate}
                 onChange={(event) => updateParam("fromDate", event.target.value)}
               />
@@ -91,87 +163,70 @@ function CouponRedemptionReport() {
               <Field
                 label="To"
                 type="date"
+                min={fromDate || undefined}
                 value={toDate}
                 onChange={(event) => updateParam("toDate", event.target.value)}
               />
             </div>
             {couponId ? (
-              <button
-                type="button"
-                onClick={() => updateParam("couponId", "")}
-                className="text-sm font-medium text-neutral-600 underline hover:text-black dark:text-neutral-400 dark:hover:text-white"
-              >
-                Clear coupon filter
-              </button>
+              <Button type="button" variant="secondary" onClick={() => updateParam("couponId", "")}>
+                Show every coupon
+              </Button>
             ) : null}
           </div>
         </Card>
 
-        {reportQuery.error ? (
-          <Card title="Redemption report">
-            <p className="text-sm text-red-600 dark:text-red-400">{describeError(reportQuery.error)}</p>
-          </Card>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <StatTile label="Total redemptions" value={(reportQuery.data?.totalRedemptions ?? 0).toLocaleString("en-IN")} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* While the first load is in flight there is no total yet, and a
+              tile reading "0" is a wrong number stated as fact. */}
+          {hasTotals ? (
+            <>
+              <StatTile
+                label="Total redemptions"
+                value={reportQuery.data.totalRedemptions.toLocaleString("en-IN")}
+              />
               <StatTile
                 label="Total discount given"
-                value={`₹${(reportQuery.data?.totalDiscountAmount ?? 0).toFixed(2)}`}
-                title={`₹${(reportQuery.data?.totalDiscountAmount ?? 0).toFixed(2)}`}
+                value={formatCurrency(reportQuery.data.totalDiscountAmount)}
+                title={formatCurrency(reportQuery.data.totalDiscountAmount)}
               />
-            </div>
+            </>
+          ) : (
+            <>
+              <StatTileSkeleton />
+              <StatTileSkeleton />
+            </>
+          )}
+        </div>
 
-            <Card
-              title="Per-coupon breakdown"
-              description="Booking count using a coupon equals its redemption count - CouponRedemption links one booking to one coupon."
-            >
-              {reportQuery.isLoading ? (
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>
-              ) : !reportQuery.data || reportQuery.data.rows.length === 0 ? (
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">No redemptions in the selected window.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-black/10 text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15 dark:text-neutral-400">
-                        <th scope="col" className="px-3 py-2 font-medium">Code</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Redemptions</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Discount total</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Unique customers</th>
-                        <th scope="col" className="px-3 py-2 font-medium">Avg. redemptions / customer</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportQuery.data.rows.map((row) => (
-                        <tr key={row.couponId} className="border-b border-black/5 last:border-0 dark:border-white/10">
-                          <td className="px-3 py-2 font-medium">{row.code}</td>
-                          <td className="px-3 py-2">{row.isActive ? "Active" : "Suspended"}</td>
-                          <td className="px-3 py-2">{row.redemptionCount}</td>
-                          <td className="px-3 py-2">₹{row.totalDiscountAmount.toFixed(2)}</td>
-                          <td className="px-3 py-2">{row.uniqueCustomerCount}</td>
-                          <td className="px-3 py-2">
-                            {(row.redemptionCount / row.uniqueCustomerCount).toFixed(2)}
-                            {row.redemptionCount / row.uniqueCustomerCount > 1.5 ? (
-                              <span
-                                title="Usage is concentrated in relatively few customers - the closest abuse signal this report can surface (SRS 12.12.2)."
-                                className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-                              >
-                                Watch
-                              </span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          </>
-        )}
+        <DataTable
+          title="Per-coupon breakdown"
+          description="Booking count using a coupon equals its redemption count - CouponRedemption links one booking to one coupon."
+          columns={columns}
+          rows={reportQuery.data?.rows}
+          rowKey={(row) => row.couponId}
+          isLoading={reportQuery.isPending}
+          isFetching={reportQuery.isFetching}
+          error={reportQuery.error}
+          onRetry={() => reportQuery.refetch()}
+          defaultSort={{ key: "redemptions", direction: "desc" }}
+          caption="Redemptions per coupon in the selected window"
+          emptyTitle="No redemptions in the selected window"
+          emptyDescription="Widen the date range, or clear the coupon filter."
+          skeletonRows={5}
+          minWidth="900px"
+        />
       </div>
+    </div>
+  );
+}
+
+/** Matches a `StatTile`'s height so the tiles do not jump when the totals land. */
+function StatTileSkeleton() {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="mt-3 h-9 w-24" />
     </div>
   );
 }

@@ -1,25 +1,27 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Button, Card, Field, PageHeading, Select } from "@/components/ui";
+import { FilterBar, Pagination, countActiveFilters } from "@/components/data-table";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { createCmsPage, searchCmsPages, setCmsPagePublished, updateCmsPage } from "@/lib/cms-api";
 import { CmsContentStatus, type CmsPageCreateRequest, type CmsPageResponse, type CmsPageUpdateRequest } from "@/lib/cms-types";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
+import { STATUS_FILTER_OPTIONS } from "./_components/cmsDisplay";
 import { CmsPageForm } from "./_components/CmsPageForm";
 import { CmsPagesTable } from "./_components/CmsPagesTable";
 import { CmsTabs } from "./_components/CmsTabs";
 
 const PAGE_SIZE = 20;
 
-const STATUS_FILTER_OPTIONS = [
-  { value: "", label: "All statuses" },
-  { value: String(CmsContentStatus.Draft), label: "Draft" },
-  { value: String(CmsContentStatus.Published), label: "Published" },
-] as const;
+interface PageFilters {
+  title: string;
+  status: string;
+}
+
+const EMPTY_FILTERS: PageFilters = { title: "", status: "" };
 
 /**
  * Static page management (SRS 12.16.1, task 125b): search/filter, create,
@@ -29,27 +31,29 @@ const STATUS_FILTER_OPTIONS = [
  * only reachable once AdminSidebar already filtered it in by "cms.read".
  */
 export default function CmsPagesPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  const [titleFilter, setTitleFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const claims = useAdminClaims();
+  const [filters, setFilters] = useState<PageFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<PageFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [editingPage, setEditingPage] = useState<CmsPageResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-
   const canWrite = canWriteModule(claims, "cms");
   const queryClient = useQueryClient();
 
-  const status = statusFilter === "" ? undefined : (Number(statusFilter) as CmsContentStatus);
-
   const pagesQuery = useQuery({
-    queryKey: ["cms", "pages", "search", titleFilter, statusFilter, page] as const,
-    queryFn: () => searchCmsPages({ title: titleFilter || undefined, status, page, pageSize: PAGE_SIZE }),
+    // The title filter used to sit straight in the key, so every keystroke
+    // fired a paged search. Applying explicitly is one request per search.
+    queryKey: ["cms", "pages", "search", appliedFilters, page] as const,
+    queryFn: () =>
+      searchCmsPages({
+        title: appliedFilters.title || undefined,
+        status:
+          appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as CmsContentStatus),
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
   });
 
   const invalidatePages = () => queryClient.invalidateQueries({ queryKey: ["cms", "pages", "search"] });
@@ -86,7 +90,16 @@ export default function CmsPagesPage() {
     }
   };
 
-  const totalPages = pagesQuery.data ? Math.max(1, Math.ceil(pagesQuery.data.totalCount / PAGE_SIZE)) : 1;
+  const applyFilters = () => {
+    setPage(1);
+    setAppliedFilters(filters);
+  };
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -120,68 +133,66 @@ export default function CmsPagesPage() {
           </Card>
         ) : null}
 
-        <Card title="Pages" description="Search and manage every static page (SRS 12.16.1).">
-          <div className="mb-4 flex flex-wrap items-end gap-3">
-            <div className="w-56">
-              <Field
-                label="Title"
-                placeholder="Search by title…"
-                value={titleFilter}
-                onChange={(event) => {
-                  setPage(1);
-                  setTitleFilter(event.target.value);
-                }}
-              />
-            </div>
-            <div className="w-44">
-              <Select
-                label="Status"
-                options={STATUS_FILTER_OPTIONS}
-                value={statusFilter}
-                onChange={(event) => {
-                  setPage(1);
-                  setStatusFilter(event.target.value);
-                }}
-              />
-            </div>
-          </div>
-
-          <CmsPagesTable
-            pages={pagesQuery.data?.items}
-            isLoading={pagesQuery.isLoading}
-            errorMessage={pagesQuery.error ? describeError(pagesQuery.error) : null}
-            canWrite={canWrite}
-            onEdit={(page) => {
-              setEditingPage(page);
-              setFormError(null);
-            }}
-            onTogglePublished={(page) =>
-              toggleMutation.mutate({ id: page.id, published: page.status !== CmsContentStatus.Published })
-            }
-            togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        <FilterBar
+          columns={2}
+          onSubmit={applyFilters}
+          onClear={clearFilters}
+          activeCount={countActiveFilters(appliedFilters)}
+          busy={pagesQuery.isFetching}
+        >
+          <Field
+            label="Title"
+            placeholder="Search by title…"
+            value={filters.title}
+            onChange={(event) => setFilters((current) => ({ ...current, title: event.target.value }))}
           />
+          <Select
+            label="Status"
+            options={STATUS_FILTER_OPTIONS}
+            value={filters.status}
+            onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+          />
+        </FilterBar>
 
-          {pagesQuery.data && pagesQuery.data.totalCount > PAGE_SIZE ? (
-            <div className="mt-4 flex items-center justify-between text-sm text-neutral-600 dark:text-neutral-400">
-              <span>
-                Page {page} of {totalPages} ({pagesQuery.data.totalCount} total)
-              </span>
-              <div className="flex gap-2">
-                <Button type="button" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </Card>
+        <CmsPagesTable
+          pages={pagesQuery.data?.items}
+          isLoading={pagesQuery.isPending}
+          isFetching={pagesQuery.isFetching}
+          error={pagesQuery.error}
+          onRetry={() => pagesQuery.refetch()}
+          canWrite={canWrite}
+          onEdit={(cmsPage) => {
+            setEditingPage(cmsPage);
+            setFormError(null);
+          }}
+          onTogglePublished={(cmsPage) =>
+            toggleMutation.mutate({
+              id: cmsPage.id,
+              published: cmsPage.status !== CmsContentStatus.Published,
+            })
+          }
+          togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+          toggleError={toggleMutation.error}
+          emptyAction={
+            countActiveFilters(appliedFilters) > 0 ? (
+              <Button variant="secondary" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+          footer={
+            pagesQuery.data ? (
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalCount={pagesQuery.data.totalCount}
+                onPageChange={setPage}
+                busy={pagesQuery.isFetching}
+                itemLabel="page"
+              />
+            ) : null
+          }
+        />
       </div>
     </div>
   );

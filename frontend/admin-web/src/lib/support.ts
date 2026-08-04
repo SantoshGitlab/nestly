@@ -1,3 +1,4 @@
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "./day-range";
 import { SupportTicketCategory, SupportTicketPriority, SupportTicketStatus } from "./types";
 
 /**
@@ -100,10 +101,14 @@ export function buildSupportTicketSearchQuery(
   if (filters.unassigned) params.set("unassigned", filters.unassigned);
 
   // <input type="date"> yields "yyyy-mm-dd"; the API filters on a full UTC
-  // instant, so pin From to the start of that day and To to its end - same
-  // convention as buildReviewModerationQuery.
-  if (filters.fromDate) params.set("fromUtc", `${filters.fromDate}T00:00:00.000Z`);
-  if (filters.toDate) params.set("toUtc", `${filters.toDate}T23:59:59.999Z`);
+  // instant, so pin From to the start of that *local* day and To to its end.
+  // Appending "Z" to the raw value — which is what this did — makes the
+  // boundary a UTC midnight, so in IST a "from today" search silently drops
+  // every ticket raised before 05:30 and picks up yesterday evening's.
+  const fromUtc = filters.fromDate ? startOfLocalDayUtc(filters.fromDate) : null;
+  const toUtc = filters.toDate ? endOfLocalDayUtc(filters.toDate) : null;
+  if (fromUtc) params.set("fromUtc", fromUtc);
+  if (toUtc) params.set("toUtc", toUtc);
 
   params.set("page", String(paging.page));
   params.set("pageSize", String(paging.pageSize));

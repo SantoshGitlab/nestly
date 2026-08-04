@@ -1,118 +1,166 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
+import { ConfirmDialog, DataTable } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { describeError } from "@/lib/api";
 import { CmsContentStatus, type BannerResponse } from "@/lib/cms-types";
-import { formatPlacement } from "./cmsDisplay";
+import { formatPlacement, formatSchedule } from "./cmsDisplay";
+import { CmsStatusBadge } from "./CmsStatusBadge";
 
-function formatSchedule(banner: BannerResponse): string {
-  if (!banner.publishStartUtc && !banner.publishEndUtc) return "Always";
-  const start = banner.publishStartUtc ? new Date(banner.publishStartUtc).toLocaleString() : "now";
-  const end = banner.publishEndUtc ? new Date(banner.publishEndUtc).toLocaleString() : "indefinitely";
-  return `${start} – ${end}`;
-}
-
+/**
+ * Promotional banner list (SRS 12.16.1). Server-paged, so no sortable
+ * columns — see `CmsPagesTable`.
+ */
 export function BannersTable({
   banners,
   isLoading,
-  errorMessage,
+  isFetching,
+  error,
+  onRetry,
   canWrite,
   onEdit,
   onTogglePublished,
   togglingId,
+  toggleError,
+  emptyAction,
+  footer,
 }: {
   banners: BannerResponse[] | undefined;
   isLoading: boolean;
-  errorMessage: string | null;
+  isFetching?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   canWrite: boolean;
   onEdit: (banner: BannerResponse) => void;
   onTogglePublished: (banner: BannerResponse) => void;
   togglingId?: string;
+  toggleError?: unknown;
+  emptyAction?: ReactNode;
+  footer?: ReactNode;
 }) {
-  if (isLoading) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">Loading…</p>;
-  }
+  const [pendingUnpublish, setPendingUnpublish] = useState<BannerResponse | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const isUnpublishing = pendingUnpublish !== null && togglingId === pendingUnpublish.id;
 
-  if (errorMessage) {
-    return <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>;
-  }
+  useEffect(() => {
+    if (!confirmed || isUnpublishing) return;
+    setConfirmed(false);
+    if (!toggleError) setPendingUnpublish(null);
+  }, [confirmed, isUnpublishing, toggleError]);
 
-  if (!banners || banners.length === 0) {
-    return <p className="text-sm text-neutral-600 dark:text-neutral-400">No banners match the current filters.</p>;
-  }
+  const columns: DataTableColumn<BannerResponse>[] = [
+    {
+      key: "title",
+      header: "Title",
+      cell: (banner) => <span className="font-medium text-fg">{banner.title}</span>,
+    },
+    {
+      key: "image",
+      header: "Image",
+      cell: (banner) => (
+        <a
+          href={banner.mediaUrl}
+          target="_blank"
+          rel="noreferrer"
+          // The link text alone reads as "View" to a screen reader running a
+          // link list, which is meaningless across a column of them.
+          aria-label={`View the image for ${banner.title} (opens in a new tab)`}
+          className="rounded text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+        >
+          View
+        </a>
+      ),
+    },
+    {
+      key: "placement",
+      header: "Placement",
+      cell: (banner) =>
+        banner.categoryName
+          ? `${formatPlacement(banner.placement)} (${banner.categoryName})`
+          : formatPlacement(banner.placement),
+    },
+    { key: "sortOrder", header: "Sort", numeric: true, cell: (banner) => banner.sortOrder },
+    {
+      key: "schedule",
+      header: "Schedule",
+      cell: (banner) => <span className="nums whitespace-nowrap">{formatSchedule(banner)}</span>,
+    },
+    { key: "status", header: "Status", cell: (banner) => <CmsStatusBadge status={banner.status} /> },
+  ];
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-black/10 text-xs uppercase tracking-wide text-neutral-500 dark:border-white/15 dark:text-neutral-400">
-            <th scope="col" className="px-3 py-2 font-medium">Title</th>
-            <th scope="col" className="px-3 py-2 font-medium">Image</th>
-            <th scope="col" className="px-3 py-2 font-medium">Placement</th>
-            <th scope="col" className="px-3 py-2 font-medium">Sort</th>
-            <th scope="col" className="px-3 py-2 font-medium">Schedule</th>
-            <th scope="col" className="px-3 py-2 font-medium">Status</th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {banners.map((banner) => (
-            <tr key={banner.id} className="border-b border-black/5 last:border-0 dark:border-white/10">
-              <td className="px-3 py-2 font-medium">{banner.title}</td>
-              <td className="px-3 py-2">
-                <a
-                  href={banner.mediaUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-neutral-600 underline hover:text-black dark:text-neutral-400 dark:hover:text-white"
-                >
-                  View
-                </a>
-              </td>
-              <td className="px-3 py-2">
-                {formatPlacement(banner.placement)}
-                {banner.categoryName ? ` (${banner.categoryName})` : ""}
-              </td>
-              <td className="px-3 py-2">{banner.sortOrder}</td>
-              <td className="px-3 py-2">{formatSchedule(banner)}</td>
-              <td className="px-3 py-2">
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    banner.status === CmsContentStatus.Published
-                      ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
-                      : "bg-neutral-200 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
-                  }`}
-                >
-                  {banner.status === CmsContentStatus.Published ? "Published" : "Draft"}
-                </span>
-              </td>
-              <td className="px-3 py-2">
-                {canWrite ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="secondary" className="px-2 py-1 text-xs" onClick={() => onEdit(banner)}>
+    <>
+      <DataTable
+        title="Banners"
+        description="Search and manage every promotional banner (SRS 12.16.1)."
+        columns={columns}
+        rows={banners}
+        rowKey={(banner) => banner.id}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        error={error}
+        onRetry={onRetry}
+        caption="Promotional banners"
+        emptyTitle="No banners match the current filters"
+        emptyDescription="Clear the filters, or create a banner above."
+        emptyAction={emptyAction}
+        skeletonRows={6}
+        minWidth="1040px"
+        footer={footer}
+        rowActions={
+          canWrite
+            ? (banner) => {
+                const published = banner.status === CmsContentStatus.Published;
+                return (
+                  <>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => onEdit(banner)}>
                       Edit
                     </Button>
                     <Button
                       type="button"
-                      variant={banner.status === CmsContentStatus.Published ? "danger" : "secondary"}
-                      className="px-2 py-1 text-xs"
+                      size="sm"
+                      variant={published ? "secondary" : "subtle"}
                       disabled={togglingId === banner.id}
-                      onClick={() => onTogglePublished(banner)}
+                      loading={togglingId === banner.id && !published}
+                      onClick={() => (published ? setPendingUnpublish(banner) : onTogglePublished(banner))}
                     >
-                      {togglingId === banner.id
-                        ? "Saving…"
-                        : banner.status === CmsContentStatus.Published
-                          ? "Unpublish"
-                          : "Publish"}
+                      {published ? "Unpublish" : "Publish"}
                     </Button>
-                  </div>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  </>
+                );
+              }
+            : undefined
+        }
+      />
+
+      <ConfirmDialog
+        open={pendingUnpublish !== null}
+        title="Unpublish this banner?"
+        description="It disappears from its placement on the customer site immediately."
+        confirmLabel="Unpublish"
+        cancelLabel="Keep published"
+        loading={isUnpublishing}
+        error={toggleError ? describeError(toggleError) : null}
+        onCancel={() => {
+          setConfirmed(false);
+          setPendingUnpublish(null);
+        }}
+        onConfirm={() => {
+          if (!pendingUnpublish) return;
+          setConfirmed(true);
+          onTogglePublished(pendingUnpublish);
+        }}
+      >
+        {pendingUnpublish ? (
+          <p className="text-sm text-fg-muted">
+            <span className="font-medium text-fg">{pendingUnpublish.title}</span> on{" "}
+            {formatPlacement(pendingUnpublish.placement)}.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+    </>
   );
 }

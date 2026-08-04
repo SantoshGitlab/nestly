@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { PageHeading } from "@/components/ui";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { CitiesSection } from "./_components/CitiesSection";
 import { LocalitiesSection } from "./_components/LocalitiesSection";
 import { PincodesSection } from "./_components/PincodesSection";
@@ -23,18 +21,11 @@ import { ZonesSection } from "./_components/ZonesSection";
  * 403 if used.
  */
 export default function ServiceabilityPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-
+  const claims = useAdminClaims();
   const canWrite = canWriteModule(claims, "serviceability");
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-6xl">
       <PageHeading
         title="Serviceability"
         subtitle="Geography master: state, city, zone, locality and pincode (SRS 12.9.1)."

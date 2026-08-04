@@ -6,14 +6,16 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Card, Field, Select } from "@/components/ui";
+import { FormActions, FormGrid } from "@/components/data-table";
+import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
 import { createZone, listCities, listZones, setZoneActive } from "@/lib/serviceability-api";
 import type { ZoneResponse } from "@/lib/serviceability-types";
-import { EntityTable } from "./EntityTable";
+import { toLookupOptions } from "./lookup-options";
 
 const zoneSchema = z.object({
   cityId: z.string().min(1, "Select a city"),
-  name: z.string().min(1, "Zone name is required").max(200),
+  name: z.string().trim().min(1, "Zone name is required").max(200),
 });
 type ZoneFormValues = z.infer<typeof zoneSchema>;
 
@@ -34,7 +36,7 @@ export function ZonesSection({ canWrite }: { canWrite: boolean }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: createZone,
+    mutationFn: (values: ZoneFormValues) => createZone({ cityId: values.cityId, name: values.name.trim() }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["zones"] });
       form.reset({ cityId: form.getValues("cityId"), name: "" });
@@ -46,58 +48,78 @@ export function ZonesSection({ canWrite }: { canWrite: boolean }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["zones"] }),
   });
 
-  const cityOptions = (citiesQuery.data ?? []).map((city) => ({ value: city.id, label: city.name }));
+  const cityOptions = toLookupOptions(citiesQuery.data, (city) => city.name);
   const onSubmit = form.handleSubmit((values) => createMutation.mutate(values));
 
   return (
-    <Card title="Zones" description="Operational grouping of localities within a city (SRS 12.9.1).">
-      <div className="mb-4 w-64">
-        <Select
-          label="Filter by city"
-          value={cityFilter}
-          onChange={(e) => setCityFilter(e.target.value)}
-          options={[{ value: "", label: "All cities" }, ...cityOptions]}
-        />
-      </div>
-
+    <div className="flex flex-col gap-4">
       <EntityTable<ZoneResponse>
+        title="Zones"
+        description="Operational grouping of localities within a city (SRS 12.9.1)."
+        actions={
+          <div className="w-56">
+            <Select
+              label="Filter by city"
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              options={[{ value: "", label: "All cities" }, ...cityOptions]}
+            />
+          </div>
+        }
         items={zonesQuery.data}
-        isLoading={zonesQuery.isLoading}
-        errorMessage={zonesQuery.error ? describeError(zonesQuery.error) : null}
-        emptyMessage="No zones yet."
+        isLoading={zonesQuery.isPending}
+        isFetching={zonesQuery.isFetching}
+        error={zonesQuery.error}
+        onRetry={() => zonesQuery.refetch()}
+        emptyMessage={cityFilter ? "No zones in this city" : "No zones yet"}
+        emptyAction={
+          cityFilter ? (
+            <Button variant="secondary" onClick={() => setCityFilter("")}>
+              Show all cities
+            </Button>
+          ) : undefined
+        }
         canWrite={canWrite}
+        entityLabel="zone"
+        labelOf={(zone) => zone.name}
+        minWidth="640px"
+        skeletonRows={5}
         togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        toggleError={toggleMutation.error}
         onToggleActive={(zone) => toggleMutation.mutate({ id: zone.id, isActive: !zone.isActive })}
         columns={[
-          { header: "Name", render: (zone) => zone.name },
-          { header: "City", render: (zone) => zone.cityName },
+          {
+            header: "Name",
+            sortValue: (zone) => zone.name,
+            render: (zone) => <span className="font-medium text-fg">{zone.name}</span>,
+          },
+          { header: "City", sortValue: (zone) => zone.cityName, render: (zone) => zone.cityName },
         ]}
       />
 
       {canWrite ? (
-        <form onSubmit={onSubmit} className="mt-4 flex flex-wrap items-end gap-3" noValidate>
-          {createMutation.isError ? (
-            <div className="w-full">
-              <Alert>{describeError(createMutation.error)}</Alert>
-            </div>
-          ) : null}
-          <div className="w-48">
-            <Select
-              label="City"
-              placeholder="Select a city…"
-              error={form.formState.errors.cityId?.message}
-              options={cityOptions}
-              {...form.register("cityId")}
-            />
-          </div>
-          <div className="w-48">
-            <Field label="Name" error={form.formState.errors.name?.message} {...form.register("name")} />
-          </div>
-          <Button type="submit" disabled={form.formState.isSubmitting || createMutation.isPending}>
-            {createMutation.isPending ? "Adding…" : "Add zone"}
-          </Button>
-        </form>
+        <Card title="Add a zone" description="Localities are grouped into zones for operational routing.">
+          <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+            {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
+            <FormGrid>
+              <Select
+                label="City"
+                required
+                placeholder="Select a city…"
+                error={form.formState.errors.cityId?.message}
+                options={cityOptions}
+                {...form.register("cityId")}
+              />
+              <Field label="Name" required error={form.formState.errors.name?.message} {...form.register("name")} />
+            </FormGrid>
+            <FormActions align="start">
+              <Button type="submit" loading={createMutation.isPending}>
+                Add zone
+              </Button>
+            </FormActions>
+          </form>
+        </Card>
       ) : null}
-    </Card>
+    </div>
   );
 }

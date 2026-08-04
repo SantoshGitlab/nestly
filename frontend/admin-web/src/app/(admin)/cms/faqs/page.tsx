@@ -1,28 +1,33 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Button, Card, PageHeading, Select } from "@/components/ui";
+import { FilterBar, Pagination, countActiveFilters } from "@/components/data-table";
 import { describeError } from "@/lib/api";
-import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { createCmsFaq, searchCmsFaqs, setCmsFaqPublished, updateCmsFaq } from "@/lib/cms-api";
-import { CmsContentStatus, type CmsFaqCreateRequest, type CmsFaqResponse, type CmsFaqUpdateRequest } from "@/lib/cms-types";
+import {
+  CmsContentStatus,
+  type CmsFaqCreateRequest,
+  type CmsFaqResponse,
+  type CmsFaqUpdateRequest,
+  type CmsPlacement,
+} from "@/lib/cms-types";
 import { canWriteModule } from "@/lib/permissions";
-import type { AdminSessionClaims } from "@/lib/types";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import { CmsFaqForm } from "../_components/CmsFaqForm";
 import { CmsFaqsTable } from "../_components/CmsFaqsTable";
-import { PLACEMENT_OPTIONS } from "../_components/cmsDisplay";
+import { PLACEMENT_FILTER_OPTIONS, STATUS_FILTER_OPTIONS } from "../_components/cmsDisplay";
 import { CmsTabs } from "../_components/CmsTabs";
 
 const PAGE_SIZE = 20;
 
-const STATUS_FILTER_OPTIONS = [
-  { value: "", label: "All statuses" },
-  { value: String(CmsContentStatus.Draft), label: "Draft" },
-  { value: String(CmsContentStatus.Published), label: "Published" },
-] as const;
+interface FaqFilters {
+  placement: string;
+  status: string;
+}
 
-const PLACEMENT_FILTER_OPTIONS = [{ value: "", label: "All placements" }, ...PLACEMENT_OPTIONS] as const;
+const EMPTY_FILTERS: FaqFilters = { placement: "", status: "" };
 
 /**
  * Site-level FAQ management (SRS 12.16.1, task 125c): search/filter by
@@ -32,28 +37,30 @@ const PLACEMENT_FILTER_OPTIONS = [{ value: "", label: "All placements" }, ...PLA
  * reachable once AdminSidebar already filtered it in by "cms.read".
  */
 export default function CmsFaqsPage() {
-  const [claims, setClaims] = useState<AdminSessionClaims | null>(null);
-  const [placementFilter, setPlacementFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const claims = useAdminClaims();
+  const [filters, setFilters] = useState<FaqFilters>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<FaqFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [editingFaq, setEditingFaq] = useState<CmsFaqResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const sync = () => setClaims(getSessionClaims());
-    sync();
-    return subscribeToAuthChanges(sync);
-  }, []);
-
   const canWrite = canWriteModule(claims, "cms");
   const queryClient = useQueryClient();
 
-  const placement = placementFilter === "" ? undefined : (Number(placementFilter) as CmsFaqResponse["placement"]);
-  const status = statusFilter === "" ? undefined : (Number(statusFilter) as CmsContentStatus);
-
   const faqsQuery = useQuery({
-    queryKey: ["cms", "faqs", "search", placementFilter, statusFilter, page] as const,
-    queryFn: () => searchCmsFaqs({ placement, status, page, pageSize: PAGE_SIZE }),
+    queryKey: ["cms", "faqs", "search", appliedFilters, page] as const,
+    queryFn: () =>
+      searchCmsFaqs({
+        placement:
+          appliedFilters.placement === ""
+            ? undefined
+            : (Number(appliedFilters.placement) as CmsPlacement),
+        status:
+          appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as CmsContentStatus),
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
   });
 
   const invalidateFaqs = () => queryClient.invalidateQueries({ queryKey: ["cms", "faqs", "search"] });
@@ -90,7 +97,16 @@ export default function CmsFaqsPage() {
     }
   };
 
-  const totalPages = faqsQuery.data ? Math.max(1, Math.ceil(faqsQuery.data.totalCount / PAGE_SIZE)) : 1;
+  const applyFilters = () => {
+    setPage(1);
+    setAppliedFilters(filters);
+  };
+
+  const clearFilters = () => {
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -124,68 +140,63 @@ export default function CmsFaqsPage() {
           </Card>
         ) : null}
 
-        <Card title="FAQs" description="Search and manage every site-level FAQ (SRS 12.16.1).">
-          <div className="mb-4 flex flex-wrap items-end gap-3">
-            <div className="w-52">
-              <Select
-                label="Placement"
-                options={PLACEMENT_FILTER_OPTIONS}
-                value={placementFilter}
-                onChange={(event) => {
-                  setPage(1);
-                  setPlacementFilter(event.target.value);
-                }}
-              />
-            </div>
-            <div className="w-44">
-              <Select
-                label="Status"
-                options={STATUS_FILTER_OPTIONS}
-                value={statusFilter}
-                onChange={(event) => {
-                  setPage(1);
-                  setStatusFilter(event.target.value);
-                }}
-              />
-            </div>
-          </div>
-
-          <CmsFaqsTable
-            faqs={faqsQuery.data?.items}
-            isLoading={faqsQuery.isLoading}
-            errorMessage={faqsQuery.error ? describeError(faqsQuery.error) : null}
-            canWrite={canWrite}
-            onEdit={(faq) => {
-              setEditingFaq(faq);
-              setFormError(null);
-            }}
-            onTogglePublished={(faq) =>
-              toggleMutation.mutate({ id: faq.id, published: faq.status !== CmsContentStatus.Published })
-            }
-            togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+        <FilterBar
+          columns={2}
+          onSubmit={applyFilters}
+          onClear={clearFilters}
+          activeCount={countActiveFilters(appliedFilters)}
+          busy={faqsQuery.isFetching}
+        >
+          <Select
+            label="Placement"
+            options={PLACEMENT_FILTER_OPTIONS}
+            value={filters.placement}
+            onChange={(event) => setFilters((current) => ({ ...current, placement: event.target.value }))}
           />
+          <Select
+            label="Status"
+            options={STATUS_FILTER_OPTIONS}
+            value={filters.status}
+            onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+          />
+        </FilterBar>
 
-          {faqsQuery.data && faqsQuery.data.totalCount > PAGE_SIZE ? (
-            <div className="mt-4 flex items-center justify-between text-sm text-neutral-600 dark:text-neutral-400">
-              <span>
-                Page {page} of {totalPages} ({faqsQuery.data.totalCount} total)
-              </span>
-              <div className="flex gap-2">
-                <Button type="button" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </Card>
+        <CmsFaqsTable
+          faqs={faqsQuery.data?.items}
+          isLoading={faqsQuery.isPending}
+          isFetching={faqsQuery.isFetching}
+          error={faqsQuery.error}
+          onRetry={() => faqsQuery.refetch()}
+          canWrite={canWrite}
+          onEdit={(faq) => {
+            setEditingFaq(faq);
+            setFormError(null);
+          }}
+          onTogglePublished={(faq) =>
+            toggleMutation.mutate({ id: faq.id, published: faq.status !== CmsContentStatus.Published })
+          }
+          togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
+          toggleError={toggleMutation.error}
+          emptyAction={
+            countActiveFilters(appliedFilters) > 0 ? (
+              <Button variant="secondary" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+          footer={
+            faqsQuery.data ? (
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalCount={faqsQuery.data.totalCount}
+                onPageChange={setPage}
+                busy={faqsQuery.isFetching}
+                itemLabel="FAQ"
+              />
+            ) : null
+          }
+        />
       </div>
     </div>
   );
