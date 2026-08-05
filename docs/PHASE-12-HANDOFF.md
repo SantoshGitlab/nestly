@@ -1,5 +1,13 @@
 # Phase 12 — Premium UI & UX Overhaul: handoff
 
+**Phase 12 is complete as of 2026-08-05 (tip commit — see `git log -1`).**
+All rows 209-229 are `done` in `tasks.csv`, with one deliberate, documented
+gap: 5 of `partner-web`'s OTP-gated screens in `docs/UI-GUIDE.md` still show
+the pre-Phase-12 design (see row 229's note and the UI-GUIDE.md "Refreshed
+for Phase 12" section for why and what it'd take to close). Everything below
+this point is the original working history, kept for context on how the
+phase was actually executed — not a live task list anymore.
+
 Working branch: **`phase-12-premium-ui`** (branched from `main` at `cdb1d0b`).
 
 The authoritative backlog is **`tasks.csv` rows 209–229**, phase

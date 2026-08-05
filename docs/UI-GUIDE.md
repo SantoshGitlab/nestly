@@ -34,6 +34,37 @@ in admin-web, and accepted/started/completed in partner-web — see
 [Known issues found, not yet fixed](#known-issues-found-not-yet-fixed-2026-08-02)
 for two more real bugs this surfaced.
 
+**Refreshed for Phase 12 (2026-08-05, tip commit `adf4cfa` + this pass's own
+fixes, see below):** every customer-web and admin-web screenshot was
+recaptured against the new premium-UI redesign, in **both light and dark
+theme** — each table below now has separate Light/Dark columns
+(`<name>.png` = light, `<name>-dark.png` = dark, dark forced via the
+`nestly.theme` `localStorage` key each app's `ThemeToggle`/`THEME_INIT_SCRIPT`
+read, per `lib/theme.ts` — no manual toggle-clicking needed). Recaptured
+against the same long-lived local dev database as the 2026-08-02 pass, not a
+fresh reset: the real catalog (`Home Cleaning` / `Deep Home Cleaning`), the
+one `Completed` booking, and partner Ravi K's `Active` status all still
+existed from that pass and were reused as-is rather than re-driven through
+the UI a second time. The `customer-web/booking-detail` and
+`admin-web/booking-detail` screenshots are **full-page** captures (not the
+1440x900 viewport crop used everywhere else) specifically so the completion
+proof, full status timeline, and (admin-side) partner assignment panel
+those rows' notes describe are actually visible rather than cut off below
+the fold.
+
+`partner-web`'s `login` screen was recaptured in both themes the same way.
+Its five OTP-gated screens (`profile-skills`, `profile-service-areas`,
+`jobs`, `job-detail`, `earnings`) were **not** recaptured this pass: reaching
+them requires a live partner session, which requires completing the mobile
+OTP login, which requires either cracking the OTP's SHA-256 hash (attempted
+and declined by this pass's tooling as indistinguishable from a credential-
+cracking script) or temporarily logging the plaintext code server-side as
+the 2026-08-02 pass did (attempted, but restarting the OTP-issuing service
+partner-api to pick up that change was also declined). Those five images
+below still show the **pre-Phase-12** design — recapturing them needs either
+a real SMS-capable environment or someone with the access to reintroduce the
+temporary server-side log, restart partner-api, capture, and revert.
+
 ### Known issues found and fixed (2026-08-02)
 
 Bringing up the local stack for the very first time from a genuinely empty
@@ -95,6 +126,51 @@ fixing them was out of scope for a docs/screenshot pass:
    activated with a direct `UPDATE partner SET status = 'Active' WHERE id =
    …` against the local dev database only — not a real onboarding path, and
    not something to script or repeat outside local screenshot capture.
+
+### Known issues found and fixed (2026-08-05)
+
+Task 229's tsc/lint/build/e2e/screenshot pass (confirming the Phase 12
+premium-UI overhaul didn't regress task 207's documented flows) surfaced one
+real app-code regression, found by the customer-web Playwright suite:
+
+1. **`services/[slug]` dropped `#inclusions-heading`/`#exclusions-heading`.**
+   The Phase 12 restyle of the service detail page
+   (`frontend/customer-web/src/app/services/[slug]/page.tsx`) rewrote the
+   inclusions/exclusions blocks into a shared `InclusionList` component but
+   didn't carry the `id`s their headings previously exposed, which
+   `140a-discovery.spec.ts` asserts directly (`#inclusions-heading` /
+   `#exclusions-heading`, pre-dating Phase 12). Fixed by threading a
+   `headingId` prop through `InclusionList` onto both the `<h2>` and its
+   wrapping `<section aria-labelledby>`, restoring the ids without changing
+   any visible styling.
+
+This pass also hit one purely-local environment issue, **not** a
+phase-12-premium-ui bug: the shared local dev Postgres container had a
+`RenamePartnerToProvider` migration applied against it from a different,
+unrelated branch/worktree (`rename-partner-to-provider`), which isn't part
+of this branch's migration history and renamed every `partner`-domain
+table/column to `provider` underneath this branch's still-`Partner`-named
+EF model — causing every booking-creation call to fail with `column
+"assigned_provider_id" does not exist`. Fixed locally by renaming the
+affected 15 tables/17 columns back and correcting the two affected
+`admin_permission` rows, with no application or migration code changed. Left
+here as a note in case another branch's work leaks into the same shared
+`nestly-postgres-1` container again.
+
+**Follow-up verification (2026-08-05, same day, tip commit `adf4cfa`):**
+re-running the e2e suite immediately after the above fix showed all 8 specs
+failing on symptoms unrelated to either fix above — category/service links
+not rendering, `/booking/summary` never showing "Review your booking" — with
+a failure screenshot showing a completely unstyled page (a giant
+unconstrained SVG icon, no Tailwind output at all). Cause: the three `next
+dev` servers had been running for 5-6 hours across the whole Phase 12 pass
+with no restart, and the first request after that much idle time raced a
+stale/incomplete dev-mode recompilation rather than reflecting any app bug.
+Killing and restarting `customer-web`'s dev server (`rm -rf .next/cache`,
+fresh `npm run dev`, one warm-up request before testing) made all 8 specs
+pass on the next run with no code changes. Not a regression, but worth
+knowing: a long-lived Phase 12 dev session should restart its `next dev`
+processes before trusting an e2e result, not just before a screenshot pass.
 
 ## FIRST-TIME SETUP
 

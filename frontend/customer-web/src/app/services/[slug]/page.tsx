@@ -80,11 +80,13 @@ export default function ServiceDetailPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <InclusionList
+              headingId="inclusions-heading"
               title="What's included"
               body={service.inclusions}
               tone="included"
             />
             <InclusionList
+              headingId="exclusions-heading"
               title="What's not included"
               body={service.exclusions}
               tone="excluded"
@@ -135,10 +137,12 @@ export default function ServiceDetailPage() {
 }
 
 function InclusionList({
+  headingId,
   title,
   body,
   tone,
 }: {
+  headingId: string;
   title: string;
   body: string;
   tone: "included" | "excluded";
@@ -146,8 +150,8 @@ function InclusionList({
   if (!body) return null;
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+    <section aria-labelledby={headingId} className="rounded-2xl border border-line bg-surface p-4">
+      <h2 id={headingId} className="flex items-center gap-2 text-sm font-semibold text-fg">
         {tone === "included" ? (
           <svg
             viewBox="0 0 24 24"
