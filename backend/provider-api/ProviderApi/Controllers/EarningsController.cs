@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -69,5 +68,5 @@ public class EarningsController : ControllerBase
     }
 
     private Guid CurrentProviderId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 }

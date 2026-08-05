@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -236,7 +235,7 @@ public class ReportsController : ControllerBase
     }
 
     private Guid CurrentAdminUserId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 
     private static string BuildFileName(string reportSlug) =>
         $"{reportSlug}-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";

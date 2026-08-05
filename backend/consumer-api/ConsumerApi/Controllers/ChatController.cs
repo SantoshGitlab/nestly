@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.Results;
@@ -98,7 +97,7 @@ public class ChatController : ControllerBase
     }
 
     private Guid CurrentCustomerId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 
     private static ModelStateDictionary ToModelState(ValidationResult validation)
     {

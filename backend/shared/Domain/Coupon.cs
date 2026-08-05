@@ -222,7 +222,8 @@ public class Coupon : Entity<Guid>
         }
 
         decimal raw = DiscountType == CouponDiscountType.Percentage
-            ? Math.Round(orderAmount * DiscountValue / 100m, 2)
+            // Explicit MidpointRounding (task 260) - see CommissionCalculator.
+            ? Math.Round(orderAmount * DiscountValue / 100m, 2, MidpointRounding.ToEven)
             : DiscountValue;
 
         if (MaxDiscountAmount.HasValue && raw > MaxDiscountAmount.Value)

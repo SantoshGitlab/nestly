@@ -29,7 +29,8 @@ public class SubscriptionBenefitService : ISubscriptionBenefitService
 
         if (subscription.DiscountPercentSnapshot > 0)
         {
-            decimal discountAmount = Math.Round(orderAmount * subscription.DiscountPercentSnapshot / 100m, 2);
+            // Explicit MidpointRounding (task 260) - see CommissionCalculator.
+            decimal discountAmount = Math.Round(orderAmount * subscription.DiscountPercentSnapshot / 100m, 2, MidpointRounding.ToEven);
             return new SubscriptionBenefitSummary(subscription.Id, FreeVisitApplied: false, DiscountAmount: discountAmount);
         }
 
