@@ -68,8 +68,7 @@ public class CmsPageRepository : ICmsPageRepository
 
         var page = await query
             .OrderByDescending(p => p.CreatedAtUtc)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         var items = page.Select(ToResponse).ToList();

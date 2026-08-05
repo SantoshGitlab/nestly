@@ -64,8 +64,7 @@ public class ReviewRepository : IReviewRepository
         // already-paged rows, not the whole filtered set.
         var pagedReviews = filtered
             .OrderByDescending(r => r.CreatedAtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize);
+            .ApplyPaging(page, pageSize);
 
         var joined = await JoinNames(pagedReviews).ToListAsync(cancellationToken);
 

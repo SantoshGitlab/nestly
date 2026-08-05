@@ -74,8 +74,7 @@ public class ProviderRepository : IProviderRepository
 
         var rows = await query
             .OrderByDescending(p => p.CreatedAt)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         return new ProviderSearchResult(rows, totalCount);

@@ -53,8 +53,7 @@ public class BannerRepository : IBannerRepository
         var page = await query
             .OrderBy(b => b.SortOrder)
             .ThenByDescending(b => b.CreatedAtUtc)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         // Media URLs and category names resolved in one batch query each

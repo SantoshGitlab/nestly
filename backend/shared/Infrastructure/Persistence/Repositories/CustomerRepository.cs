@@ -122,8 +122,7 @@ public class CustomerRepository : ICustomerRepository
 
         var page = await projected
             .OrderByDescending(x => x.Customer.CreatedAt)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         var rows = page.Select(x => new CustomerSearchRow(x.Customer, x.BookingCount)).ToList();

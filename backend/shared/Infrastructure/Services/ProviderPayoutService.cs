@@ -8,6 +8,19 @@ namespace Nestly.Infrastructure.Services;
 /// <inheritdoc cref="IProviderPayoutService"/>
 public class ProviderPayoutService : IProviderPayoutService
 {
+    /// <summary>
+    /// Task 251: page-size bounds for <see cref="SearchAsync"/>. Clamped here
+    /// rather than in each caller because both payout list endpoints - admin
+    /// PayoutsController.Search and provider EarningsController.ListPayouts -
+    /// funnel through this one method, and neither validates its query
+    /// string. Unbounded, a single request materializes the whole table;
+    /// a page below 1 reaches the repository as a negative OFFSET, which
+    /// PostgreSQL rejects outright ("OFFSET must not be negative") for a 500.
+    /// Same limits as AuditLogQueryService and the admin *Validators.cs.
+    /// </summary>
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderPayoutRepository _payoutRepository;
     private readonly IProviderEarningLedgerRepository _ledgerRepository;
@@ -58,6 +71,17 @@ public class ProviderPayoutService : IProviderPayoutService
 
     public async Task<Result<ProviderPayoutSearchResponse>> SearchAsync(Guid? providerId, ProviderPayoutStatus? status, int page, int pageSize)
     {
+        // Clamp before the query, and echo the clamped values back in the
+        // response so a caller that asked for page 0 / pageSize 10000 can see
+        // what it actually got rather than silently mis-paging.
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize switch
+        {
+            <= 0 => DefaultPageSize,
+            > MaxPageSize => MaxPageSize,
+            _ => pageSize
+        };
+
         var (rows, totalCount) = await _payoutRepository.SearchAsync(providerId, status, page, pageSize);
 
         var providerCache = new Dictionary<Guid, string>();

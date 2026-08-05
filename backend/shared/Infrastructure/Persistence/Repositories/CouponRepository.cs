@@ -86,8 +86,7 @@ public class CouponRepository : ICouponRepository
 
         var page = await query
             .OrderByDescending(c => c.CreatedAtUtc)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         // Category names resolved in one batch query rather than per-row -

@@ -170,8 +170,7 @@ public class BookingRepository : IBookingRepository
             .AsNoTracking()
             .Include(b => b.Items)
             .OrderByDescending(b => b.CreatedAtUtc)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         return new BookingSearchResult(rows, totalCount);
