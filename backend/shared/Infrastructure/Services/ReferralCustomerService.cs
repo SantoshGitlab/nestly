@@ -41,18 +41,23 @@ public class ReferralCustomerService : IReferralCustomerService
     public async Task<IReadOnlyList<ReferralHistoryItemResponse>> GetHistoryAsync(Guid customerId)
     {
         var referrals = await _referralRepository.ListByReferrerCustomerIdAsync(customerId);
+
+        // Task 257: one GetByIdAsync per referral, loading a whole Customer
+        // aggregate to read the referee's name.
+        var refereeNames = await _customerRepository.GetNamesByIdsAsync(
+            referrals.Select(r => r.RefereeCustomerId).Distinct().ToList());
+
         var items = new List<ReferralHistoryItemResponse>(referrals.Count);
 
         foreach (var referral in referrals)
         {
-            Customer? referee = await _customerRepository.GetByIdAsync(referral.RefereeCustomerId);
             decimal? rewardEarned = referral.Status == ReferralStatus.Rewarded && referral.ReferrerWalletEntryId is null && referral.ReferrerCouponId is null
                 ? null
                 : referral.Status == ReferralStatus.Rewarded ? referral.ReferrerRewardValue : null;
 
             items.Add(new ReferralHistoryItemResponse(
                 referral.Id,
-                referee?.Name ?? "Nestly customer",
+                refereeNames.GetValueOrDefault(referral.RefereeCustomerId, "Nestly customer"),
                 referral.Status.ToString(),
                 referral.RegisteredAtUtc,
                 referral.QualifiedAtUtc,

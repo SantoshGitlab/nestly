@@ -191,21 +191,16 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         }
 
         var history = await _assignmentRepository.ListByBookingAsync(bookingId);
-        var providerCache = new Dictionary<Guid, string>();
-        var items = new List<BookingProviderAssignmentResponse>();
-        foreach (var assignment in history)
-        {
-            if (!providerCache.TryGetValue(assignment.ProviderId, out var displayName))
-            {
-                var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-                displayName = provider?.DisplayName ?? "(unknown provider)";
-                providerCache[assignment.ProviderId] = displayName;
-            }
 
-            items.Add(ToResponse(assignment, displayName));
-        }
+        // Task 257: the local dictionary only saved a repeat lookup for a
+        // provider already seen in this history - the first assignment for
+        // each distinct provider still cost its own round trip.
+        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(
+            history.Select(a => a.ProviderId).Distinct().ToList());
 
-        return items;
+        return history
+            .Select(assignment => ToResponse(assignment, displayNames.GetValueOrDefault(assignment.ProviderId, "(unknown provider)")))
+            .ToList();
     }
 
     private static BookingProviderAssignmentResponse ToResponse(BookingProviderAssignment assignment, string providerDisplayName) => new(

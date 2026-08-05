@@ -19,6 +19,21 @@ public class CouponRepository : ICouponRepository
     public Task<Coupon?> GetByCodeAsync(string code) =>
         _context.Coupons.FirstOrDefaultAsync(c => c.Code == code.Trim().ToUpper());
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> GetCodesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _context.Coupons
+            .AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .Select(c => new { c.Id, c.Code })
+            .ToDictionaryAsync(c => c.Id, c => c.Code);
+    }
+
     public async Task<bool> TryReserveRedemptionAsync(Guid couponId)
     {
         // A single conditional UPDATE, not read-then-write: the WHERE clause

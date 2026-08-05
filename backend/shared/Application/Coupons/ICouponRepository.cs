@@ -9,6 +9,9 @@ public interface ICouponRepository
     /// <summary>Codes are normalized to uppercase at construction (see <see cref="Coupon"/>) - lookups must match that normalization.</summary>
     Task<Coupon?> GetByCodeAsync(string code);
 
+    /// <summary>Codes for a set of coupon ids in one round trip (task 258) - the admin customer-detail screen renders a code per redemption row. Ids with no matching coupon are absent from the result.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetCodesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
     /// <summary>
     /// Atomically increments the coupon's redemption counter, but only if it
     /// is still under its overall usage cap (or the cap is unlimited) - a
