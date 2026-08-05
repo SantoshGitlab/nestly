@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
 
@@ -52,6 +53,26 @@ public sealed class TestDatabase : IDisposable
     public NestlyDbContext CreateContext()
     {
         var context = new NestlyDbContext(Options);
+        context.Database.ExecuteSqlRaw("PRAGMA foreign_keys = ON;");
+        return context;
+    }
+
+    /// <summary>
+    /// A context over the same database with an extra interceptor attached -
+    /// used by the N+1 regression tests (task 253 onwards) to count the SQL
+    /// commands a service actually issues. An N+1 is invisible to an
+    /// assertion on the returned data (the values are correct either way),
+    /// so the query count is the only thing that pins the fix.
+    /// </summary>
+    public NestlyDbContext CreateContext(IInterceptor interceptor)
+    {
+        var options = new DbContextOptionsBuilder<NestlyDbContext>()
+            .UseSqlite(_connection)
+            .UseSnakeCaseNamingConvention()
+            .AddInterceptors(new NewOwnedChildEntityInterceptor(), interceptor)
+            .Options;
+
+        var context = new NestlyDbContext(options);
         context.Database.ExecuteSqlRaw("PRAGMA foreign_keys = ON;");
         return context;
     }

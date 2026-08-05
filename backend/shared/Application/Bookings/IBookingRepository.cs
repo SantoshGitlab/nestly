@@ -34,4 +34,14 @@ public interface IBookingRepository
 
     /// <summary>Task 240: PaymentPending bookings created before <paramref name="olderThanUtc"/> - BookingExpirySweepJob's candidate set. Still PaymentPending only; one that already moved to Confirmed/PaymentFailed/CancelledByCustomer never matches regardless of age.</summary>
     Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc);
+
+    /// <summary>
+    /// Task 255: bookings for a set of ids in one round trip, for list
+    /// screens that resolve a booking per row. Read-only and deliberately
+    /// NOT fully loaded - unlike <see cref="GetByIdAsync"/> it omits items,
+    /// add-ons and status history, because the callers (the provider job
+    /// list) read only the booking's snapshot columns and its status.
+    /// Ids with no matching booking are simply absent from the result.
+    /// </summary>
+    Task<IReadOnlyList<Booking>> ListSummariesByIdsAsync(IReadOnlyCollection<Guid> ids);
 }

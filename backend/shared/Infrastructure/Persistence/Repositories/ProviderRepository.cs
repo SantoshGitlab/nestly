@@ -29,6 +29,21 @@ public class ProviderRepository : IProviderRepository
     public Task<Provider?> GetByIdAsync(Guid id) =>
         _context.Set<Provider>().FirstOrDefaultAsync(p => p.Id == id);
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _context.Set<Provider>()
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, p.DisplayName })
+            .ToDictionaryAsync(p => p.Id, p => p.DisplayName);
+    }
+
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Provider>().AnyAsync(p => p.Id == id);
 

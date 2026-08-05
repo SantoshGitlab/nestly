@@ -198,6 +198,24 @@ public class BookingRepository : IBookingRepository
             .Where(b => b.Status == BookingStatus.PaymentPending && b.CreatedAtUtc < olderThanUtc)
             .ToListAsync();
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Booking>> ListSummariesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // No FullyLoaded() here on purpose - see the interface's doc comment.
+        // Pulling items/add-ons/status history for a whole page of bookings
+        // just to render snapshot columns is what made the per-row version
+        // expensive in the first place.
+        return await _context.Bookings
+            .AsNoTracking()
+            .Where(b => ids.Contains(b.Id))
+            .ToListAsync();
+    }
+
     private IQueryable<Booking> FullyLoaded() =>
         _context.Bookings
             .Include(b => b.Items).ThenInclude(i => i.AddOns)

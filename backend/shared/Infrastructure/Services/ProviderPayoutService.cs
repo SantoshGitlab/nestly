@@ -84,19 +84,16 @@ public class ProviderPayoutService : IProviderPayoutService
 
         var (rows, totalCount) = await _payoutRepository.SearchAsync(providerId, status, page, pageSize);
 
-        var providerCache = new Dictionary<Guid, string>();
-        var items = new List<ProviderPayoutResponse>();
-        foreach (var payout in rows)
-        {
-            if (!providerCache.TryGetValue(payout.ProviderId, out var displayName))
-            {
-                var provider = await _providerRepository.GetByIdAsync(payout.ProviderId);
-                displayName = provider?.DisplayName ?? "(unknown provider)";
-                providerCache[payout.ProviderId] = displayName;
-            }
+        // Task 254: the local dictionary only avoided re-querying a provider
+        // already seen on this page - the first row for each distinct provider
+        // still cost its own round trip, so an admin page spanning 100
+        // providers issued 100 of them. One batched lookup instead.
+        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(
+            rows.Select(p => p.ProviderId).Distinct().ToList());
 
-            items.Add(ToResponse(payout, displayName));
-        }
+        var items = rows
+            .Select(payout => ToResponse(payout, displayNames.GetValueOrDefault(payout.ProviderId, "(unknown provider)")))
+            .ToList();
 
         return new ProviderPayoutSearchResponse(items, totalCount, page, pageSize);
     }

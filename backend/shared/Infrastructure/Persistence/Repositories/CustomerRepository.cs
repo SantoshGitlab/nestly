@@ -28,6 +28,24 @@ public class CustomerRepository : ICustomerRepository
     public Task<Customer?> GetByIdAsync(Guid id) =>
         _context.Set<Customer>().FirstOrDefaultAsync(c => c.Id == id);
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        // Projects the two columns the caller needs instead of materializing
+        // whole Customer aggregates - same shape as BannerRepository's
+        // media/category batch lookups.
+        return await _context.Set<Customer>()
+            .AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .Select(c => new { c.Id, c.Name })
+            .ToDictionaryAsync(c => c.Id, c => c.Name);
+    }
+
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Customer>().AnyAsync(c => c.Id == id);
 

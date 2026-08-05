@@ -50,17 +50,24 @@ public class ReferralAdminService : IReferralAdminService
         var (items, totalCount) = await _referralRepository.SearchAsync(
             request.Status, request.IsFraudFlagged, customerIds, request.Page, request.PageSize);
 
+        // Task 253: this used to issue two GetByIdAsync calls per row - a
+        // 100-row page cost 200 sequential round trips, each loading a whole
+        // Customer aggregate to read one column. One batched name lookup
+        // covers both sides of every referral on the page.
+        var names = await _customerRepository.GetNamesByIdsAsync(
+            items.SelectMany(r => new[] { r.ReferrerCustomerId, r.RefereeCustomerId })
+                 .Distinct()
+                 .ToList());
+
         var responses = new List<ReferralAdminListItemResponse>(items.Count);
         foreach (var referral in items)
         {
-            var referrer = await _customerRepository.GetByIdAsync(referral.ReferrerCustomerId);
-            var referee = await _customerRepository.GetByIdAsync(referral.RefereeCustomerId);
             responses.Add(new ReferralAdminListItemResponse(
                 referral.Id,
                 referral.ReferrerCustomerId,
-                referrer?.Name ?? "Unknown",
+                names.GetValueOrDefault(referral.ReferrerCustomerId, "Unknown"),
                 referral.RefereeCustomerId,
-                referee?.Name ?? "Unknown",
+                names.GetValueOrDefault(referral.RefereeCustomerId, "Unknown"),
                 referral.Status,
                 referral.IsFraudFlagged,
                 referral.RegisteredAtUtc,
