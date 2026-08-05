@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Options;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
+using Nestly.Application.Slots;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
@@ -33,6 +35,8 @@ public class CancellationService : ICancellationService
     private readonly IRefundService _refundService;
     private readonly ICancellationRepository _cancellationRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
+    private readonly ISlotAvailabilityService _slotAvailabilityService;
+    private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
     private readonly CancellationPolicyOptions _policy;
 
@@ -43,6 +47,8 @@ public class CancellationService : ICancellationService
         IRefundService refundService,
         ICancellationRepository cancellationRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
+        ISlotAvailabilityService slotAvailabilityService,
+        IBusinessClock businessClock,
         TimeProvider timeProvider,
         IOptions<CancellationPolicyOptions> policy)
     {
@@ -52,6 +58,8 @@ public class CancellationService : ICancellationService
         _refundService = refundService;
         _cancellationRepository = cancellationRepository;
         _assignmentRepository = assignmentRepository;
+        _slotAvailabilityService = slotAvailabilityService;
+        _businessClock = businessClock;
         _timeProvider = timeProvider;
         _policy = policy.Value;
     }
@@ -153,6 +161,14 @@ public class CancellationService : ICancellationService
         booking.TransitionTo(targetStatus, reason);
         await _bookingRepository.UpdateAsync(booking);
 
+        // Hand the slot's seat back to the pool. The reservation was taken
+        // when the booking was created (BookingService.CreateAsync); without
+        // this release the counter only ever climbs, and a window fills up
+        // with cancelled bookings until it rejects real customers while
+        // standing empty. Released after the transition so a booking that
+        // could not legally be cancelled never frees a seat it still holds.
+        await _slotAvailabilityService.ReleaseSlotAsync(booking.SlotWindowId, booking.SlotDate);
+
         // Task 208: a provider still Assigned/Accepted on this booking has no
         // way of hearing about the cancellation otherwise - ProviderJobService
         // derives their job status from this assignment row, not from the
@@ -220,8 +236,13 @@ public class CancellationService : ICancellationService
     {
         decimal payableAmount = await ResolvePayableAmountAsync(booking.Id);
 
-        DateTime slotStartUtc = booking.SlotDate.ToDateTime(TimeOnly.MinValue).Add(booking.SlotStartTimeSnapshot);
-        DateTime now = _timeProvider.GetUtcNow().DateTime;
+        // Business wall-clock lifted to a real instant before it meets UTC
+        // now - see IBusinessClock. Subtracting the raw snapshot skewed
+        // "am I inside the free-cancellation window" by the business
+        // timezone's offset, which in IST handed out 5.5 hours of free
+        // cancellation nobody had earned.
+        DateTime slotStartUtc = _businessClock.ToUtc(booking.SlotDate, booking.SlotStartTimeSnapshot);
+        DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         TimeSpan timeUntilSlot = slotStartUtc - now;
 
         return CancellationFeeCalculator.Compute(

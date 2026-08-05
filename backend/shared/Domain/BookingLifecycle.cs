@@ -11,7 +11,7 @@ public static class BookingLifecycle
     private static readonly Dictionary<BookingStatus, BookingStatus[]> Transitions = new()
     {
         [BookingStatus.Initiated] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer],
-        [BookingStatus.PaymentPending] = [BookingStatus.Confirmed, BookingStatus.PaymentFailed, BookingStatus.CancelledByCustomer],
+        [BookingStatus.PaymentPending] = [BookingStatus.Confirmed, BookingStatus.PaymentFailed, BookingStatus.CancelledByCustomer, BookingStatus.Expired],
         [BookingStatus.PaymentFailed] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
         [BookingStatus.Confirmed] = [BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
         [BookingStatus.AwaitingFulfilment] = [BookingStatus.Assigned, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
@@ -28,6 +28,10 @@ public static class BookingLifecycle
         [BookingStatus.Rescheduled] = [BookingStatus.AwaitingFulfilment, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
         [BookingStatus.RefundPending] = [BookingStatus.Refunded],
         [BookingStatus.Refunded] = [],
+        // Task 240: no payment was ever captured on a PaymentPending booking,
+        // so unlike CancelledByCustomer/CancelledByAdmin there is nothing to
+        // refund and no cancellation-fee policy to apply - terminal on its own.
+        [BookingStatus.Expired] = [],
     };
 
     /// <summary>Whether moving from <paramref name="from"/> to <paramref name="to"/> is a legal transition.</summary>

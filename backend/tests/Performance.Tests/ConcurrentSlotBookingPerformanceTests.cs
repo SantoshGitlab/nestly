@@ -52,7 +52,7 @@ public sealed class ConcurrentSlotBookingPerformanceTests : IClassFixture<PerfTe
             new SlotBlackoutRepository(context),
             new SlotBookingPolicyRepository(context),
             new SlotCapacityRepository(context),
-            TimeProvider.System);
+            TestServices.Clock());
 
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
@@ -66,7 +66,9 @@ public sealed class ConcurrentSlotBookingPerformanceTests : IClassFixture<PerfTe
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -124,6 +126,10 @@ public sealed class ConcurrentSlotBookingPerformanceTests : IClassFixture<PerfTe
             var address = new CustomerAddress(
                 Guid.NewGuid(), customer.Id, "Home", $"{i} Residency Road", null, null,
                 pincodeCode, "Bengaluru", "Karnataka", 12.9716m, 77.5946m, $"Customer {i}", "9876500000", true);
+            // As CustomerAddressService does on save - a booking is only
+            // accepted for an address that resolves to the service area it is
+            // being booked in.
+            address.LinkToGeography(pincode.Id, locality.Id);
             context.Add(customer);
             context.Add(address);
             customers.Add((customer, address));
@@ -160,6 +166,10 @@ public sealed class ConcurrentSlotBookingPerformanceTests : IClassFixture<PerfTe
 
         succeeded.Should().HaveCount(capacity, "exactly capacity-many bookings must win the race, no more and no fewer");
         failed.Should().HaveCount(concurrentCustomers - capacity);
+        // One code regardless of which check caught it: a loser that reads
+        // availability after the last seat is gone is turned away up front,
+        // one that read it while a seat was still free loses the atomic
+        // reservation instead - both are the same outcome to the customer.
         failed.Should().OnlyContain(r => r.Error.Code == "Booking.SlotCapacityReached");
         failed.Should().OnlyContain(r => r.Error.Type == ErrorType.Conflict, "a capacity-exhausted slot is a 409, not a validation or business-rule failure");
 

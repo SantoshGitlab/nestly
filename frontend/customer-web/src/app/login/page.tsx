@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -16,6 +16,7 @@ import {
 import { Alert, Button, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { storeSession } from "@/lib/auth";
+import { RETURN_TO_PARAM, resolvePostLoginPath } from "@/lib/return-to";
 import type { LoginResponse } from "@/lib/types";
 import {
   ADMIN_WEB_URL,
@@ -82,6 +83,27 @@ const SIGN_IN_MODES = [
  * origin still works.
  */
 export default function LoginPage() {
+  // Suspense for useSearchParams below (see booking/summary/page.tsx for the
+  // same pattern): reading the `next` destination opts this tree out of
+  // static rendering, which the App Router requires a boundary around.
+  return (
+    <Suspense fallback={<AuthShell title="Welcome back" subtitle="One sign-in for customers, admins and providers."><div /></AuthShell>}>
+      <LoginScreen />
+    </Suspense>
+  );
+}
+
+/**
+ * Where to go once signed in: the screen the customer was sent here from, or
+ * their profile if they came to `/login` directly. See lib/return-to.ts for
+ * why the value is validated rather than followed as given.
+ */
+function usePostLoginPath(): string {
+  const returnTo = useSearchParams().get(RETURN_TO_PARAM);
+  return resolvePostLoginPath(returnTo);
+}
+
+function LoginScreen() {
   const [accountType, setAccountType] = useState<AccountType>("customer");
   const [mode, setMode] = useState<Mode>("otp");
 
@@ -135,6 +157,7 @@ export default function LoginPage() {
 
 function OtpLogin() {
   const router = useRouter();
+  const postLoginPath = usePostLoginPath();
   const [step, setStep] = useState<"request" | "verify">("request");
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -194,7 +217,7 @@ function OtpLogin() {
         body: JSON.stringify(values),
       });
       storeSession(session);
-      router.push("/profile");
+      router.push(postLoginPath);
     } catch (err) {
       setError(describeError(err));
     }
@@ -257,6 +280,7 @@ function OtpLogin() {
 
 function PasswordLogin() {
   const router = useRouter();
+  const postLoginPath = usePostLoginPath();
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof passwordSchema>>({
@@ -272,7 +296,7 @@ function PasswordLogin() {
         body: JSON.stringify(values),
       });
       storeSession(session);
-      router.push("/profile");
+      router.push(postLoginPath);
     } catch (err) {
       setError(describeError(err));
     }

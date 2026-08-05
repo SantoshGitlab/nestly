@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Nestly.Application.Serviceability;
+using Nestly.Application.Slots;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -18,11 +19,11 @@ public sealed class SlotAvailabilityServiceTests : IClassFixture<TestDatabase>
         new SlotBlackoutRepository(context),
         new SlotBookingPolicyRepository(context),
         new SlotCapacityRepository(context),
-        timeProvider ?? TimeProvider.System);
+        TestServices.Clock(timeProvider));
 
     public SlotAvailabilityServiceTests(TestDatabase db) => _db = db;
 
-    private sealed record Fixture(State State, City City, Pincode Pincode, Locality Locality, Category Category, Service Service);
+    private sealed record Fixture(State State, City City, Pincode Pincode, Locality Locality, Category Category, Service Service, SlotWindow? Window = null);
 
     private Fixture SeedGeographyAndService(Nestly.Infrastructure.Persistence.NestlyDbContext context, DayOfWeek windowDay, TimeSpan start, TimeSpan end, int? capacity = null)
     {
@@ -49,7 +50,7 @@ public sealed class SlotAvailabilityServiceTests : IClassFixture<TestDatabase>
         context.SlotWindowRules.Add(rule);
         context.SaveChanges();
 
-        return new Fixture(state, city, pincode, locality, category, service);
+        return new Fixture(state, city, pincode, locality, category, service, window);
     }
 
     [Fact]
@@ -174,6 +175,98 @@ public sealed class SlotAvailabilityServiceTests : IClassFixture<TestDatabase>
         var result = await BuildService(readContext).GetAvailableSlotsAsync(fixture.Service.Id, fixture.Locality.Id, futureDate);
 
         result.Value.Slots.Single().MaxBookingsPerSlot.Should().Be(5);
+    }
+
+    /// <summary>
+    /// A window at capacity must not be offered at all. It used to stay
+    /// selectable through the picker and through revalidation, and only failed
+    /// on the customer's final click.
+    /// </summary>
+    [Fact]
+    public async Task A_window_at_capacity_is_not_offered_and_does_not_revalidate()
+    {
+        var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = SeedGeographyAndService(context, futureDate.DayOfWeek, TimeSpan.FromHours(9), TimeSpan.FromHours(13), capacity: 1);
+        }
+
+        using (var reserveContext = _db.CreateContext())
+        {
+            var reserved = await BuildService(reserveContext).ReserveSlotAsync(fixture.Window!.Id, futureDate);
+            reserved.IsSuccess.Should().BeTrue("the single seat should still be free");
+        }
+
+        using var readContext = _db.CreateContext();
+        var availability = await BuildService(readContext).GetAvailableSlotsAsync(fixture.Service.Id, fixture.Locality.Id, futureDate);
+
+        availability.Value.Slots.Should().BeEmpty();
+        availability.Value.Reason.Should().Be(SlotUnavailabilityReason.FullyBooked);
+
+        var revalidation = await BuildService(readContext).RevalidateSlotAsync(fixture.Service.Id, fixture.Locality.Id, fixture.Window!.Id, futureDate);
+        revalidation.Value.IsValid.Should().BeFalse();
+        revalidation.Value.Reason.Should().Contain("fully booked");
+    }
+
+    /// <summary>
+    /// The other half of the reservation: a released seat becomes bookable
+    /// again. Without it a window silently fills up with cancelled bookings.
+    /// </summary>
+    [Fact]
+    public async Task Releasing_a_seat_makes_a_full_window_bookable_again()
+    {
+        var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(6));
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = SeedGeographyAndService(context, futureDate.DayOfWeek, TimeSpan.FromHours(9), TimeSpan.FromHours(13), capacity: 1);
+        }
+
+        using (var reserveContext = _db.CreateContext())
+        {
+            await BuildService(reserveContext).ReserveSlotAsync(fixture.Window!.Id, futureDate);
+        }
+
+        using (var releaseContext = _db.CreateContext())
+        {
+            await BuildService(releaseContext).ReleaseSlotAsync(fixture.Window!.Id, futureDate);
+        }
+
+        using var readContext = _db.CreateContext();
+        var availability = await BuildService(readContext).GetAvailableSlotsAsync(fixture.Service.Id, fixture.Locality.Id, futureDate);
+
+        availability.Value.Slots.Should().ContainSingle(s => s.SlotWindowId == fixture.Window!.Id);
+    }
+
+    /// <summary>
+    /// A release with nothing reserved must not drive the counter negative -
+    /// that would hand out seats the window does not have.
+    /// </summary>
+    [Fact]
+    public async Task Releasing_more_than_was_reserved_never_oversells_the_window()
+    {
+        var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7));
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = SeedGeographyAndService(context, futureDate.DayOfWeek, TimeSpan.FromHours(9), TimeSpan.FromHours(13), capacity: 1);
+        }
+
+        using (var releaseContext = _db.CreateContext())
+        {
+            await BuildService(releaseContext).ReleaseSlotAsync(fixture.Window!.Id, futureDate);
+            await BuildService(releaseContext).ReleaseSlotAsync(fixture.Window!.Id, futureDate);
+        }
+
+        using (var reserveContext = _db.CreateContext())
+        {
+            var first = await BuildService(reserveContext).ReserveSlotAsync(fixture.Window!.Id, futureDate);
+            var second = await BuildService(reserveContext).ReserveSlotAsync(fixture.Window!.Id, futureDate);
+
+            first.IsSuccess.Should().BeTrue();
+            second.IsFailure.Should().BeTrue("capacity is 1 - the stray releases must not have created extra seats");
+        }
     }
 
     [Fact]

@@ -42,7 +42,7 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -50,7 +50,9 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -64,7 +66,7 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             metricsService,
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context));
@@ -86,6 +88,7 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
         var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        address.LinkToGeography(pincode.Id, locality.Id);
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 500m);
         var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -134,15 +137,19 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
         recorder.SlotConflicts.Should().Be(0);
     }
 
+    /// <summary>
+    /// A slot that is already full is now filtered out by slot availability,
+    /// so the rejection arrives before the reservation step - but it is the
+    /// same outcome with the same code, and it still counts as a slot
+    /// conflict for metrics.
+    /// </summary>
     [Fact]
     public async Task CreateAsync_records_a_slot_conflict_and_a_failure_outcome_when_the_slot_is_at_capacity()
     {
         Fixture fixture;
         using (var context = _db.CreateContext())
         {
-            // Capacity of 1: the first booking below consumes the only seat,
-            // so the second request must be rejected with
-            // Booking.SlotCapacityReached.
+            // Capacity of 1: the first booking below consumes the only seat.
             fixture = Seed(context, slotCapacity: 1);
         }
 

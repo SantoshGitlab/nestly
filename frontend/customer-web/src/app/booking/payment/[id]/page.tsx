@@ -19,6 +19,7 @@ import {
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading, Skeleton, Spinner, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { clearDraft } from "@/lib/booking-draft";
 import { BookingStatus } from "@/lib/types";
 import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } from "@/lib/types";
 
@@ -64,8 +65,14 @@ function BookingPaymentScreen() {
    * second click can be dispatched in the same tick as the first before that
    * state has rendered - and on a payment screen the cost of losing that race
    * is a duplicate gateway attempt, not just a duplicate request.
+   *
+   * `navigated` holds the guard shut through the route transition to the
+   * confirmation screen. Resetting during that window - which is seconds long
+   * on a slow connection - hands the button back to a customer who has already
+   * paid and is still looking at "Pay ₹…".
    */
   const inFlight = useRef(false);
+  const navigated = useRef(false);
 
   const bookingQuery = useQuery({
     queryKey: ["booking", id],
@@ -75,11 +82,15 @@ function BookingPaymentScreen() {
   const booking = bookingQuery.data;
   const isConfirmed = booking?.status === BookingStatus.Confirmed;
 
-  // Already paid (e.g. the customer navigated back here after paying) - skip
-  // straight to the confirmation page rather than trying to pay again.
+  // Already paid (e.g. the customer navigated back here after paying, or the
+  // gateway webhook confirmed it out of band) - skip straight to the
+  // confirmation page rather than trying to pay again, and retire the draft
+  // that was tracking this booking as unpaid.
   useEffect(() => {
-    if (isConfirmed) router.replace(successHref);
-  }, [isConfirmed, router, successHref]);
+    if (!isConfirmed) return;
+    if (serviceSlug) clearDraft(serviceSlug);
+    router.replace(successHref);
+  }, [isConfirmed, router, successHref, serviceSlug]);
 
   const orderQuery = useQuery({
     queryKey: ["payment-order", id, attempt],
@@ -116,6 +127,12 @@ function BookingPaymentScreen() {
       const status = refreshed.data?.status;
 
       if (status === BookingStatus.Confirmed) {
+        // The booking is paid for: the draft that was holding this booking's
+        // id has done its job and must not resurrect it as a "continue
+        // payment" prompt on the next visit to this service.
+        if (serviceSlug) clearDraft(serviceSlug);
+
+        navigated.current = true;
         router.push(successHref);
         // Left busy through the route transition so the button cannot be
         // pressed a second time while the next screen is loading.
@@ -142,7 +159,9 @@ function BookingPaymentScreen() {
     } catch (err) {
       setPayError(describeError(err));
     } finally {
-      if (!inFlight.current) return;
+      // Once the payment has gone through and the confirmation screen is
+      // loading, the button stays busy for good - see `navigated` above.
+      if (navigated.current) return;
       inFlight.current = false;
       setIsPaying(false);
     }

@@ -30,7 +30,7 @@ public sealed class BookingLifecycleTransitionTests
         new Dictionary<BookingStatus, BookingStatus[]>
         {
             [BookingStatus.Initiated] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer],
-            [BookingStatus.PaymentPending] = [BookingStatus.Confirmed, BookingStatus.PaymentFailed, BookingStatus.CancelledByCustomer],
+            [BookingStatus.PaymentPending] = [BookingStatus.Confirmed, BookingStatus.PaymentFailed, BookingStatus.CancelledByCustomer, BookingStatus.Expired],
             [BookingStatus.PaymentFailed] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.Confirmed] = [BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.AwaitingFulfilment] = [BookingStatus.Assigned, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
@@ -42,6 +42,7 @@ public sealed class BookingLifecycleTransitionTests
             [BookingStatus.Rescheduled] = [BookingStatus.AwaitingFulfilment, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.RefundPending] = [BookingStatus.Refunded],
             [BookingStatus.Refunded] = [],
+            [BookingStatus.Expired] = [],
         };
 
     public static IEnumerable<object[]> AllStatusPairs()
@@ -86,11 +87,28 @@ public sealed class BookingLifecycleTransitionTests
     }
 
     [Fact]
-    public void Refunded_is_the_only_terminal_state()
+    public void Refunded_and_Expired_are_the_only_terminal_states()
     {
         Enum.GetValues<BookingStatus>()
             .Where(BookingLifecycle.IsTerminal)
-            .Should().BeEquivalentTo([BookingStatus.Refunded]);
+            .Should().BeEquivalentTo([BookingStatus.Refunded, BookingStatus.Expired]);
+    }
+
+    [Fact]
+    public void PaymentPending_can_expire_and_Expired_is_terminal_with_no_refund_path()
+    {
+        var booking = NewBooking();
+        booking.TransitionTo(BookingStatus.PaymentPending);
+
+        booking.TransitionTo(BookingStatus.Expired, "Payment was not completed within the expiry window.");
+
+        booking.Status.Should().Be(BookingStatus.Expired);
+        booking.StatusHistory.Last().Reason.Should().Be("Payment was not completed within the expiry window.");
+        BookingLifecycle.IsTerminal(booking.Status).Should().BeTrue();
+
+        // Unlike CancelledByCustomer/CancelledByAdmin, an expired booking never
+        // captured a payment - there is deliberately no RefundPending path.
+        BookingLifecycle.IsValidTransition(BookingStatus.Expired, BookingStatus.RefundPending).Should().BeFalse();
     }
 
     // --- Full lifecycle walks through the real aggregate, not just the static table ---

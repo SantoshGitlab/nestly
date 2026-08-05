@@ -15,5 +15,8 @@ public enum BookingStatus
     CancelledByAdmin,
     Rescheduled,
     RefundPending,
-    Refunded
+    Refunded,
+
+    /// <summary>Task 240: a PaymentPending booking abandoned past the expiry window swept by BookingExpirySweepJob - never paid for, so distinct from CancelledByCustomer/CancelledByAdmin, which carry cancellation-fee/refund semantics that never applied here.</summary>
+    Expired
 }

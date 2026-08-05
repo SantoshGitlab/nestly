@@ -38,7 +38,14 @@ public sealed record ProviderSearchResponse(IReadOnlyList<ProviderSummaryRespons
 /// <summary>Admin creates a provider record directly (as opposed to the provider's own self-service registration, task 146a). ProviderType is always Individual - OPEN DECISIONS #2.</summary>
 public sealed record CreateProviderRequest(string LegalName, string DisplayName, string Phone, string? Email);
 
-public sealed record UpdateProviderRequest(string LegalName, string DisplayName, string? Email);
+/// <param name="Latitude">
+/// Task 243: both-or-neither with <paramref name="Longitude"/>, feeding the
+/// automatic-assignment engine's distance ranking (task 244). Full-overwrite
+/// semantics, same as every other field on this request (this is a PUT-style
+/// update, not a patch) - submitting both as null clears a previously set
+/// location.
+/// </param>
+public sealed record UpdateProviderRequest(string LegalName, string DisplayName, string? Email, decimal? Latitude = null, decimal? Longitude = null);
 
 public sealed record SuspendProviderRequest(string Reason);
 
@@ -71,6 +78,8 @@ public sealed record ProviderDetailResponse(
     ProviderOnboardingStatus OnboardingStatus,
     DateTime CreatedAt,
     DateTime UpdatedAt,
+    decimal? Latitude,
+    decimal? Longitude,
     IReadOnlyList<ProviderKycDocumentResponse> KycDocuments,
     IReadOnlyList<ProviderBackgroundCheckResponse> BackgroundChecks);
 

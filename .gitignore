@@ -64,8 +64,12 @@ dashboard/index.html
 .hermes-worker-failures.jsonl
 .hermes-worker-status.json
 .hermes-worker-decompose-tried.json
+.hermes-scheduled-run.log
 tasks.csv.tmp
 __pycache__/
+
+# task_claim.py cross-session claims: local coordination, not project history
+.task-claims/
 .claude-verify-errors*
 .autopilot-memory.json
 .claude-project-facts

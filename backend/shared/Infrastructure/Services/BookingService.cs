@@ -49,12 +49,39 @@ public class BookingService : IBookingService
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
     {
+        // Task 241: checked before anything else reserves - a retried
+        // request carrying the same key must not take a second slot seat,
+        // coupon redemption, or subscription free-visit credit before
+        // discovering the booking already exists. Scoped to this customer:
+        // BookingConfiguration's unique index is global, but there is no
+        // reason a key from one customer's session should ever resolve
+        // another's booking even if it somehow collided.
+        if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
+        {
+            var existingByKey = await _bookingRepository.GetByIdempotencyKeyAsync(customerId, request.IdempotencyKey);
+            if (existingByKey is not null)
+            {
+                var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(existingByKey.Id);
+                return Result.Success(ToDetailResponse(existingByKey, activeAssignment?.Status));
+            }
+        }
+
         // Re-validates every precondition (58a-f) through the same code path
         // the preview uses, so creation can never succeed on a combination
         // the preview would have rejected.
         var summaryResult = await _summaryService.GetSummaryAsync(customerId, request);
         if (summaryResult.IsFailure)
         {
+            // Slot availability now filters out windows that are already at
+            // capacity, so most contention is caught here rather than by
+            // ReserveSlotAsync below. The conflict counter has to be fed from
+            // both places or "slot-conflict rate" only counts the narrow race
+            // and reads as near-zero while customers are being turned away.
+            if (summaryResult.Error.Code == SlotCapacityReachedErrorCode)
+            {
+                _metricsService.RecordSlotConflict();
+            }
+
             _metricsService.RecordBookingCreated(succeeded: false, summaryResult.Error.Code);
             return summaryResult.Error;
         }
@@ -144,7 +171,8 @@ public class BookingService : IBookingService
             summary.Coupon?.DiscountAmount,
             summary.SubscriptionBenefit?.SubscriptionId,
             summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
-            summary.SubscriptionBenefit?.DiscountAmount);
+            summary.SubscriptionBenefit?.DiscountAmount,
+            string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey);
 
         // Add-on line items come from the price breakdown, not summary.AddOns:
         // the breakdown already carries each selection's quantity and
@@ -161,7 +189,32 @@ public class BookingService : IBookingService
 
         booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
 
-        await _bookingRepository.AddAsync(booking);
+        if (!await _bookingRepository.TryAddAsync(booking))
+        {
+            // Task 241: lost a genuine concurrent race against another
+            // request carrying the same key (the check at the top of this
+            // method only catches a *sequential* retry, since it runs before
+            // this one's own insert exists to be found) - hand back the
+            // winner's booking rather than a duplicate. Known, accepted gap:
+            // the slot/coupon/subscription reservations this losing request
+            // just took above are not released here - this method has no
+            // rollback path for those today on *any* failure branch (e.g. a
+            // coupon-reservation failure after a successful slot reservation
+            // a few lines up leaks the same way), so this is consistent with
+            // the rest of the method rather than a new gap. Same manual
+            // backstop as that existing class of drift: database/scripts/reconcile-slot-capacity.sql.
+            var winner = await _bookingRepository.GetByIdempotencyKeyAsync(customerId, request.IdempotencyKey!);
+            if (winner is null)
+            {
+                _metricsService.RecordBookingCreated(succeeded: false, "Booking.IdempotencyRaceUnresolved");
+                return Error.Infrastructure(
+                    "Booking.IdempotencyRaceUnresolved",
+                    "Could not create or locate a booking for this request. Please retry.");
+            }
+
+            var winnerAssignment = await _assignmentRepository.GetActiveByBookingAsync(winner.Id);
+            return Result.Success(ToDetailResponse(winner, winnerAssignment?.Status));
+        }
 
         if (summary.Coupon is not null)
         {

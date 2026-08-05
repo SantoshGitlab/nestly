@@ -33,6 +33,12 @@ public class UpdateProviderRequestValidator : AbstractValidator<UpdateProviderRe
         RuleFor(x => x.LegalName).NotEmpty().MaximumLength(200);
         RuleFor(x => x.DisplayName).NotEmpty().MaximumLength(200);
         RuleFor(x => x.Email).MaximumLength(200).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email));
+
+        // Task 243: same bounds as UpsertAddressRequestValidator's Latitude/Longitude.
+        RuleFor(x => x.Latitude).InclusiveBetween(-90m, 90m).When(x => x.Latitude.HasValue);
+        RuleFor(x => x.Longitude).InclusiveBetween(-180m, 180m).When(x => x.Longitude.HasValue);
+        RuleFor(x => x.Longitude).NotNull().WithMessage("Longitude is required when latitude is set.").When(x => x.Latitude.HasValue);
+        RuleFor(x => x.Latitude).NotNull().WithMessage("Latitude is required when longitude is set.").When(x => x.Longitude.HasValue);
     }
 }
 

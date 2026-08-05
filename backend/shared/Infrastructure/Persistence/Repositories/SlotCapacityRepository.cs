@@ -63,6 +63,30 @@ public class SlotCapacityRepository : ISlotCapacityRepository
         }
     }
 
+    public async Task ReleaseAsync(Guid slotWindowId, DateOnly date)
+    {
+        // Conditional on BookedCount > 0 for the same reason the reservation
+        // is conditional on BookedCount < max: a single UPDATE that cannot be
+        // lost to a concurrent one, and that can never take the counter
+        // negative if a release is somehow issued twice for one booking.
+        await _context.Set<SlotBookingCounter>()
+            .Where(c => c.SlotWindowId == slotWindowId && c.SlotDate == date && c.BookedCount > 0)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.BookedCount, c => c.BookedCount - 1));
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> GetBookedCountsAsync(IReadOnlyCollection<Guid> slotWindowIds, DateOnly date)
+    {
+        if (slotWindowIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        return await _context.Set<SlotBookingCounter>()
+            .AsNoTracking()
+            .Where(c => c.SlotDate == date && slotWindowIds.Contains(c.SlotWindowId))
+            .ToDictionaryAsync(c => c.SlotWindowId, c => c.BookedCount);
+    }
+
     private async Task<bool> TryIncrementExistingAsync(Guid slotWindowId, DateOnly date, int maxCapacity)
     {
         int affected = await _context.Set<SlotBookingCounter>()

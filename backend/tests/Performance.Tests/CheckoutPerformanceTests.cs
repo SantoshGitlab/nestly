@@ -51,7 +51,7 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
             new SlotBlackoutRepository(context),
             new SlotBookingPolicyRepository(context),
             new SlotCapacityRepository(context),
-            TimeProvider.System);
+            TestServices.Clock());
 
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
@@ -65,7 +65,9 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService, new BookingRepository(context), new CustomerRepository(context), couponService, slotAvailabilityService,
@@ -115,6 +117,10 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
             var zone = new Zone(Guid.NewGuid(), city.Id, $"Zone {i}");
             var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
             var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, $"Locality {i}");
+            // As CustomerAddressService does on save - a booking is only
+            // accepted for an address that resolves to the service area it is
+            // being booked in.
+            address.LinkToGeography(pincode.Id, locality.Id);
             var window = new SlotWindow(Guid.NewGuid(), city.Id, $"Morning {i}", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
             var rule = new SlotWindowRule(Guid.NewGuid(), window.Id, futureDate.DayOfWeek);
 

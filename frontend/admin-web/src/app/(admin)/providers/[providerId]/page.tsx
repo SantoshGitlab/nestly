@@ -193,11 +193,19 @@ export default function ProviderDetailPage() {
   };
 
   const updateMutation = useMutation({
-    mutationFn: (values: { legalName: string; displayName: string; email: string }) =>
+    mutationFn: (values: {
+      legalName: string;
+      displayName: string;
+      email: string;
+      latitude: number | null;
+      longitude: number | null;
+    }) =>
       updateProvider(providerId, {
         legalName: values.legalName,
         displayName: values.displayName,
         email: values.email || undefined,
+        latitude: values.latitude,
+        longitude: values.longitude,
       }),
     onSuccess: () => onSuccess("Profile updated."),
     onError,
@@ -765,11 +773,25 @@ function ProfileEditor({
 }: {
   provider: ProviderDetail;
   saving: boolean;
-  onSave: (values: { legalName: string; displayName: string; email: string }) => void;
+  onSave: (values: {
+    legalName: string;
+    displayName: string;
+    email: string;
+    latitude: number | null;
+    longitude: number | null;
+  }) => void;
 }) {
   const [legalName, setLegalName] = useState(provider.legalName);
   const [displayName, setDisplayName] = useState(provider.displayName);
   const [email, setEmail] = useState(provider.email ?? "");
+  const [latitude, setLatitude] = useState(provider.latitude?.toString() ?? "");
+  const [longitude, setLongitude] = useState(provider.longitude?.toString() ?? "");
+
+  // Both-or-neither, mirroring Provider.UpdateLocation's own guard - caught
+  // here too so the button disables instead of round-tripping a 400.
+  const hasLatitude = latitude.trim() !== "";
+  const hasLongitude = longitude.trim() !== "";
+  const locationIncomplete = hasLatitude !== hasLongitude;
 
   return (
     <div className="flex flex-col gap-4">
@@ -778,12 +800,37 @@ function ProfileEditor({
         <Field label="Display name" required value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
       </FormGrid>
+      <FormGrid columns={3}>
+        <Field
+          label="Latitude"
+          type="number"
+          step="any"
+          hint="Feeds automatic job assignment by nearest provider. Leave both blank if unknown."
+          value={latitude}
+          onChange={(e) => setLatitude(e.target.value)}
+        />
+        <Field
+          label="Longitude"
+          type="number"
+          step="any"
+          value={longitude}
+          onChange={(e) => setLongitude(e.target.value)}
+        />
+      </FormGrid>
       <FormActions align="start">
         <Button
           variant="secondary"
-          disabled={!legalName.trim() || !displayName.trim()}
+          disabled={!legalName.trim() || !displayName.trim() || locationIncomplete}
           loading={saving}
-          onClick={() => onSave({ legalName, displayName, email })}
+          onClick={() =>
+            onSave({
+              legalName,
+              displayName,
+              email,
+              latitude: latitude.trim() === "" ? null : Number(latitude),
+              longitude: longitude.trim() === "" ? null : Number(longitude),
+            })
+          }
         >
           Save profile
         </Button>

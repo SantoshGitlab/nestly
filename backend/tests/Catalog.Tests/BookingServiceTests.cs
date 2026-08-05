@@ -36,7 +36,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -44,7 +44,9 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -58,7 +60,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context));
@@ -81,6 +83,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        address.LinkToGeography(pincode.Id, locality.Id);
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 500m);
         var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Sofa Cleaning", 150m);
@@ -240,6 +243,87 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         var afterAccept = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
         afterAccept.Value.Status.Should().Be(BookingStatus.Assigned, "Booking.Status has no separate accepted state by design (SRS 13.1)");
         afterAccept.Value.ProviderAssignmentStatus.Should().Be(BookingProviderAssignmentStatus.Accepted, "the accept must be visible to the customer the moment it happens");
+    }
+
+    /// <summary>Task 241: the core dedup case - a retried request carrying the same key must not create a second booking.</summary>
+    [Fact]
+    public async Task CreateAsync_with_a_repeated_idempotency_key_returns_the_same_booking_instead_of_a_duplicate()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        var request = RequestFor(fixture) with { IdempotencyKey = "checkout-attempt-1" };
+
+        using var firstContext = _db.CreateContext();
+        var first = await BuildService(firstContext).CreateAsync(fixture.Customer.Id, request);
+        first.IsSuccess.Should().BeTrue();
+
+        using var retryContext = _db.CreateContext();
+        var retry = await BuildService(retryContext).CreateAsync(fixture.Customer.Id, request);
+
+        retry.IsSuccess.Should().BeTrue();
+        retry.Value.Id.Should().Be(first.Value.Id, "a replayed key must resolve to the booking already created, not a second one");
+
+        using var readContext = _db.CreateContext();
+        var all = await new BookingRepository(readContext).ListByCustomerAsync(fixture.Customer.Id, Enum.GetValues<BookingStatus>());
+        all.Should().ContainSingle();
+    }
+
+    /// <summary>Task 241: a different key (a genuinely new attempt - e.g. the customer changed something and tried again) must not be treated as a duplicate.</summary>
+    [Fact]
+    public async Task CreateAsync_with_a_different_idempotency_key_creates_a_separate_booking()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        using (var firstContext = _db.CreateContext())
+        {
+            var first = await BuildService(firstContext).CreateAsync(
+                fixture.Customer.Id, RequestFor(fixture) with { IdempotencyKey = "checkout-attempt-1" });
+            first.IsSuccess.Should().BeTrue();
+        }
+
+        using var secondContext = _db.CreateContext();
+        var second = await BuildService(secondContext).CreateAsync(
+            fixture.Customer.Id, RequestFor(fixture) with { IdempotencyKey = "checkout-attempt-2" });
+
+        second.IsSuccess.Should().BeTrue();
+
+        using var readContext = _db.CreateContext();
+        var all = await new BookingRepository(readContext).ListByCustomerAsync(fixture.Customer.Id, Enum.GetValues<BookingStatus>());
+        all.Should().HaveCount(2);
+    }
+
+    /// <summary>No key supplied at all (an older client, or a caller like RecurringBookingSchedulerService) gets no dedup protection - same behaviour as before task 241.</summary>
+    [Fact]
+    public async Task CreateAsync_with_no_idempotency_key_creates_a_new_booking_every_call()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        using (var firstContext = _db.CreateContext())
+        {
+            var first = await BuildService(firstContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            first.IsSuccess.Should().BeTrue();
+        }
+
+        using var secondContext = _db.CreateContext();
+        var second = await BuildService(secondContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        second.IsSuccess.Should().BeTrue();
+
+        using var readContext = _db.CreateContext();
+        var all = await new BookingRepository(readContext).ListByCustomerAsync(fixture.Customer.Id, Enum.GetValues<BookingStatus>());
+        all.Should().HaveCount(2);
     }
 
     [Fact]

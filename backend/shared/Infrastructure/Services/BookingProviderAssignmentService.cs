@@ -23,7 +23,28 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         _assignmentRepository = assignmentRepository;
     }
 
-    public async Task<Result<BookingProviderAssignmentResponse>> AssignAsync(Guid bookingId, Guid adminUserId, AssignProviderRequest request)
+    public Task<Result<BookingProviderAssignmentResponse>> AssignAsync(Guid bookingId, Guid adminUserId, AssignProviderRequest request) =>
+        AssignInternalAsync(
+            bookingId, request.ProviderId, BookingAssignedByType.Admin, adminUserId, request.ResponseDeadline, "Provider assigned by admin.");
+
+    /// <summary>
+    /// Phase 14 (task 246): the automatic-assignment engine's counterpart to
+    /// <see cref="AssignAsync"/> - same validation and PROVIDER.md OPEN
+    /// DECISIONS #5 supersede-the-outstanding-row behaviour, but records
+    /// <see cref="BookingAssignedByType.System"/> with no acting admin id,
+    /// exactly what that column has existed to support since task 147
+    /// (PROVIDER.md OPEN DECISIONS #1: "the bridge table's assigned_by
+    /// column already distinguishes admin from system, so an automatic
+    /// assignment engine can be added later purely as a new writer of that
+    /// same table" - this is that later writer). No response deadline: task
+    /// 247's rejection-retry chain moves on to the next candidate itself
+    /// rather than waiting one out.
+    /// </summary>
+    public Task<Result<BookingProviderAssignmentResponse>> AssignBySystemAsync(Guid bookingId, Guid providerId) =>
+        AssignInternalAsync(bookingId, providerId, BookingAssignedByType.System, adminUserId: null, responseDeadline: null, "Provider auto-assigned by the matching engine.");
+
+    private async Task<Result<BookingProviderAssignmentResponse>> AssignInternalAsync(
+        Guid bookingId, Guid providerId, BookingAssignedByType assignedByType, Guid? adminUserId, DateTime? responseDeadline, string reason)
     {
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking is null)
@@ -31,7 +52,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             return Error.NotFound("BookingProviderAssignment.BookingNotFound", "Booking was not found.");
         }
 
-        var provider = await _providerRepository.GetByIdAsync(request.ProviderId);
+        var provider = await _providerRepository.GetByIdAsync(providerId);
         if (provider is null)
         {
             return Error.NotFound("BookingProviderAssignment.ProviderNotFound", "Provider was not found.");
@@ -59,15 +80,15 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         }
 
         var assignment = new BookingProviderAssignment(
-            Guid.NewGuid(), bookingId, request.ProviderId, BookingAssignedByType.Admin, adminUserId, request.ResponseDeadline);
+            Guid.NewGuid(), bookingId, providerId, assignedByType, adminUserId, responseDeadline);
         await _assignmentRepository.AddAsync(assignment);
 
         if (booking.Status == BookingStatus.AwaitingFulfilment)
         {
-            booking.TransitionTo(BookingStatus.Assigned, "Provider assigned by admin.");
+            booking.TransitionTo(BookingStatus.Assigned, reason);
         }
 
-        booking.AssignProvider(request.ProviderId);
+        booking.AssignProvider(providerId);
         await _bookingRepository.UpdateAsync(booking);
 
         return ToResponse(assignment, provider.DisplayName);

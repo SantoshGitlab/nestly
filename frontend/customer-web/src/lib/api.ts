@@ -57,6 +57,19 @@ export function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
+/**
+ * The backend's machine-readable error code for a failed request, or null if
+ * this wasn't an API failure.
+ *
+ * Every domain error the API returns carries its code (`Coupon.NotActive`,
+ * `Booking.SlotCapacityReached`, …) as the ProblemDetails `title`, with the
+ * human wording in `detail`. Branching on the code lets a screen react to the
+ * *kind* of failure without matching on message text, which changes.
+ */
+export function errorCode(error: unknown): string | null {
+  return error instanceof ApiError ? (error.problem?.title ?? null) : null;
+}
+
 export interface ApiFetchOptions extends RequestInit {
   /** Attaches the stored bearer token. Required by every [Authorize] endpoint. */
   authenticated?: boolean;

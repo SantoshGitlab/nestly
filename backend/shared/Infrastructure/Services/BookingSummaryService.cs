@@ -1,11 +1,14 @@
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
+using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
+using Nestly.Infrastructure.Options;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -25,6 +28,8 @@ public class BookingSummaryService : IBookingSummaryService
     private readonly IPriceCalculationService _priceCalculationService;
     private readonly ICouponService _couponService;
     private readonly ISubscriptionBenefitService _subscriptionBenefitService;
+    private readonly IServiceabilityRepository _serviceabilityRepository;
+    private readonly BookingOptions _bookingOptions;
 
     public BookingSummaryService(
         IServiceRepository serviceRepository,
@@ -33,8 +38,12 @@ public class BookingSummaryService : IBookingSummaryService
         ISlotAvailabilityService slotAvailabilityService,
         IPriceCalculationService priceCalculationService,
         ICouponService couponService,
-        ISubscriptionBenefitService subscriptionBenefitService)
+        ISubscriptionBenefitService subscriptionBenefitService,
+        IServiceabilityRepository serviceabilityRepository,
+        IOptions<BookingOptions> bookingOptions)
     {
+        _serviceabilityRepository = serviceabilityRepository;
+        _bookingOptions = bookingOptions.Value;
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
         _addressRepository = addressRepository;
@@ -51,16 +60,41 @@ public class BookingSummaryService : IBookingSummaryService
             return Error.Validation("Booking.InvalidQuantity", "Quantity must be positive.");
         }
 
+        if (request.Quantity > _bookingOptions.MaxQuantityPerBooking)
+        {
+            return Error.Validation(
+                "Booking.QuantityTooLarge",
+                $"A single booking can be placed for at most {_bookingOptions.MaxQuantityPerBooking} units. Please split larger orders across bookings.");
+        }
+
         var service = await _serviceRepository.GetByIdAsync(request.ServiceId);
         if (service is null || !service.IsActive)
         {
             return Error.NotFound("Booking.ServiceNotFound", "The specified service does not exist.");
         }
 
+        if (!service.IsQuantityAllowed && request.Quantity != 1)
+        {
+            return Error.Validation("Booking.QuantityNotAllowed", "This service is booked one at a time.");
+        }
+
         var address = await _addressRepository.GetByIdAsync(request.AddressId);
         if (address is null || address.CustomerId != customerId)
         {
             return Error.NotFound("Booking.AddressNotFound", "The specified address does not exist.");
+        }
+
+        // Everything downstream - serviceability, slots, city pricing - is
+        // computed from the client-supplied LocalityId and CityId, while the
+        // service is actually delivered to AddressId. Nothing tied those three
+        // together, so a booking could be priced and slotted against one city
+        // while being delivered to an address in another (the default address
+        // is pre-selected for the customer, and nobody re-reads a default), and
+        // a hand-crafted request could pick whichever CityId priced cheapest.
+        var geographyResult = await ValidateGeographyAsync(request, address);
+        if (geographyResult.IsFailure)
+        {
+            return geographyResult.Error;
         }
 
         var addOnSummaries = new List<ServiceAddOnSummaryResponse>(request.AddOns.Count);
@@ -89,7 +123,15 @@ public class BookingSummaryService : IBookingSummaryService
         var slot = availability.Value.Slots.FirstOrDefault(s => s.SlotWindowId == request.SlotWindowId);
         if (slot is null)
         {
-            return Error.Business("Booking.SlotNotAvailable", "The selected slot is no longer available.");
+            // "The slot is full" is one outcome with one code and one status
+            // (409), whether it is caught here - because availability already
+            // filtered the window out - or by the atomic reservation in
+            // BookingService when two customers race for the last seat.
+            // Anything else about the slot (cutoff, blackout, out of range) is
+            // a business-rule failure, not contention.
+            return availability.Value.Reason == SlotUnavailabilityReason.FullyBooked
+                ? Error.Conflict("Booking.SlotCapacityReached", DescribeSlotUnavailability(availability.Value.Reason))
+                : Error.Business("Booking.SlotNotAvailable", DescribeSlotUnavailability(availability.Value.Reason));
         }
 
         var priceResult = await _priceCalculationService.CalculateAsync(
@@ -155,4 +197,70 @@ public class BookingSummaryService : IBookingSummaryService
 
         return Result.Success(response);
     }
+
+    /// <summary>
+    /// Ties the three geography inputs of a booking request together: the
+    /// locality the slots and serviceability are computed from, the city the
+    /// price is computed from, and the address the professional is actually
+    /// sent to. All three are supplied by the client and were previously
+    /// trusted independently.
+    ///
+    /// The locality is the anchor - its city and pincode are resolved
+    /// server-side, and both of the other two must agree with it.
+    /// </summary>
+    private async Task<Result> ValidateGeographyAsync(BookingSummaryRequest request, Domain.CustomerAddress address)
+    {
+        var geography = await _serviceabilityRepository.GetCityAndPincodeForLocalityAsync(request.LocalityId);
+        if (geography is null)
+        {
+            return Result.Failure(Error.NotFound("Booking.LocalityNotFound", "The specified locality does not exist."));
+        }
+
+        var (localityCityId, localityPincodeId) = geography.Value;
+
+        if (request.CityId != localityCityId)
+        {
+            // City drives city-specific pricing (ServiceCityPrice), so an
+            // unchecked CityId is a price-manipulation vector, not just an
+            // inconsistency.
+            return Result.Failure(Error.Validation(
+                "Booking.CityMismatch",
+                "The selected city does not match the selected locality."));
+        }
+
+        // PincodeId is resolved from the address's free-text pincode when the
+        // address is saved (CustomerAddress.LinkToGeography). Null means that
+        // pincode matched no active pincode in the geography master, so there
+        // is no service area this address belongs to.
+        if (address.PincodeId is null)
+        {
+            return Result.Failure(Error.Business(
+                "Booking.AddressNotServiceable",
+                "We don't serve this address's pincode yet. Please choose or add another address."));
+        }
+
+        if (address.PincodeId != localityPincodeId)
+        {
+            return Result.Failure(Error.Business(
+                "Booking.AddressOutsideSelectedArea",
+                $"The selected address ({address.City} {address.Pincode}) is outside the area you're booking in. Choose an address in this area, or switch your location."));
+        }
+
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Customer-facing wording for a slot that isn't in the available set,
+    /// matching <c>SlotAvailabilityService.DescribeUnavailability</c> - a
+    /// booking blocked because the day is full should not read the same as
+    /// one blocked because bookings closed an hour ago.
+    /// </summary>
+    private static string DescribeSlotUnavailability(SlotUnavailabilityReason reason) => reason switch
+    {
+        SlotUnavailabilityReason.FullyBooked => "This slot has just been fully booked. Please choose another.",
+        SlotUnavailabilityReason.CutoffPassed => "Bookings for this slot have closed. Please choose a later slot.",
+        SlotUnavailabilityReason.Blackout => "We aren't taking bookings on this date. Please choose another day.",
+        SlotUnavailabilityReason.DateOutOfBookableRange => "This date is outside the window we can book. Please choose another day.",
+        _ => "The selected slot is no longer available.",
+    };
 }

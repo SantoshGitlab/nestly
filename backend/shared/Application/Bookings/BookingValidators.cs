@@ -11,6 +11,9 @@ public class BookingSummaryRequestValidator : AbstractValidator<BookingSummaryRe
         RuleFor(x => x.AddressId).NotEmpty();
         RuleFor(x => x.LocalityId).NotEmpty();
         RuleFor(x => x.SlotWindowId).NotEmpty();
+        // Upper bound is enforced in BookingSummaryService against the
+        // configured Booking:MaxQuantityPerBooking - the business limit lives
+        // with the business rule. This is the structural floor only.
         RuleFor(x => x.Quantity).GreaterThan(0);
         RuleForEach(x => x.AddOns).ChildRules(addOn =>
         {

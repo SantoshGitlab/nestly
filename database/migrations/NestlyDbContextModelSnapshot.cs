@@ -523,6 +523,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("customer_name_snapshot");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
                     b.Property<decimal>("PlatformFeeSnapshot")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
@@ -610,6 +615,10 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CreatedAtUtc")
                         .HasDatabaseName("ix_booking_created_at_utc");
+
+                    b.HasIndex("CustomerId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_customer_id_idempotency_key");
 
                     b.HasIndex("CustomerId", "Status")
                         .HasDatabaseName("ix_booking_customer_id_status");
@@ -2721,11 +2730,21 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("email");
 
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("latitude");
+
                     b.Property<string>("LegalName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("legal_name");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("longitude");
 
                     b.Property<string>("OnboardingStatus")
                         .IsRequired()

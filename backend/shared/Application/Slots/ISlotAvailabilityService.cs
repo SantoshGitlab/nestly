@@ -25,4 +25,13 @@ public interface ISlotAvailabilityService
     /// capacity (null) always succeeds without reserving anything.
     /// </summary>
     Task<Result> ReserveSlotAsync(Guid slotWindowId, DateOnly date);
+
+    /// <summary>
+    /// Hands back the seat a booking was holding on this window+date - the
+    /// other half of <see cref="ReserveSlotAsync"/>. Must be called whenever a
+    /// booking stops occupying a slot: cancelled by either actor, or moved off
+    /// it by a reschedule. A no-op for windows with no configured capacity,
+    /// and safe to call more than once.
+    /// </summary>
+    Task ReleaseSlotAsync(Guid slotWindowId, DateOnly date);
 }

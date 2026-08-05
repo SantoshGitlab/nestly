@@ -181,7 +181,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -189,7 +189,9 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -203,7 +205,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context));
@@ -224,6 +226,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
         var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        address.LinkToGeography(pincode.Id, locality.Id);
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 999m);
         var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -292,7 +295,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new RefundService(
                 new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
                 new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)), BuildGateway(), context),
-            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TimeProvider.System, Options.Create(new CancellationPolicyOptions()));
+            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TestServices.SlotAvailability(context), TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions()));
 
         var result = await service.GetPolicyAsync(customer.Id, bookingId);
 
@@ -310,7 +313,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new RefundService(
                 new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
                 new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)), BuildGateway(), context),
-            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TimeProvider.System, Options.Create(new CancellationPolicyOptions()));
+            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TestServices.SlotAvailability(context), TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions()));
 
         var result = await service.GetPolicyAsync(customer.Id, bookingId);
 
@@ -328,8 +331,8 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
-                new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TimeProvider.System),
-            new BookingRescheduleRepository(context), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
+                new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
+            new BookingRescheduleRepository(context), TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
 
         var result = await service.GetEligibilityAsync(customer.Id, bookingId);
 
@@ -347,8 +350,8 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
-                new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TimeProvider.System),
-            new BookingRescheduleRepository(context), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
+                new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
+            new BookingRescheduleRepository(context), TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
 
         var result = await service.GetEligibilityAsync(customer.Id, bookingId);
 

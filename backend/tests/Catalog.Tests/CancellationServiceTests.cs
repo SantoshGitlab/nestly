@@ -40,7 +40,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -48,7 +48,9 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -62,7 +64,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context));
@@ -87,6 +89,8 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context),
             new BookingCancellationRepository(context),
             new BookingProviderAssignmentRepository(context),
+            TestServices.SlotAvailability(context, timeProvider),
+            TestServices.Clock(timeProvider),
             timeProvider,
             Options.Create(policy ?? new CancellationPolicyOptions()));
 
@@ -113,6 +117,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
             var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
             var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+            address.LinkToGeography(pincode.Id, locality.Id);
             var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
             var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", servicePrice);
             var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", slotStart, TimeSpan.FromHours(13));

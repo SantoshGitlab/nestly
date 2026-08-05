@@ -60,6 +60,41 @@ public class ProviderDomainTests
     }
 
     [Fact]
+    public void UpdateLocation_sets_both_coordinates_together()
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+
+        provider.UpdateLocation(12.9716m, 77.5946m);
+
+        provider.Latitude.Should().Be(12.9716m);
+        provider.Longitude.Should().Be(77.5946m);
+    }
+
+    [Fact]
+    public void UpdateLocation_clears_a_previously_set_location_when_given_both_null()
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+        provider.UpdateLocation(12.9716m, 77.5946m);
+
+        provider.UpdateLocation(null, null);
+
+        provider.Latitude.Should().BeNull();
+        provider.Longitude.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(12.9716, null)]
+    [InlineData(null, 77.5946)]
+    public void UpdateLocation_rejects_only_one_coordinate_set(double? latitude, double? longitude)
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+
+        Action act = () => provider.UpdateLocation((decimal?)latitude, (decimal?)longitude);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
     public void A_kyc_document_starts_pending_and_records_the_admin_who_approves_it()
     {
         var adminUserId = Guid.NewGuid();

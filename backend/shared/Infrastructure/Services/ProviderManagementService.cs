@@ -87,6 +87,7 @@ public class ProviderManagementService : IProviderManagementService
         try
         {
             provider.UpdateProfile(request.LegalName, request.DisplayName, request.Email);
+            provider.UpdateLocation(request.Latitude, request.Longitude);
         }
         catch (ArgumentException ex)
         {

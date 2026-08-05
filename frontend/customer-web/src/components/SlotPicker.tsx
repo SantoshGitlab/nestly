@@ -4,6 +4,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, Button, Skeleton, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { SlotUnavailabilityReason } from "@/lib/types";
 import type { SlotAvailability } from "@/lib/types";
 
 /** How many upcoming days are offered in the date strip (SRS 11.8.2's "available dates"). */
@@ -42,6 +43,52 @@ function formatDateLabel(iso: string): { weekday: string; day: string } {
   };
 }
 
+/**
+ * What to tell the customer about a date with nothing bookable.
+ *
+ * The availability API now reports *why* a date came back empty. Before that
+ * every empty list was rendered as "Fully booked", so opening the app in the
+ * evening - when the day's windows have simply closed - announced the service
+ * as fully booked. That reads as scarcity, and it isn't true: the customer's
+ * only real problem is that they need to book for tomorrow.
+ */
+const UNAVAILABILITY_COPY: Record<
+  SlotUnavailabilityReason,
+  { title: string; description: string; chip: string } | null
+> = {
+  [SlotUnavailabilityReason.None]: null,
+  [SlotUnavailabilityReason.NotServiceable]: {
+    title: "Not available here",
+    description: "This service isn't available at this address.",
+    chip: "Not available at this address",
+  },
+  [SlotUnavailabilityReason.DateOutOfBookableRange]: {
+    title: "Too far ahead",
+    description: "We're not taking bookings this far in advance yet — try a nearer date.",
+    chip: "Outside the booking window",
+  },
+  [SlotUnavailabilityReason.Blackout]: {
+    title: "We're not working this day",
+    description: "We aren't taking bookings on this date — pick another day from the strip above.",
+    chip: "Not taking bookings",
+  },
+  [SlotUnavailabilityReason.NoWindowsConfigured]: {
+    title: "No slots on this day",
+    description: "We don't run this service on this day — pick another day from the strip above.",
+    chip: "No slots this day",
+  },
+  [SlotUnavailabilityReason.CutoffPassed]: {
+    title: "Bookings have closed for this date",
+    description: "It's too late to book this one — the next day is still open.",
+    chip: "Bookings closed for this date",
+  },
+  [SlotUnavailabilityReason.FullyBooked]: {
+    title: "Fully booked",
+    description: "No slots left on this date — pick another day from the strip above.",
+    chip: "Fully booked",
+  },
+};
+
 /** Buckets a slot by its start hour so the list reads as a day, not a flat wall of chips. */
 const PARTS = [
   { key: "morning", label: "Morning", until: 12 },
@@ -60,11 +107,12 @@ function partOfDay(startTime: string): (typeof PARTS)[number]["key"] {
  * Every one of the next VISIBLE_DAYS days is fetched up front (GET
  * /slots?serviceId&localityId&date, one call per date) rather than only the
  * selected date - the availability API only ever returns the slots that ARE
- * bookable (cutoff/blackout/advance-window filtering happens server-side, see
- * SlotAvailabilityService), it never returns a disabled slot with a reason.
+ * bookable (serviceability, cutoff, blackout, advance-window and per-day
+ * capacity filtering all happen server-side, see SlotAvailabilityService), and
+ * reports why an empty date is empty rather than returning disabled slots.
  * Prefetching lets the date strip itself show which dates have nothing
- * bookable (SRS 11.8.2 "disabled slots"), instead of the customer discovering
- * that only after tapping in.
+ * bookable (SRS 11.8.2 "disabled slots"), and say why, instead of the customer
+ * discovering that only after tapping in.
  *
  * Stale-slot handling (task 63c, SRS 11.8.3 "must fail gracefully if no
  * longer available") is deliberately NOT done here: this component only
@@ -130,6 +178,7 @@ export function SlotPicker({
                 const notServiceable = query.isSuccess && !query.data.isServiceable;
                 const disabled = knownEmpty || notServiceable;
                 const isSelected = date === selectedDate;
+                const emptyReason = query.isSuccess ? query.data.reason : undefined;
 
                 return (
                   <button
@@ -138,13 +187,15 @@ export function SlotPicker({
                     disabled={disabled}
                     aria-pressed={isSelected}
                     // Without this a disabled chip is just faded, leaving the
-                    // customer to guess why they cannot pick it.
+                    // customer to guess why they cannot pick it. The reason
+                    // comes from the API rather than being assumed, so a date
+                    // past its cutoff no longer claims to be fully booked.
                     title={
-                      notServiceable
-                        ? "Not available at this address"
-                        : knownEmpty
-                          ? "Fully booked"
-                          : undefined
+                      disabled
+                        ? ((emptyReason !== undefined
+                            ? UNAVAILABILITY_COPY[emptyReason]?.chip
+                            : undefined) ?? "No slots on this date")
+                        : undefined
                     }
                     onClick={() => {
                       onDateChange(date);
@@ -190,12 +241,16 @@ export function SlotPicker({
             {describeError(selectedQuery.error)}
           </Alert>
         ) : !selectedQuery.data.isServiceable ? (
-          <Alert tone="error" title="Not available here">
-            This service isn&apos;t available at this address.
+          <Alert tone="error" title={UNAVAILABILITY_COPY[SlotUnavailabilityReason.NotServiceable]!.title}>
+            {UNAVAILABILITY_COPY[SlotUnavailabilityReason.NotServiceable]!.description}
           </Alert>
         ) : selectedQuery.data.slots.length === 0 ? (
-          <Alert tone="info" title="Fully booked">
-            No slots left on this date — pick another day from the strip above.
+          <Alert
+            tone="info"
+            title={UNAVAILABILITY_COPY[selectedQuery.data.reason]?.title ?? "No slots on this date"}
+          >
+            {UNAVAILABILITY_COPY[selectedQuery.data.reason]?.description ??
+              "Pick another day from the strip above."}
           </Alert>
         ) : (
           <div className="flex flex-col gap-4">

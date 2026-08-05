@@ -10,6 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Observability;
+using Nestly.Application.Abstractions.Time;
 using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
 using Nestly.Application.Chat;
@@ -174,6 +175,20 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(RecurringBookingOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 240: not a secret, has a safe production-sensible default -
+        // same reasoning as CommissionOptions/ReferralOptions above.
+        services
+            .AddOptions<BookingExpiryOptions>()
+            .Bind(configuration.GetSection(BookingExpiryOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Tasks 247/248: not a secret, has safe production-sensible
+        // defaults - same reasoning as CommissionOptions above.
+        services
+            .AddOptions<AutoAssignmentOptions>()
+            .Bind(configuration.GetSection(AutoAssignmentOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
@@ -268,6 +283,17 @@ public static class DependencyInjection
         services.AddScoped<ISlotCapacityRepository, SlotCapacityRepository>();
         services.AddScoped<ISlotManagementService, SlotManagementService>();
         services.AddSingleton(TimeProvider.System);
+
+        // The business wall-clock every slot/cutoff/policy comparison is made
+        // against. Singleton: it holds only the resolved TimeZoneInfo and the
+        // (singleton) TimeProvider, and resolving the zone once at startup is
+        // what makes a bad BusinessTime:TimeZoneId fail fast.
+        services
+            .AddOptions<BusinessTimeOptions>()
+            .Bind(configuration.GetSection(BusinessTimeOptions.SectionName))
+            .ValidateDataAnnotations();
+        services.AddSingleton<IBusinessClock, BusinessClock>();
+
         services.AddScoped<ISlotAvailabilityService, SlotAvailabilityService>();
         services.AddScoped<IServiceCityPriceRepository, ServiceCityPriceRepository>();
         services.AddScoped<ICityPricingPolicyRepository, CityPricingPolicyRepository>();
@@ -306,6 +332,10 @@ public static class DependencyInjection
         services.AddScoped<IServiceManagementService, ServiceManagementService>();
         services.AddScoped<IServiceAddOnManagementService, ServiceAddOnManagementService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
+        services
+            .AddOptions<BookingOptions>()
+            .Bind(configuration.GetSection(BookingOptions.SectionName))
+            .ValidateDataAnnotations();
         services.AddScoped<IBookingSummaryService, BookingSummaryService>();
         services.AddScoped<IBookingRepository, BookingRepository>();
         services.AddScoped<IBookingService, BookingService>();
@@ -356,6 +386,13 @@ public static class DependencyInjection
         // self-service auth/onboarding (tasks 145a-146c).
         services.AddScoped<IBookingProviderAssignmentRepository, BookingProviderAssignmentRepository>();
         services.AddScoped<IBookingProviderAssignmentService, BookingProviderAssignmentService>();
+        // Phase 14 (tasks 242-250): the automatic-assignment engine's
+        // candidate ranking - a new writer of BookingProviderAssignment
+        // alongside the manual admin path above (PROVIDER.md OPEN DECISIONS
+        // #1), never replacing it.
+        services.AddScoped<IProviderMatchingService, ProviderMatchingService>();
+        services.AddScoped<IProviderCapacityRepository, ProviderCapacityRepository>();
+        services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
         // Task 195: completion verification (photo + checklist proof gating
         // the InProgress -> Completed transition, task 196) - registered
         // here rather than beside IBookingRepository above since every
@@ -453,6 +490,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
+        services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
         services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
         services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
         services.AddScoped<INestlyCoinsAdminService, NestlyCoinsAdminService>();
