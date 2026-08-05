@@ -513,15 +513,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   );
 });
 
-export function Checkbox({
-  label,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+export const Checkbox = forwardRef<
+  HTMLInputElement,
+  InputHTMLAttributes<HTMLInputElement> & { label: string }
+>(function Checkbox({ label, ...props }, ref) {
   const inputId = controlId(props.id, props.name, `checkbox-${label}`);
   return (
     <label htmlFor={inputId} className="flex cursor-pointer items-center gap-2.5 text-sm text-fg">
       <input
         {...props}
+        ref={ref}
         id={inputId}
         type="checkbox"
         className="h-4 w-4 shrink-0 cursor-pointer rounded border-line-strong text-brand-600 accent-brand-600"
@@ -529,7 +530,7 @@ export function Checkbox({
       {label}
     </label>
   );
-}
+});
 
 interface CheckboxFieldProps {
   label: string;
