@@ -72,3 +72,16 @@ export function subscribeToAuthChanges(listener: () => void): () => void {
   window.addEventListener(AUTH_CHANGED_EVENT, listener);
   return () => window.removeEventListener(AUTH_CHANGED_EVENT, listener);
 }
+
+/**
+ * Validates a `?redirect=` query value before navigating to it. The value
+ * comes straight off the URL, so it must be constrained to a same-origin
+ * relative path - passing it through unchecked would make this an open
+ * redirect (`redirect=https://evil.example` or the protocol-relative
+ * `redirect=//evil.example`, which browsers treat as absolute).
+ */
+export function safeRedirectTarget(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("://")) return null;
+  return raw;
+}

@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -15,7 +15,7 @@ import {
 } from "@/components/auth-ui";
 import { Alert, Button, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { storeSession } from "@/lib/auth";
+import { safeRedirectTarget, storeSession } from "@/lib/auth";
 import type { LoginResponse } from "@/lib/types";
 import {
   ADMIN_WEB_URL,
@@ -82,6 +82,17 @@ const SIGN_IN_MODES = [
  * origin still works.
  */
 export default function LoginPage() {
+  // Suspense boundary required around useSearchParams (used below by
+  // OtpLogin/PasswordLogin to resume the customer's original destination
+  // after sign-in) - same requirement/pattern as booking/summary/page.tsx.
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const [accountType, setAccountType] = useState<AccountType>("customer");
   const [mode, setMode] = useState<Mode>("otp");
 
@@ -135,6 +146,7 @@ export default function LoginPage() {
 
 function OtpLogin() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<"request" | "verify">("request");
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -194,7 +206,7 @@ function OtpLogin() {
         body: JSON.stringify(values),
       });
       storeSession(session);
-      router.push("/profile");
+      router.push(safeRedirectTarget(searchParams.get("redirect")) ?? "/profile");
     } catch (err) {
       setError(describeError(err));
     }
@@ -257,6 +269,7 @@ function OtpLogin() {
 
 function PasswordLogin() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof passwordSchema>>({
@@ -272,7 +285,7 @@ function PasswordLogin() {
         body: JSON.stringify(values),
       });
       storeSession(session);
-      router.push("/profile");
+      router.push(safeRedirectTarget(searchParams.get("redirect")) ?? "/profile");
     } catch (err) {
       setError(describeError(err));
     }

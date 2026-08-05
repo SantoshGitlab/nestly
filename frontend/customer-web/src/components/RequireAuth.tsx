@@ -28,7 +28,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (authed === false) {
-      router.replace("/login");
+      // Plain window.location rather than usePathname/useSearchParams: those
+      // hooks would opt this component (used by ~20 routes) out of static
+      // rendering and force a Suspense boundary onto every one of them. This
+      // effect only ever runs client-side already (authed starts undefined
+      // until the first client render), so window.location is always safe
+      // here and the redirect target still round-trips through /login's own
+      // useSearchParams on the other end.
+      const target = window.location.pathname + window.location.search;
+      router.replace(`/login?redirect=${encodeURIComponent(target)}`);
     }
   }, [authed, router]);
 
