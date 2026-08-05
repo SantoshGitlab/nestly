@@ -15,7 +15,7 @@ import { describeError } from "@/lib/api";
  * destructive action goes through `ConfirmDialog`.
  *
  * This lives outside `components/ui.tsx` on purpose: that file is byte-identical
- * across customer-web, admin-web and partner-web and is frozen for this phase.
+ * across customer-web, admin-web and provider-web and is frozen for this phase.
  * These primitives are admin-shaped (dense lists, filter forms, bulk pagers)
  * and are additive — nothing here re-implements a kit component, it composes
  * them. It can be ported to the other apps as a whole file if they ever grow
@@ -681,7 +681,7 @@ export function Pagination({
 
 /**
  * One confirmation shape for every irreversible or high-blast-radius admin
- * action — suspend a partner, delete a banner, cancel a booking, force a
+ * action — suspend a provider, delete a banner, cancel a booking, force a
  * refund. `window.confirm` was the alternative and it cannot be styled, cannot
  * show the record being acted on, and cannot show an in-flight state.
  */

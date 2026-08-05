@@ -2,7 +2,7 @@
 
 **Phase 12 is complete as of 2026-08-05 (tip commit — see `git log -1`).**
 All rows 209-229 are `done` in `tasks.csv`, with one deliberate, documented
-gap: 5 of `partner-web`'s OTP-gated screens in `docs/UI-GUIDE.md` still show
+gap: 5 of `provider-web`'s OTP-gated screens in `docs/UI-GUIDE.md` still show
 the pre-Phase-12 design (see row 229's note and the UI-GUIDE.md "Refreshed
 for Phase 12" section for why and what it'd take to close). Everything below
 this point is the original working history, kept for context on how the
@@ -30,13 +30,13 @@ without a real passing `npm run build` (all three frontends are Next projects;
 | 211 | Dark mode + theme toggle | **done** |
 | 212 | Customer app shell | **done** |
 | 213 | Admin app shell | **done** |
-| 214 | Partner app shell | **done** |
+| 214 | Provider app shell | **done** |
 | 215 | Auth screens (all 3 apps) | **done** |
 | 216 | Customer home & discovery | **done** |
 | 217 | Service detail & slots | **done** |
 | 218 | Customer booking flow | **done** |
 | 219 | Customer post-booking screens | **done** |
-| 223 | Partner screens | **done** |
+| 223 | Provider screens | **done** |
 | 221 | Admin table system | **partial** |
 | 222 | Admin module pass | **partial** — 4 of 16 modules |
 | 228 | Bug sweep | **partial** — date class closed |
@@ -48,7 +48,7 @@ before starting — several rows are further along than the status suggests, and
 
 ## Highest-value next step
 
-**Row 222's remaining modules.** Done so far: catalog, customers, partners,
+**Row 222's remaining modules.** Done so far: catalog, customers, providers,
 pricing. `cms`, `coupons` and `serviceability` have had only their `*Tabs.tsx`
 converted; `slots` has only `_components/WindowsSection.tsx`. Untouched:
 support, reviews, admin-users, settings, referral, nestly-coins,
@@ -69,13 +69,13 @@ are the worked reference implementations. The rest is mechanical.
 
 ## Note on subagents
 
-Two ran on `admin-web` and `partner-web` and were killed mid-pass by an account
+Two ran on `admin-web` and `provider-web` and were killed mid-pass by an account
 session limit. The arrangement that made that recoverable: they shared this
 checkout but worked on **strictly disjoint app trees** and were forbidden from
 running any writing git command, so their work surfaced as uncommitted changes
 to review rather than half-landed history. Reuse that arrangement.
 
-Reviewing rather than trusting caught a real defect: the partner agent added a
+Reviewing rather than trusting caught a real defect: the provider agent added a
 `ToastProvider` to `providers.tsx` without knowing `layout.tsx` already mounts
 one. Nested providers render a second permanently-empty toast container and
 leave the outer one unreachable. **Each app must have exactly one
@@ -145,7 +145,7 @@ file trees never touch and can be worked simultaneously:
 |---|---|---|
 | A | `frontend/customer-web/` | 220 |
 | B | `frontend/admin-web/` | 221, 222 |
-| C | `frontend/partner-web/` | — (223 complete) |
+| C | `frontend/provider-web/` | — (223 complete) |
 
 **Coordination rules**
 

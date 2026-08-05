@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Badge, Skeleton, cx } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import {
-  BookingPartnerAssignmentStatus,
+  BookingProviderAssignmentStatus,
   BookingStatus,
   RecurringBookingPlanStatus,
   SupportTicketStatus,
@@ -16,10 +16,10 @@ import type { PriceBreakdown } from "@/lib/types";
  * account screens (Phase 12 rows 218-220).
  *
  * Deliberately a separate file from `components/ui.tsx`: that kit is
- * byte-identical across customer-web, admin-web and partner-web, so anything
+ * byte-identical across customer-web, admin-web and provider-web, so anything
  * added there has to be ported to all three. Everything here is
  * customer-only — a booking progress rail and an INR price breakdown have no
- * meaning in the admin or partner apps — so it lives outside the frozen kit.
+ * meaning in the admin or provider apps — so it lives outside the frozen kit.
  *
  * No component here contains a hex value or a raw `neutral-*`/`black/10`
  * class; every visual value resolves through the tokens in app/globals.css.
@@ -145,38 +145,38 @@ export function BookingStatusBadge({
 }
 
 /**
- * Customer-facing wording for a `BookingPartnerAssignment` row (task 208).
+ * Customer-facing wording for a `BookingProviderAssignment` row (task 208).
  * The booking's own status stays "Assigned" across both the offer and the
- * partner's accept, so this is the only signal that tells a customer their
+ * provider's accept, so this is the only signal that tells a customer their
  * professional has actually confirmed.
  */
-export function partnerAssignmentLabel(status: BookingPartnerAssignmentStatus): string {
+export function providerAssignmentLabel(status: BookingProviderAssignmentStatus): string {
   switch (status) {
-    case BookingPartnerAssignmentStatus.Assigned:
+    case BookingProviderAssignmentStatus.Assigned:
       return "Professional assigned — awaiting their confirmation";
-    case BookingPartnerAssignmentStatus.Accepted:
+    case BookingProviderAssignmentStatus.Accepted:
       return "Professional confirmed";
-    case BookingPartnerAssignmentStatus.Rejected:
+    case BookingProviderAssignmentStatus.Rejected:
       return "Professional declined — finding you another";
-    case BookingPartnerAssignmentStatus.Reassigned:
+    case BookingProviderAssignmentStatus.Reassigned:
       return "Reassigned to another professional";
-    case BookingPartnerAssignmentStatus.Withdrawn:
+    case BookingProviderAssignmentStatus.Withdrawn:
       return "Assignment withdrawn — finding you another";
     default:
       return "Professional assignment updating";
   }
 }
 
-export function partnerAssignmentTone(status: BookingPartnerAssignmentStatus): BadgeTone {
+export function providerAssignmentTone(status: BookingProviderAssignmentStatus): BadgeTone {
   switch (status) {
-    case BookingPartnerAssignmentStatus.Accepted:
+    case BookingProviderAssignmentStatus.Accepted:
       return "success";
-    case BookingPartnerAssignmentStatus.Assigned:
+    case BookingProviderAssignmentStatus.Assigned:
       return "brand";
-    case BookingPartnerAssignmentStatus.Rejected:
-    case BookingPartnerAssignmentStatus.Withdrawn:
+    case BookingProviderAssignmentStatus.Rejected:
+    case BookingProviderAssignmentStatus.Withdrawn:
       return "warning";
-    case BookingPartnerAssignmentStatus.Reassigned:
+    case BookingProviderAssignmentStatus.Reassigned:
       return "info";
     default:
       return "neutral";

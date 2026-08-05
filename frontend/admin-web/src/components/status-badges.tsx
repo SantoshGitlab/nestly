@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
-import { PartnerStatus } from "@/lib/partners-types";
+import { ProviderStatus } from "@/lib/providers-types";
 import { BookingStatus, CustomerStatus, SupportTicketPriority, SupportTicketStatus } from "@/lib/types";
 
 /**
@@ -65,15 +65,15 @@ export function CustomerStatusBadge({ status }: { status: CustomerStatus }) {
   );
 }
 
-const PARTNER_STATUS_TONES: Record<PartnerStatus, BadgeTone> = {
-  [PartnerStatus.PendingVerification]: "warning",
-  [PartnerStatus.Active]: "success",
-  [PartnerStatus.Suspended]: "danger",
-  [PartnerStatus.Deactivated]: "neutral",
+const PROVIDER_STATUS_TONES: Record<ProviderStatus, BadgeTone> = {
+  [ProviderStatus.PendingVerification]: "warning",
+  [ProviderStatus.Active]: "success",
+  [ProviderStatus.Suspended]: "danger",
+  [ProviderStatus.Deactivated]: "neutral",
 };
 
-export function PartnerStatusBadge({ status, label }: { status: PartnerStatus; label: string }) {
-  return <Badge tone={PARTNER_STATUS_TONES[status] ?? "neutral"}>{label}</Badge>;
+export function ProviderStatusBadge({ status, label }: { status: ProviderStatus; label: string }) {
+  return <Badge tone={PROVIDER_STATUS_TONES[status] ?? "neutral"}>{label}</Badge>;
 }
 
 const TICKET_STATUS_TONES: Record<SupportTicketStatus, BadgeTone> = {

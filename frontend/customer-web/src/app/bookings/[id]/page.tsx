@@ -16,14 +16,14 @@ import {
   formatInstant,
   formatTimeRange,
   inr,
-  partnerAssignmentLabel,
-  partnerAssignmentTone,
+  providerAssignmentLabel,
+  providerAssignmentTone,
 } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Button, Card, PageHeading, Skeleton, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import {
-  BookingPartnerAssignmentStatus,
+  BookingProviderAssignmentStatus,
   BookingStatus,
   ChatContextType,
   RefundMethod,
@@ -156,7 +156,7 @@ function BookingDetailScreen() {
           <Timeline
             entries={booking.timeline}
             currentStatus={booking.status}
-            partnerAssignmentStatus={booking.partnerAssignmentStatus}
+            providerAssignmentStatus={booking.providerAssignmentStatus}
           />
         </Card>
 
@@ -172,13 +172,13 @@ function BookingDetailScreen() {
 
 /**
  * The "where is my booking right now" card. Surfaces
- * `partnerAssignmentStatus` (task 208) — the booking's own status stays
+ * `providerAssignmentStatus` (task 208) — the booking's own status stays
  * "Assigned" across both the offer to a professional and their acceptance, so
  * without this the customer has no way to tell an accepted job from one still
  * waiting on a response.
  */
 function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
-  const assignment = booking.partnerAssignmentStatus;
+  const assignment = booking.providerAssignmentStatus;
 
   return (
     <Card>
@@ -198,7 +198,7 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
             aria-hidden
             className={cx(
               "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-              assignment === BookingPartnerAssignmentStatus.Accepted
+              assignment === BookingProviderAssignmentStatus.Accepted
                 ? "bg-success-soft text-success"
                 : assignment === null
                   ? "bg-surface-3 text-fg-subtle"
@@ -223,12 +223,12 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
             <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">
               {assignment === null
                 ? "Not assigned yet — we'll match a professional to this slot shortly."
-                : partnerAssignmentLabel(assignment)}
+                : providerAssignmentLabel(assignment)}
             </p>
           </div>
           {assignment !== null ? (
-            <Badge tone={partnerAssignmentTone(assignment)} className="ml-auto shrink-0">
-              {assignment === BookingPartnerAssignmentStatus.Accepted ? "Confirmed" : "In progress"}
+            <Badge tone={providerAssignmentTone(assignment)} className="ml-auto shrink-0">
+              {assignment === BookingProviderAssignmentStatus.Accepted ? "Confirmed" : "In progress"}
             </Badge>
           ) : null}
         </div>
@@ -362,22 +362,22 @@ function refundStatusTone(status: RefundStatus) {
  * Vertical status rail. The last recorded transition is the booking's current
  * state, so it carries the filled marker; everything before it is history.
  *
- * `partnerAssignmentStatus` is appended as a live node rather than folded
+ * `providerAssignmentStatus` is appended as a live node rather than folded
  * into the history list: it is not a BookingStatusHistory row (it tracks the
- * separate BookingPartnerAssignment entity, task 208) and it has no
+ * separate BookingProviderAssignment entity, task 208) and it has no
  * changed-at of its own, so presenting it as a dated history entry would be
  * inventing data.
  */
 function Timeline({
   entries,
   currentStatus,
-  partnerAssignmentStatus,
+  providerAssignmentStatus,
 }: {
   entries: BookingStatusTimelineEntry[];
   currentStatus: BookingStatus;
-  partnerAssignmentStatus: BookingPartnerAssignmentStatus | null;
+  providerAssignmentStatus: BookingProviderAssignmentStatus | null;
 }) {
-  const hasAssignment = partnerAssignmentStatus !== null;
+  const hasAssignment = providerAssignmentStatus !== null;
 
   if (entries.length === 0 && !hasAssignment) {
     return <p className="text-sm text-fg-muted">No status history yet.</p>;
@@ -407,15 +407,15 @@ function Timeline({
 
       {hasAssignment ? (
         <TimelineNode
-          tone={partnerAssignmentTone(partnerAssignmentStatus)}
+          tone={providerAssignmentTone(providerAssignmentStatus)}
           filled
           isCurrent
           showRail={false}
-          title={partnerAssignmentLabel(partnerAssignmentStatus)}
+          title={providerAssignmentLabel(providerAssignmentStatus)}
           meta="Professional assignment"
         >
           <p className="mt-1 text-sm text-fg-muted">
-            {partnerAssignmentStatus === BookingPartnerAssignmentStatus.Accepted
+            {providerAssignmentStatus === BookingProviderAssignmentStatus.Accepted
               ? "Your professional has confirmed and will arrive in your slot window."
               : "This updates on its own — no action needed from you."}
           </p>
@@ -577,7 +577,7 @@ function ActionLink({
   );
 }
 
-/** Photo + checklist evidence the partner submitted at job completion (tasks 195-198). */
+/** Photo + checklist evidence the provider submitted at job completion (tasks 195-198). */
 function CompletionProofCard({ bookingId }: { bookingId: string }) {
   const query = useQuery({
     queryKey: ["booking-completion-proof", bookingId],
@@ -587,7 +587,7 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
         { authenticated: true },
       );
       /**
-       * The endpoint answers 204 until the partner has actually submitted
+       * The endpoint answers 204 until the provider has actually submitted
        * proof, and `apiFetch` maps that to `undefined`. React Query treats an
        * `undefined` resolution as a thrown failure, so this card used to show
        * "Couldn't load the completion proof" for every booking that simply

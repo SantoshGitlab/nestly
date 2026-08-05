@@ -323,17 +323,17 @@ export enum BookingStatus {
 export type BookingStatusBucket = "Upcoming" | "Completed" | "Cancelled";
 
 /**
- * Mirrors Nestly.Domain.BookingPartnerAssignmentStatus's declaration order
+ * Mirrors Nestly.Domain.BookingProviderAssignmentStatus's declaration order
  * exactly (no JsonStringEnumConverter is registered - see BookingStatus's doc
  * comment above for the same pattern).
  *
- * This is the live state of the booking's current BookingPartnerAssignment
+ * This is the live state of the booking's current BookingProviderAssignment
  * row (task 208), not the booking's own status: BookingStatus stays
- * "Assigned" across both the offer to a partner and that partner's accept, so
+ * "Assigned" across both the offer to a provider and that provider's accept, so
  * this is the only field that tells a customer their professional has
  * actually confirmed.
  */
-export enum BookingPartnerAssignmentStatus {
+export enum BookingProviderAssignmentStatus {
   Assigned = 0,
   Accepted = 1,
   Rejected = 2,
@@ -364,8 +364,8 @@ export interface BookingDetail {
   couponDiscountAmount: number | null;
   /** Equals price.totalPayable on a persisted booking - both already reflect the discounted amount actually charged. */
   finalPayable: number;
-  /** Null until a partner is assigned; then tracks the live assignment row (task 208). */
-  partnerAssignmentStatus: BookingPartnerAssignmentStatus | null;
+  /** Null until a provider is assigned; then tracks the live assignment row (task 208). */
+  providerAssignmentStatus: BookingProviderAssignmentStatus | null;
 }
 
 export interface BookingListItem {
@@ -899,7 +899,7 @@ export interface BookingCompletionProofResponse {
   bookingId: string;
   photoRefs: string[];
   checklistAnswers: CompletionChecklistAnswerResponse[];
-  submittedByPartnerId: string;
+  submittedByProviderId: string;
   submittedAtUtc: string;
 }
 
@@ -919,7 +919,7 @@ export enum ChatContextType {
 export enum ChatSenderType {
   Customer = 0,
   Admin = 1,
-  Partner = 2,
+  Provider = 2,
 }
 
 export interface GetOrCreateChatThreadRequestBody {

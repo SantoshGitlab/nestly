@@ -12,13 +12,13 @@ import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
 
 export enum NestlyCoinsAudience {
   Customer = 0,
-  Partner = 1,
+  Provider = 1,
 }
 
 /** Tab strip for `ui.tsx`'s `Tabs`, which keys on a string value. */
 export const AUDIENCE_TABS: readonly { value: string; label: string }[] = [
   { value: String(NestlyCoinsAudience.Customer), label: "Customer" },
-  { value: String(NestlyCoinsAudience.Partner), label: "Partner" },
+  { value: String(NestlyCoinsAudience.Provider), label: "Provider" },
 ];
 
 export interface NestlyCoinsProgramConfig {

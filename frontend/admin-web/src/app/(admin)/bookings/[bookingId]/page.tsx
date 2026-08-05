@@ -42,8 +42,8 @@ import {
   RefundStatus,
   RescheduleActor,
 } from "@/lib/bookings-types";
-import { assignPartnerToBooking, getBookingAssignmentHistory, rejectBookingAssignment } from "@/lib/partners-api";
-import { BookingPartnerAssignmentStatus } from "@/lib/partners-types";
+import { assignProviderToBooking, getBookingAssignmentHistory, rejectBookingAssignment } from "@/lib/providers-api";
+import { BookingProviderAssignmentStatus } from "@/lib/providers-types";
 import { BookingStatus } from "@/lib/types";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -103,12 +103,12 @@ const REFUND_STATUS_TONES: Record<RefundStatus, "info" | "warning" | "success" |
   [RefundStatus.Failed]: "danger",
 };
 
-const ASSIGNMENT_STATUS_LABELS: Record<BookingPartnerAssignmentStatus, string> = {
-  [BookingPartnerAssignmentStatus.Assigned]: "Awaiting response",
-  [BookingPartnerAssignmentStatus.Accepted]: "Accepted",
-  [BookingPartnerAssignmentStatus.Rejected]: "Rejected",
-  [BookingPartnerAssignmentStatus.Reassigned]: "Superseded (reassigned)",
-  [BookingPartnerAssignmentStatus.Withdrawn]: "Withdrawn (booking cancelled)",
+const ASSIGNMENT_STATUS_LABELS: Record<BookingProviderAssignmentStatus, string> = {
+  [BookingProviderAssignmentStatus.Assigned]: "Awaiting response",
+  [BookingProviderAssignmentStatus.Accepted]: "Accepted",
+  [BookingProviderAssignmentStatus.Rejected]: "Rejected",
+  [BookingProviderAssignmentStatus.Reassigned]: "Superseded (reassigned)",
+  [BookingProviderAssignmentStatus.Withdrawn]: "Withdrawn (booking cancelled)",
 };
 
 /**
@@ -161,7 +161,7 @@ export default function BookingDetailPage() {
   const [refundMethod, setRefundMethod] = useState(String(RefundMethod.Gateway));
   const [confirmRefund, setConfirmRefund] = useState(false);
 
-  const [assignPartnerId, setAssignPartnerId] = useState("");
+  const [assignProviderId, setAssignProviderId] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [confirmReject, setConfirmReject] = useState(false);
 
@@ -233,12 +233,12 @@ export default function BookingDetailPage() {
     onError: (err) => setActionError(describeError(err)),
   });
 
-  const assignPartnerMutation = useMutation({
-    mutationFn: () => assignPartnerToBooking(bookingId, { partnerId: assignPartnerId }),
+  const assignProviderMutation = useMutation({
+    mutationFn: () => assignProviderToBooking(bookingId, { providerId: assignProviderId }),
     onSuccess: () => {
       setActionError(null);
-      setActionNotice("Partner assigned.");
-      setAssignPartnerId("");
+      setActionNotice("Provider assigned.");
+      setAssignProviderId("");
       invalidateDetail();
     },
     onError: (err) => setActionError(describeError(err)),
@@ -392,8 +392,8 @@ export default function BookingDetailPage() {
       </Card>
 
       <Card
-        title="Partner assignment"
-        description="Manual admin-driven assignment (PARTNER.md OPEN DECISIONS #1, tasks 147, 159)"
+        title="Provider assignment"
+        description="Manual admin-driven assignment (PROVIDER.md OPEN DECISIONS #1, tasks 147, 159)"
       >
         {assignmentHistoryQuery.isPending ? (
           <SkeletonText lines={3} />
@@ -410,10 +410,10 @@ export default function BookingDetailPage() {
           </Alert>
         ) : assignmentHistoryQuery.data.length === 0 ? (
           <EmptyState
-            title="No partner assigned yet"
+            title="No provider assigned yet"
             description={
               canWrite
-                ? "Assign a partner below to put this booking into a professional's queue."
+                ? "Assign a provider below to put this booking into a professional's queue."
                 : "An admin with booking write access can assign one."
             }
           />
@@ -422,14 +422,14 @@ export default function BookingDetailPage() {
             {assignmentHistoryQuery.data.map((assignment) => (
               <li key={assignment.id} className="rounded-xl border border-line p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-fg">{assignment.partnerDisplayName}</span>
+                  <span className="font-medium text-fg">{assignment.providerDisplayName}</span>
                   <Badge
                     tone={
-                      assignment.status === BookingPartnerAssignmentStatus.Accepted
+                      assignment.status === BookingProviderAssignmentStatus.Accepted
                         ? "success"
-                        : assignment.status === BookingPartnerAssignmentStatus.Rejected
+                        : assignment.status === BookingProviderAssignmentStatus.Rejected
                           ? "danger"
-                          : assignment.status === BookingPartnerAssignmentStatus.Assigned
+                          : assignment.status === BookingProviderAssignmentStatus.Assigned
                             ? "info"
                             : "neutral"
                     }
@@ -452,18 +452,18 @@ export default function BookingDetailPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <Field
-                  label="Partner ID to assign"
-                  value={assignPartnerId}
-                  onChange={(e) => setAssignPartnerId(e.target.value)}
-                  placeholder="Partner GUID"
+                  label="Provider ID to assign"
+                  value={assignProviderId}
+                  onChange={(e) => setAssignProviderId(e.target.value)}
+                  placeholder="Provider GUID"
                 />
               </div>
               <Button
-                disabled={!assignPartnerId.trim()}
-                loading={assignPartnerMutation.isPending}
-                onClick={() => assignPartnerMutation.mutate()}
+                disabled={!assignProviderId.trim()}
+                loading={assignProviderMutation.isPending}
+                onClick={() => assignProviderMutation.mutate()}
               >
-                Assign partner
+                Assign provider
               </Button>
             </div>
 
@@ -691,7 +691,7 @@ export default function BookingDetailPage() {
       <ConfirmDialog
         open={confirmReject}
         title="Reject the current assignment?"
-        description="The booking returns to the unassigned queue and needs a new partner."
+        description="The booking returns to the unassigned queue and needs a new provider."
         confirmLabel="Reject assignment"
         loading={rejectAssignmentMutation.isPending}
         error={rejectAssignmentMutation.isError ? describeError(rejectAssignmentMutation.error) : null}
@@ -722,7 +722,7 @@ function BookingDetailSkeleton() {
   );
 }
 
-/** Photo + checklist evidence the partner submitted at job completion - dispute-review evidence (tasks 195-198, SRS 12.11.2). */
+/** Photo + checklist evidence the provider submitted at job completion - dispute-review evidence (tasks 195-198, SRS 12.11.2). */
 function CompletionProofCard({ bookingId }: { bookingId: string }) {
   const query = useQuery({
     queryKey: ["admin-booking-completion-proof", bookingId],
@@ -760,7 +760,7 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
   }
 
   return (
-    <Card title="Completion proof" description="Submitted by the partner at job completion (SRS 12.11.2)">
+    <Card title="Completion proof" description="Submitted by the provider at job completion (SRS 12.11.2)">
       <p className="text-sm text-fg-muted">
         Submitted {formatDateTime(proof.submittedAtUtc)} · {proof.photoRefs.length} photo(s)
       </p>
