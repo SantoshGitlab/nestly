@@ -28,6 +28,22 @@ public class SlotWindowRepository : ISlotWindowRepository
     public Task<SlotWindow?> GetByIdAsync(Guid id) =>
         _context.Set<SlotWindow>().FirstOrDefaultAsync(w => w.Id == id);
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _context.Set<SlotWindow>()
+            .AsNoTracking()
+            .Where(w => ids.Contains(w.Id))
+            .Select(w => new { w.Id, w.Name })
+            .ToDictionaryAsync(w => w.Id, w => w.Name);
+    }
+
+
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<SlotWindow>().AnyAsync(w => w.Id == id);
 
@@ -61,6 +77,27 @@ public class SlotWindowRepository : ISlotWindowRepository
             .Where(r => r.SlotWindowId == slotWindowId)
             .Select(r => r.DayOfWeek)
             .ToListAsync();
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<DayOfWeek>>> ListRuleDaysByWindowIdsAsync(IReadOnlyCollection<Guid> slotWindowIds)
+    {
+        if (slotWindowIds.Count == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<DayOfWeek>>();
+        }
+
+        var rules = await _context.Set<SlotWindowRule>()
+            .AsNoTracking()
+            .Where(r => slotWindowIds.Contains(r.SlotWindowId))
+            .Select(r => new { r.SlotWindowId, r.DayOfWeek })
+            .ToListAsync();
+
+        return rules
+            .GroupBy(r => r.SlotWindowId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<DayOfWeek>)g.Select(r => r.DayOfWeek).ToList());
+    }
 
     public async Task ReplaceRulesAsync(Guid slotWindowId, IReadOnlyList<DayOfWeek> daysOfWeek)
     {

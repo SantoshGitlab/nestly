@@ -25,4 +25,7 @@ public interface ICategoryRepository : IRepository<Category>
 
     /// <summary>Every category regardless of active status, ordered for the admin management screen (SRS 12.5.1).</summary>
     Task<IReadOnlyList<Category>> ListAllAsync();
+
+    /// <summary>Names for a set of category ids in one round trip (task 256) - mirrors <c>ICustomerRepository.GetNamesByIdsAsync</c>.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
 }

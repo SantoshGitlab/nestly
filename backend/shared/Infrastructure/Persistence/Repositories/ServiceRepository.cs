@@ -28,6 +28,22 @@ public class ServiceRepository : IServiceRepository
     public Task<Service?> GetByIdAsync(Guid id) =>
         _context.Set<Service>().FirstOrDefaultAsync(s => s.Id == id);
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _context.Set<Service>()
+            .AsNoTracking()
+            .Where(s => ids.Contains(s.Id))
+            .Select(s => new { s.Id, s.Name })
+            .ToDictionaryAsync(s => s.Id, s => s.Name);
+    }
+
+
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Service>().AnyAsync(s => s.Id == id);
 

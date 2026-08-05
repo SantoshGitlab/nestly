@@ -68,14 +68,14 @@ public class SlotManagementService : ISlotManagementService
     public async Task<IReadOnlyList<SlotWindowAdminResponse>> ListWindowsAsync(Guid? cityId)
     {
         var windows = await _slotWindowRepository.ListAsync(cityId);
-        var responses = new List<SlotWindowAdminResponse>(windows.Count);
-        foreach (var window in windows)
-        {
-            var days = await _slotWindowRepository.ListRuleDaysAsync(window.Id);
-            responses.Add(ToResponse(window, days));
-        }
 
-        return responses;
+        // Task 256: rule days were fetched a window at a time.
+        var ruleDays = await _slotWindowRepository.ListRuleDaysByWindowIdsAsync(
+            windows.Select(w => w.Id).ToList());
+
+        return windows
+            .Select(window => ToResponse(window, ruleDays.GetValueOrDefault(window.Id, [])))
+            .ToList();
     }
 
     public async Task<Result<SlotWindowAdminResponse>> CreateWindowAsync(SlotWindowCreateRequest request)
@@ -146,16 +146,16 @@ public class SlotManagementService : ISlotManagementService
     public async Task<IReadOnlyList<SlotBlackoutAdminResponse>> ListBlackoutsAsync(Guid? cityId)
     {
         var blackouts = await _slotBlackoutRepository.ListAsync(cityId);
-        var responses = new List<SlotBlackoutAdminResponse>(blackouts.Count);
-        foreach (var blackout in blackouts)
-        {
-            var city = await _cityRepository.GetByIdAsync(blackout.CityId);
-            responses.Add(new SlotBlackoutAdminResponse(
-                blackout.Id, blackout.CityId, city?.Name ?? string.Empty,
-                blackout.StartDate, blackout.EndDate, blackout.Type, blackout.Reason));
-        }
 
-        return responses;
+        // Task 256: one city lookup per blackout row.
+        var cityNames = await _cityRepository.GetNamesByIdsAsync(
+            blackouts.Select(b => b.CityId).Distinct().ToList());
+
+        return blackouts
+            .Select(blackout => new SlotBlackoutAdminResponse(
+                blackout.Id, blackout.CityId, cityNames.GetValueOrDefault(blackout.CityId, string.Empty),
+                blackout.StartDate, blackout.EndDate, blackout.Type, blackout.Reason))
+            .ToList();
     }
 
     public async Task<Result<SlotBlackoutAdminResponse>> CreateBlackoutAsync(SlotBlackoutCreateRequest request)
@@ -190,14 +190,17 @@ public class SlotManagementService : ISlotManagementService
     public async Task<IReadOnlyList<SlotBookingPolicyAdminResponse>> ListBookingPoliciesAsync()
     {
         var policies = await _slotBookingPolicyRepository.ListAsync();
-        var responses = new List<SlotBookingPolicyAdminResponse>(policies.Count);
-        foreach (var policy in policies)
-        {
-            var city = await _cityRepository.GetByIdAsync(policy.CityId);
-            responses.Add(new SlotBookingPolicyAdminResponse(policy.Id, policy.CityId, city?.Name ?? string.Empty, policy.CutoffMinutes, policy.MaxAdvanceDays));
-        }
 
-        return responses.OrderBy(r => r.CityName).ToList();
+        // Task 256: one city lookup per policy row.
+        var cityNames = await _cityRepository.GetNamesByIdsAsync(
+            policies.Select(p => p.CityId).Distinct().ToList());
+
+        return policies
+            .Select(policy => new SlotBookingPolicyAdminResponse(
+                policy.Id, policy.CityId, cityNames.GetValueOrDefault(policy.CityId, string.Empty),
+                policy.CutoffMinutes, policy.MaxAdvanceDays))
+            .OrderBy(r => r.CityName)
+            .ToList();
     }
 
     public async Task<Result<SlotBookingPolicyAdminResponse>> UpsertBookingPolicyAsync(SlotBookingPolicyUpsertRequest request)
@@ -229,13 +232,11 @@ public class SlotManagementService : ISlotManagementService
     public async Task<IReadOnlyList<SlotAvailabilityOverrideAdminResponse>> ListOverridesAsync(Guid? cityId, DateOnly? date)
     {
         var overrides = await _slotAvailabilityOverrideRepository.ListAsync(cityId, date);
-        var responses = new List<SlotAvailabilityOverrideAdminResponse>(overrides.Count);
-        foreach (var overrideRecord in overrides)
-        {
-            responses.Add(await ToResponseAsync(overrideRecord));
-        }
 
-        return responses;
+        // Task 256: four name lookups per row become four for the whole page.
+        var names = await LoadOverrideNamesAsync(overrides);
+
+        return overrides.Select(o => ToResponse(o, names)).ToList();
     }
 
     public async Task<Result<SlotAvailabilityOverrideAdminResponse>> CreateOverrideAsync(SlotAvailabilityOverrideCreateRequest request)
@@ -281,33 +282,44 @@ public class SlotManagementService : ISlotManagementService
         return Result.Success();
     }
 
-    private async Task<SlotAvailabilityOverrideAdminResponse> ToResponseAsync(SlotAvailabilityOverride overrideRecord)
-    {
-        var city = await _cityRepository.GetByIdAsync(overrideRecord.CityId);
+    /// <summary>
+    /// The four name lookups an override row renders, resolved for a whole
+    /// batch at once (task 256). Rendering one override used to cost up to
+    /// four queries, and <see cref="ListOverridesAsync"/> paid that per row.
+    /// </summary>
+    private sealed record OverrideNames(
+        IReadOnlyDictionary<Guid, string> Cities,
+        IReadOnlyDictionary<Guid, string> Windows,
+        IReadOnlyDictionary<Guid, string> Categories,
+        IReadOnlyDictionary<Guid, string> Services);
 
-        string? windowName = null;
-        if (overrideRecord.SlotWindowId is not null)
-        {
-            windowName = (await _slotWindowRepository.GetByIdAsync(overrideRecord.SlotWindowId.Value))?.Name;
-        }
+    private async Task<OverrideNames> LoadOverrideNamesAsync(IReadOnlyList<SlotAvailabilityOverride> records) =>
+        new(
+            await _cityRepository.GetNamesByIdsAsync(
+                records.Select(r => r.CityId).Distinct().ToList()),
+            await _slotWindowRepository.GetNamesByIdsAsync(
+                records.Where(r => r.SlotWindowId is not null).Select(r => r.SlotWindowId!.Value).Distinct().ToList()),
+            await _categoryRepository.GetNamesByIdsAsync(
+                records.Where(r => r.CategoryId is not null).Select(r => r.CategoryId!.Value).Distinct().ToList()),
+            await _serviceRepository.GetNamesByIdsAsync(
+                records.Where(r => r.ServiceId is not null).Select(r => r.ServiceId!.Value).Distinct().ToList()));
 
-        string? categoryName = null;
-        if (overrideRecord.CategoryId is not null)
-        {
-            categoryName = (await _categoryRepository.GetByIdAsync(overrideRecord.CategoryId.Value))?.Name;
-        }
+    private static SlotAvailabilityOverrideAdminResponse ToResponse(SlotAvailabilityOverride overrideRecord, OverrideNames names) =>
+        new(
+            overrideRecord.Id,
+            overrideRecord.CityId,
+            names.Cities.GetValueOrDefault(overrideRecord.CityId, string.Empty),
+            overrideRecord.Date,
+            overrideRecord.SlotWindowId,
+            overrideRecord.SlotWindowId is null ? null : names.Windows.GetValueOrDefault(overrideRecord.SlotWindowId.Value),
+            overrideRecord.CategoryId,
+            overrideRecord.CategoryId is null ? null : names.Categories.GetValueOrDefault(overrideRecord.CategoryId.Value),
+            overrideRecord.ServiceId,
+            overrideRecord.ServiceId is null ? null : names.Services.GetValueOrDefault(overrideRecord.ServiceId.Value),
+            overrideRecord.Reason);
 
-        string? serviceName = null;
-        if (overrideRecord.ServiceId is not null)
-        {
-            serviceName = (await _serviceRepository.GetByIdAsync(overrideRecord.ServiceId.Value))?.Name;
-        }
-
-        return new SlotAvailabilityOverrideAdminResponse(
-            overrideRecord.Id, overrideRecord.CityId, city?.Name ?? string.Empty, overrideRecord.Date,
-            overrideRecord.SlotWindowId, windowName, overrideRecord.CategoryId, categoryName,
-            overrideRecord.ServiceId, serviceName, overrideRecord.Reason);
-    }
+    private async Task<SlotAvailabilityOverrideAdminResponse> ToResponseAsync(SlotAvailabilityOverride overrideRecord) =>
+        ToResponse(overrideRecord, await LoadOverrideNamesAsync([overrideRecord]));
 
     private static SlotWindowAdminResponse ToResponse(SlotWindow window, IReadOnlyList<DayOfWeek> daysOfWeek, string? cityName = null) =>
         new(window.Id, window.CityId, cityName ?? window.City?.Name ?? string.Empty, window.Name,
