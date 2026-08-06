@@ -97,6 +97,12 @@ public class PaymentWebhookService : IPaymentWebhookService
             // to redeliver). The first resolution always wins - a duplicate
             // is a no-op success, never re-applied, even if the redelivery
             // reports a different outcome than the first one did.
+            //
+            // This is only a fast-path short-circuit against the snapshot we
+            // just read, not the actual guard - two concurrent redeliveries
+            // can both load Created before either commits. The real,
+            // race-proof guard is the conditional ExecuteUpdateAsync below
+            // (NESTLY-006).
             _logger.LogInformation(
                 "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (attempt already {Status}).",
                 request.GatewayOrderId, attempt.Status);
@@ -117,6 +123,26 @@ public class PaymentWebhookService : IPaymentWebhookService
         await using var dbTransaction = await _context.Database.BeginTransactionAsync();
         try
         {
+            // NESTLY-006: the actual idempotency guard. A single conditional
+            // UPDATE that only ever affects a row still in Created - the same
+            // pattern SlotCapacityRepository.TryReserveAsync uses to close a
+            // capacity race. Of two concurrent/duplicate webhook deliveries
+            // for the same gateway order, only one can ever flip this
+            // attempt; the loser affects zero rows and must bail out here,
+            // before doing anything else, so it never re-applies the booking
+            // transition or the escrow hold a second time.
+            bool wonRace = await _paymentRepository.TryMarkAttemptResolvedAsync(
+                attempt.Id, succeeded ? PaymentAttemptStatus.Success : PaymentAttemptStatus.Failed);
+
+            if (!wonRace)
+            {
+                await dbTransaction.CommitAsync();
+                _logger.LogInformation(
+                    "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (attempt was resolved by a concurrent delivery).",
+                    request.GatewayOrderId);
+                return Result.Success();
+            }
+
             if (succeeded)
             {
                 transaction.MarkAttemptSucceeded(attempt.Id, request.GatewayPaymentRef);

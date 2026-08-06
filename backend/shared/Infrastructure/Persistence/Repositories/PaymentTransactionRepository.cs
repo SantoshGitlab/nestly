@@ -48,6 +48,22 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         }
     }
 
+    public async Task<bool> TryMarkAttemptResolvedAsync(Guid attemptId, PaymentAttemptStatus newStatus)
+    {
+        // NESTLY-006: the same conditional-ExecuteUpdateAsync idiom
+        // SlotCapacityRepository.TryReserveAsync uses to close a capacity
+        // race. The WHERE clause is re-evaluated against the committed row
+        // at execution time, so of two concurrent webhook deliveries for the
+        // same gateway order, only the first to reach the database can ever
+        // affect a row here - the second finds Status already flipped and
+        // affects zero.
+        int affected = await _context.Set<PaymentAttempt>()
+            .Where(a => a.Id == attemptId && a.Status == PaymentAttemptStatus.Created)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(a => a.Status, newStatus));
+
+        return affected == 1;
+    }
+
     public async Task UpdateAsync(PaymentTransaction transaction)
     {
         // Only attach+mark-modified when not already tracked by this

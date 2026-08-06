@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
@@ -304,6 +305,62 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
         using var readContext = _db.CreateContext();
         var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
         booking!.Status.Should().Be(BookingStatus.Confirmed, "the first resolution wins and is never overwritten by a later, conflicting callback");
+    }
+
+    [Fact]
+    public async Task Two_concurrent_deliveries_of_the_same_webhook_hold_escrow_exactly_once()
+    {
+        // NESTLY-006: a gateway is free to redeliver the same webhook, and
+        // two deliveries can race in - both loading the attempt while it is
+        // still Created, before either has committed its resolution. Before
+        // the fix, both could pass the (then non-atomic) idempotency check
+        // and both call EscrowService.HoldAsync, double-crediting the
+        // platform escrow ledger for one payment. Task.WhenAll over two
+        // independent DbContexts/PaymentWebhookService instances (mirroring
+        // ConcurrentSlotBookingPerformanceTests' proven pattern for the same
+        // kind of race) is what actually exercises the race rather than the
+        // already-resolved-attempt fast path the other duplicate test covers.
+        var gateway = BuildGateway();
+        Fixture fixture;
+        string gatewayOrderId;
+
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = await SeedBookingAsync(seedContext, priceOverride: 501m);
+            var (payments, _) = BuildServices(seedContext, gateway);
+            var order = await payments.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, IdempotencyKey: null));
+            gatewayOrderId = order.Value.GatewayOrderId;
+        }
+
+        string paymentRef = "sandbox_pay_test_ref";
+        string payload = PaymentWebhookPayload.Build(gatewayOrderId, paymentRef, PaymentWebhookPayload.SuccessStatus);
+        string signature = gateway.SignPayload(payload);
+        var request = new PaymentWebhookRequest(gatewayOrderId, paymentRef, PaymentWebhookPayload.SuccessStatus, signature);
+
+        var deliveries = Enumerable.Range(0, 2).Select(async _ =>
+        {
+            using var context = _db.CreateContext();
+            var (_, webhook) = BuildServices(context, gateway);
+            return await webhook.HandleCallbackAsync(request);
+        });
+
+        var results = await Task.WhenAll(deliveries);
+
+        results.Should().OnlyContain(r => r.IsSuccess, "a duplicate/racing redelivery must always be a clean idempotent success, never an error");
+
+        using var readContext = _db.CreateContext();
+        var transaction = await new PaymentTransactionRepository(readContext).GetByBookingIdAsync(fixture.BookingId);
+        transaction!.Attempts.Should().ContainSingle("only one attempt exists regardless of how many times its webhook is delivered");
+        transaction.Attempts[0].Status.Should().Be(PaymentAttemptStatus.Success);
+
+        var holds = await readContext.Set<PlatformEscrowLedger>()
+            .Where(e => e.BookingId == fixture.BookingId && e.EntryType == EscrowEntryType.Hold)
+            .ToListAsync();
+        holds.Should().ContainSingle("the racing redelivery must not double-credit the platform escrow ledger for one payment");
+        holds[0].Amount.Should().Be(fixture.Total);
+
+        var escrowService = new EscrowService(new PlatformEscrowLedgerRepository(readContext));
+        (await escrowService.GetHeldBalanceAsync(fixture.BookingId)).Should().Be(fixture.Total, "escrow held must equal the payment once, not twice");
     }
 
     [Fact]
