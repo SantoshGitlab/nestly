@@ -228,18 +228,11 @@ public class ServiceManagementService : IServiceManagementService
             isSlotRequired, isAddressRequired, isCustomerNoteAllowed);
     }
 
-    private async Task<IReadOnlyDictionary<Guid, string>> BuildCategoryNameLookupAsync(IEnumerable<Guid> categoryIds)
-    {
-        var lookup = new Dictionary<Guid, string>();
-        foreach (Guid categoryId in categoryIds.Distinct())
-        {
-            if (lookup.ContainsKey(categoryId)) continue;
-            var category = await _categoryRepository.GetByIdAsync(categoryId);
-            lookup[categoryId] = category?.Name ?? string.Empty;
-        }
-
-        return lookup;
-    }
+    // Task NESTLY-011: one batched lookup instead of a GetByIdAsync per
+    // distinct category id (mirrors ReferralAdminService.SearchAsync's use of
+    // the equivalent ICustomerRepository.GetNamesByIdsAsync).
+    private async Task<IReadOnlyDictionary<Guid, string>> BuildCategoryNameLookupAsync(IEnumerable<Guid> categoryIds) =>
+        await _categoryRepository.GetNamesByIdsAsync(categoryIds.Distinct().ToList());
 
     private static Result<ServiceAdminResponse> NotFound() =>
         Error.NotFound("Service.NotFound", "The specified service does not exist.");
