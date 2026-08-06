@@ -158,6 +158,37 @@ public class CancellationService : ICancellationService
     {
         var outcome = await ComputeOutcomeAsync(booking);
 
+        // NESTLY-002: reserve this booking's one-and-only BookingCancellation
+        // row (unique index on BookingId, BookingCancellationConfiguration)
+        // *before* transitioning the booking or ever calling IRefundService -
+        // the same TryAddAsync/"loser reads the winner's row" idiom
+        // PaymentService.CreateOrderAsync already uses for the identical
+        // duplicate-concurrent-request race on PaymentTransaction. Two
+        // near-simultaneous cancel calls for the same booking (double-click,
+        // client retry, two open tabs) both read the same pre-cancellation
+        // booking and both pass the lifecycle check above; without an atomic
+        // reservation here, both would independently reach IRefundService,
+        // which itself only sees "nothing refunded yet" from each request's
+        // own point of view since neither has committed - so both would
+        // actually move money. Refund fields are attached below once the
+        // winner's own refund (if any) has actually been raised.
+        var cancellation = new BookingCancellation(
+            Guid.NewGuid(),
+            booking.Id,
+            actor,
+            reason,
+            outcome.WithinFreeWindow,
+            outcome.FeeAmount,
+            outcome.RefundAmount,
+            refundMethod: null,
+            refundTransactionId: null,
+            internalNotes);
+
+        if (!await _cancellationRepository.TryAddAsync(cancellation))
+        {
+            return await BuildAlreadyCancelledResultAsync(booking);
+        }
+
         booking.TransitionTo(targetStatus, reason);
         await _bookingRepository.UpdateAsync(booking);
 
@@ -198,21 +229,10 @@ public class CancellationService : ICancellationService
             refundTransactionId = refundResult.Value.Id;
             refundStatus = refundResult.Value.Status;
             refundMethod = refundResult.Value.Method;
+
+            cancellation.AttachRefund(refundTransactionId.Value, refundMethod.Value);
+            await _cancellationRepository.UpdateAsync(cancellation);
         }
-
-        var cancellation = new BookingCancellation(
-            Guid.NewGuid(),
-            booking.Id,
-            actor,
-            reason,
-            outcome.WithinFreeWindow,
-            outcome.FeeAmount,
-            outcome.RefundAmount,
-            refundMethod,
-            refundTransactionId,
-            internalNotes);
-
-        await _cancellationRepository.AddAsync(cancellation);
 
         // Re-fetch to report the booking's true post-refund status: a full
         // refund with nothing owed moves the booking straight past
@@ -230,6 +250,36 @@ public class CancellationService : ICancellationService
             refundMethod,
             refundTransactionId,
             cancellation.CreatedAtUtc));
+    }
+
+    /// <summary>
+    /// NESTLY-002: the losing side of the TryAddAsync race above - some
+    /// concurrent request already reserved (and, per <see cref="BookingCancellation.RefundTransactionId"/>,
+    /// possibly already completed) this booking's cancellation. Reports that
+    /// winner's outcome instead of touching the booking or IRefundService
+    /// again, so a duplicate request reads as a clean no-op rather than a
+    /// second real cancellation/refund.
+    /// </summary>
+    private async Task<Result<CancellationOutcomeResponse>> BuildAlreadyCancelledResultAsync(Booking booking)
+    {
+        var winner = await _cancellationRepository.GetByBookingIdAsync(booking.Id)
+            ?? throw new InvalidOperationException($"Booking {booking.Id} lost its cancellation reservation race but no winning row was found.");
+
+        var winnerBooking = await _bookingRepository.GetByIdAsync(booking.Id) ?? booking;
+        var winnerRefund = winner.RefundTransactionId is Guid refundId
+            ? await _refundTransactionRepository.GetByIdAsync(refundId)
+            : null;
+
+        return Result.Success(new CancellationOutcomeResponse(
+            booking.Id,
+            winnerBooking.Status,
+            winner.WithinFreeCancellationWindow,
+            winner.CancellationFeeAmount,
+            winner.RefundAmount,
+            winnerRefund?.Status,
+            winner.RefundMethod,
+            winner.RefundTransactionId,
+            winner.CreatedAtUtc));
     }
 
     private async Task<CancellationFeeCalculator.Outcome> ComputeOutcomeAsync(Booking booking)
