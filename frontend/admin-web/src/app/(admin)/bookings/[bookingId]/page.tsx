@@ -42,7 +42,12 @@ import {
   RefundStatus,
   RescheduleActor,
 } from "@/lib/bookings-types";
-import { assignProviderToBooking, getBookingAssignmentHistory, rejectBookingAssignment } from "@/lib/providers-api";
+import {
+  assignProviderToBooking,
+  getBookingAssignmentHistory,
+  getEligibleProviders,
+  rejectBookingAssignment,
+} from "@/lib/providers-api";
 import { BookingProviderAssignmentStatus } from "@/lib/providers-types";
 import { BookingStatus } from "@/lib/types";
 
@@ -140,6 +145,16 @@ export default function BookingDetailPage() {
     queryFn: () => getBookingAssignmentHistory(bookingId),
   });
 
+  // Candidates for the assignment picker below - matched server-side by
+  // service area/skill, ranked by specificity then load (see
+  // EligibleProviderResponse's doc comment). Read-only suggestions: nothing
+  // is assigned until the admin picks one and submits below.
+  const eligibleProvidersQuery = useQuery({
+    queryKey: ["admin-booking-eligible-providers", bookingId],
+    queryFn: () => getEligibleProviders(bookingId),
+    enabled: canWrite,
+  });
+
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
@@ -168,6 +183,8 @@ export default function BookingDetailPage() {
   const invalidateDetail = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-booking-detail", bookingId] });
     queryClient.invalidateQueries({ queryKey: ["admin-booking-assignment-history", bookingId] });
+    // Assigning/rejecting changes today's load counts the picker shows.
+    queryClient.invalidateQueries({ queryKey: ["admin-booking-eligible-providers", bookingId] });
   };
 
   const statusMutation = useMutation({
@@ -451,12 +468,41 @@ export default function BookingDetailPage() {
           <div className="mt-5 flex flex-col gap-4 border-t border-line pt-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <Field
-                  label="Provider ID to assign"
-                  value={assignProviderId}
-                  onChange={(e) => setAssignProviderId(e.target.value)}
-                  placeholder="Provider GUID"
-                />
+                {eligibleProvidersQuery.isPending ? (
+                  <SkeletonText />
+                ) : eligibleProvidersQuery.isError ? (
+                  <Alert
+                    tone="error"
+                    title="Couldn't load eligible providers"
+                    action={
+                      <Button size="sm" variant="secondary" onClick={() => eligibleProvidersQuery.refetch()}>
+                        Retry
+                      </Button>
+                    }
+                  >
+                    {describeError(eligibleProvidersQuery.error)}
+                  </Alert>
+                ) : eligibleProvidersQuery.data.length === 0 ? (
+                  <p className="text-sm text-fg-muted">
+                    No provider has a matching service area and skill for this booking&apos;s location and
+                    service yet.
+                  </p>
+                ) : (
+                  <Select
+                    label="Provider to assign"
+                    value={assignProviderId}
+                    onChange={(e) => setAssignProviderId(e.target.value)}
+                    placeholder="Select a provider…"
+                    options={eligibleProvidersQuery.data.map((p) => ({
+                      value: p.providerId,
+                      label: `${p.displayName} · ${p.phone} · ${
+                        p.pincodeMatch ? "this pincode" : "city-wide"
+                      }${p.serviceMatch ? "" : ", category-wide"} · ${p.assignedJobsToday}${
+                        p.maxJobsPerDay !== null ? `/${p.maxJobsPerDay}` : ""
+                      } jobs today`,
+                    }))}
+                  />
+                )}
               </div>
               <Button
                 disabled={!assignProviderId.trim()}

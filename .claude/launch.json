@@ -21,6 +21,27 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "frontend/provider-web",
       "port": 3002
+    },
+    {
+      "name": "consumer-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "backend/consumer-api/ConsumerApi"],
+      "port": 5257,
+      "url": "http://localhost:5257/swagger"
+    },
+    {
+      "name": "admin-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "backend/admin-api/AdminApi"],
+      "port": 5177,
+      "url": "http://localhost:5177/swagger"
+    },
+    {
+      "name": "provider-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "backend/provider-api/ProviderApi"],
+      "port": 5337,
+      "url": "http://localhost:5337/swagger"
     }
   ]
 }

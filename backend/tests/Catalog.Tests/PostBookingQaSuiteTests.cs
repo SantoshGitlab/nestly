@@ -206,7 +206,8 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private async Task<(Customer Customer, Guid BookingId)> SeedBookingAsync(BookingStatus finalStatus)

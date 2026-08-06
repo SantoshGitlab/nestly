@@ -55,4 +55,15 @@ public interface IBookingProviderAssignmentService
 
     /// <summary>Full assignment history for a booking, newest first (task 159 - lets the admin UI show why a booking needs reassignment).</summary>
     Task<Result<IReadOnlyList<BookingProviderAssignmentResponse>>> GetHistoryAsync(Guid bookingId);
+
+    /// <summary>
+    /// Candidate providers for manually assigning this booking, matched by
+    /// declared service area (pincode, falling back to city-wide coverage)
+    /// and skill mapping (service, falling back to category-wide coverage),
+    /// ranked most-specific-and-least-loaded first. Read-only: still requires
+    /// an explicit <see cref="AssignAsync"/> call to actually assign anyone -
+    /// PROVIDER.md OPEN DECISIONS #1 keeps assignment manual/admin-driven, so
+    /// this exists to inform that decision, not make it.
+    /// </summary>
+    Task<Result<IReadOnlyList<EligibleProviderResponse>>> GetEligibleProvidersAsync(Guid bookingId);
 }

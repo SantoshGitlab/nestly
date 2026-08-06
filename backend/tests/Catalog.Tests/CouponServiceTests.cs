@@ -58,7 +58,8 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private sealed record Fixture(Customer Customer, City City, CustomerAddress Address, Locality Locality, Service Service, Category Category, SlotWindow Window, DateOnly Date);

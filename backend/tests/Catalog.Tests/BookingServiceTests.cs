@@ -61,7 +61,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private sealed record Fixture(
@@ -220,7 +221,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
             providerId = provider.Id;
 
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(setupContext), new ProviderRepository(setupContext), new BookingProviderAssignmentRepository(setupContext));
+                new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
+                new BookingProviderAssignmentRepository(setupContext), setupContext);
             var assignResult = await assignmentService.AssignAsync(bookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }
@@ -232,7 +234,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         using (var acceptContext = _db.CreateContext())
         {
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(acceptContext), new ProviderRepository(acceptContext), new BookingProviderAssignmentRepository(acceptContext));
+                new BookingRepository(acceptContext), new ProviderRepository(acceptContext), new ServiceRepository(acceptContext),
+                new BookingProviderAssignmentRepository(acceptContext), acceptContext);
             var acceptResult = await assignmentService.AcceptAsync(bookingId, providerId);
             acceptResult.IsSuccess.Should().BeTrue();
         }

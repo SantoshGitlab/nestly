@@ -75,7 +75,8 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private static PaymentWebhookService BuildWebhookService(

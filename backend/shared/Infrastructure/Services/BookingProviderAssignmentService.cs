@@ -1,8 +1,10 @@
+using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -11,16 +13,27 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
 {
     private readonly IBookingRepository _bookingRepository;
     private readonly IProviderRepository _providerRepository;
+    private readonly IServiceRepository _serviceRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
+    // Matching candidates for GetEligibleProvidersAsync spans Provider,
+    // ProviderServiceArea, ProviderSkillMapping, ProviderCapacity and Pincode
+    // in one read - no single existing repository owns that join, so this
+    // reads directly off the shared context, same as RefundService/
+    // PaymentWebhookService do for their own cross-aggregate needs.
+    private readonly NestlyDbContext _context;
 
     public BookingProviderAssignmentService(
         IBookingRepository bookingRepository,
         IProviderRepository providerRepository,
-        IBookingProviderAssignmentRepository assignmentRepository)
+        IServiceRepository serviceRepository,
+        IBookingProviderAssignmentRepository assignmentRepository,
+        NestlyDbContext context)
     {
         _bookingRepository = bookingRepository;
         _providerRepository = providerRepository;
+        _serviceRepository = serviceRepository;
         _assignmentRepository = assignmentRepository;
+        _context = context;
     }
 
     public async Task<Result<BookingProviderAssignmentResponse>> AssignAsync(Guid bookingId, Guid adminUserId, AssignProviderRequest request)
@@ -185,6 +198,125 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         }
 
         return items;
+    }
+
+    public async Task<Result<IReadOnlyList<EligibleProviderResponse>>> GetEligibleProvidersAsync(Guid bookingId)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("BookingProviderAssignment.BookingNotFound", "Booking was not found.");
+        }
+
+        if (booking.Items.Count == 0)
+        {
+            return Error.Business("BookingProviderAssignment.NoServiceOnBooking", "This booking has no service line item to match providers against.");
+        }
+
+        var serviceId = booking.Items[0].ServiceId;
+        var service = await _serviceRepository.GetByIdAsync(serviceId);
+        if (service is null)
+        {
+            return Error.NotFound("BookingProviderAssignment.ServiceNotFound", "The booking's service could not be found.");
+        }
+
+        // The booking only ever stores the pincode as a snapshot string (see
+        // Booking's doc comment on why every address field is a snapshot,
+        // not a live FK) - resolve it back to a real Pincode row so it can be
+        // compared against ProviderServiceArea's actual foreign keys.
+        var pincode = await _context.Set<Pincode>()
+            .FirstOrDefaultAsync(p => p.Code == booking.AddressPincodeSnapshot);
+        if (pincode is null)
+        {
+            return Error.NotFound(
+                "BookingProviderAssignment.PincodeNotFound",
+                "The booking's address pincode is not a recognised serviceable pincode.");
+        }
+
+        // A provider matches if their declared service area covers this
+        // pincode specifically (PincodeId set) or the whole city
+        // (PincodeId null), and their declared skill covers this service
+        // specifically (ServiceId set) or the whole category (ServiceId
+        // null) - the same "narrows an optional broader default" shape
+        // ProviderServiceArea/ProviderSkillMapping's own doc comments
+        // describe, not a distance calculation (this schema has no provider
+        // coordinates - see PROVIDER.md OPEN DECISIONS #1's "distance...
+        // doesn't exist yet").
+        var candidateRows = await (
+            from provider in _context.Set<Provider>()
+            where provider.Status == ProviderStatus.Active
+            join area in _context.Set<ProviderServiceArea>() on provider.Id equals area.ProviderId
+            join skill in _context.Set<ProviderSkillMapping>() on provider.Id equals skill.ProviderId
+            where area.IsActive && area.CityId == pincode.CityId
+                && (area.PincodeId == null || area.PincodeId == pincode.Id)
+            where skill.IsActive && skill.CategoryId == service.CategoryId
+                && (skill.ServiceId == null || skill.ServiceId == serviceId)
+            select new
+            {
+                ProviderId = provider.Id,
+                provider.DisplayName,
+                provider.Phone,
+                PincodeMatch = area.PincodeId != null,
+                ServiceMatch = skill.ServiceId != null,
+            }
+        ).ToListAsync();
+
+        if (candidateRows.Count == 0)
+        {
+            return Array.Empty<EligibleProviderResponse>();
+        }
+
+        // A provider can satisfy the join above through more than one
+        // area/skill row (e.g. both a city-wide and a pincode-specific
+        // area) - collapse to one row per provider, keeping the most
+        // specific match found on either dimension.
+        var bestPerProvider = candidateRows
+            .GroupBy(x => x.ProviderId)
+            .Select(g => new
+            {
+                ProviderId = g.Key,
+                DisplayName = g.First().DisplayName,
+                Phone = g.First().Phone,
+                PincodeMatch = g.Any(x => x.PincodeMatch),
+                ServiceMatch = g.Any(x => x.ServiceMatch),
+            })
+            .ToList();
+
+        var providerIds = bestPerProvider.Select(x => x.ProviderId).ToList();
+
+        var capacityByProvider = await _context.Set<ProviderCapacity>()
+            .Where(c => providerIds.Contains(c.ProviderId))
+            .ToDictionaryAsync(c => c.ProviderId, c => c.MaxJobsPerDay);
+
+        // Advisory load signal (ProviderCapacity's own doc comment: "an admin
+        // can consult them when hand-assigning a booking") - counts this
+        // provider's other live jobs on the same slot date, not a hard filter.
+        var jobsTodayByProvider = await _context.Set<Booking>()
+            .Where(b => b.AssignedProviderId != null
+                && providerIds.Contains(b.AssignedProviderId!.Value)
+                && b.SlotDate == booking.SlotDate
+                && (b.Status == BookingStatus.Assigned || b.Status == BookingStatus.InProgress))
+            .GroupBy(b => b.AssignedProviderId!.Value)
+            .Select(g => new { ProviderId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ProviderId, x => x.Count);
+
+        var results = bestPerProvider
+            .Select(x => new EligibleProviderResponse(
+                x.ProviderId,
+                x.DisplayName,
+                x.Phone,
+                x.PincodeMatch,
+                x.ServiceMatch,
+                capacityByProvider.GetValueOrDefault(x.ProviderId),
+                jobsTodayByProvider.GetValueOrDefault(x.ProviderId)))
+            // Most specific match first (exact pincode, exact service), then
+            // least-loaded today - never by rating (OPEN DECISIONS #4).
+            .OrderByDescending(r => r.PincodeMatch)
+            .ThenByDescending(r => r.ServiceMatch)
+            .ThenBy(r => r.AssignedJobsToday)
+            .ToList();
+
+        return results;
     }
 
     private static BookingProviderAssignmentResponse ToResponse(BookingProviderAssignment assignment, string providerDisplayName) => new(

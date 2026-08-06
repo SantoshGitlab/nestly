@@ -178,6 +178,23 @@ function BookingSummaryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceSlug]);
 
+  // Resume from a "+ Add a new address" detour (see addNewAddressHref below):
+  // addresses/new sends the customer back here with ?newAddressId=... so the
+  // address they just entered is selected automatically instead of making
+  // them find and pick it again from the list. Declared after the draft
+  // restore above so it wins when both fire on the same mount - the draft
+  // only remembers whatever was selected *before* the detour, which for a
+  // customer who had no address yet is nothing at all.
+  useEffect(() => {
+    const newAddressId = searchParams.get("newAddressId");
+    if (!newAddressId || !serviceSlug) return;
+    setSelectedAddressId(newAddressId);
+    const cleaned = new URLSearchParams(searchParams.toString());
+    cleaned.delete("newAddressId");
+    router.replace(`/booking/summary?${cleaned.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Persist on every change so a detour (most commonly "+ Add a new address"
   // below) doesn't cost the customer their selections.
   useEffect(() => {
@@ -359,6 +376,11 @@ function BookingSummaryScreen() {
   const summary = summaryQuery.data;
   const payable = summary ? (summary.coupon ? summary.finalPayable : summary.price.totalPayable) : null;
 
+  // Carries this exact review page as the return trip for the "add a new
+  // address" detour below - see the newAddressId effect above and
+  // addresses/new/page.tsx's returnTo handling.
+  const addNewAddressHref = `/addresses/new?returnTo=${encodeURIComponent(`/booking/summary?serviceSlug=${service.slug}`)}`;
+
   return (
     <main
       className={cx(
@@ -457,7 +479,7 @@ function BookingSummaryScreen() {
               description="Add the address you'd like this service delivered to."
               action={
                 <Link
-                  href="/addresses/new"
+                  href={addNewAddressHref}
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
                 >
                   Add an address
@@ -504,7 +526,7 @@ function BookingSummaryScreen() {
                 );
               })}
               <Link
-                href="/addresses/new"
+                href={addNewAddressHref}
                 className="mt-1 inline-flex w-fit items-center gap-1 text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
               >
                 + Add a new address

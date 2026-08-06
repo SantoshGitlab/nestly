@@ -277,3 +277,20 @@ export interface BookingProviderAssignment {
   respondedAt: string | null;
   notes: string | null;
 }
+
+/**
+ * A candidate for manually assigning this booking (matched by service area +
+ * skill, ranked by specificity then load) - informs the admin's choice, does
+ * not assign anyone by itself. See BookingProviderAssignmentContracts.cs's
+ * EligibleProviderResponse doc comment for why rating is deliberately not a
+ * signal here (PROVIDER.md OPEN DECISIONS #4).
+ */
+export interface EligibleProvider {
+  providerId: string;
+  displayName: string;
+  phone: string;
+  pincodeMatch: boolean;
+  serviceMatch: boolean;
+  maxJobsPerDay: number | null;
+  assignedJobsToday: number;
+}

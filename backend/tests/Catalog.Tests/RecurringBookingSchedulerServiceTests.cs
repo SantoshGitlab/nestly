@@ -110,7 +110,8 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
 
         var notificationDispatchService = new NotificationDispatchService(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),

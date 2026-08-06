@@ -6,6 +6,7 @@ using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -26,6 +27,17 @@ public class BookingService : IBookingService
     private readonly IMetricsService _metricsService;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
+    // Same reasoning as RefundService: the slot-capacity reservation, coupon
+    // reservation, subscription free-visit consumption and the booking write
+    // itself are each their own SaveChangesAsync against repositories that
+    // all share this same scoped context - without an explicit transaction
+    // around them, an exception after the slot reservation commits (e.g. the
+    // booking insert itself failing) leaves that reservation's capacity
+    // consumed forever with no booking to show for it, instead of rolling
+    // back cleanly. Observed directly in local testing: a failed booking
+    // attempt left slot_booking_counter incremented with zero matching rows
+    // in booking for that (slotWindowId, date).
+    private readonly NestlyDbContext _context;
 
     public BookingService(
         IBookingSummaryService summaryService,
@@ -35,7 +47,8 @@ public class BookingService : IBookingService
         ISlotAvailabilityService slotAvailabilityService,
         IMetricsService metricsService,
         IBookingProviderAssignmentRepository assignmentRepository,
-        ICustomerSubscriptionRepository customerSubscriptionRepository)
+        ICustomerSubscriptionRepository customerSubscriptionRepository,
+        NestlyDbContext context)
     {
         _summaryService = summaryService;
         _bookingRepository = bookingRepository;
@@ -45,6 +58,7 @@ public class BookingService : IBookingService
         _metricsService = metricsService;
         _assignmentRepository = assignmentRepository;
         _customerSubscriptionRepository = customerSubscriptionRepository;
+        _context = context;
     }
 
     public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
@@ -69,107 +83,126 @@ public class BookingService : IBookingService
 
         var summary = summaryResult.Value;
 
-        // Reserve the slot's per-day capacity (SRS 12.10.1, task 135c)
-        // before anything else: an atomic conditional update, same shape as
-        // the coupon reservation below, so two customers racing for the
-        // last seat on a promoted slot cannot both succeed. Checked first
-        // because under promotion-level traffic the slot - not the coupon -
-        // is the more likely contended resource.
-        var slotReservation = await _slotAvailabilityService.ReserveSlotAsync(summary.Slot.SlotWindowId, summary.Slot.Date);
-        if (slotReservation.IsFailure)
+        // Everything below writes: slot capacity, coupon usage, subscription
+        // free-visit credit, and the booking itself each go through their own
+        // SaveChangesAsync on this same scoped context. Without an explicit
+        // transaction, an exception partway through (e.g. the booking insert
+        // itself failing) would leave an earlier reservation - most
+        // dangerously the slot capacity, since nothing else ever frees it -
+        // committed with no booking to show for it. Same pattern as
+        // RefundService for the same reason.
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            // Task 137b: tracked as its own counter (not just a
-            // RecordBookingCreated failure reason) so "slot-conflict rate"
-            // can be graphed directly as this counter's rate against total
-            // booking-creation attempts.
-            if (slotReservation.Error.Code == SlotCapacityReachedErrorCode)
+            // Reserve the slot's per-day capacity (SRS 12.10.1, task 135c)
+            // before anything else: an atomic conditional update, same shape as
+            // the coupon reservation below, so two customers racing for the
+            // last seat on a promoted slot cannot both succeed. Checked first
+            // because under promotion-level traffic the slot - not the coupon -
+            // is the more likely contended resource.
+            var slotReservation = await _slotAvailabilityService.ReserveSlotAsync(summary.Slot.SlotWindowId, summary.Slot.Date);
+            if (slotReservation.IsFailure)
             {
-                _metricsService.RecordSlotConflict();
+                // Task 137b: tracked as its own counter (not just a
+                // RecordBookingCreated failure reason) so "slot-conflict rate"
+                // can be graphed directly as this counter's rate against total
+                // booking-creation attempts.
+                if (slotReservation.Error.Code == SlotCapacityReachedErrorCode)
+                {
+                    _metricsService.RecordSlotConflict();
+                }
+
+                _metricsService.RecordBookingCreated(succeeded: false, slotReservation.Error.Code);
+                return slotReservation.Error;
             }
 
-            _metricsService.RecordBookingCreated(succeeded: false, slotReservation.Error.Code);
-            return slotReservation.Error;
-        }
-
-        // Reserve the coupon's usage slot before the booking exists (task
-        // 72c/73): CouponRedemption has a foreign key to the booking, so it
-        // cannot be inserted until the booking is, but the atomic usage-cap
-        // check must happen before persisting anything - otherwise a lost
-        // race would create a booking with a discount that was never really
-        // available.
-        if (summary.Coupon is not null)
-        {
-            var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId);
-            if (reserveResult.IsFailure)
+            // Reserve the coupon's usage slot before the booking exists (task
+            // 72c/73): CouponRedemption has a foreign key to the booking, so it
+            // cannot be inserted until the booking is, but the atomic usage-cap
+            // check must happen before persisting anything - otherwise a lost
+            // race would create a booking with a discount that was never really
+            // available.
+            if (summary.Coupon is not null)
             {
-                _metricsService.RecordBookingCreated(succeeded: false, reserveResult.Error.Code);
-                return reserveResult.Error;
+                var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId);
+                if (reserveResult.IsFailure)
+                {
+                    _metricsService.RecordBookingCreated(succeeded: false, reserveResult.Error.Code);
+                    return reserveResult.Error;
+                }
             }
-        }
 
-        // Task 179: consume the free-visit credit before the booking exists,
-        // same reasoning as the coupon reservation above - an atomic
-        // conditional UPDATE (ICustomerSubscriptionRepository.TryConsumeFreeVisitAsync)
-        // so two bookings racing for a subscriber's last free visit cannot
-        // both win. A percentage-discount benefit (FreeVisitApplied false)
-        // has no counter to consume - it's a standing benefit, not a
-        // per-cycle credit - so nothing to reserve in that branch.
-        if (summary.SubscriptionBenefit is { FreeVisitApplied: true } benefit)
-        {
-            bool consumed = await _customerSubscriptionRepository.TryConsumeFreeVisitAsync(benefit.SubscriptionId);
-            if (!consumed)
+            // Task 179: consume the free-visit credit before the booking exists,
+            // same reasoning as the coupon reservation above - an atomic
+            // conditional UPDATE (ICustomerSubscriptionRepository.TryConsumeFreeVisitAsync)
+            // so two bookings racing for a subscriber's last free visit cannot
+            // both win. A percentage-discount benefit (FreeVisitApplied false)
+            // has no counter to consume - it's a standing benefit, not a
+            // per-cycle credit - so nothing to reserve in that branch.
+            if (summary.SubscriptionBenefit is { FreeVisitApplied: true } benefit)
             {
-                const string errorCode = "Subscription.FreeVisitNoLongerAvailable";
-                _metricsService.RecordBookingCreated(succeeded: false, errorCode);
-                return Error.Conflict(errorCode, "Your subscription's free visit is no longer available. Please retry.");
+                bool consumed = await _customerSubscriptionRepository.TryConsumeFreeVisitAsync(benefit.SubscriptionId);
+                if (!consumed)
+                {
+                    const string errorCode = "Subscription.FreeVisitNoLongerAvailable";
+                    _metricsService.RecordBookingCreated(succeeded: false, errorCode);
+                    return Error.Conflict(errorCode, "Your subscription's free visit is no longer available. Please retry.");
+                }
             }
+
+            var booking = new Booking(
+                Guid.NewGuid(),
+                customerId,
+                new CustomerSnapshot(customer.Name, customer.Mobile),
+                summary.Address.Id,
+                new AddressSnapshot(
+                    summary.Address.Label, summary.Address.Line1, summary.Address.Line2, summary.Address.Landmark,
+                    summary.Address.Pincode, summary.Address.City, summary.Address.State,
+                    summary.Address.Latitude, summary.Address.Longitude,
+                    summary.Address.ContactName, summary.Address.ContactMobile),
+                new SlotSnapshot(summary.Slot.SlotWindowId, summary.Slot.Date, summary.Slot.Name, summary.Slot.StartTime, summary.Slot.EndTime),
+                new PriceSnapshot(
+                    summary.Price.BasePrice, summary.Price.Quantity, summary.Price.BaseTotal, summary.Price.AddOnTotal,
+                    summary.Price.VisitCharge, summary.Price.Subtotal, summary.Price.TaxPercentage,
+                    summary.Price.TaxAmount, summary.Price.PlatformFee, summary.FinalPayable),
+                summary.Coupon?.Code,
+                summary.Coupon?.DiscountAmount,
+                summary.SubscriptionBenefit?.SubscriptionId,
+                summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
+                summary.SubscriptionBenefit?.DiscountAmount);
+
+            // Add-on line items come from the price breakdown, not summary.AddOns:
+            // the breakdown already carries each selection's quantity and
+            // resolved unit price, exactly what the snapshot needs, whereas
+            // summary.AddOns is a plain catalog projection for display.
+            var item = booking.AddItem(
+                Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                summary.Price.BasePrice, summary.Price.Quantity);
+
+            foreach (var addOnLine in summary.Price.AddOnLineItems)
+            {
+                booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+            }
+
+            booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+
+            await _bookingRepository.AddAsync(booking);
+
+            if (summary.Coupon is not null)
+            {
+                await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
+            }
+
+            await dbTransaction.CommitAsync();
+
+            _metricsService.RecordBookingCreated(succeeded: true);
+            return Result.Success(ToDetailResponse(booking, providerAssignmentStatus: null));
         }
-
-        var booking = new Booking(
-            Guid.NewGuid(),
-            customerId,
-            new CustomerSnapshot(customer.Name, customer.Mobile),
-            summary.Address.Id,
-            new AddressSnapshot(
-                summary.Address.Label, summary.Address.Line1, summary.Address.Line2, summary.Address.Landmark,
-                summary.Address.Pincode, summary.Address.City, summary.Address.State,
-                summary.Address.Latitude, summary.Address.Longitude,
-                summary.Address.ContactName, summary.Address.ContactMobile),
-            new SlotSnapshot(summary.Slot.SlotWindowId, summary.Slot.Date, summary.Slot.Name, summary.Slot.StartTime, summary.Slot.EndTime),
-            new PriceSnapshot(
-                summary.Price.BasePrice, summary.Price.Quantity, summary.Price.BaseTotal, summary.Price.AddOnTotal,
-                summary.Price.VisitCharge, summary.Price.Subtotal, summary.Price.TaxPercentage,
-                summary.Price.TaxAmount, summary.Price.PlatformFee, summary.FinalPayable),
-            summary.Coupon?.Code,
-            summary.Coupon?.DiscountAmount,
-            summary.SubscriptionBenefit?.SubscriptionId,
-            summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
-            summary.SubscriptionBenefit?.DiscountAmount);
-
-        // Add-on line items come from the price breakdown, not summary.AddOns:
-        // the breakdown already carries each selection's quantity and
-        // resolved unit price, exactly what the snapshot needs, whereas
-        // summary.AddOns is a plain catalog projection for display.
-        var item = booking.AddItem(
-            Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
-            summary.Price.BasePrice, summary.Price.Quantity);
-
-        foreach (var addOnLine in summary.Price.AddOnLineItems)
+        catch
         {
-            booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+            await dbTransaction.RollbackAsync();
+            throw;
         }
-
-        booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
-
-        await _bookingRepository.AddAsync(booking);
-
-        if (summary.Coupon is not null)
-        {
-            await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
-        }
-
-        _metricsService.RecordBookingCreated(succeeded: true);
-        return Result.Success(ToDetailResponse(booking, providerAssignmentStatus: null));
     }
 
     public async Task<Result<IReadOnlyList<BookingListItemResponse>>> ListAsync(Guid customerId, BookingStatusBucket? bucket)

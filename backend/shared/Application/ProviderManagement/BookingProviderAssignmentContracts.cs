@@ -21,3 +21,26 @@ public sealed record BookingProviderAssignmentResponse(
     DateTime? RespondedAt,
     string? Notes,
     string? CompletionProofRef);
+
+/// <summary>
+/// A candidate for manual assignment to a booking (PROVIDER.md OPEN DECISIONS
+/// #1 - assists the admin's decision, does not assign anything itself: no
+/// auto-dispatch/matching engine, exactly as that decision requires).
+/// Matched on <see cref="Nestly.Domain.ProviderServiceArea"/> (the booking's
+/// pincode/city) and <see cref="Nestly.Domain.ProviderSkillMapping"/> (the
+/// booking's service/category), ranked by specificity - not by
+/// <c>provider_rating_summary</c>, which OPEN DECISIONS #4 explicitly keeps
+/// out of the manual assignment flow. <see cref="MaxJobsPerDay"/>/
+/// <see cref="AssignedJobsToday"/> surface <see cref="Nestly.Domain.ProviderCapacity"/>,
+/// which that entity's own doc comment already describes as "advisory only
+/// in v1... an admin can consult them when hand-assigning a booking" - this
+/// is that consultation, still nothing enforced automatically.
+/// </summary>
+public sealed record EligibleProviderResponse(
+    Guid ProviderId,
+    string DisplayName,
+    string Phone,
+    bool PincodeMatch,
+    bool ServiceMatch,
+    int? MaxJobsPerDay,
+    int AssignedJobsToday);

@@ -94,7 +94,8 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, Guid CategoryId, decimal Total);
@@ -310,7 +311,8 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
             await bookingRepository.UpdateAsync(booking);
 
             var assignmentService = new BookingProviderAssignmentService(
-                bookingRepository, new ProviderRepository(assignContext), new BookingProviderAssignmentRepository(assignContext));
+                bookingRepository, new ProviderRepository(assignContext), new ServiceRepository(assignContext),
+                new BookingProviderAssignmentRepository(assignContext), assignContext);
             var assignResult = await assignmentService.AssignAsync(fixture.BookingId, Guid.NewGuid(), new AssignProviderRequest(providerId, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }

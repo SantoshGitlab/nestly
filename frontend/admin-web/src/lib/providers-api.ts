@@ -12,6 +12,7 @@ import type {
   BookingProviderAssignment,
   CreateProviderPayoutRequest,
   CreateProviderRequest,
+  EligibleProvider,
   ProviderDetail,
   ProviderEarningsSummary,
   ProviderKycDocument,
@@ -148,3 +149,6 @@ export const rejectBookingAssignment = (bookingId: string, request: RejectAssign
 
 export const getBookingAssignmentHistory = (bookingId: string) =>
   apiFetch<BookingProviderAssignment[]>(`${BOOKINGS_BASE}/${bookingId}/assignments`, { authenticated: true });
+
+export const getEligibleProviders = (bookingId: string) =>
+  apiFetch<EligibleProvider[]>(`${BOOKINGS_BASE}/${bookingId}/eligible-providers`, { authenticated: true });

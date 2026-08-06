@@ -250,6 +250,24 @@ public class BookingsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Candidate providers for manually assigning this booking - matched by
+    /// service area (pincode/city) and skill (service/category), ranked by
+    /// specificity then current load. Read-only, to inform the admin's own
+    /// choice before calling <see cref="AssignProvider"/>: no auto-dispatch
+    /// (PROVIDER.md OPEN DECISIONS #1).
+    /// </summary>
+    [HttpGet("{bookingId:guid}/eligible-providers")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<EligibleProviderResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> GetEligibleProviders(Guid bookingId)
+    {
+        var result = await _assignmentService.GetEligibleProvidersAsync(bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Completion proof (photos + checklist) for a booking, if any (task 198, SRS 12.11.2 dispute review).</summary>
     [HttpGet("{bookingId:guid}/completion-proof")]
     [Authorize(Policy = ReadPolicy)]

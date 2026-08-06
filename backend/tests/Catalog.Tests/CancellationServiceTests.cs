@@ -65,7 +65,8 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private static PaymentWebhookService BuildWebhookService(
@@ -272,7 +273,8 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             providerId = provider.Id;
 
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(setupContext), new ProviderRepository(setupContext), new BookingProviderAssignmentRepository(setupContext));
+                new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
+                new BookingProviderAssignmentRepository(setupContext), setupContext);
             (await assignmentService.AssignAsync(fixture.BookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null)))
                 .IsSuccess.Should().BeTrue();
             (await assignmentService.AcceptAsync(fixture.BookingId, providerId)).IsSuccess.Should().BeTrue();
@@ -294,7 +296,9 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
 
         var jobService = new ProviderJobService(
             new BookingRepository(readContext), assignmentRepository,
-            new BookingProviderAssignmentService(new BookingRepository(readContext), new ProviderRepository(readContext), assignmentRepository),
+            new BookingProviderAssignmentService(
+                new BookingRepository(readContext), new ProviderRepository(readContext), new ServiceRepository(readContext),
+                assignmentRepository, readContext),
             new BookingCompletionProofRepository(readContext));
         var jobDetail = await jobService.GetDetailAsync(providerId, fixture.BookingId);
         jobDetail.IsSuccess.Should().BeTrue();

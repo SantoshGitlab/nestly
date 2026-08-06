@@ -2,27 +2,37 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AddressForm, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
 import { Card, PageHeading } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { safeRedirectTarget } from "@/lib/auth";
 import type { CustomerAddress } from "@/lib/types";
 
 export default function NewAddressPage() {
+  // Suspense boundary required around useSearchParams (used below to resume
+  // wherever this form was opened from, e.g. mid-booking review, instead of
+  // always landing on the standalone address book) - same requirement/
+  // pattern as booking/summary/page.tsx and login/page.tsx.
   return (
-    <RequireAuth>
-      <NewAddress />
-    </RequireAuth>
+    <Suspense fallback={null}>
+      <RequireAuth>
+        <NewAddress />
+      </RequireAuth>
+    </Suspense>
   );
 }
 
 function NewAddress() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+
+  const returnTo = safeRedirectTarget(searchParams.get("returnTo"));
 
   const mutation = useMutation({
     mutationFn: (values: AddressPayload) =>
@@ -31,9 +41,17 @@ function NewAddress() {
         authenticated: true,
         body: JSON.stringify(toUpsertBody(values)),
       }),
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["addresses"] });
-      router.push("/addresses");
+      // Resume wherever this form was opened from rather than always
+      // dropping the customer on the standalone address book - newAddressId
+      // lets that page auto-select what was just created instead of making
+      // the customer find and pick it again from the list.
+      router.push(
+        returnTo
+          ? `${returnTo}${returnTo.includes("?") ? "&" : "?"}newAddressId=${created.id}`
+          : "/addresses",
+      );
     },
     onError: (err) => setError(describeError(err)),
   });
@@ -55,8 +73,8 @@ function NewAddress() {
       </Card>
 
       <p className="mt-6 text-sm">
-        <Link href="/addresses" className="underline">
-          Back to address book
+        <Link href={returnTo ?? "/addresses"} className="underline">
+          {returnTo ? "Back to your booking" : "Back to address book"}
         </Link>
       </p>
     </main>

@@ -67,7 +67,8 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
                 TimeProvider.System),
             metricsService,
             new BookingProviderAssignmentRepository(context),
-            new CustomerSubscriptionRepository(context));
+            new CustomerSubscriptionRepository(context),
+            context);
     }
 
     private sealed record Fixture(Customer Customer, CustomerAddress Address, City City, Locality Locality, Service Service, SlotWindow Window, DateOnly Date);
