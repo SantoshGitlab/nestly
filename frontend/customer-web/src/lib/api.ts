@@ -2,7 +2,7 @@
  * Typed fetch wrapper for the Consumer API.
  * Base URL comes from NEXT_PUBLIC_API_URL (see .env.example).
  */
-import { getAccessToken } from "./auth";
+import { clearSession, getAccessToken } from "./auth";
 
 /** Exported for the chat SignalR connection (ChatWidget), which talks to the same origin outside of `apiFetch`. */
 export const API_BASE_URL =
@@ -106,6 +106,18 @@ export async function apiFetch<T>(
     } catch {
       // Non-JSON error body; keep problem null.
     }
+
+    // A 401 on an authenticated call means the token the caller had is no
+    // longer valid (expired, revoked, or the account was deactivated after
+    // login) - clear it so every mounted guard (RequireAuth) reacts to the
+    // auth-changed event and sends the customer back to /login. An
+    // unauthenticated call rejecting with 401 must NOT clear anything - there
+    // is nothing to clear, and this is the expected "invalid credentials"
+    // outcome.
+    if (authenticated && response.status === 401) {
+      clearSession();
+    }
+
     throw new ApiError(response.status, problem);
   }
 
