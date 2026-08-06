@@ -329,7 +329,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext), setupContext);
             (await assignmentService.AssignAsync(fixture.BookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null)))
                 .IsSuccess.Should().BeTrue();
             (await assignmentService.AcceptAsync(fixture.BookingId, providerId)).IsSuccess.Should().BeTrue();
@@ -353,7 +353,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new BookingRepository(readContext), assignmentRepository,
             new BookingProviderAssignmentService(
                 new BookingRepository(readContext), new ProviderRepository(readContext), new ServiceRepository(readContext),
-                assignmentRepository, readContext),
+                assignmentRepository, new ProviderScheduleConflictService(readContext), readContext),
             new BookingCompletionProofRepository(readContext));
         var jobDetail = await jobService.GetDetailAsync(providerId, fixture.BookingId);
         jobDetail.IsSuccess.Should().BeTrue();

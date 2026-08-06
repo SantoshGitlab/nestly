@@ -58,6 +58,8 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Confirmed]: "Confirmed",
   [BookingStatus.AwaitingFulfilment]: "Preparing Service",
   [BookingStatus.Assigned]: "Professional Assigned",
+  [BookingStatus.ProviderEnRoute]: "Professional On the Way",
+  [BookingStatus.ProviderArrived]: "Professional Arrived",
   [BookingStatus.InProgress]: "In Progress",
   [BookingStatus.Completed]: "Completed",
   [BookingStatus.CancelledByCustomer]: "Cancelled by Customer",
@@ -65,12 +67,17 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Rescheduled]: "Rescheduled",
   [BookingStatus.RefundPending]: "Refund in Progress",
   [BookingStatus.Refunded]: "Refunded",
+  [BookingStatus.Expired]: "Expired",
 };
 
 // Statuses reachable through the generic status-update action. Cancel/
 // reschedule/refund each go through their own dedicated action below - the
 // API rejects these five here regardless (see AdminBookingStatusUpdateRequest's
 // doc comment), so they are left out of this picker entirely.
+//
+// Expired is also left out: BookingExpirySweepJob owns that transition, and
+// it is terminal with no refund path, so an admin expiring a booking by hand
+// would strand it. Cancelling is the intended manual equivalent.
 const GENERIC_STATUS_OPTIONS = [
   BookingStatus.Initiated,
   BookingStatus.PaymentPending,
@@ -78,6 +85,8 @@ const GENERIC_STATUS_OPTIONS = [
   BookingStatus.Confirmed,
   BookingStatus.AwaitingFulfilment,
   BookingStatus.Assigned,
+  BookingStatus.ProviderEnRoute,
+  BookingStatus.ProviderArrived,
   BookingStatus.InProgress,
   BookingStatus.Completed,
 ].map((value) => ({ value: String(value), label: BOOKING_STATUS_LABELS[value] }));

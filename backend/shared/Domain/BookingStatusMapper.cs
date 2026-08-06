@@ -24,6 +24,8 @@ public static class BookingStatusMapper
         [BookingStatus.Confirmed] = "Confirmed",
         [BookingStatus.AwaitingFulfilment] = "Preparing Your Service",
         [BookingStatus.Assigned] = "Professional Assigned",
+        [BookingStatus.ProviderEnRoute] = "On the way",
+        [BookingStatus.ProviderArrived] = "Arrived",
         [BookingStatus.InProgress] = "Service in Progress",
         [BookingStatus.Completed] = "Completed",
         [BookingStatus.CancelledByCustomer] = "Cancelled by You",
@@ -31,6 +33,7 @@ public static class BookingStatusMapper
         [BookingStatus.Rescheduled] = "Rescheduled",
         [BookingStatus.RefundPending] = "Refund in Progress",
         [BookingStatus.Refunded] = "Refunded",
+        [BookingStatus.Expired] = "Expired",
     };
 
     /// <summary>
@@ -50,6 +53,10 @@ public static class BookingStatusMapper
         [BookingStatus.Confirmed] = BookingStatusBucket.Upcoming,
         [BookingStatus.AwaitingFulfilment] = BookingStatusBucket.Upcoming,
         [BookingStatus.Assigned] = BookingStatusBucket.Upcoming,
+        // Task 264: both tracking states are mid-fulfilment, so they belong
+        // with Assigned/InProgress in the customer's "Upcoming" tab.
+        [BookingStatus.ProviderEnRoute] = BookingStatusBucket.Upcoming,
+        [BookingStatus.ProviderArrived] = BookingStatusBucket.Upcoming,
         [BookingStatus.InProgress] = BookingStatusBucket.Upcoming,
         [BookingStatus.Rescheduled] = BookingStatusBucket.Upcoming,
         [BookingStatus.Completed] = BookingStatusBucket.Completed,
@@ -57,6 +64,13 @@ public static class BookingStatusMapper
         [BookingStatus.CancelledByAdmin] = BookingStatusBucket.Cancelled,
         [BookingStatus.RefundPending] = BookingStatusBucket.Cancelled,
         [BookingStatus.Refunded] = BookingStatusBucket.Cancelled,
+        // Task 264: Expired was added to BookingStatus by task 240 but never
+        // to either table here, so LabelFor/BucketFor threw
+        // KeyNotFoundException for it and an expired booking fell out of every
+        // bucket - invisible in the customer's list and a 500 on its detail
+        // page. Bucketed as Cancelled: the booking is dead and was never paid
+        // for, so it is neither Upcoming nor Completed.
+        [BookingStatus.Expired] = BookingStatusBucket.Cancelled,
     };
 
     private static readonly ILookup<BookingStatusBucket, BookingStatus> StatusesByBucket =

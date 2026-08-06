@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
 using Nestly.Application.Bookings;
@@ -9,12 +10,37 @@ using Nestly.Infrastructure.Persistence;
 namespace Nestly.Infrastructure.Services;
 
 /// <inheritdoc cref="IBookingProviderAssignmentService"/>
+/// <remarks>
+/// Task 288 - how far the double-booking guard actually reaches, by provider:
+///
+/// <list type="bullet">
+/// <item>Every provider: <see cref="IProviderScheduleConflictService"/> is
+/// consulted inside a Serializable transaction on both assignment paths, so
+/// the check and the write it justifies cannot be split by a concurrent
+/// assignment on the same connection.</item>
+/// <item>PostgreSQL (runtime): additionally backed by the
+/// <c>ex_booking_provider_no_double_booking</c> EXCLUDE USING gist constraint
+/// added by the <c>AddProviderNoDoubleBooking</c> migration. Serializable
+/// Snapshot Isolation aborts one side of two concurrent assignments that both
+/// read "no conflict"; the exclusion constraint is the belt-and-braces
+/// backstop that also catches any writer that bypasses this service entirely.</item>
+/// <item>SQLite (Catalog.Tests' <c>TestDatabase</c>): the schema is built by
+/// <c>EnsureCreated</c> from the EF model, which never runs migrations, and
+/// SQLite has no exclusion constraints at all - so the database-level
+/// backstop simply does not exist there and the tests exercise the
+/// application-level check only. This is the same runtime/test provider
+/// divergence task 252 recorded for negative OFFSET, documented rather than
+/// papered over: a green test suite is not evidence that the Postgres
+/// constraint is correct, only that the service-level rule is.</item>
+/// </list>
+/// </remarks>
 public class BookingProviderAssignmentService : IBookingProviderAssignmentService
 {
     private readonly IBookingRepository _bookingRepository;
     private readonly IProviderRepository _providerRepository;
     private readonly IServiceRepository _serviceRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
+    private readonly IProviderScheduleConflictService _scheduleConflictService;
     // Matching candidates for GetEligibleProvidersAsync spans Provider,
     // ProviderServiceArea, ProviderSkillMapping, ProviderCapacity and Pincode
     // in one read - no single existing repository owns that join, so this
@@ -27,12 +53,14 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         IProviderRepository providerRepository,
         IServiceRepository serviceRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
+        IProviderScheduleConflictService scheduleConflictService,
         NestlyDbContext context)
     {
         _bookingRepository = bookingRepository;
         _providerRepository = providerRepository;
         _serviceRepository = serviceRepository;
         _assignmentRepository = assignmentRepository;
+        _scheduleConflictService = scheduleConflictService;
         _context = context;
     }
 
@@ -83,28 +111,95 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
                 $"A provider can only be assigned while the booking is AwaitingFulfilment or Assigned (current status: {booking.Status}).");
         }
 
-        // Supersede whatever assignment is currently outstanding, if any -
-        // PROVIDER.md OPEN DECISIONS #5: only one row is ever "live" per booking.
-        var currentAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
-        if (currentAssignment is not null)
+        // Task 288: the read this decision depends on and the writes that act
+        // on it are one unit of work. Serializable so that two assignments
+        // racing for the same provider and overlapping slots cannot both read
+        // "no conflict" and both commit - Postgres aborts one of them as a
+        // write skew, the same reasoning behind WalletService.DebitAsync's
+        // append-only balance check. See this class's doc comment for what
+        // this does and does not guarantee per database provider.
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var conflict = await _scheduleConflictService.FindConflictAsync(providerId, booking);
+        if (conflict is not null)
         {
-            currentAssignment.MarkReassigned();
-            await _assignmentRepository.UpdateAsync(currentAssignment);
+            return DoubleBookedError(conflict);
         }
 
-        var assignment = new BookingProviderAssignment(
-            Guid.NewGuid(), bookingId, providerId, assignedByType, adminUserId, responseDeadline);
-        await _assignmentRepository.AddAsync(assignment);
-
-        if (booking.Status == BookingStatus.AwaitingFulfilment)
+        try
         {
-            booking.TransitionTo(BookingStatus.Assigned, reason);
+            // Supersede whatever assignment is currently outstanding, if any -
+            // PROVIDER.md OPEN DECISIONS #5: only one row is ever "live" per booking.
+            var currentAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+            if (currentAssignment is not null)
+            {
+                currentAssignment.MarkReassigned();
+                await _assignmentRepository.UpdateAsync(currentAssignment);
+            }
+
+            var assignment = new BookingProviderAssignment(
+                Guid.NewGuid(), bookingId, providerId, assignedByType, adminUserId, responseDeadline);
+            await _assignmentRepository.AddAsync(assignment);
+
+            if (booking.Status == BookingStatus.AwaitingFulfilment)
+            {
+                booking.TransitionTo(BookingStatus.Assigned, reason);
+            }
+
+            booking.AssignProvider(providerId);
+            await _bookingRepository.UpdateAsync(booking);
+
+            await dbTransaction.CommitAsync();
+
+            return ToResponse(assignment, provider.DisplayName);
         }
+        catch (DbUpdateException)
+        {
+            // Either Postgres' ex_booking_provider_no_double_booking exclusion
+            // constraint rejected the write (see the AddProviderNoDoubleBooking
+            // migration) or the serializable transaction lost a race - both
+            // mean a competing assignment committed between the check above
+            // and this write. Detach so the failed rows can't be resubmitted
+            // by a later SaveChangesAsync on this same scoped context (same
+            // precaution as SlotCapacityRepository.TryReserveAsync), then
+            // re-read and report the real reason rather than a 500.
+            await dbTransaction.RollbackAsync();
+            DetachPendingAssignmentWrites();
 
-        booking.AssignProvider(providerId);
-        await _bookingRepository.UpdateAsync(booking);
+            var racedConflict = await _scheduleConflictService.FindConflictAsync(providerId, booking);
+            if (racedConflict is null)
+            {
+                throw;
+            }
 
-        return ToResponse(assignment, provider.DisplayName);
+            return DoubleBookedError(racedConflict);
+        }
+    }
+
+    /// <summary>
+    /// Task 288. Names the booking that was collided with: an admin who is
+    /// stopped from assigning needs to know which other job the provider is
+    /// already on, not just that "something" clashed. The automatic engine
+    /// gets the same failure and simply moves on to its next candidate
+    /// (<c>ProviderAutoAssignmentHandler.TryAssignAsync</c>), so one rule
+    /// covers both paths.
+    /// </summary>
+    private static Error DoubleBookedError(ProviderScheduleConflict conflict) => Error.Conflict(
+        "BookingProviderAssignment.ProviderDoubleBooked",
+        $"This provider is already assigned to booking {conflict.BookingId} on {conflict.SlotDate:yyyy-MM-dd} "
+        + $"from {conflict.StartTime:hh\\:mm} to {conflict.EndTime:hh\\:mm}, which overlaps this booking's slot.");
+
+    private void DetachPendingAssignmentWrites()
+    {
+        var pending = _context.ChangeTracker.Entries()
+            .Where(e => e.Entity is BookingProviderAssignment or Booking)
+            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+            .ToList();
+
+        foreach (var entry in pending)
+        {
+            entry.State = EntityState.Detached;
+        }
     }
 
     public async Task<Result<BookingProviderAssignmentResponse>> RejectAsync(Guid bookingId, RejectAssignmentRequest request)

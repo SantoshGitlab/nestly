@@ -19,12 +19,12 @@ public sealed class ProviderAssignmentEligibilityServiceTests : IClassFixture<Te
     private static readonly TimeSpan SlotStart = TimeSpan.FromHours(9);
     private static readonly TimeSpan SlotEnd = TimeSpan.FromHours(13);
 
-    private static Booking NewBooking(Guid customerId, Guid slotWindowId, DateOnly? date = null)
+    private static Booking NewBooking(Guid customerId, Guid slotWindowId, DateOnly? date = null, TimeSpan? start = null, TimeSpan? end = null)
     {
         var address = new AddressSnapshot(
             "Home", "221B Baker Street", null, null, "560001", "Bengaluru", "Karnataka",
             12.9716m, 77.5946m, "Asha Rao", "9876543210");
-        var slot = new SlotSnapshot(slotWindowId, date ?? SlotDate, "Morning", SlotStart, SlotEnd);
+        var slot = new SlotSnapshot(slotWindowId, date ?? SlotDate, "Morning", start ?? SlotStart, end ?? SlotEnd);
         var price = new PriceSnapshot(500m, 1, 500m, 0m, 50m, 550m, 18m, 99m, 10m, 659m);
         return new Booking(Guid.NewGuid(), customerId, new CustomerSnapshot("Asha Rao", "9876543210"), null, address, slot, price);
     }
@@ -34,6 +34,7 @@ public sealed class ProviderAssignmentEligibilityServiceTests : IClassFixture<Te
         new ProviderAvailabilityWindowRepository(context),
         new ProviderBlackoutDateRepository(context),
         new ProviderCapacityRepository(context),
+        new ProviderScheduleConflictService(context),
         context);
 
     private sealed record Setup(Guid CustomerId, Guid ProviderId, Guid SlotWindowId, Guid BookingId);
@@ -148,8 +149,13 @@ public sealed class ProviderAssignmentEligibilityServiceTests : IClassFixture<Te
         {
             context.Add(new ProviderCapacity(Guid.NewGuid(), setup.ProviderId, maxJobsPerDay: 1));
 
-            // A different booking, same date, already live-assigned to this provider.
-            var otherBooking = NewBooking(setup.CustomerId, Guid.NewGuid());
+            // A different booking, same date, already live-assigned to this
+            // provider - deliberately at a non-overlapping later time (the
+            // fixture booking runs 09:00-13:00), so what this test proves is
+            // the per-day count and not task 288's overlap invariant, which
+            // would otherwise reject an identical slot before the capacity
+            // check ever ran.
+            var otherBooking = NewBooking(setup.CustomerId, Guid.NewGuid(), start: TimeSpan.FromHours(14), end: TimeSpan.FromHours(16));
             await new BookingRepository(context).AddAsync(otherBooking);
             context.Add(new BookingProviderAssignment(Guid.NewGuid(), otherBooking.Id, setup.ProviderId, BookingAssignedByType.System, null, null));
             context.SaveChanges();
@@ -183,6 +189,13 @@ public sealed class ProviderAssignmentEligibilityServiceTests : IClassFixture<Te
         eligible.Should().BeTrue("a rejected assignment is no longer live and must not count against capacity");
     }
 
+    /// <remarks>
+    /// Since task 288 this outcome is over-determined: two bookings in the
+    /// same window on the same date necessarily overlap in clock time, so the
+    /// unconditional overlap check rejects them before MaxJobsPerSlot is even
+    /// consulted. Kept as the documented behaviour of the limit; the overlap
+    /// invariant itself is pinned by ProviderDoubleBookingTests.
+    /// </remarks>
     [Fact]
     public async Task IsEligibleAsync_false_once_MaxJobsPerSlot_is_reached_even_with_MaxJobsPerDay_still_free()
     {

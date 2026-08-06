@@ -71,15 +71,25 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         return provider;
     }
 
+    // The real SandboxRouteEstimateProvider, not a stub: it needs no HTTP and
+    // no key, and task 267 defines a sandbox-only response as carrying no road
+    // information, so candidate ranking here stays straight-line - exactly the
+    // behaviour these tests were written against. Task 267's reordering is
+    // covered in ProviderMatchingServiceRouteRankingTests.
     private static ProviderAutoAssignmentHandler BuildHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context, int retryAttempts = 3, bool enabled = true) => new(
-        new ProviderMatchingService(new BookingRepository(context), context),
+        new ProviderMatchingService(
+            new BookingRepository(context),
+            context,
+            new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
+            Options.Create(new AutoAssignmentOptions())),
         new ProviderAssignmentEligibilityService(
             new BookingRepository(context),
             new ProviderAvailabilityWindowRepository(context),
             new ProviderBlackoutDateRepository(context),
             new ProviderCapacityRepository(context),
+            new ProviderScheduleConflictService(context),
             context),
-        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), context),
+        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context),
         new BookingProviderAssignmentRepository(context),
         Options.Create(new AutoAssignmentOptions { RetryAttempts = retryAttempts, Enabled = enabled }),
         NullLogger<ProviderAutoAssignmentHandler>.Instance);
@@ -202,7 +212,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         using (var context = _db.CreateContext())
         {
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), context);
+                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);
 
             var firstAssign = await assignmentService.AssignBySystemAsync(f.BookingId, rejecter.Id);
             firstAssign.IsSuccess.Should().BeTrue();

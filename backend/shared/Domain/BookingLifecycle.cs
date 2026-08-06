@@ -20,7 +20,20 @@ public static class BookingLifecycle
         // the booking back to AwaitingFulfilment so it re-enters the
         // assignable pool for manual admin reassignment (PROVIDER.md OPEN
         // DECISIONS #1 - no auto-match).
-        [BookingStatus.Assigned] = [BookingStatus.InProgress, BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+        // ProviderEnRoute added (task 264). Assigned -> InProgress is
+        // deliberately kept alongside it: tapping en-route is optional, and a
+        // provider who goes straight from accepting the job to starting work
+        // must not be blocked by a tracking state they never entered.
+        [BookingStatus.Assigned] = [BookingStatus.ProviderEnRoute, BookingStatus.InProgress, BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+        // Task 264: the two tracking states carry the same cancel/reschedule
+        // edges Assigned has - a customer whose provider is en route or at the
+        // door has not lost the right to cancel, and admin can still step in.
+        // They do NOT carry Assigned's AwaitingFulfilment edge: that one exists
+        // for a provider *rejecting* an offer, and a provider who has already
+        // set off has accepted the job - returning it to the assignable pool
+        // from here is a withdrawal/reassignment, not a rejection.
+        [BookingStatus.ProviderEnRoute] = [BookingStatus.ProviderArrived, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+        [BookingStatus.ProviderArrived] = [BookingStatus.InProgress, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
         [BookingStatus.InProgress] = [BookingStatus.Completed, BookingStatus.CancelledByAdmin],
         [BookingStatus.Completed] = [BookingStatus.RefundPending],
         [BookingStatus.CancelledByCustomer] = [BookingStatus.RefundPending, BookingStatus.Refunded],

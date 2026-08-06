@@ -37,6 +37,7 @@ using Nestly.Application.ProviderManagement;
 using Nestly.Application.ProviderProfile;
 using Nestly.Application.NestlyCoins;
 using Nestly.Application.Referral;
+using Nestly.Application.Routing;
 using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
@@ -393,6 +394,10 @@ public static class DependencyInjection
         // provider-identity registrations above, which are the provider's own
         // self-service auth/onboarding (tasks 145a-146c).
         services.AddScoped<IBookingProviderAssignmentRepository, BookingProviderAssignmentRepository>();
+        // Task 288: the "one person, one place at a time" invariant, shared by
+        // the manual admin path below and the automatic engine's eligibility
+        // gate - registered before both, since both depend on it.
+        services.AddScoped<IProviderScheduleConflictService, ProviderScheduleConflictService>();
         services.AddScoped<IBookingProviderAssignmentService, BookingProviderAssignmentService>();
         // Phase 14 (tasks 242-250): the automatic-assignment engine's
         // candidate ranking - a new writer of BookingProviderAssignment
@@ -635,6 +640,8 @@ public static class DependencyInjection
         // vendor is configured yet. Swap this registration, not the callers,
         // when a production provider lands.
         services.AddScoped<INotificationProvider, SandboxNotificationProvider>();
+
+        services.AddRouteEstimates(configuration);
 
         return services;
     }

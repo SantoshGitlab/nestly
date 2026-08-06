@@ -42,6 +42,8 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Confirmed]: "Confirmed",
   [BookingStatus.AwaitingFulfilment]: "Preparing Service",
   [BookingStatus.Assigned]: "Professional Assigned",
+  [BookingStatus.ProviderEnRoute]: "Professional On the Way",
+  [BookingStatus.ProviderArrived]: "Professional Arrived",
   [BookingStatus.InProgress]: "In Progress",
   [BookingStatus.Completed]: "Completed",
   [BookingStatus.CancelledByCustomer]: "Cancelled by Customer",
@@ -49,6 +51,7 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Rescheduled]: "Rescheduled",
   [BookingStatus.RefundPending]: "Refund in Progress",
   [BookingStatus.Refunded]: "Refunded",
+  [BookingStatus.Expired]: "Expired",
 };
 
 const COMMENT_AUTHOR_LABELS: Record<SupportTicketCommentAuthorType, string> = {

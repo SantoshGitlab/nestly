@@ -28,6 +28,8 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: String(BookingStatus.Confirmed), label: "Confirmed" },
   { value: String(BookingStatus.AwaitingFulfilment), label: "Preparing Service" },
   { value: String(BookingStatus.Assigned), label: "Professional Assigned" },
+  { value: String(BookingStatus.ProviderEnRoute), label: "Professional On the Way" },
+  { value: String(BookingStatus.ProviderArrived), label: "Professional Arrived" },
   { value: String(BookingStatus.InProgress), label: "In Progress" },
   { value: String(BookingStatus.Completed), label: "Completed" },
   { value: String(BookingStatus.CancelledByCustomer), label: "Cancelled by Customer" },
@@ -35,6 +37,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: String(BookingStatus.Rescheduled), label: "Rescheduled" },
   { value: String(BookingStatus.RefundPending), label: "Refund in Progress" },
   { value: String(BookingStatus.Refunded), label: "Refunded" },
+  { value: String(BookingStatus.Expired), label: "Expired" },
 ];
 
 interface FilterFormState {

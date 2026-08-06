@@ -114,6 +114,11 @@ export function bookingStatusTone(status: BookingStatus): BadgeTone {
     case BookingStatus.Confirmed:
       return "success";
     case BookingStatus.Assigned:
+    // The tracking states (task 264) read as the same live-service moment as
+    // Assigned/InProgress, so they share its token rather than introducing a
+    // fourth colour into an already-busy timeline.
+    case BookingStatus.ProviderEnRoute:
+    case BookingStatus.ProviderArrived:
     case BookingStatus.InProgress:
       return "brand";
     case BookingStatus.PaymentPending:
@@ -124,6 +129,7 @@ export function bookingStatusTone(status: BookingStatus): BadgeTone {
     case BookingStatus.PaymentFailed:
     case BookingStatus.CancelledByCustomer:
     case BookingStatus.CancelledByAdmin:
+    case BookingStatus.Expired:
       return "danger";
     case BookingStatus.RefundPending:
     case BookingStatus.Refunded:

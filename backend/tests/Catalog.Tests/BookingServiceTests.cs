@@ -225,7 +225,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext), setupContext);
             var assignResult = await assignmentService.AssignAsync(bookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }
@@ -238,7 +238,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         {
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(acceptContext), new ProviderRepository(acceptContext), new ServiceRepository(acceptContext),
-                new BookingProviderAssignmentRepository(acceptContext), acceptContext);
+                new BookingProviderAssignmentRepository(acceptContext), new ProviderScheduleConflictService(acceptContext), acceptContext);
             var acceptResult = await assignmentService.AcceptAsync(bookingId, providerId);
             acceptResult.IsSuccess.Should().BeTrue();
         }

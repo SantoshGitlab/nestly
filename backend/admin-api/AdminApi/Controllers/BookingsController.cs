@@ -200,12 +200,13 @@ public class BookingsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
-    /// <summary>Assigns (or reassigns) a provider to a booking (task 147, PROVIDER.md OPEN DECISIONS #1 - manual admin-driven assignment). Gated behind "bookings.write" - the existing permission code, per PROVIDER.md's SCOPE BOUNDARY this is Booking-domain behaviour, not a separate Provider-module permission.</summary>
+    /// <summary>Assigns (or reassigns) a provider to a booking (task 147, PROVIDER.md OPEN DECISIONS #1 - manual admin-driven assignment). Gated behind "bookings.write" - the existing permission code, per PROVIDER.md's SCOPE BOUNDARY this is Booking-domain behaviour, not a separate Provider-module permission. Returns 409 with "BookingProviderAssignment.ProviderDoubleBooked" when the provider is already on an overlapping job (task 288) - unlike their advisory capacity limits, that one is a hard stop even for an admin.</summary>
     [HttpPost("{bookingId:guid}/assign-provider")]
     [Authorize(Policy = WritePolicy)]
     [ProducesResponseType(typeof(BookingProviderAssignmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> AssignProvider(Guid bookingId, [FromBody] AssignProviderRequest request)
     {

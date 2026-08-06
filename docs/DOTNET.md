@@ -272,6 +272,66 @@ Redis when `Cache:ConnectionString` is set, an in-process store otherwise.
 - `GetOrCreateAsync` is cache-aside, not a lock: concurrent misses may each run
   the factory. Do not use it where the factory has side effects.
 
+## EXTERNAL ROUTE ESTIMATES (T266)
+
+Road distance and travel time come from `IRouteEstimateProvider` (Application
+layer) — one origin to many destinations, batched into a single call. Both
+auto-assignment ranking (T267) and the customer-facing ETA (T271) use it, so
+they cannot drift into two different notions of "near".
+
+The implementation is chosen by configuration, exactly like the cache:
+
+- `GoogleMapsRouteEstimateProvider` when `GoogleMaps:ApiKey` is set and
+  `GoogleMaps:Enabled` is true — the Google Maps Platform **Routes API**
+  (`computeRouteMatrix`). Not the Distance Matrix API: Google made that a
+  legacy product on 1 March 2025 and it cannot be enabled on a Cloud project
+  that had not already turned it on, so a new deployment could never switch it
+  on.
+- `SandboxRouteEstimateProvider` otherwise — Haversine × a road-winding factor
+  at a fixed average speed. The whole tracking and assignment stack therefore
+  runs with no billing account, no key and no network.
+
+Rules this integration must keep:
+
+- **It never throws.** Missing key, HTTP 5xx, `429`, a rejected credential, a
+  timeout, an unparseable body, or a single unroutable destination all degrade
+  to the sandbox estimate for the destinations affected, and are logged. An
+  approximate ETA on a tracking screen is acceptable; a failed booking is not.
+  Caller cancellation is the one exception and propagates as usual.
+- **The API key is header-only** (`X-Goog-Api-Key`) and appears in no URL, no
+  cache key, no log and no exception message. `GoogleMapsOptions` is a class,
+  not a record, so its `ToString` cannot print it.
+- Legs are cached through `ICacheService` under `CacheKeys.RouteEstimate`,
+  which rounds coordinates to `CacheKeys.RouteEstimateCoordinateDecimals` (4
+  places, ~11 m) so a moving provider keeps hitting the same entry.
+  `GoogleMaps:CacheTtlSeconds` is short because the durations are
+  traffic-aware. Only Google-sourced legs are cached — caching a sandbox
+  approximation would outlive the outage that produced it.
+- Requests are chunked to `GoogleMaps:MaxDestinationsPerCall`, and one
+  `EstimateAsync` may not send more than
+  `GoogleMaps:MaxDestinationsPerEstimate` destinations to Google in total.
+  Destinations past that cap get the sandbox estimate rather than being
+  dropped.
+
+### Configuration keys
+
+| Key | Default | Notes |
+| --- | --- | --- |
+| `GoogleMaps:ApiKey` | *(none)* | **Secret.** Absent ⇒ sandbox. Set via `GoogleMaps__ApiKey` from the secret store, never in `appsettings.json`. |
+| `GoogleMaps:Enabled` | `true` | Kill switch — force the sandbox without deleting the key. |
+| `GoogleMaps:TimeoutSeconds` | `5` | Per-request HTTP timeout. |
+| `GoogleMaps:CacheTtlSeconds` | `60` | Cached-leg TTL; `0` disables caching. |
+| `GoogleMaps:MaxDestinationsPerCall` | `25` | Destinations per HTTP request; hard-capped at 100 (Google's tightest element limit). |
+| `GoogleMaps:MaxDestinationsPerEstimate` | `100` | Total destinations one estimate may bill for. |
+| `RouteEstimates:Sandbox:RoadWindingFactor` | `1.3` | Road length ÷ straight-line length. |
+| `RouteEstimates:Sandbox:AverageSpeedKph` | `25` | Average door-to-door driving speed. |
+
+The server-side key must be restricted **by caller IP** and to the **Routes
+API** only. It is not the browser key: the customer web app's
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (T280) is public by construction and can only
+be protected by an HTTP-referrer restriction, which does nothing for a server
+call. Issue two separate keys.
+
 ## HEALTH CHECKS
 
 Applications should expose health endpoints for:

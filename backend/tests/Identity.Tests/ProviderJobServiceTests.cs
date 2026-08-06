@@ -44,7 +44,7 @@ public class ProviderJobServiceTests : IDisposable
 
     private BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
-        new BookingProviderAssignmentRepository(context), context);
+        new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);
 
     private static Booking NewAwaitingFulfilmentBooking(Guid customerId)
     {
