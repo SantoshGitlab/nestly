@@ -19,7 +19,7 @@ public sealed class WalletCreditExpiryTests : IClassFixture<TestDatabase>
     public WalletCreditExpiryTests(TestDatabase db) => _db = db;
 
     private static WalletService BuildWalletService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
-        new(new WalletLedgerRepository(context));
+        new(new WalletLedgerRepository(context), context);
 
     private static WalletCreditExpirySweepJob BuildSweepJob(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(new WalletLedgerRepository(context), BuildWalletService(context), NullLogger<WalletCreditExpirySweepJob>.Instance);

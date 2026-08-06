@@ -74,7 +74,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
             new BookingRepository(context),
             new PaymentTransactionRepository(context),
             new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
             gateway,
             context);
@@ -208,7 +208,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var balance = await new WalletService(new WalletLedgerRepository(readContext)).GetBalanceAsync(fixture.Customer.Id);
+        var balance = await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id);
         balance.Value.Balance.Should().Be(fixture.Total);
     }
 

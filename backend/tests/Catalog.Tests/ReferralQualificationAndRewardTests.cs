@@ -23,7 +23,7 @@ public sealed class ReferralQualificationAndRewardTests : IClassFixture<TestData
             new ReferralRepository(context),
             new ReferralProgramConfigRepository(context),
             new CustomerRepository(context),
-            new WalletService(new WalletLedgerRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
             new CouponRepository(context),
             new ReferralMilestoneRepository(context),
             new ReferralMilestoneAwardRepository(context),

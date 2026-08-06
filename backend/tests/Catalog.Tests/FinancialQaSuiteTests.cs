@@ -297,7 +297,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
 
         RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context)), BuildEscrowService(context), gateway, context);
+            new WalletService(new WalletLedgerRepository(context), context), BuildEscrowService(context), gateway, context);
 
         // 600 via gateway, then an over-ask of 500 (only 400 remains) must be rejected...
         using (var partialGatewayContext = _db.CreateContext())
@@ -329,7 +329,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         refunds.Should().HaveCount(2);
         refunds.Sum(r => r.Amount).Should().Be(1000m);
 
-        var walletBalance = await new WalletService(new WalletLedgerRepository(readContext)).GetBalanceAsync(fixture.Customer.Id);
+        var walletBalance = await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id);
         walletBalance.Value.Balance.Should().Be(400m, "only the wallet-settled portion credits the wallet");
     }
 }

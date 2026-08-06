@@ -53,7 +53,7 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
     private static RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
         new(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context)), BuildEscrowService(context), gateway, context);
+            new WalletService(new WalletLedgerRepository(context), context), BuildEscrowService(context), gateway, context);
 
     private static BookingService BuildBookingService(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {
