@@ -126,15 +126,34 @@ public class CustomerRegistrationService : ICustomerRegistrationService
             await _authIdentityRepository.AddAsync(emailIdentity);
         }
 
-        await _notificationDispatchService.DispatchAsync(
-            customer.Id,
-            NotificationEventType.Welcome,
-            new NotificationRecipient(customer.Mobile, customer.Email),
-            new Dictionary<string, string> { ["CustomerName"] = customer.Name });
+        // Best-effort side effects from here down: the account (Customer +
+        // CustomerAuthIdentity rows above) is already durably committed, so a
+        // failure dispatching the welcome notification or creating a
+        // referral must never turn an already-successful registration into a
+        // 500 (NESTLY-001).
+        try
+        {
+            await _notificationDispatchService.DispatchAsync(
+                customer.Id,
+                NotificationEventType.Welcome,
+                new NotificationRecipient(customer.Mobile, customer.Email),
+                new Dictionary<string, string> { ["CustomerName"] = customer.Name });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to dispatch welcome notification for customer {CustomerId}.", customer.Id);
+        }
 
         if (!string.IsNullOrWhiteSpace(request.ReferralCode))
         {
-            await TryCreateReferralAsync(customer, request.ReferralCode);
+            try
+            {
+                await TryCreateReferralAsync(customer, request.ReferralCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process referral code {ReferralCode} for customer {CustomerId}.", request.ReferralCode, customer.Id);
+            }
         }
 
         return Result.Success(new CustomerSummaryResponse(

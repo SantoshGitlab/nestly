@@ -64,9 +64,23 @@ public sealed class NotificationTemplateRenderer : INotificationTemplateRenderer
         _cache.GetOrCreateAsync(NotificationTemplateCacheKeys.ActiveTemplates, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheDuration;
-            var rows = await _repository.ListActiveAsync(cancellationToken);
-            IReadOnlyDictionary<(NotificationEventType, NotificationChannel), NotificationTemplate> byKey =
-                rows.ToDictionary(t => (t.EventType, t.Channel), t => t);
-            return byKey;
+            try
+            {
+                var rows = await _repository.ListActiveAsync(cancellationToken);
+                IReadOnlyDictionary<(NotificationEventType, NotificationChannel), NotificationTemplate> byKey =
+                    rows.ToDictionary(t => (t.EventType, t.Channel), t => t);
+                return byKey;
+            }
+            catch
+            {
+                // GetOrCreateAsync's `using` entry still commits to the
+                // cache on the way out even when the factory throws, so a
+                // transient DB hiccup here would otherwise poison every
+                // dispatch for the full CacheDuration. Shrink the
+                // expiration so the next call retries within seconds
+                // instead of waiting out the 10-minute TTL.
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5);
+                throw;
+            }
         })!;
 }
