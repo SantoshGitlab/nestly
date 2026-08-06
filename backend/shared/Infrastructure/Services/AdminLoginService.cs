@@ -68,6 +68,23 @@ public class AdminLoginService : IAdminLoginService
             return Result.Failure<AdminLoginResponse>(InvalidCredentials);
         }
 
+        var verification = _passwordHasher.VerifyHashedPassword(adminUser, adminUser.PasswordHash, request.Password);
+        if (verification == PasswordVerificationResult.Failed)
+        {
+            adminUser.RegisterFailedLoginAttempt(
+                _options.MaxFailedLoginAttempts, TimeSpan.FromMinutes(_options.LockoutMinutes), now);
+            await _adminUserRepository.UpdateAsync(adminUser);
+            await RecordAttemptAsync(adminUser.Id.ToString(), "AdminLoginFailed");
+            return Result.Failure<AdminLoginResponse>(InvalidCredentials);
+        }
+
+        // Lockout/inactive detail is only ever revealed once the password has
+        // already been confirmed correct - checking these before password
+        // verification would let an unauthenticated caller distinguish a
+        // locked or deactivated account from an unknown email or a wrong
+        // password with a single request (SRS 28.3 enumeration risk), the
+        // same reasoning CustomerLoginService.IssueSessionAsync's Status
+        // check follows.
         if (adminUser.IsLockedOut(now))
         {
             await RecordAttemptAsync(adminUser.Id.ToString(), "AdminLoginFailedAccountLocked");
@@ -81,16 +98,6 @@ public class AdminLoginService : IAdminLoginService
             await RecordAttemptAsync(adminUser.Id.ToString(), "AdminLoginFailedAccountInactive");
             return Result.Failure<AdminLoginResponse>(
                 Error.Forbidden("AdminLogin.AccountNotActive", "This account cannot log in."));
-        }
-
-        var verification = _passwordHasher.VerifyHashedPassword(adminUser, adminUser.PasswordHash, request.Password);
-        if (verification == PasswordVerificationResult.Failed)
-        {
-            adminUser.RegisterFailedLoginAttempt(
-                _options.MaxFailedLoginAttempts, TimeSpan.FromMinutes(_options.LockoutMinutes), now);
-            await _adminUserRepository.UpdateAsync(adminUser);
-            await RecordAttemptAsync(adminUser.Id.ToString(), "AdminLoginFailed");
-            return Result.Failure<AdminLoginResponse>(InvalidCredentials);
         }
 
         var mfaResult = await _mfaChallengeProvider.VerifyAsync(adminUser);
