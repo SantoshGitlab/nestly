@@ -75,6 +75,14 @@ public class CouponService : ICouponService
             return Error.Conflict("Coupon.UsageLimitReached", "This coupon has reached its overall usage limit.");
         }
 
+        // Preview only - fast, friendly feedback in the checkout UI before a
+        // booking is attempted. Not the enforcement boundary: this read has
+        // no transaction or lock tying it to the reservation that happens
+        // later in ReserveAsync, so it cannot by itself stop two concurrent
+        // bookings from both seeing "not yet used" (NESTLY-009). The real
+        // guard against that is the atomic per-customer check inside
+        // ICouponRepository.TryReserveRedemptionAsync, run again immediately
+        // before the booking is created.
         if (coupon.UsageLimitPerCustomer is not null)
         {
             int usedByCustomer = await _redemptionRepository.CountByCouponAndCustomerAsync(coupon.Id, customerId);
@@ -92,12 +100,12 @@ public class CouponService : ICouponService
         return Result.Success(new CouponSummaryResponse(coupon.Id, coupon.Code, coupon.Description, discountAmount));
     }
 
-    public async Task<Result> ReserveAsync(Guid couponId)
+    public async Task<Result> ReserveAsync(Guid couponId, Guid customerId)
     {
-        bool reserved = await _couponRepository.TryReserveRedemptionAsync(couponId);
+        bool reserved = await _couponRepository.TryReserveRedemptionAsync(couponId, customerId);
         return reserved
             ? Result.Success()
-            : Result.Failure(Error.Conflict("Coupon.UsageLimitReached", "This coupon has reached its overall usage limit."));
+            : Result.Failure(Error.Conflict("Coupon.UsageLimitReached", "This coupon can no longer be redeemed - its usage limit has been reached."));
     }
 
     public Task CreateRedemptionRecordAsync(Guid couponId, Guid customerId, Guid bookingId, decimal discountAmount) =>

@@ -126,7 +126,7 @@ public class BookingService : IBookingService
         // available.
         if (summary.Coupon is not null)
         {
-            var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId);
+            var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId, customerId);
             if (reserveResult.IsFailure)
             {
                 _metricsService.RecordBookingCreated(succeeded: false, reserveResult.Error.Code);

@@ -34,15 +34,110 @@ public class CouponRepository : ICouponRepository
             .ToDictionaryAsync(c => c.Id, c => c.Code);
     }
 
-    public async Task<bool> TryReserveRedemptionAsync(Guid couponId)
+    public async Task<bool> TryReserveRedemptionAsync(Guid couponId, Guid customerId)
     {
-        // A single conditional UPDATE, not read-then-write: the WHERE clause
-        // re-checks the cap in the same statement that increments the
-        // counter, so two concurrent bookings racing for the last
-        // redemption cannot both succeed (task 72c).
+        // Both caps are claimed by conditional UPDATEs, never read-then-write
+        // (task 72c, NESTLY-009). The per-customer cap deliberately does not
+        // count CouponRedemption rows: those carry a required foreign key to
+        // the booking, so they are written only *after* the booking is
+        // persisted - well after this reservation runs. Every request in a
+        // concurrent batch would therefore count zero and all of them would
+        // pass a single-use-per-customer cap. The claim has to land on
+        // something that exists now, so it lands on a per-(coupon, customer)
+        // counter row, incremented under the same conditional-UPDATE
+        // discipline SlotCapacityRepository uses for slot capacity.
+        int? perCustomerLimit = await _context.Coupons
+            .AsNoTracking()
+            .Where(c => c.Id == couponId)
+            .Select(c => c.UsageLimitPerCustomer)
+            .FirstOrDefaultAsync();
+
+        // Per-customer first: it is the cap a customer is most likely to hit,
+        // and failing it costs nothing to unwind. The global claim below is
+        // the one that may need compensating.
+        if (perCustomerLimit is not null
+            && !await TryReservePerCustomerAsync(couponId, customerId, perCustomerLimit.Value))
+        {
+            return false;
+        }
+
         int affected = await _context.Coupons
             .Where(c => c.Id == couponId && (c.UsageLimitTotal == null || c.RedemptionCount < c.UsageLimitTotal))
             .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.RedemptionCount, c => c.RedemptionCount + 1));
+
+        if (affected != 1 && perCustomerLimit is not null)
+        {
+            // The campaign-wide cap was already exhausted, so this booking
+            // will not happen. Hand the customer's allowance back rather than
+            // burning it on a redemption that never occurred - otherwise
+            // losing this race would lock them out of a single-use coupon
+            // permanently. Guarded on ReservedCount > 0 for the same reason
+            // the increment is guarded: a single UPDATE that cannot be lost
+            // to a concurrent one, and that can never go negative.
+            await _context.Set<CouponCustomerRedemptionCounter>()
+                .Where(c => c.CouponId == couponId && c.CustomerId == customerId && c.ReservedCount > 0)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.ReservedCount, c => c.ReservedCount - 1));
+        }
+
+        return affected == 1;
+    }
+
+    /// <summary>
+    /// Claims one unit of <paramref name="customerId"/>'s allowance on this
+    /// coupon, creating the counter row on first use. Mirrors
+    /// SlotCapacityRepository.TryReserveAsync: if two concurrent requests
+    /// both race to create that first row, the unique index on
+    /// (CouponId, CustomerId) lets exactly one INSERT win and the loser falls
+    /// back to the conditional UPDATE it would have taken had the row already
+    /// existed, so the outcome is still cap-correct.
+    /// </summary>
+    private async Task<bool> TryReservePerCustomerAsync(Guid couponId, Guid customerId, int limit)
+    {
+        if (await TryIncrementPerCustomerAsync(couponId, customerId, limit))
+        {
+            return true;
+        }
+
+        // ExecuteUpdateAsync can't tell "no row yet" apart from "row exists
+        // and is at the cap" - both match zero rows. Assume the optimistic
+        // case (this customer has never used this coupon) and try to create
+        // the counter. A limit of zero has no optimistic case to try.
+        if (limit < 1)
+        {
+            return false;
+        }
+
+        try
+        {
+            _context.Set<CouponCustomerRedemptionCounter>()
+                .Add(new CouponCustomerRedemptionCounter(Guid.NewGuid(), couponId, customerId, 1));
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            // Lost the race to create the row - another request's insert
+            // already committed (or the row genuinely existed and was at the
+            // cap all along). Detach the failed entity so it isn't
+            // re-submitted by a later SaveChangesAsync on this same
+            // request-scoped context, then re-check against the real row.
+            foreach (var entry in _context.ChangeTracker.Entries<CouponCustomerRedemptionCounter>().ToList())
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
+
+            return await TryIncrementPerCustomerAsync(couponId, customerId, limit);
+        }
+    }
+
+    private async Task<bool> TryIncrementPerCustomerAsync(Guid couponId, Guid customerId, int limit)
+    {
+        int affected = await _context.Set<CouponCustomerRedemptionCounter>()
+            .Where(c => c.CouponId == couponId && c.CustomerId == customerId && c.ReservedCount < limit)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.ReservedCount, c => c.ReservedCount + 1));
 
         return affected == 1;
     }

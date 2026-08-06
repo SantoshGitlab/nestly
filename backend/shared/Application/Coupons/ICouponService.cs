@@ -7,9 +7,10 @@ namespace Nestly.Application.Coupons;
 /// Split into a read-only preview (<see cref="ValidateAsync"/>, safe to call
 /// as many times as the customer edits their cart/checkout) and a two-step
 /// commit used only once, at booking creation:
-/// <see cref="ReserveAsync"/> atomically consumes one unit of the coupon's
-/// global usage cap before the booking exists (so the cap can never be
-/// exceeded, and a failed reservation never creates a booking), and
+/// <see cref="ReserveAsync"/> atomically consumes one unit of both the
+/// coupon's global usage cap and the calling customer's per-customer cap
+/// before the booking exists (so neither cap can ever be exceeded, and a
+/// failed reservation never creates a booking), and
 /// <see cref="CreateRedemptionRecordAsync"/> links that reservation to the
 /// booking once it has actually been persisted (a <see cref="Domain.CouponRedemption"/>
 /// row has a foreign key to the booking, so it cannot be inserted first).
@@ -25,8 +26,8 @@ public interface ICouponService
     /// </summary>
     Task<Result<CouponSummaryResponse>> ValidateAsync(Guid customerId, string code, Guid categoryId, decimal orderAmount);
 
-    /// <summary>Atomically reserves one redemption against the coupon's global cap. Call only immediately before creating the booking that will use it.</summary>
-    Task<Result> ReserveAsync(Guid couponId);
+    /// <summary>Atomically reserves one redemption against both the coupon's global cap and <paramref name="customerId"/>'s per-customer cap. Call only immediately before creating the booking that will use it.</summary>
+    Task<Result> ReserveAsync(Guid couponId, Guid customerId);
 
     Task CreateRedemptionRecordAsync(Guid couponId, Guid customerId, Guid bookingId, decimal discountAmount);
 }
