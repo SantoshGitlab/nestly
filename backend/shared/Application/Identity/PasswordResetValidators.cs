@@ -28,6 +28,7 @@ public class ResetPasswordRequestValidator : AbstractValidator<ResetPasswordRequ
         // reset must not be a way to set a weaker password than signup allows.
         RuleFor(x => x.NewPassword)
             .NotEmpty().WithMessage("New password is required")
-            .MinimumLength(8).WithMessage("Password must be at least 8 characters");
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters")
+            .MaximumLength(128).WithMessage("Password must be at most 128 characters");
     }
 }
