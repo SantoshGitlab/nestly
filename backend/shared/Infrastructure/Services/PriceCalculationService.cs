@@ -83,7 +83,10 @@ public class PriceCalculationService : IPriceCalculationService
         decimal platformFee = pricingPolicy?.PlatformFee ?? 0m;
 
         decimal subtotal = baseTotal + addOnTotal + visitCharge;
-        decimal taxAmount = Math.Round(subtotal * taxPercentage / 100m, 2);
+        // MidpointRounding stated explicitly (task 260): this is money, and
+        // ToEven matches CommissionCalculator/CancellationFeeCalculator/
+        // RescheduleFeeCalculator rather than leaving the rule to a language default.
+        decimal taxAmount = Math.Round(subtotal * taxPercentage / 100m, 2, MidpointRounding.ToEven);
         decimal totalPayable = subtotal + taxAmount + platformFee;
 
         return new PriceBreakdownResponse(

@@ -35,10 +35,13 @@ public class CouponRedemptionConfiguration : IEntityTypeConfiguration<CouponRede
         builder.Property(x => x.DiscountAmount).IsRequired().HasPrecision(12, 2);
         builder.Property(x => x.RedeemedAtUtc).IsRequired();
 
-        // Non-unique: supports UsageLimitPerCustomer > 1. The common
-        // single-use-per-customer case is enforced in ICouponService via a
-        // count check inside the same transaction as the atomic usage-cap
-        // increment, not by a DB constraint here.
+        // Non-unique: supports UsageLimitPerCustomer > 1, and these rows are
+        // history, not the enforcement point - they are written after the
+        // booking they reference exists, so they cannot arbitrate a cap that
+        // had to be claimed before it. UsageLimitPerCustomer is enforced by
+        // the unique-indexed counter in
+        // CouponCustomerRedemptionCounterConfiguration, claimed atomically at
+        // reservation time (NESTLY-009). This index serves lookups only.
         builder.HasIndex(x => new { x.CouponId, x.CustomerId });
     }
 }

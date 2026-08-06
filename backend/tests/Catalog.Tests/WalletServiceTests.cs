@@ -14,7 +14,7 @@ public sealed class WalletServiceTests : IClassFixture<TestDatabase>
     public WalletServiceTests(TestDatabase db) => _db = db;
 
     private static WalletService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
-        new(new WalletLedgerRepository(context));
+        new(new WalletLedgerRepository(context), context);
 
     private static Guid SeedCustomer(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {

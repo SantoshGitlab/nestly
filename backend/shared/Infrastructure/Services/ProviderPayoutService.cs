@@ -1,4 +1,5 @@
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.ProviderManagement;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -6,20 +7,45 @@ using Nestly.Domain;
 namespace Nestly.Infrastructure.Services;
 
 /// <inheritdoc cref="IProviderPayoutService"/>
+/// <remarks>
+/// Writes an audit entry for batch creation and every status change (task
+/// 132c gap fix, NESTLY-007): a payout batch and its Processing/Paid/Failed
+/// transitions are directly financial (bank reference, amount owed), the
+/// same "every write is audited" reasoning <c>CouponManagementService</c>'s
+/// doc comment gives for discount changes applies here. Staged before the
+/// repository call so the repository's own <c>SaveChangesAsync</c> commits
+/// both in one transaction.
+/// </remarks>
 public class ProviderPayoutService : IProviderPayoutService
 {
+    /// <summary>
+    /// Task 251: page-size bounds for <see cref="SearchAsync"/>. Clamped here
+    /// rather than in each caller because both payout list endpoints - admin
+    /// PayoutsController.Search and provider EarningsController.ListPayouts -
+    /// funnel through this one method, and neither validates its query
+    /// string. Unbounded, a single request materializes the whole table;
+    /// a page below 1 reaches the repository as a negative OFFSET, which
+    /// PostgreSQL rejects outright ("OFFSET must not be negative") for a 500.
+    /// Same limits as AuditLogQueryService and the admin *Validators.cs.
+    /// </summary>
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderPayoutRepository _payoutRepository;
     private readonly IProviderEarningLedgerRepository _ledgerRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public ProviderPayoutService(
         IProviderRepository providerRepository,
         IProviderPayoutRepository payoutRepository,
-        IProviderEarningLedgerRepository ledgerRepository)
+        IProviderEarningLedgerRepository ledgerRepository,
+        IAuditLogWriter auditLogWriter)
     {
         _providerRepository = providerRepository;
         _payoutRepository = payoutRepository;
         _ledgerRepository = ledgerRepository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<Result<ProviderPayoutResponse>> CreateBatchAsync(Guid providerId, CreateProviderPayoutRequest request)
@@ -39,6 +65,13 @@ public class ProviderPayoutService : IProviderPayoutService
         }
 
         var payout = new ProviderPayout(Guid.NewGuid(), providerId, request.PeriodStart, request.PeriodEnd, total);
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "ProviderPayout",
+            payout.Id.ToString(),
+            "Created",
+            NewValues: $"ProviderId={providerId}; Status=(none)->{payout.Status}; TotalAmount={payout.TotalAmount}"));
+
         await _payoutRepository.AddAsync(payout);
 
         return ToResponse(payout, provider.DisplayName);
@@ -58,21 +91,29 @@ public class ProviderPayoutService : IProviderPayoutService
 
     public async Task<Result<ProviderPayoutSearchResponse>> SearchAsync(Guid? providerId, ProviderPayoutStatus? status, int page, int pageSize)
     {
+        // Clamp before the query, and echo the clamped values back in the
+        // response so a caller that asked for page 0 / pageSize 10000 can see
+        // what it actually got rather than silently mis-paging.
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize switch
+        {
+            <= 0 => DefaultPageSize,
+            > MaxPageSize => MaxPageSize,
+            _ => pageSize
+        };
+
         var (rows, totalCount) = await _payoutRepository.SearchAsync(providerId, status, page, pageSize);
 
-        var providerCache = new Dictionary<Guid, string>();
-        var items = new List<ProviderPayoutResponse>();
-        foreach (var payout in rows)
-        {
-            if (!providerCache.TryGetValue(payout.ProviderId, out var displayName))
-            {
-                var provider = await _providerRepository.GetByIdAsync(payout.ProviderId);
-                displayName = provider?.DisplayName ?? "(unknown provider)";
-                providerCache[payout.ProviderId] = displayName;
-            }
+        // Task 254: the local dictionary only avoided re-querying a provider
+        // already seen on this page - the first row for each distinct provider
+        // still cost its own round trip, so an admin page spanning 100
+        // providers issued 100 of them. One batched lookup instead.
+        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(
+            rows.Select(p => p.ProviderId).Distinct().ToList());
 
-            items.Add(ToResponse(payout, displayName));
-        }
+        var items = rows
+            .Select(payout => ToResponse(payout, displayNames.GetValueOrDefault(payout.ProviderId, "(unknown provider)")))
+            .ToList();
 
         return new ProviderPayoutSearchResponse(items, totalCount, page, pageSize);
     }
@@ -84,6 +125,8 @@ public class ProviderPayoutService : IProviderPayoutService
         {
             return Error.NotFound("ProviderPayout.NotFound", "Payout was not found.");
         }
+
+        var previousStatus = payout.Status;
 
         try
         {
@@ -111,6 +154,12 @@ public class ProviderPayoutService : IProviderPayoutService
         {
             return Error.Business("ProviderPayout.InvalidTransition", ex.Message);
         }
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "ProviderPayout",
+            payout.Id.ToString(),
+            "StatusChanged",
+            NewValues: $"ProviderId={payout.ProviderId}; Status={previousStatus}->{payout.Status}; PayoutReference={payout.PayoutReference ?? "null"}"));
 
         await _payoutRepository.UpdateAsync(payout);
 

@@ -4,6 +4,7 @@ using Hangfire;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
+using Nestly.Application.Bookings;
 using Nestly.Application.Subscriptions;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Middleware;
@@ -76,6 +77,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// NESTLY-012: HSTS tells the browser to only ever use HTTPS for this host
+// going forward - skipped in Development since local dev typically runs
+// over plain HTTP.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 app.UseHttpsRedirection();
 
 app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
@@ -119,6 +128,19 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         "subscription-billing-sweep",
         job => job.ProcessDueBillingAsync(CancellationToken.None),
         Cron.Daily);
+}
+
+// Task 240: expires abandoned PaymentPending bookings and releases their slot
+// seat. Runs every 5 minutes (unlike the daily sweeps above) since the
+// default expiry window itself is only 20 minutes (BookingExpiryOptions) -
+// a daily cadence would hold seats far longer than the window intends. Same
+// ServerEnabled-guarded, idempotent-by-design registration pattern.
+if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundJobOptions>>().Value.ServerEnabled)
+{
+    RecurringJob.AddOrUpdate<IBookingExpirySweepJob>(
+        "booking-expiry-sweep",
+        job => job.SweepAsync(CancellationToken.None),
+        "*/5 * * * *");
 }
 
 app.MapControllers();

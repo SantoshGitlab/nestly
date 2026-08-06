@@ -59,8 +59,7 @@ public class ReferralRepository : IReferralRepository
         int totalCount = await query.CountAsync();
         var items = await query
             .OrderByDescending(r => r.RegisteredAtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .ApplyPaging(page, pageSize)
             .ToListAsync();
 
         return (items, totalCount);

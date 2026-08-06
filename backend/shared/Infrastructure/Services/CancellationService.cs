@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Options;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
+using Nestly.Application.Slots;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
@@ -33,6 +35,8 @@ public class CancellationService : ICancellationService
     private readonly IRefundService _refundService;
     private readonly ICancellationRepository _cancellationRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
+    private readonly ISlotAvailabilityService _slotAvailabilityService;
+    private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
     private readonly CancellationPolicyOptions _policy;
 
@@ -43,6 +47,8 @@ public class CancellationService : ICancellationService
         IRefundService refundService,
         ICancellationRepository cancellationRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
+        ISlotAvailabilityService slotAvailabilityService,
+        IBusinessClock businessClock,
         TimeProvider timeProvider,
         IOptions<CancellationPolicyOptions> policy)
     {
@@ -52,6 +58,8 @@ public class CancellationService : ICancellationService
         _refundService = refundService;
         _cancellationRepository = cancellationRepository;
         _assignmentRepository = assignmentRepository;
+        _slotAvailabilityService = slotAvailabilityService;
+        _businessClock = businessClock;
         _timeProvider = timeProvider;
         _policy = policy.Value;
     }
@@ -150,8 +158,47 @@ public class CancellationService : ICancellationService
     {
         var outcome = await ComputeOutcomeAsync(booking);
 
+        // NESTLY-002: reserve this booking's one-and-only BookingCancellation
+        // row (unique index on BookingId, BookingCancellationConfiguration)
+        // *before* transitioning the booking or ever calling IRefundService -
+        // the same TryAddAsync/"loser reads the winner's row" idiom
+        // PaymentService.CreateOrderAsync already uses for the identical
+        // duplicate-concurrent-request race on PaymentTransaction. Two
+        // near-simultaneous cancel calls for the same booking (double-click,
+        // client retry, two open tabs) both read the same pre-cancellation
+        // booking and both pass the lifecycle check above; without an atomic
+        // reservation here, both would independently reach IRefundService,
+        // which itself only sees "nothing refunded yet" from each request's
+        // own point of view since neither has committed - so both would
+        // actually move money. Refund fields are attached below once the
+        // winner's own refund (if any) has actually been raised.
+        var cancellation = new BookingCancellation(
+            Guid.NewGuid(),
+            booking.Id,
+            actor,
+            reason,
+            outcome.WithinFreeWindow,
+            outcome.FeeAmount,
+            outcome.RefundAmount,
+            refundMethod: null,
+            refundTransactionId: null,
+            internalNotes);
+
+        if (!await _cancellationRepository.TryAddAsync(cancellation))
+        {
+            return await BuildAlreadyCancelledResultAsync(booking);
+        }
+
         booking.TransitionTo(targetStatus, reason);
         await _bookingRepository.UpdateAsync(booking);
+
+        // Hand the slot's seat back to the pool. The reservation was taken
+        // when the booking was created (BookingService.CreateAsync); without
+        // this release the counter only ever climbs, and a window fills up
+        // with cancelled bookings until it rejects real customers while
+        // standing empty. Released after the transition so a booking that
+        // could not legally be cancelled never frees a seat it still holds.
+        await _slotAvailabilityService.ReleaseSlotAsync(booking.SlotWindowId, booking.SlotDate);
 
         // Task 208: a provider still Assigned/Accepted on this booking has no
         // way of hearing about the cancellation otherwise - ProviderJobService
@@ -182,21 +229,10 @@ public class CancellationService : ICancellationService
             refundTransactionId = refundResult.Value.Id;
             refundStatus = refundResult.Value.Status;
             refundMethod = refundResult.Value.Method;
+
+            cancellation.AttachRefund(refundTransactionId.Value, refundMethod.Value);
+            await _cancellationRepository.UpdateAsync(cancellation);
         }
-
-        var cancellation = new BookingCancellation(
-            Guid.NewGuid(),
-            booking.Id,
-            actor,
-            reason,
-            outcome.WithinFreeWindow,
-            outcome.FeeAmount,
-            outcome.RefundAmount,
-            refundMethod,
-            refundTransactionId,
-            internalNotes);
-
-        await _cancellationRepository.AddAsync(cancellation);
 
         // Re-fetch to report the booking's true post-refund status: a full
         // refund with nothing owed moves the booking straight past
@@ -216,12 +252,47 @@ public class CancellationService : ICancellationService
             cancellation.CreatedAtUtc));
     }
 
+    /// <summary>
+    /// NESTLY-002: the losing side of the TryAddAsync race above - some
+    /// concurrent request already reserved (and, per <see cref="BookingCancellation.RefundTransactionId"/>,
+    /// possibly already completed) this booking's cancellation. Reports that
+    /// winner's outcome instead of touching the booking or IRefundService
+    /// again, so a duplicate request reads as a clean no-op rather than a
+    /// second real cancellation/refund.
+    /// </summary>
+    private async Task<Result<CancellationOutcomeResponse>> BuildAlreadyCancelledResultAsync(Booking booking)
+    {
+        var winner = await _cancellationRepository.GetByBookingIdAsync(booking.Id)
+            ?? throw new InvalidOperationException($"Booking {booking.Id} lost its cancellation reservation race but no winning row was found.");
+
+        var winnerBooking = await _bookingRepository.GetByIdAsync(booking.Id) ?? booking;
+        var winnerRefund = winner.RefundTransactionId is Guid refundId
+            ? await _refundTransactionRepository.GetByIdAsync(refundId)
+            : null;
+
+        return Result.Success(new CancellationOutcomeResponse(
+            booking.Id,
+            winnerBooking.Status,
+            winner.WithinFreeCancellationWindow,
+            winner.CancellationFeeAmount,
+            winner.RefundAmount,
+            winnerRefund?.Status,
+            winner.RefundMethod,
+            winner.RefundTransactionId,
+            winner.CreatedAtUtc));
+    }
+
     private async Task<CancellationFeeCalculator.Outcome> ComputeOutcomeAsync(Booking booking)
     {
         decimal payableAmount = await ResolvePayableAmountAsync(booking.Id);
 
-        DateTime slotStartUtc = booking.SlotDate.ToDateTime(TimeOnly.MinValue).Add(booking.SlotStartTimeSnapshot);
-        DateTime now = _timeProvider.GetUtcNow().DateTime;
+        // Business wall-clock lifted to a real instant before it meets UTC
+        // now - see IBusinessClock. Subtracting the raw snapshot skewed
+        // "am I inside the free-cancellation window" by the business
+        // timezone's offset, which in IST handed out 5.5 hours of free
+        // cancellation nobody had earned.
+        DateTime slotStartUtc = _businessClock.ToUtc(booking.SlotDate, booking.SlotStartTimeSnapshot);
+        DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         TimeSpan timeUntilSlot = slotStartUtc - now;
 
         return CancellationFeeCalculator.Compute(

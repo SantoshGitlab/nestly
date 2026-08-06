@@ -28,6 +28,22 @@ public class CityRepository : ICityRepository
     public Task<City?> GetByIdAsync(Guid id) =>
         _context.Set<City>().FirstOrDefaultAsync(c => c.Id == id);
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await _context.Set<City>()
+            .AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .Select(c => new { c.Id, c.Name })
+            .ToDictionaryAsync(c => c.Id, c => c.Name);
+    }
+
+
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<City>().AnyAsync(c => c.Id == id);
 

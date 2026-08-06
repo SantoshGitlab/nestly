@@ -158,26 +158,20 @@ public class CustomerManagementService : ICustomerManagementService
 
         decimal walletBalance = walletEntries.Count > 0 ? walletEntries[0].BalanceAfter : 0m;
 
-        // Small, bounded set per customer (usage caps keep redemption counts
-        // low) - a cache avoids repeat lookups when the same coupon was used
-        // more than once, without needing a new batch-fetch repository method.
-        var couponCache = new Dictionary<Guid, Coupon?>();
-        var coupons = new List<CustomerCouponUsageResponse>();
-        foreach (var redemption in redemptions)
-        {
-            if (!couponCache.TryGetValue(redemption.CouponId, out var coupon))
-            {
-                coupon = await _couponRepository.GetByIdAsync(redemption.CouponId);
-                couponCache[redemption.CouponId] = coupon;
-            }
+        // Task 258: the cache only avoided re-querying a coupon already seen
+        // on this customer, so each distinct coupon still cost its own round
+        // trip (and loaded a whole Coupon aggregate to read its code).
+        var couponCodes = await _couponRepository.GetCodesByIdsAsync(
+            redemptions.Select(r => r.CouponId).Distinct().ToList());
 
-            coupons.Add(new CustomerCouponUsageResponse(
+        var coupons = redemptions
+            .Select(redemption => new CustomerCouponUsageResponse(
                 redemption.CouponId,
-                coupon?.Code ?? "(deleted coupon)",
+                couponCodes.GetValueOrDefault(redemption.CouponId, "(deleted coupon)"),
                 redemption.BookingId,
                 redemption.DiscountAmount,
-                redemption.RedeemedAtUtc));
-        }
+                redemption.RedeemedAtUtc))
+            .ToList();
 
         return new CustomerDetailResponse(
             customer.Id,

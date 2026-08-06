@@ -56,8 +56,7 @@ public sealed class AuditLogQueryService : IAuditLogQueryService
         // access path.
         List<AuditLog> pageEntries = await query
             .OrderByDescending(entry => entry.OccurredOnUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .ApplyPaging(page, pageSize)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 

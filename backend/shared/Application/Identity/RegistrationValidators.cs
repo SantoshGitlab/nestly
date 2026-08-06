@@ -34,6 +34,7 @@ public class RegisterCustomerRequestValidator : AbstractValidator<RegisterCustom
 
         RuleFor(x => x.Password)
             .MinimumLength(8).WithMessage("Password must be at least 8 characters")
+            .MaximumLength(128).WithMessage("Password must be at most 128 characters")
             .When(x => !string.IsNullOrEmpty(x.Password));
 
         RuleFor(x => x.ConsentAccepted)

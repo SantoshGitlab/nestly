@@ -22,6 +22,9 @@ public interface IServiceRepository : IRepository<Service>
     /// </summary>
     Task<IReadOnlyList<Service>> SearchActiveAsync(string query, int? limit = null);
 
+    /// <summary>Names for a set of service ids in one round trip (task 256) - mirrors <c>ICustomerRepository.GetNamesByIdsAsync</c>.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
     /// <summary>
     /// Every service regardless of active status, optionally filtered to one
     /// category, ordered for the admin management screen (SRS 12.6.1).

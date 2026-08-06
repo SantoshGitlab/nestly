@@ -63,6 +63,19 @@ public class Provider : Entity<Guid>
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Task 243: where this provider actually is, for the automatic-assignment
+    /// engine's distance ranking (PROVIDER.md OPEN DECISIONS - AUTOMATIC
+    /// ASSIGNMENT #1, task 244). Null until set via <see cref="UpdateLocation"/>
+    /// - a provider with no coordinates simply can't be auto-matched (falls
+    /// through to the existing manual admin queue), not a hard onboarding
+    /// blocker. Same decimal(9,6) shape as CustomerAddress.Latitude/Longitude,
+    /// not a PostGIS geography column - no such package exists anywhere in
+    /// this solution (see the OPEN DECISIONS entry).
+    /// </summary>
+    public decimal? Latitude { get; private set; }
+    public decimal? Longitude { get; private set; }
+
     protected Provider() { }
 
     public Provider(
@@ -118,6 +131,25 @@ public class Provider : Entity<Guid>
         {
             OnboardingStatus = ProviderOnboardingStatus.ProfileCompleted;
         }
+    }
+
+    /// <summary>
+    /// Task 243. Both-or-neither: a lone latitude or longitude is not a
+    /// usable coordinate, so this rejects the half-set case rather than
+    /// silently persisting an unusable point. Pass both null to clear a
+    /// previously set location (e.g. the provider relocated and hasn't
+    /// re-shared a new one yet).
+    /// </summary>
+    public void UpdateLocation(decimal? latitude, decimal? longitude)
+    {
+        if (latitude.HasValue != longitude.HasValue)
+        {
+            throw new ArgumentException("Latitude and longitude must be set together.");
+        }
+
+        Latitude = latitude;
+        Longitude = longitude;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     /// <summary>Applied only after an OTP proved control of the new number (mirrors <c>Customer.ChangeMobile</c>).</summary>

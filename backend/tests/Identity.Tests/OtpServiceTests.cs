@@ -2,9 +2,11 @@ using System.Security.Cryptography;
 using System.Text;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Moq;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Services;
 
@@ -21,6 +23,7 @@ namespace Nestly.Identity.Tests;
 public class OtpServiceTests : IDisposable
 {
     private const string Mobile = "+919876543210";
+    private const string Pepper = "test-only-otp-pepper-not-for-production-abc123";
 
     private readonly TestDatabase _database = new();
     private readonly Mock<INotificationProvider> _notificationProvider = new(MockBehavior.Strict);
@@ -46,7 +49,7 @@ public class OtpServiceTests : IDisposable
     }
 
     private OtpService CreateService(NestlyDbContext context) =>
-        new(context, _notificationProvider.Object);
+        new(context, _notificationProvider.Object, Options.Create(new OtpOptions { Pepper = Pepper }));
 
     private static string ExtractCode(string message) =>
         System.Text.RegularExpressions.Regex.Match(message, @"\d{6}").Value;
@@ -64,7 +67,7 @@ public class OtpServiceTests : IDisposable
         // The plaintext must never reach the database (CLAUDE.md: never log or
         // persist secrets).
         stored.CodeHash.Should().NotBe(_lastSentCode);
-        stored.CodeHash.Should().Be(Sha256Hex(_lastSentCode!));
+        stored.CodeHash.Should().Be(HmacSha256Hex(_lastSentCode!));
         stored.ConsumedAt.Should().BeNull();
         stored.AttemptCount.Should().Be(0);
     }
@@ -404,8 +407,8 @@ public class OtpServiceTests : IDisposable
         result.Error.Code.Should().Be("Otp.NotFound");
     }
 
-    private static string Sha256Hex(string value) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    private static string HmacSha256Hex(string value) =>
+        Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(Pepper), Encoding.UTF8.GetBytes(value)));
 
     public void Dispose() => _database.Dispose();
 }

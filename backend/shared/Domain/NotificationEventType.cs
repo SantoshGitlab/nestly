@@ -40,5 +40,8 @@ public enum NotificationEventType
     SubscriptionExpiringSoon,
 
     /// <summary>A subscription's recurring charge failed - either a recoverable suspension still retrying, or the terminal expiry once retries are exhausted (PRODUCT-ENHANCEMENTS.md #1, task 183).</summary>
-    SubscriptionPaymentFailed
+    SubscriptionPaymentFailed,
+
+    /// <summary>A PaymentPending booking was auto-expired by BookingExpirySweepJob without ever being paid for (task 240).</summary>
+    BookingExpired
 }

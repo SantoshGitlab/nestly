@@ -48,7 +48,7 @@ import {
   getEligibleProviders,
   rejectBookingAssignment,
 } from "@/lib/providers-api";
-import { BookingProviderAssignmentStatus } from "@/lib/providers-types";
+import { BookingAssignedByType, BookingProviderAssignmentStatus } from "@/lib/providers-types";
 import { BookingStatus } from "@/lib/types";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -410,7 +410,7 @@ export default function BookingDetailPage() {
 
       <Card
         title="Provider assignment"
-        description="Manual admin-driven assignment (PROVIDER.md OPEN DECISIONS #1, tasks 147, 159)"
+        description="Manually assign a provider below, or the system auto-assigns the nearest eligible one when a booking reaches Awaiting Fulfilment (tasks 147, 159, 246)"
       >
         {assignmentHistoryQuery.isPending ? (
           <SkeletonText lines={3} />
@@ -439,7 +439,13 @@ export default function BookingDetailPage() {
             {assignmentHistoryQuery.data.map((assignment) => (
               <li key={assignment.id} className="rounded-xl border border-line p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-fg">{assignment.providerDisplayName}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium text-fg">{assignment.providerDisplayName}</span>
+                    {/* Task 249: lets ops tell an auto-assignment (task 246) from a manual admin pick at a glance. */}
+                    <Badge tone={assignment.assignedByType === BookingAssignedByType.System ? "info" : "neutral"}>
+                      {assignment.assignedByType === BookingAssignedByType.System ? "Auto-assigned" : "By admin"}
+                    </Badge>
+                  </span>
                   <Badge
                     tone={
                       assignment.status === BookingProviderAssignmentStatus.Accepted

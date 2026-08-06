@@ -2,12 +2,16 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Bookings;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
+using Nestly.Application.Refunds;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Support;
+using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -38,7 +42,7 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -46,7 +50,9 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -60,7 +66,7 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context),
@@ -76,11 +82,51 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private static DisputeResolutionService BuildDisputeService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
+        BuildDisputeService(context, new RefundService(
+            new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context));
+
+    private static DisputeResolutionService BuildDisputeService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IRefundService refundService) =>
         new(
             new SupportTicketRepository(context),
-            new RefundService(
-                new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-                new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context));
+            refundService,
+            new AuditLogWriter(context, new StubAuditContextProvider()));
+
+    private sealed class StubAuditContextProvider : IAuditContextProvider
+    {
+        public AuditContext GetCurrent() =>
+            new(AuditActorType.AdminUser, Guid.NewGuid(), IpAddress: "127.0.0.1", CorrelationId: "test-correlation-id");
+    }
+
+    /// <summary>
+    /// NESTLY-003 regression: <see cref="IRefundService"/> stub that fails the
+    /// test outright if invoked more than once, so a second
+    /// <c>ResolveAsync</c> call on an already-resolved dispute proves it never
+    /// reaches the refund path at all - not just that the refund happens to
+    /// return a failure the second time.
+    /// </summary>
+    private sealed class CountingRefundService : IRefundService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<Result<RefundTransactionResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
+            Invoke();
+
+        public Task<Result<RefundTransactionResponse>> InitiatePartialRefundAsync(Guid bookingId, decimal amount, string reason, RefundMethod method = RefundMethod.Gateway) =>
+            Invoke();
+
+        public Task<Result<IReadOnlyList<RefundTransactionResponse>>> ListByBookingAsync(Guid customerId, Guid bookingId) =>
+            throw new NotSupportedException("Not exercised by this stub.");
+
+        private Task<Result<RefundTransactionResponse>> Invoke()
+        {
+            CallCount++;
+            CallCount.Should().Be(1, "a resolved dispute must never reach the refund service again");
+            return Task.FromResult(Result.Success(new RefundTransactionResponse(
+                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), RefundType.Full, RefundMethod.Gateway, 1m, RefundStatus.Refunded,
+                GatewayRefundRef: null, Reason: "test", CreatedAtUtc: DateTime.UtcNow, ProcessedAtUtc: DateTime.UtcNow)));
+        }
+    }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
@@ -103,6 +149,7 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
             var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
             var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
             var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+            address.LinkToGeography(pincode.Id, locality.Id);
             var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
             var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", servicePrice);
             var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -313,5 +360,48 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Code.Should().Be("Dispute.NoLinkedBooking");
+    }
+
+    /// <summary>
+    /// NESTLY-003 regression: before this fix, ResolveAsync checked only
+    /// <c>ticket.IsDisputed</c> (never cleared by a first resolution) before
+    /// calling the refund service, so a second resolve attempt raised a real
+    /// second refund and only then failed on the ticket's own Resolved ->
+    /// Resolved transition - reporting a failure for an operation that had
+    /// just moved money. Using <see cref="CountingRefundService"/> instead of
+    /// the real <see cref="RefundService"/> proves the second call is
+    /// rejected before the refund service is ever reached, not merely that
+    /// the eventual outcome happens to look like a rejection.
+    /// </summary>
+    [Fact]
+    public async Task ResolveAsync_a_second_time_never_reaches_the_refund_service_again()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, 1206m);
+        var ticketId = await SeedTicketAsync(fixture.Customer.Id, fixture.BookingId);
+        var refundService = new CountingRefundService();
+
+        using (var markContext = _db.CreateContext())
+        {
+            var mark = await BuildDisputeService(markContext, refundService).MarkDisputedAsync(ticketId);
+            mark.IsSuccess.Should().BeTrue();
+        }
+
+        using (var firstContext = _db.CreateContext())
+        {
+            var first = await BuildDisputeService(firstContext, refundService).ResolveAsync(
+                ticketId, new ResolveDisputeRequest(DisputeResolutionOutcome.RefundValid, "Duplicate charge confirmed.", null));
+            first.IsSuccess.Should().BeTrue();
+        }
+
+        refundService.CallCount.Should().Be(1);
+
+        using var secondContext = _db.CreateContext();
+        var second = await BuildDisputeService(secondContext, refundService).ResolveAsync(
+            ticketId, new ResolveDisputeRequest(DisputeResolutionOutcome.RefundValid, "Attempted re-resolve.", null));
+
+        second.IsSuccess.Should().BeFalse();
+        second.Error.Code.Should().Be("Dispute.CannotResolve");
+        refundService.CallCount.Should().Be(1, "an already-resolved dispute must never reach the refund service a second time");
     }
 }

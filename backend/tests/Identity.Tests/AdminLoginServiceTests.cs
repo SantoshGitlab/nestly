@@ -90,9 +90,18 @@ public class AdminLoginServiceTests : IDisposable
             result.Error.Code.Should().Be("AdminLogin.InvalidCredentials");
         }
 
-        var locked = await AttemptLoginAsync(options, "wrong-password");
-        locked.IsFailure.Should().BeTrue();
-        locked.Error.Code.Should().Be("AdminLogin.AccountLocked");
+        // Once locked, a wrong password still reports the same generic error
+        // as any other failed credential check - the lockout check now runs
+        // only after a successful password verification, so a wrong
+        // password never reveals that the account is locked (SRS 28.3).
+        var lockedWithWrongPassword = await AttemptLoginAsync(options, "wrong-password");
+        lockedWithWrongPassword.IsFailure.Should().BeTrue();
+        lockedWithWrongPassword.Error.Code.Should().Be("AdminLogin.InvalidCredentials");
+
+        // Only the correct password, once verified, surfaces the lockout detail.
+        var lockedWithCorrectPassword = await AttemptLoginAsync(options, CorrectPassword);
+        lockedWithCorrectPassword.IsFailure.Should().BeTrue();
+        lockedWithCorrectPassword.Error.Code.Should().Be("AdminLogin.AccountLocked");
     }
 
     [Fact]

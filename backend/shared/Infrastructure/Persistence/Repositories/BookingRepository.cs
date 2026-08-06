@@ -19,6 +19,30 @@ public class BookingRepository : IBookingRepository
         await _context.SaveChangesAsync();
     }
 
+    /// <summary>Task 241: mirrors PaymentTransactionRepository.TryAddAsync - the unique index on IdempotencyKey (BookingConfiguration) is what actually makes this race-safe, not this catch block by itself.</summary>
+    public async Task<bool> TryAddAsync(Booking booking)
+    {
+        await _context.Bookings.AddAsync(booking);
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException)
+        {
+            foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State == EntityState.Added).ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            return false;
+        }
+    }
+
+    public Task<Booking?> GetByIdempotencyKeyAsync(Guid customerId, string idempotencyKey) =>
+        FullyLoaded().FirstOrDefaultAsync(b => b.CustomerId == customerId && b.IdempotencyKey == idempotencyKey);
+
     public async Task UpdateAsync(Booking booking)
     {
         // Only attach+mark-modified when the booking isn't already tracked
@@ -146,8 +170,7 @@ public class BookingRepository : IBookingRepository
             .AsNoTracking()
             .Include(b => b.Items)
             .OrderByDescending(b => b.CreatedAtUtc)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         return new BookingSearchResult(rows, totalCount);
@@ -168,6 +191,30 @@ public class BookingRepository : IBookingRepository
     public Task<int> CountCompletedByAssignedProviderAsync(Guid providerId, Guid excludingBookingId) =>
         _context.Bookings.CountAsync(b =>
             b.AssignedProviderId == providerId && b.Status == BookingStatus.Completed && b.Id != excludingBookingId);
+
+    /// <summary>Task 240: BookingExpirySweepJob's candidate set - not AsNoTracking, since the job transitions and saves each row it loads here.</summary>
+    public async Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc) =>
+        await FullyLoaded()
+            .Where(b => b.Status == BookingStatus.PaymentPending && b.CreatedAtUtc < olderThanUtc)
+            .ToListAsync();
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Booking>> ListSummariesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        // No FullyLoaded() here on purpose - see the interface's doc comment.
+        // Pulling items/add-ons/status history for a whole page of bookings
+        // just to render snapshot columns is what made the per-row version
+        // expensive in the first place.
+        return await _context.Bookings
+            .AsNoTracking()
+            .Where(b => ids.Contains(b.Id))
+            .ToListAsync();
+    }
 
     private IQueryable<Booking> FullyLoaded() =>
         _context.Bookings

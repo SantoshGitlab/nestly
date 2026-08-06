@@ -78,6 +78,9 @@ public class Booking : AggregateRoot<Guid>
 
     public decimal? SubscriptionDiscountAmountSnapshot { get; private set; }
 
+    /// <summary>Task 241: the client-minted key from POST /bookings' idempotencyKey - see BookingService.CreateAsync. Null for callers that don't supply one (e.g. RecurringBookingSchedulerService), which simply get no dedup protection. BookingConfiguration puts a unique index on (CustomerId, IdempotencyKey); Postgres treats every NULL as distinct from every other, so only two of the same customer's rows sharing the same non-null key ever collide.</summary>
+    public string? IdempotencyKey { get; private set; }
+
     public BookingStatus Status { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
@@ -109,7 +112,8 @@ public class Booking : AggregateRoot<Guid>
         decimal? couponDiscountAmount = null,
         Guid? subscriptionId = null,
         bool subscriptionFreeVisitApplied = false,
-        decimal? subscriptionDiscountAmount = null)
+        decimal? subscriptionDiscountAmount = null,
+        string? idempotencyKey = null)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -157,6 +161,8 @@ public class Booking : AggregateRoot<Guid>
         SubscriptionId = subscriptionId;
         SubscriptionFreeVisitApplied = subscriptionFreeVisitApplied;
         SubscriptionDiscountAmountSnapshot = subscriptionDiscountAmount;
+
+        IdempotencyKey = idempotencyKey;
 
         Status = BookingStatus.Initiated;
         CreatedAtUtc = DateTime.UtcNow;

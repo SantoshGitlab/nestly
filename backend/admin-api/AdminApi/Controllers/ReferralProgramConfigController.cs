@@ -4,7 +4,6 @@ using FluentValidation.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
-using System.IdentityModel.Tokens.Jwt;
 using Nestly.Application.Referral;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
@@ -120,7 +119,7 @@ public class ReferralProgramConfigController : ControllerBase
     }
 
     private Guid CurrentAdminUserId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 
     private static ModelStateDictionary ToModelState(ValidationResult validation)
     {

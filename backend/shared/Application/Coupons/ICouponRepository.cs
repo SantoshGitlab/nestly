@@ -9,15 +9,20 @@ public interface ICouponRepository
     /// <summary>Codes are normalized to uppercase at construction (see <see cref="Coupon"/>) - lookups must match that normalization.</summary>
     Task<Coupon?> GetByCodeAsync(string code);
 
+    /// <summary>Codes for a set of coupon ids in one round trip (task 258) - the admin customer-detail screen renders a code per redemption row. Ids with no matching coupon are absent from the result.</summary>
+    Task<IReadOnlyDictionary<Guid, string>> GetCodesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
     /// <summary>
-    /// Atomically increments the coupon's redemption counter, but only if it
-    /// is still under its overall usage cap (or the cap is unlimited) - a
-    /// single conditional UPDATE, not a read-then-write, so the global usage
-    /// cap (task 72c) holds even under concurrent bookings racing for the
-    /// last redemption. Returns false (no state change) if the cap had
-    /// already been reached.
+    /// Atomically increments the coupon's redemption counter, but only if
+    /// both its overall usage cap and <paramref name="customerId"/>'s
+    /// per-customer cap are still unmet (either cap unlimited = null) - a
+    /// single conditional UPDATE, not a read-then-write, so neither cap
+    /// (task 72c, NESTLY-009) can be exceeded by concurrent bookings racing
+    /// for the last redemption, whether they're racing for the same
+    /// customer's single-use allowance or the campaign-wide total. Returns
+    /// false (no state change) if either cap had already been reached.
     /// </summary>
-    Task<bool> TryReserveRedemptionAsync(Guid couponId);
+    Task<bool> TryReserveRedemptionAsync(Guid couponId, Guid customerId);
 
     // ---- Admin management (SRS 12.12.1, task 118) ----
 

@@ -74,7 +74,7 @@ public sealed class ReferralRegistrationTests : IClassFixture<TestDatabase>
         context.SaveChanges();
 
         var otpProvider = new OtpCapturingNotificationProvider();
-        var otpService = new OtpService(context, otpProvider);
+        var otpService = new OtpService(context, otpProvider, Options.Create(new OtpOptions { Pepper = "test-only-otp-pepper-not-for-production-abc123" }));
         var mobile = "9" + Guid.NewGuid().ToString("N")[..9];
         await otpService.GenerateAsync(mobile, OtpPurpose.Registration);
         string otpCode = System.Text.RegularExpressions.Regex.Match(otpProvider.LastSmsMessage!, @"\d{6}").Value;
@@ -106,7 +106,7 @@ public sealed class ReferralRegistrationTests : IClassFixture<TestDatabase>
         SeedActiveConfig(context);
 
         var otpProvider = new OtpCapturingNotificationProvider();
-        var otpService = new OtpService(context, otpProvider);
+        var otpService = new OtpService(context, otpProvider, Options.Create(new OtpOptions { Pepper = "test-only-otp-pepper-not-for-production-abc123" }));
         var mobile = "9" + Guid.NewGuid().ToString("N")[..9];
         await otpService.GenerateAsync(mobile, OtpPurpose.Registration);
         string otpCode = System.Text.RegularExpressions.Regex.Match(otpProvider.LastSmsMessage!, @"\d{6}").Value;
@@ -141,7 +141,7 @@ public sealed class ReferralRegistrationTests : IClassFixture<TestDatabase>
         SeedActiveConfig(context);
 
         var otpProvider = new OtpCapturingNotificationProvider();
-        var otpService = new OtpService(context, otpProvider);
+        var otpService = new OtpService(context, otpProvider, Options.Create(new OtpOptions { Pepper = "test-only-otp-pepper-not-for-production-abc123" }));
         var mobile = "9" + Guid.NewGuid().ToString("N")[..9];
 
         var referrer = new Customer(Guid.NewGuid(), mobile, "Self Referrer", CustomerStatus.Active);

@@ -103,7 +103,7 @@ public sealed class NestlyCoinsAdminServiceTests : IClassFixture<TestDatabase>
         context.Add(customer);
         context.SaveChanges();
 
-        var wallet = new WalletService(new WalletLedgerRepository(context));
+        var wallet = new WalletService(new WalletLedgerRepository(context), context);
         var fromUtc = DateTime.UtcNow.AddDays(-1);
         var toUtc = DateTime.UtcNow.AddDays(1);
 
@@ -133,7 +133,7 @@ public sealed class NestlyCoinsAdminServiceTests : IClassFixture<TestDatabase>
         context.Add(customer);
         context.SaveChanges();
 
-        var wallet = new WalletService(new WalletLedgerRepository(context));
+        var wallet = new WalletService(new WalletLedgerRepository(context), context);
         await wallet.CreditAsync(customer.Id, 50m, WalletSourceType.NestlyCoinsReward, Guid.NewGuid(), "issued");
 
         // A range entirely in the future should see none of it.

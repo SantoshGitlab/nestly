@@ -1,8 +1,8 @@
-using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Nestly.Application.Referral;
+using Nestly.BuildingBlocks.Extensions;
 
 namespace Nestly.ConsumerApi.Controllers;
 
@@ -36,5 +36,5 @@ public class ReferralController : ControllerBase
     public async Task<IActionResult> History() => Ok(await _referralCustomerService.GetHistoryAsync(CurrentCustomerId()));
 
     private Guid CurrentCustomerId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 }

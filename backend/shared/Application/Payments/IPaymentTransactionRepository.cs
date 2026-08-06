@@ -18,6 +18,20 @@ public interface IPaymentTransactionRepository
 
     Task UpdateAsync(PaymentTransaction transaction);
 
+    /// <summary>
+    /// Atomically flips one attempt from <see cref="PaymentAttemptStatus.Created"/>
+    /// to <paramref name="newStatus"/> via a single conditional UPDATE - never a
+    /// read-then-write (NESTLY-006). Mirrors
+    /// <see cref="Nestly.Infrastructure.Persistence.Repositories.SlotCapacityRepository.TryReserveAsync"/>:
+    /// two concurrent/duplicate gateway webhook deliveries for the same order can
+    /// both read <c>Created</c>, but only one of them can win this UPDATE (its
+    /// WHERE clause re-checks the still-committed status). Returns <c>false</c>
+    /// when the attempt was no longer <c>Created</c> - the caller must treat that
+    /// as an already-processed duplicate and must not re-apply any side effect
+    /// (escrow hold, booking transition) a second time.
+    /// </summary>
+    Task<bool> TryMarkAttemptResolvedAsync(Guid attemptId, PaymentAttemptStatus newStatus);
+
     /// <summary>Loaded with its attempts - a transaction is never useful partially loaded.</summary>
     Task<PaymentTransaction?> GetByIdAsync(Guid id);
 

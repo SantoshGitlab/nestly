@@ -44,6 +44,7 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
         var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        address.LinkToGeography(pincode.Id, locality.Id);
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 500m);
         var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -85,7 +86,7 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -93,7 +94,9 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         var bookingService = new BookingService(
             summaryService,
@@ -107,7 +110,7 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context),

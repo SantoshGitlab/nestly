@@ -1,6 +1,9 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -15,10 +18,12 @@ namespace Nestly.Infrastructure.Services;
 public class WalletService : IWalletService
 {
     private readonly IWalletLedgerRepository _repository;
+    private readonly NestlyDbContext _context;
 
-    public WalletService(IWalletLedgerRepository repository)
+    public WalletService(IWalletLedgerRepository repository, NestlyDbContext context)
     {
         _repository = repository;
+        _context = context;
     }
 
     public async Task<Result<WalletBalanceResponse>> GetBalanceAsync(Guid customerId)
@@ -47,8 +52,22 @@ public class WalletService : IWalletService
         return entry;
     }
 
+    /// <summary>
+    /// NESTLY-013: the ledger is append-only with no mutable balance column
+    /// (see class doc comment), so the conditional-update idiom used
+    /// elsewhere for money reservations (e.g. <c>SlotCapacityRepository.TryReserveAsync</c>,
+    /// <c>CouponRepository.TryReserveRedemptionAsync</c>) doesn't apply as-is -
+    /// there is no row to guard with a WHERE clause. Instead the read
+    /// (latest balance), check, and write (new ledger row) are wrapped in a
+    /// Serializable transaction, the same BeginTransactionAsync/commit/rollback
+    /// shape already used by PaymentWebhookService/RefundService: Postgres
+    /// aborts one side of two concurrent debits that would otherwise both
+    /// read the same stale balance and both pass the check.
+    /// </summary>
     public async Task<Result<WalletLedgerEntry>> DebitAsync(Guid customerId, decimal amount, WalletSourceType sourceType, Guid? sourceReferenceId, string description)
     {
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
         decimal currentBalance = (await _repository.GetLatestAsync(customerId))?.BalanceAfter ?? 0m;
         if (amount > currentBalance)
         {
@@ -58,9 +77,18 @@ public class WalletService : IWalletService
         var entry = new WalletLedgerEntry(
             Guid.NewGuid(), customerId, WalletEntryType.Debit, amount, currentBalance - amount, sourceType, sourceReferenceId, description);
 
-        await _repository.AddAsync(entry);
-        await ConsumeExpiringCreditsAsync(customerId, amount);
-        return entry;
+        try
+        {
+            await _repository.AddAsync(entry);
+            await ConsumeExpiringCreditsAsync(customerId, amount);
+            await dbTransaction.CommitAsync();
+            return entry;
+        }
+        catch
+        {
+            await dbTransaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<WalletLedgerEntry?> ExpireCreditAsync(Guid customerId, Guid expiredEntryId, decimal amount)

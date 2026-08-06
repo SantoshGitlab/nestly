@@ -219,19 +219,19 @@ public sealed class AdminAuditTrailQaSuiteTests : IClassFixture<TestDatabase>
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
             new RefundService(
                 new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-                new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+                new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),
                 new SandboxPaymentGateway(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" })), context),
-            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TimeProvider.System, Options.Create(new CancellationPolicyOptions())),
+            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TestServices.SlotAvailability(context), TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions())),
         new RescheduleService(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
-                new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TimeProvider.System),
-            new BookingRescheduleRepository(context), TimeProvider.System, Options.Create(new ReschedulePolicyOptions())),
+                new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
+            new BookingRescheduleRepository(context), TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions())),
         new RefundService(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             new SandboxPaymentGateway(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" })), context),
         new AuditLogWriter(context, new StubAuditContextProvider(actorId)),
         context,

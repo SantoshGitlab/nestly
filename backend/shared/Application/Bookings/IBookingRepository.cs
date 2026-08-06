@@ -6,6 +6,12 @@ public interface IBookingRepository
 {
     Task AddAsync(Booking booking);
 
+    /// <summary>Task 241: same TryAdd-under-a-unique-index shape as IPaymentTransactionRepository.TryAddAsync - returns false if IdempotencyKey lost the race against a concurrent duplicate request rather than throwing. Only meaningful when booking.IdempotencyKey is non-null; BookingConfiguration's unique index never rejects two null keys.</summary>
+    Task<bool> TryAddAsync(Booking booking);
+
+    /// <summary>Task 241: the other half of the idempotency check - null if no booking (for this customer) was created from this key yet.</summary>
+    Task<Booking?> GetByIdempotencyKeyAsync(Guid customerId, string idempotencyKey);
+
     Task UpdateAsync(Booking booking);
 
     /// <summary>Loaded with its items, their add-ons, and its status history - a booking is never useful partially loaded.</summary>
@@ -25,4 +31,17 @@ public interface IBookingRepository
 
     /// <summary>Nestly Coins' reorder check, provider side (docs/NESTLY-COINS.md GUIDELINES #2, task 201): does this provider have any OTHER Completed booking besides <paramref name="excludingBookingId"/>?</summary>
     Task<int> CountCompletedByAssignedProviderAsync(Guid providerId, Guid excludingBookingId);
+
+    /// <summary>Task 240: PaymentPending bookings created before <paramref name="olderThanUtc"/> - BookingExpirySweepJob's candidate set. Still PaymentPending only; one that already moved to Confirmed/PaymentFailed/CancelledByCustomer never matches regardless of age.</summary>
+    Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc);
+
+    /// <summary>
+    /// Task 255: bookings for a set of ids in one round trip, for list
+    /// screens that resolve a booking per row. Read-only and deliberately
+    /// NOT fully loaded - unlike <see cref="GetByIdAsync"/> it omits items,
+    /// add-ons and status history, because the callers (the provider job
+    /// list) read only the booking's snapshot columns and its status.
+    /// Ids with no matching booking are simply absent from the result.
+    /// </summary>
+    Task<IReadOnlyList<Booking>> ListSummariesByIdsAsync(IReadOnlyCollection<Guid> ids);
 }

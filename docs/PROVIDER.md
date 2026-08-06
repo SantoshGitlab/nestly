@@ -11,6 +11,10 @@ per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9)
 — this is the SRS's own release-phase terminology, unrelated to the
 backlog's numbered phases below.
 
+Automatic provider assignment — deferred by decision 1 below at the time —
+is now in implementation as its own **Phase 14** (`tasks.csv` 242-250); see
+OPEN DECISIONS — AUTOMATIC ASSIGNMENT below for that phase's decisions.
+
 In the backlog (`tasks.csv`), Provider is scheduled as **Phase 7**, ahead of
 Hardening & Launch (Phase 8) — moved there explicitly so provider/provider
 work is done before launch, not after it. No longer "deferred" in the sense
@@ -160,10 +164,94 @@ breaking schema change, so a future phase can extend rather than migrate.
    via the `reassigned` status rather than a second concurrent row). No
    multi-provider/crew booking support in v1.
 
+## OPEN DECISIONS — AUTOMATIC ASSIGNMENT, RESOLVED (task 242)
+
+Decision 1 above deferred automatic assignment explicitly, on the grounds
+that "requires ranking logic (distance, skill, capacity, rating) that
+doesn't exist yet and would be premature to guess at." Phase 14
+(`tasks.csv` 242-250) is that engine. Manual assignment (decision 1) is
+unchanged and remains available — this adds a second, automatic writer of
+`booking_provider_assignment` (`assigned_by = System`) alongside the
+existing admin one, never replacing it. The six decisions below are resolved
+for v1, same "simplest option that doesn't block the richer one later"
+approach as the five above.
+
+1. **Distance: Haversine over plain lat/long, not PostGIS.** No
+   `NetTopologySuite`/PostGIS package exists anywhere in this solution today
+   (confirmed by grep across every `.csproj`), and this codebase's existing
+   geo data is already plain `decimal(9,6)` lat/long columns
+   (`CustomerAddress.Latitude`/`Longitude`, snapshotted onto
+   `Booking.AddressLatitudeSnapshot`/`LongitudeSnapshot`) rather than a
+   `geography` type — task 243 gives `Provider` the same shape. A great-circle
+   distance formula is a few lines of `Math` and needs no new dependency,
+   matching CODING-STANDARDS.md's dependency-only-when-justified guidance;
+   revisit if candidate volume ever makes an in-process O(n) scan (task
+   244's actual approach — filter by skill/area first, then rank the much
+   smaller remaining set by distance) too slow for real query patterns.
+
+2. **Capacity: hard-enforced for auto-assignment only, still advisory for
+   manual.** `ProviderCapacity`'s doc comment states it is "advisory only in
+   v1 — nothing enforces these limits automatically." Task 245 enforces
+   `MaxJobsPerDay`/`MaxJobsPerSlot` when the automatic engine filters
+   candidates — a machine picking a provider needs a hard cap, since there is
+   no human in the loop to notice an overload the way an admin browsing a
+   list would. Manual admin assignment keeps today's advisory-only behaviour
+   unchanged; enforcing it there too is a separate, undecided product
+   question this task does not resolve.
+
+3. **Rating: still not an input — corrected while implementing task 244.**
+   Decision 4 above (task 144) left this "deferred, not discarded... once
+   automatic assignment exists, rating becomes a natural input to that
+   ranking," and this decision originally planned to make it the tie-break
+   among candidates equally ranked by distance. Implementing task 244 found
+   that premise false: `provider_rating_summary` was never built at all
+   (only 4 of DATA MODEL's 5 Reputation & Ops tables exist in code —
+   `provider_note`/`provider_status_history` exist, this one doesn't), and
+   `ProviderPerformanceResponse`'s own doc comment already states why:
+   "`provider_rating_summary` is out of this pass's scope... no
+   review-to-provider link exists yet" — `Review` has no `ProviderId`
+   column, so there is no query that could compute a per-provider rating
+   today even ad hoc. Rating is **not used** by the matching engine in this
+   pass, corrected here rather than left silently wrong; task 244 breaks an
+   exact-distance tie by `Provider.Id` instead, purely for deterministic
+   ordering, carrying no ranking meaning. Building a real rating input needs
+   its own task (`Review.ProviderId` + a migration to backfill it from
+   existing `Booking.AssignedProviderId` history) — out of scope here, not
+   quietly folded in.
+
+4. **Trigger: `AwaitingFulfilment`, after payment, not `PaymentPending`.**
+   Task 240 (`tasks.csv`) established that a `PaymentPending` booking may
+   never be paid for at all and now expires unassisted — reserving a
+   provider's time against a booking that might vanish in 20 minutes would
+   waste real dispatch capacity for nothing. The engine runs once a booking
+   reaches `AwaitingFulfilment` (task 246), the same status manual admin
+   assignment already targets today.
+
+5. **No eligible candidate: unchanged manual queue, not a hard failure.** A
+   booking with no provider matching skill + area + availability + capacity
+   simply stays `AwaitingFulfilment` — exactly where it already sits today
+   before any assignment, manual or automatic. No new status, no error
+   surfaced to the customer; an admin's existing manual-assignment queue
+   picks it up the same way it picks up every `AwaitingFulfilment` booking
+   now. The automatic engine is purely additive — a booking it can't place
+   is no worse off than before this phase existed.
+
+6. **Rejection retry cap: 3 automatic attempts, then the manual queue.**
+   Task 247 retries the matching engine (excluding every provider already
+   rejected for that booking) up to 3 times before falling back to decision
+   5's unchanged manual queue. Three, not unlimited: past a handful of
+   declines the pattern is more likely a genuinely hard-to-place
+   booking (remote address, unusual service, tight slot) than one more retry
+   fixing it, and an unbounded retry loop against a small local candidate
+   pool would just cycle the same providers. Configurable
+   (`AutoAssignmentOptions`, task 248), not hardcoded — the number itself
+   is a guess with no production data behind it yet.
+
 ## NEXT STEPS
 
-1. ~~Resolve the open decisions above.~~ Done (task 144).
+1. ~~Resolve the open decisions above.~~ Done (task 144; automatic-assignment decisions done task 242).
 2. Add table-by-table schema to DATABASE.md.
 3. Add endpoint contracts to API.md.
 4. Create `backend/provider-api`, mirroring the existing `admin-api`/`consumer-api` structure (task 149).
 5. Extend the RBAC permission matrix and admin UI for provider management (task 150).
+6. Build the automatic-assignment engine per the decisions above (tasks 243-250).

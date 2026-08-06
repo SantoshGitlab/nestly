@@ -29,8 +29,7 @@ public class ChatMessageRepository : IChatMessageRepository
         int totalCount = await query.CountAsync();
         var messages = await query
             .OrderBy(m => m.SentAtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .ApplyPaging(page, pageSize)
             .AsNoTracking()
             .ToListAsync();
 

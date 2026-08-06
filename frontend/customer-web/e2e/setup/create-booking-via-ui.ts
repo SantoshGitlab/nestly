@@ -19,13 +19,22 @@ export async function createBookingViaUi(page: Page, fixture: CatalogFixture): P
   // Date defaults to today, but a same-day slot window can already be
   // "in the past" for slot-cutoff purposes depending on what time of day
   // the suite runs (SlotAvailabilityService filters on window.StartTime >=
-  // now + cutoff, not just the calendar date) - tomorrow is always safe
-  // since its 00:00 window start is never in the past. The date strip's
-  // second button (index 1) is always tomorrow (SlotPicker's upcomingDates
-  // starts at today).
+  // now + cutoff, not just the calendar date). The date strip's buttons are
+  // today, tomorrow, ... (SlotPicker's upcomingDates starts at today).
+  //
+  // Index 2 (the day after tomorrow) rather than 1: the seeded E2E Anytime
+  // window starts at 00:00, so *tomorrow's* slot is only minutes away in real
+  // time when the suite runs late in the evening - which put every booking it
+  // creates inside the 2-hour reschedule cutoff and made 140c fail purely on
+  // wall-clock time. That was masked until the slot engine's cutoff maths was
+  // corrected to compare business-local times against business-local now
+  // rather than against UTC (see IBusinessClock): in IST the old comparison
+  // reported every slot as 5.5 hours further away than it really was. Two days
+  // out keeps every booking this helper creates comfortably inside every
+  // policy window at any hour.
   const dateStrip = page.locator("h3", { hasText: "Date" }).locator("xpath=following-sibling::div[1]//button");
-  await expect(dateStrip.nth(1)).toBeVisible({ timeout: 15_000 });
-  await dateStrip.nth(1).click();
+  await expect(dateStrip.nth(2)).toBeVisible({ timeout: 15_000 });
+  await dateStrip.nth(2).click();
 
   const slotButton = page.getByRole("button", { name: /E2E Anytime/ });
   await expect(slotButton).toBeVisible({ timeout: 15_000 });

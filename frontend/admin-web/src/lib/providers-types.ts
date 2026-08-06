@@ -130,6 +130,9 @@ export interface UpdateProviderRequest {
   legalName: string;
   displayName: string;
   email?: string;
+  /** Task 243: both-or-neither, full-overwrite (submitting both null clears a previously set location). */
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface SuspendProviderRequest {
@@ -166,6 +169,9 @@ export interface ProviderDetail {
   onboardingStatus: ProviderOnboardingStatus;
   createdAt: string;
   updatedAt: string;
+  /** Task 243: feeds the automatic-assignment engine's distance ranking (task 244). Null until set via the edit form below. */
+  latitude: number | null;
+  longitude: number | null;
   kycDocuments: ProviderKycDocument[];
   backgroundChecks: ProviderBackgroundCheck[];
 }

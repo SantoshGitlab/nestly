@@ -91,8 +91,7 @@ public class SupportTicketRepository : ISupportTicketRepository
 
         var pagedTickets = filtered
             .OrderByDescending(t => t.CreatedAtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize);
+            .ApplyPaging(page, pageSize);
 
         var rows = await JoinNames(pagedTickets).ToListAsync();
 

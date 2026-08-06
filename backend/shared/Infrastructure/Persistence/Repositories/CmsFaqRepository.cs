@@ -48,8 +48,7 @@ public class CmsFaqRepository : ICmsFaqRepository
         var page = await query
             .OrderBy(f => f.SortOrder)
             .ThenByDescending(f => f.CreatedAtUtc)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         var items = page.Select(ToResponse).ToList();

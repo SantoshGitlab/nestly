@@ -56,8 +56,7 @@ public class ProviderPayoutRepository : IProviderPayoutRepository
 
         var rows = await query
             .OrderByDescending(p => p.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .ApplyPaging(page, pageSize)
             .ToListAsync();
 
         return (rows, totalCount);

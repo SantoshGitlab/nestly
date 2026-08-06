@@ -31,11 +31,17 @@ public class ProviderJobService : IProviderJobService
     {
         var assignments = await _assignmentRepository.ListByProviderAsync(providerId);
 
+        // Task 255: one GetByIdAsync per assignment - and each of those loaded
+        // the booking's items, add-ons and status history, none of which this
+        // list renders. Batched into a single summary query instead.
+        var bookingsById = (await _bookingRepository.ListSummariesByIdsAsync(
+                assignments.Select(a => a.BookingId).Distinct().ToList()))
+            .ToDictionary(b => b.Id);
+
         var items = new List<ProviderJobSummaryResponse>();
         foreach (var assignment in assignments)
         {
-            var booking = await _bookingRepository.GetByIdAsync(assignment.BookingId);
-            if (booking is null)
+            if (!bookingsById.TryGetValue(assignment.BookingId, out var booking))
             {
                 continue;
             }

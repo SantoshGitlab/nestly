@@ -72,6 +72,7 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
             BookingStatus.CancelledByCustomer or BookingStatus.CancelledByAdmin => [NotificationEventType.BookingCancelled],
             BookingStatus.Rescheduled => [NotificationEventType.BookingRescheduled],
             BookingStatus.Refunded => [NotificationEventType.RefundProcessed],
+            BookingStatus.Expired => [NotificationEventType.BookingExpired],
             _ => Array.Empty<NotificationEventType>()
         };
 

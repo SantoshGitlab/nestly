@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ScreenSkeleton } from "@/components/patterns";
 import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
+import { buildLoginHref } from "@/lib/return-to";
 
 /**
  * Client-side guard for the signed-in screens.
@@ -27,17 +28,18 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (authed === false) {
-      // Plain window.location rather than usePathname/useSearchParams: those
-      // hooks would opt this component (used by ~20 routes) out of static
-      // rendering and force a Suspense boundary onto every one of them. This
-      // effect only ever runs client-side already (authed starts undefined
-      // until the first client render), so window.location is always safe
-      // here and the redirect target still round-trips through /login's own
-      // useSearchParams on the other end.
-      const target = window.location.pathname + window.location.search;
-      router.replace(`/login?redirect=${encodeURIComponent(target)}`);
-    }
+    if (authed !== false) return;
+
+    // The destination travels with the redirect so signing in returns the
+    // customer to what they were doing (see lib/return-to.ts). Still
+    // `replace` rather than `push`: leaving the guarded URL in history means
+    // Back from the login page bounces straight off this guard again.
+    //
+    // Read from `window` rather than usePathname/useSearchParams: this only
+    // runs client-side at redirect time, and useSearchParams would opt every
+    // screen behind this guard out of static rendering (it needs a Suspense
+    // boundary in each of them, which the production build enforces).
+    router.replace(buildLoginHref(window.location.pathname, window.location.search));
   }, [authed, router]);
 
   // Every screen behind this guard opens with a heading plus stacked cards, so

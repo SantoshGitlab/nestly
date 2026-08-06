@@ -31,7 +31,7 @@ public class LoginWithPasswordRequestValidator : AbstractValidator<LoginWithPass
     public LoginWithPasswordRequestValidator()
     {
         RuleFor(x => x.Email).NotEmpty().EmailAddress();
-        RuleFor(x => x.Password).NotEmpty();
+        RuleFor(x => x.Password).NotEmpty().MaximumLength(128);
     }
 }
 

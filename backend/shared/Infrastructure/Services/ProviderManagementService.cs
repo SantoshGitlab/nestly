@@ -87,6 +87,7 @@ public class ProviderManagementService : IProviderManagementService
         try
         {
             provider.UpdateProfile(request.LegalName, request.DisplayName, request.Email);
+            provider.UpdateLocation(request.Latitude, request.Longitude);
         }
         catch (ArgumentException ex)
         {
@@ -158,26 +159,23 @@ public class ProviderManagementService : IProviderManagementService
     }
 
     /// <summary>
-    /// Every assignment ever made across every booking, filtered to this
-    /// provider - there is no direct "list by provider" repository method
-    /// (assignments are looked up per-booking elsewhere), so this composes
-    /// per-booking history for the bookings currently or ever assigned to
-    /// this provider. Good enough for a performance summary at today's data
-    /// volume; a dedicated ListByProviderAsync would be the next step if this
-    /// ever needs to scale past an admin-facing detail page.
+    /// Every assignment ever made to this provider, across every booking
+    /// (tasks 258, 263).
+    ///
+    /// This used to start from <c>IBookingRepository.ListByAssignedProviderAsync</c>
+    /// and pull each of those bookings' assignment history. That filters on
+    /// <c>Booking.AssignedProviderId</c> - the live assignment only - so a
+    /// booking this provider rejected, which is then reassigned to someone
+    /// else, no longer pointed here and its Rejected row was never counted.
+    /// Rejection is exactly the case that gets reassigned away, so
+    /// RejectedAssignments reported near-zero however often the provider
+    /// actually declined. It was also one query per booking.
+    ///
+    /// <c>ListByProviderAsync</c> answers the question directly, in one
+    /// query, and keeps the rejected/superseded rows the metric is about.
     /// </summary>
-    private async Task<IReadOnlyList<BookingProviderAssignment>> AssignmentsForProviderAsync(Guid providerId)
-    {
-        var bookings = await _bookingRepository.ListByAssignedProviderAsync(providerId);
-        var assignments = new List<BookingProviderAssignment>();
-        foreach (var booking in bookings)
-        {
-            var history = await _assignmentRepository.ListByBookingAsync(booking.Id);
-            assignments.AddRange(history.Where(a => a.ProviderId == providerId));
-        }
-
-        return assignments;
-    }
+    private Task<IReadOnlyList<BookingProviderAssignment>> AssignmentsForProviderAsync(Guid providerId) =>
+        _assignmentRepository.ListByProviderAsync(providerId);
 
     private async Task<ProviderDetailResponse> BuildDetailAsync(Provider provider)
     {

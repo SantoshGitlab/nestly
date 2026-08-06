@@ -20,5 +20,11 @@ public class ProviderConfiguration : IEntityTypeConfiguration<Provider>
         builder.Property(x => x.OnboardingStatus).HasConversion<string>().HasMaxLength(30).IsRequired();
         builder.Property(x => x.CreatedAt).IsRequired();
         builder.Property(x => x.UpdatedAt).IsRequired();
+
+        // Task 243. Same precision as CustomerAddressConfiguration's
+        // Latitude/Longitude - kept consistent across the two entities that
+        // now carry real-world coordinates.
+        builder.Property(x => x.Latitude).HasPrecision(9, 6);
+        builder.Property(x => x.Longitude).HasPrecision(9, 6);
     }
 }

@@ -26,6 +26,8 @@ internal static class ProviderDetailMapper
         provider.OnboardingStatus,
         provider.CreatedAt,
         provider.UpdatedAt,
+        provider.Latitude,
+        provider.Longitude,
         documents.Select(d => new ProviderKycDocumentResponse(
             d.Id, d.DocType, d.DocNumber, d.FileRef, d.VerificationStatus, d.VerifiedBy, d.VerifiedAt, d.SubmittedAt)).ToList(),
         backgroundChecks.Select(c => new ProviderBackgroundCheckResponse(c.Id, c.Status, c.CheckedBy, c.CheckedAt, c.Notes)).ToList());

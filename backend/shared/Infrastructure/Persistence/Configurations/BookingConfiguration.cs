@@ -94,5 +94,17 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
 
         builder.HasIndex(x => new { x.CustomerId, x.Status });
         builder.HasIndex(x => x.CreatedAtUtc);
+
+        // Task 241: a retried/duplicated POST /bookings carrying the same
+        // client-minted key must resolve to this same row - enforced here,
+        // not just checked in BookingService, so a lost race between two
+        // concurrent requests can't both insert (BookingRepository.TryAddAsync's
+        // DbUpdateException fallback is what actually catches that race).
+        // Scoped to (CustomerId, IdempotencyKey) rather than a bare unique
+        // index on the key alone, matching GetByIdempotencyKeyAsync's own
+        // customer-scoped lookup - a client-minted key only ever needs to be
+        // unique within the session that minted it.
+        builder.Property(x => x.IdempotencyKey).HasMaxLength(100);
+        builder.HasIndex(x => new { x.CustomerId, x.IdempotencyKey }).IsUnique();
     }
 }

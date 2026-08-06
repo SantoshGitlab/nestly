@@ -118,18 +118,11 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
         return Result.Success();
     }
 
-    private async Task<IReadOnlyDictionary<Guid, string>> BuildServiceNameLookupAsync(IEnumerable<Guid> serviceIds)
-    {
-        var lookup = new Dictionary<Guid, string>();
-        foreach (Guid serviceId in serviceIds.Distinct())
-        {
-            if (lookup.ContainsKey(serviceId)) continue;
-            var service = await _serviceRepository.GetByIdAsync(serviceId);
-            lookup[serviceId] = service?.Name ?? string.Empty;
-        }
-
-        return lookup;
-    }
+    // Task NESTLY-011: one batched lookup instead of a GetByIdAsync per
+    // distinct service id (mirrors ReferralAdminService.SearchAsync's use of
+    // the equivalent ICustomerRepository.GetNamesByIdsAsync).
+    private async Task<IReadOnlyDictionary<Guid, string>> BuildServiceNameLookupAsync(IEnumerable<Guid> serviceIds) =>
+        await _serviceRepository.GetNamesByIdsAsync(serviceIds.Distinct().ToList());
 
     private static Result<ServiceAddOnAdminResponse> NotFound() =>
         Error.NotFound("ServiceAddOn.NotFound", "The specified add-on does not exist.");

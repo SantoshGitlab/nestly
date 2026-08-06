@@ -71,8 +71,7 @@ public class AdminUserRepository : IAdminUserRepository
 
         var adminUsers = await query
             .OrderBy(x => x.FullName)
-            .Skip((filter.Page - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .ApplyPaging(filter.Page, filter.PageSize)
             .ToListAsync();
 
         var roleIds = adminUsers.Where(x => x.RoleId.HasValue).Select(x => x.RoleId!.Value).Distinct().ToList();

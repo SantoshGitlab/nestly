@@ -140,7 +140,14 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.SubscriptionPaymentFailed, NotificationChannel.Email, "subscription_payment_failed_email", "Your subscription payment failed",
             "Hi there,\n\nWe couldn't process your Nestly subscription payment. We'll retry automatically, but please check your payment method to avoid your subscription lapsing."),
         Row(NotificationEventType.SubscriptionPaymentFailed, NotificationChannel.Push, "subscription_payment_failed_push", "Subscription payment failed",
-            "We couldn't process your subscription payment - please check your payment method.")
+            "We couldn't process your subscription payment - please check your payment method."),
+
+        Row(NotificationEventType.BookingExpired, NotificationChannel.Sms, "booking_expired_sms", null,
+            "Booking {{BookingId}} was cancelled - payment wasn't completed in time. Book again anytime. - Nestly"),
+        Row(NotificationEventType.BookingExpired, NotificationChannel.Email, "booking_expired_email", "Your booking wasn't completed",
+            "Hi {{CustomerName}},\n\nYour booking {{BookingId}} for {{ServiceName}} on {{SlotDate}} ({{SlotWindow}}) was cancelled because payment wasn't completed in time. No charge was made. Feel free to book again whenever you're ready."),
+        Row(NotificationEventType.BookingExpired, NotificationChannel.Push, "booking_expired_push", "Booking not completed",
+            "Booking {{BookingId}} was cancelled - payment wasn't completed in time.")
     ];
 
     private static SeedRow Row(NotificationEventType eventType, NotificationChannel channel, string templateKey, string? subject, string body) =>

@@ -60,6 +60,14 @@ export interface CustomerAddress {
   contactName: string;
   contactMobile: string;
   isDefault: boolean;
+  /**
+   * The geography master rows this address resolved to when it was saved.
+   * Both null when its pincode matched no active pincode - i.e. the address
+   * is in no service area we know of. Used to check an address against the
+   * area being booked before a booking is placed against it.
+   */
+  pincodeId: string | null;
+  localityId: string | null;
 }
 
 /**
@@ -183,9 +191,26 @@ export interface SlotOption {
   maxBookingsPerSlot: number | null;
 }
 
+/**
+ * Why a date has nothing bookable. Mirrors the API's
+ * `SlotUnavailabilityReason` ordinals - the API serialises enums as numbers,
+ * same as {@link BookingStatus}, so the values here are load-bearing and must
+ * stay in step with SlotContracts.cs.
+ */
+export enum SlotUnavailabilityReason {
+  None = 0,
+  NotServiceable = 1,
+  DateOutOfBookableRange = 2,
+  Blackout = 3,
+  NoWindowsConfigured = 4,
+  CutoffPassed = 5,
+  FullyBooked = 6,
+}
+
 export interface SlotAvailability {
   isServiceable: boolean;
   slots: SlotOption[];
+  reason: SlotUnavailabilityReason;
 }
 
 export interface SlotRevalidation {
@@ -243,6 +268,8 @@ export interface BookingSummaryRequestBody {
   quantity: number;
   addOns: AddOnSelection[];
   couponCode?: string | null;
+  /** Only meaningful on POST /bookings - ignored by the /bookings/summary preview. See BookingContracts.cs. */
+  idempotencyKey?: string | null;
 }
 
 export interface BookingServiceSummary {

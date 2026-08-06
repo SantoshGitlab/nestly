@@ -22,6 +22,18 @@ namespace Nestly.Application.Bookings;
 /// without a code," not a separate stateful operation, since nothing about
 /// checkout is server-side session state until the booking itself is created.
 /// </summary>
+/// <param name="IdempotencyKey">
+/// Task 241: only meaningful on POST /bookings (ignored by the POST
+/// /bookings/summary preview, which never persists anything) - minted once
+/// per checkout attempt on the summary screen and replayed unchanged on any
+/// client-side retry of that same attempt (timeout, double-tap, a second open
+/// tab). <see cref="IBookingService.CreateAsync"/> returns the
+/// already-created booking instead of a new one when it recognises the key,
+/// same pattern <see cref="Nestly.Application.Payments.CreatePaymentOrderRequest"/>
+/// already established for POST /payments/orders. Optional - a caller that
+/// omits it (e.g. RecurringBookingSchedulerService) simply gets no dedup
+/// protection, same as an ordinary create today.
+/// </param>
 public record BookingSummaryRequest(
     Guid ServiceId,
     Guid CityId,
@@ -31,7 +43,8 @@ public record BookingSummaryRequest(
     DateOnly SlotDate,
     int Quantity,
     IReadOnlyList<AddOnSelection> AddOns,
-    string? CouponCode = null);
+    string? CouponCode = null,
+    string? IdempotencyKey = null);
 
 public record BookingServiceSummary(Guid Id, string Name, string Slug);
 

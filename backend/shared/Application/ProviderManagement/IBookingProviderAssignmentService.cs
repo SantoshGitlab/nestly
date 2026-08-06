@@ -24,6 +24,14 @@ public interface IBookingProviderAssignmentService
     Task<Result<BookingProviderAssignmentResponse>> AssignAsync(Guid bookingId, Guid adminUserId, AssignProviderRequest request);
 
     /// <summary>
+    /// Task 246: the automatic-assignment engine's counterpart to
+    /// <see cref="AssignAsync"/> - same validation and supersede behaviour,
+    /// recorded as <see cref="Nestly.Domain.BookingAssignedByType.System"/>
+    /// with no acting admin, no response deadline.
+    /// </summary>
+    Task<Result<BookingProviderAssignmentResponse>> AssignBySystemAsync(Guid bookingId, Guid providerId);
+
+    /// <summary>
     /// Rejects the booking's current outstanding assignment (task 159):
     /// clears <see cref="Nestly.Domain.Booking.AssignedProviderId"/> and moves
     /// the booking back to <see cref="Nestly.Domain.BookingStatus.AwaitingFulfilment"/>

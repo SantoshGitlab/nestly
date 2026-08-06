@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
@@ -19,11 +21,13 @@ public class OtpService : IOTPService
 
     private readonly NestlyDbContext _context;
     private readonly INotificationProvider _notificationProvider;
+    private readonly OtpOptions _options;
 
-    public OtpService(NestlyDbContext context, INotificationProvider notificationProvider)
+    public OtpService(NestlyDbContext context, INotificationProvider notificationProvider, IOptions<OtpOptions> options)
     {
         _context = context;
         _notificationProvider = notificationProvider;
+        _options = options.Value;
     }
 
     public async Task<Result> GenerateAsync(string target, OtpPurpose purpose, NotificationChannel channel = NotificationChannel.Sms)
@@ -118,6 +122,10 @@ public class OtpService : IOTPService
         return builder.ToString();
     }
 
-    private static string Hash(string code) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+    // HMAC-SHA256 keyed with a server-side pepper (NESTLY-005): unlike the
+    // plain SHA256 this replaced, a stolen CodeHash row cannot be reversed
+    // via a precomputed table over all 1,000,000 six-digit codes without
+    // also having _options.Pepper.
+    private string Hash(string code) =>
+        Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(_options.Pepper), Encoding.UTF8.GetBytes(code)));
 }

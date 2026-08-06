@@ -31,5 +31,18 @@ public class PlatformEscrowLedgerConfiguration : IEntityTypeConfiguration<Platfo
         builder.HasIndex(x => new { x.BookingId, x.CreatedAtUtc });
         // Platform-wide running balance reads order by this alone.
         builder.HasIndex(x => x.CreatedAtUtc);
+
+        // NESTLY-006: makes a duplicate Hold structurally impossible even if
+        // EscrowService.HoldAsync is ever called twice for the same payment
+        // (e.g. the application-level webhook guard is bypassed or has a
+        // bug). SourceReferenceId is the originating PaymentTransaction's id
+        // on a Hold entry, and a booking has at most one PaymentTransaction
+        // ever (see PaymentTransactionConfiguration's unique BookingId
+        // index), so one Hold per transaction is the correct natural key -
+        // scoped to Hold rows only, since Release entries legitimately reuse
+        // SourceReferenceId for a different purpose (refund/payout tracing).
+        builder.HasIndex(x => x.SourceReferenceId)
+            .IsUnique()
+            .HasFilter("entry_type = 'Hold'");
     }
 }

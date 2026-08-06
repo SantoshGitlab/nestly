@@ -31,7 +31,7 @@ public sealed class ReferralAdminServiceTests : IClassFixture<TestDatabase>
             new ReferralRepository(context),
             new ReferralProgramConfigRepository(context),
             new CustomerRepository(context),
-            new WalletService(new WalletLedgerRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
             new CouponRepository(context),
             new ReferralMilestoneRepository(context),
             new ReferralMilestoneAwardRepository(context),
@@ -202,6 +202,40 @@ public sealed class ReferralAdminServiceTests : IClassFixture<TestDatabase>
 
         var rewardedOnly = await BuildAdminService(context).SearchAsync(new ReferralAdminSearchRequest(ReferralStatus.Rewarded, null, null, 1, 20));
         rewardedOnly.Items.Should().NotContain(i => i.Id == referral.Id, "this referral is still Registered, not Rewarded");
+    }
+
+    /// <summary>
+    /// Task 253: SearchAsync used to resolve the referrer and referee with a
+    /// GetByIdAsync each, per row - 2N round trips for an N-row page, each
+    /// loading a whole Customer aggregate to read one column. It now batches
+    /// every name on the page into a single lookup, so the command count must
+    /// stay flat as the page grows rather than scaling with it.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_does_not_scale_its_query_count_with_the_page_size()
+    {
+        var counter = new CountingCommandInterceptor();
+        using var context = _db.CreateContext(counter);
+        var config = SeedConfig(context);
+
+        // Distinct customers on both sides of every referral: the pre-fix
+        // per-row lookups had no cache, so this is the worst case for it.
+        for (int i = 0; i < 10; i++)
+        {
+            SeedRegisteredReferral(context, SeedCustomer(context, $"Referrer{i}"), SeedCustomer(context, $"Referee{i}"), config);
+        }
+
+        counter.Reset();
+        var result = await BuildAdminService(context).SearchAsync(new ReferralAdminSearchRequest(null, null, null, 1, 20));
+
+        result.Items.Should().HaveCountGreaterThanOrEqualTo(10);
+        result.Items.Should().NotContain(i => i.ReferrerName == "Unknown", "every referrer on the page exists");
+        result.Items.Should().NotContain(i => i.RefereeName == "Unknown", "every referee on the page exists");
+
+        // Count + page + one batched name lookup. The pre-fix code issued
+        // 2 more commands for every additional row.
+        counter.CommandCount.Should().BeLessThanOrEqualTo(4,
+            "names must be batched, not resolved per row");
     }
 
     [Fact]

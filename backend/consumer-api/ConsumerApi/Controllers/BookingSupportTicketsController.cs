@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,5 +30,5 @@ public class BookingSupportTicketsController : ControllerBase
     }
 
     private Guid CurrentCustomerId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 }

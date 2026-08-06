@@ -46,12 +46,12 @@ test.describe("Cancellation and reschedule", () => {
 
     await expect(page.getByRole("heading", { name: "Reschedule booking" })).toBeVisible();
 
-    // Move two days out (index 2) rather than tomorrow (where the booking
-    // already is) - a same-day-window slot can go stale mid-run depending
+    // Move three days out (index 3) rather than two, where the booking
+    // already is - a same-day-window slot can go stale mid-run depending
     // on wall-clock time, same reasoning as create-booking-via-ui.ts.
     const dateStrip = page.locator("h3", { hasText: "Date" }).locator("xpath=following-sibling::div[1]//button");
-    await expect(dateStrip.nth(2)).toBeVisible({ timeout: 15_000 });
-    await dateStrip.nth(2).click();
+    await expect(dateStrip.nth(3)).toBeVisible({ timeout: 15_000 });
+    await dateStrip.nth(3).click();
 
     const slotButton = page.getByRole("button", { name: /E2E Anytime/ });
     await expect(slotButton).toBeVisible({ timeout: 15_000 });

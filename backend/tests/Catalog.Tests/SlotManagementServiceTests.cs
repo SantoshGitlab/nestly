@@ -188,6 +188,51 @@ public sealed class SlotManagementServiceTests : IClassFixture<TestDatabase>
         (await service.ListOverridesAsync(city.Id, new DateOnly(2026, 12, 25))).Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Task 256: rendering one availability-override row resolved a city, a
+    /// slot window, a category and a service - up to four queries - and
+    /// ListOverridesAsync paid that per row. The four lookups are now batched
+    /// across the whole page, so the command count must not grow with the
+    /// number of overrides.
+    /// </summary>
+    [Fact]
+    public async Task Listing_availability_overrides_does_not_scale_its_query_count_with_the_row_count()
+    {
+        var (_, city) = SeedCity("Pune");
+        var date = new DateOnly(2026, 11, 14);
+        var setupService = CreateService();
+
+        for (int i = 0; i < 8; i++)
+        {
+            var window = (await setupService.CreateWindowAsync(new SlotWindowCreateRequest(
+                city.Id, $"Window{i}", TimeSpan.FromHours(6 + i), TimeSpan.FromHours(7 + i), null, []))).Value;
+            (await setupService.CreateOverrideAsync(new SlotAvailabilityOverrideCreateRequest(
+                city.Id, date, window.Id, null, null, $"Reason {i}"))).IsSuccess.Should().BeTrue();
+        }
+
+        var counter = new CountingCommandInterceptor();
+        var context = _db.CreateContext(counter);
+        var service = new SlotManagementService(
+            new SlotWindowRepository(context),
+            new SlotBlackoutRepository(context),
+            new SlotBookingPolicyRepository(context),
+            new SlotAvailabilityOverrideRepository(context),
+            new CityRepository(context),
+            new CategoryRepository(context),
+            new ServiceRepository(context));
+
+        counter.Reset();
+        var listed = await service.ListOverridesAsync(city.Id, date);
+
+        listed.Should().HaveCount(8);
+        listed.Should().OnlyContain(o => o.CityName == "Pune", "the batched city lookup must still resolve every row");
+        listed.Should().OnlyContain(o => o.SlotWindowName != null, "the batched window lookup must still resolve every row");
+
+        // The override page itself plus the four batched name lookups.
+        counter.CommandCount.Should().BeLessThanOrEqualTo(5,
+            "the four per-row name lookups must be batched across the page");
+    }
+
     [Fact]
     public async Task Creating_an_override_for_a_nonexistent_window_returns_not_found()
     {

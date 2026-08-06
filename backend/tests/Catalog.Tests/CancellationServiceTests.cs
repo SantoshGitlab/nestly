@@ -40,7 +40,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -48,7 +48,9 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -62,7 +64,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context),
@@ -85,9 +87,11 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new RefundTransactionRepository(context),
             new RefundService(
                 new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-                new WalletService(new WalletLedgerRepository(context)), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context),
+                new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context),
             new BookingCancellationRepository(context),
             new BookingProviderAssignmentRepository(context),
+            TestServices.SlotAvailability(context, timeProvider),
+            TestServices.Clock(timeProvider),
             timeProvider,
             Options.Create(policy ?? new CancellationPolicyOptions()));
 
@@ -114,6 +118,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
             var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
             var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+            address.LinkToGeography(pincode.Id, locality.Id);
             var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
             var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", servicePrice);
             var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", slotStart, TimeSpan.FromHours(13));
@@ -242,6 +247,56 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         var second = await service.CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Second cancel"));
         second.IsSuccess.Should().BeFalse();
         second.Error.Code.Should().Be("Cancellation.NotEligible");
+    }
+
+    /// <summary>
+    /// NESTLY-002 regression: two near-simultaneous cancel requests for the
+    /// same booking (double-click, client retry, two tabs) both read the
+    /// booking while it is still Confirmed and both pass the eligibility
+    /// check above - the race is decided later, inside ExecuteCancellationAsync,
+    /// by BookingCancellation's unique index on BookingId. BookingConcurrencyTests.cs
+    /// documents why this suite can't literally fire both calls via
+    /// Task.WhenAll (TestDatabase's single shared SQLite connection can't run
+    /// commands from two threads at once); instead this pins the exact DB
+    /// state the real race produces at the moment the second request loses -
+    /// its own read still shows Confirmed, but a concurrent request has
+    /// already committed the booking's one cancellation reservation - and
+    /// asserts the losing CancelAsync call short-circuits without ever
+    /// raising a second refund.
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_never_raises_a_second_refund_when_a_concurrent_request_already_reserved_the_cancellation()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc);
+
+        // Simulates the winning concurrent request having just committed
+        // TryAddAsync (ExecuteCancellationAsync) - reserved but, crucially,
+        // not yet transitioned the booking or called IRefundService, exactly
+        // the window in which the real race is won or lost.
+        using (var winnerContext = _db.CreateContext())
+        {
+            var winnerCancellation = new BookingCancellation(
+                Guid.NewGuid(), fixture.BookingId, CancellationActor.Customer, "Winner of the race",
+                withinFreeCancellationWindow: true, cancellationFeeAmount: 0m, refundAmount: fixture.Total);
+            (await new BookingCancellationRepository(winnerContext).TryAddAsync(winnerCancellation)).Should().BeTrue();
+        }
+
+        using var loserContext = _db.CreateContext();
+        var loserResult = await BuildCancellationService(loserContext, gateway, timeProvider)
+            .CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Loser of the race"));
+
+        loserResult.IsSuccess.Should().BeTrue("the losing request must read back the winner's outcome, not fail or double-refund");
+        loserResult.Value.RefundAmount.Should().Be(fixture.Total);
+        loserResult.Value.RefundTransactionId.Should().BeNull("the synthetic winner never attached a real refund either");
+
+        using var readContext = _db.CreateContext();
+        (await new RefundTransactionRepository(readContext).ListByBookingAsync(fixture.BookingId))
+            .Should().BeEmpty("the losing CancelAsync call must never invoke IRefundService");
+
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+        booking!.Status.Should().Be(BookingStatus.Confirmed, "the losing call must never transition the booking either - only the winner does");
     }
 
     /// <summary>

@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.Results;
@@ -71,8 +70,24 @@ public class ReferralsController : ControllerBase
     [HttpGet("fraud-queue")]
     [Authorize(Policy = ReadPolicy)]
     [ProducesResponseType(typeof(ReferralAdminSearchResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> FraudQueue([FromQuery] int page = 1, [FromQuery] int pageSize = 20) =>
-        Ok(await _referralAdminService.SearchAsync(new ReferralAdminSearchRequest(null, true, null, page, pageSize)));
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> FraudQueue([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        // Task 251: this builds the same request type Search() above validates
+        // and used to skip the validator entirely, so the fraud queue accepted
+        // any pageSize at all - the one paged endpoint where that hurts most,
+        // because ReferralAdminService.SearchAsync resolves two customers per
+        // row (task 253).
+        var request = new ReferralAdminSearchRequest(null, true, null, page, pageSize);
+
+        var validation = await _searchValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        return Ok(await _referralAdminService.SearchAsync(request));
+    }
 
     /// <summary>Referral detail view (task 170).</summary>
     [HttpGet("{id:guid}")]
@@ -143,7 +158,7 @@ public class ReferralsController : ControllerBase
     }
 
     private Guid CurrentAdminUserId() =>
-        Guid.Parse(User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        User.GetSubjectId();
 
     private static ModelStateDictionary ToModelState(ValidationResult validation)
     {

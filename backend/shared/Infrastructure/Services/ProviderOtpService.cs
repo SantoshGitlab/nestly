@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
@@ -21,11 +23,13 @@ public class ProviderOtpService : IProviderOtpService
 
     private readonly NestlyDbContext _context;
     private readonly INotificationProvider _notificationProvider;
+    private readonly OtpOptions _options;
 
-    public ProviderOtpService(NestlyDbContext context, INotificationProvider notificationProvider)
+    public ProviderOtpService(NestlyDbContext context, INotificationProvider notificationProvider, IOptions<OtpOptions> options)
     {
         _context = context;
         _notificationProvider = notificationProvider;
+        _options = options.Value;
     }
 
     public async Task<Result> GenerateAsync(string target, OtpPurpose purpose, NotificationChannel channel = NotificationChannel.Sms)
@@ -120,6 +124,8 @@ public class ProviderOtpService : IProviderOtpService
         return builder.ToString();
     }
 
-    private static string Hash(string code) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+    // HMAC-SHA256 keyed with a server-side pepper (NESTLY-005) - same fix as
+    // OtpService.Hash, kept identical since the two paths are structural twins.
+    private string Hash(string code) =>
+        Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(_options.Pepper), Encoding.UTF8.GetBytes(code)));
 }

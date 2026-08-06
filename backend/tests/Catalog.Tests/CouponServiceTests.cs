@@ -33,7 +33,7 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -41,7 +41,9 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -55,7 +57,7 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context),
@@ -77,6 +79,7 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
         var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        address.LinkToGeography(pincode.Id, locality.Id);
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", servicePrice);
         var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -97,6 +100,19 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
         context.SaveChanges();
 
         return new Fixture(customer, city, address, locality, service, category, window, futureDate);
+    }
+
+    /// <summary>
+    /// A bare second customer, for assertions that a per-customer cap does not
+    /// leak across customers. The full <see cref="Seed"/> fixture would drag in
+    /// a whole geography/catalog graph these tests never touch.
+    /// </summary>
+    private static Guid SeedCustomer(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    {
+        var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Bhavna Iyer", CustomerStatus.Active);
+        context.Add(customer);
+        context.SaveChanges();
+        return customer.Id;
     }
 
     private static Coupon FlatCoupon(
@@ -261,7 +277,7 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
             seedContext.SaveChanges();
 
             // Simulate the cap already having been fully consumed.
-            (await new CouponRepository(seedContext).TryReserveRedemptionAsync(coupon.Id)).Should().BeTrue();
+            (await new CouponRepository(seedContext).TryReserveRedemptionAsync(coupon.Id, fixture.Customer.Id)).Should().BeTrue();
         }
 
         using var context = _db.CreateContext();
@@ -293,7 +309,7 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
         for (int i = 0; i < 5; i++)
         {
             using var context = _db.CreateContext();
-            if (await new CouponRepository(context).TryReserveRedemptionAsync(couponId))
+            if (await new CouponRepository(context).TryReserveRedemptionAsync(couponId, Guid.NewGuid()))
             {
                 succeeded++;
             }
@@ -304,6 +320,88 @@ public sealed class CouponServiceTests : IClassFixture<TestDatabase>
         using var readContext = _db.CreateContext();
         var final = await new CouponRepository(readContext).GetByIdAsync(couponId);
         final!.RedemptionCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task TryReserveRedemptionAsync_never_lets_concurrent_reservations_exceed_the_per_customer_cap()
+    {
+        // NESTLY-009. The bug this pins: the per-customer cap used to be a
+        // plain count of CouponRedemption rows, which are written only after
+        // the booking exists - so every attempt in a concurrent batch counted
+        // zero and all of them passed a single-use cap. Note that no
+        // redemption rows are created anywhere below: that is the point. The
+        // cap has to hold on reservations alone, before any booking exists.
+        Fixture fixture;
+        Guid couponId;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = Seed(seedContext);
+            var coupon = FlatCoupon("ONEPER", usageLimitTotal: null, usageLimitPerCustomer: 1);
+            couponId = coupon.Id;
+            seedContext.Coupons.Add(coupon);
+            seedContext.SaveChanges();
+        }
+
+        int succeeded = 0;
+        for (int i = 0; i < 4; i++)
+        {
+            using var context = _db.CreateContext();
+            if (await new CouponRepository(context).TryReserveRedemptionAsync(couponId, fixture.Customer.Id))
+            {
+                succeeded++;
+            }
+        }
+
+        succeeded.Should().Be(1, "a single-use-per-customer coupon must be reservable exactly once by that customer, however many attempts race for it");
+
+        // A different customer is unaffected - the cap is per-customer, not global.
+        using (var otherContext = _db.CreateContext())
+        {
+            var otherCustomer = SeedCustomer(otherContext);
+            (await new CouponRepository(otherContext).TryReserveRedemptionAsync(couponId, otherCustomer))
+                .Should().BeTrue("the per-customer cap must not leak across customers");
+        }
+    }
+
+    [Fact]
+    public async Task TryReserveRedemptionAsync_returns_a_customers_allowance_when_the_global_cap_loses_the_race()
+    {
+        // The compensating release: the per-customer claim is taken first, so
+        // a booking that then fails the campaign-wide cap must hand that
+        // allowance back - otherwise losing a race would lock the customer
+        // out of a single-use coupon permanently, with no booking to show.
+        Fixture fixture;
+        Guid couponId;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = Seed(seedContext);
+            var coupon = FlatCoupon("EXHAUSTED", usageLimitTotal: 1, usageLimitPerCustomer: 1);
+            couponId = coupon.Id;
+            seedContext.Coupons.Add(coupon);
+            seedContext.SaveChanges();
+        }
+
+        Guid otherCustomer;
+        using (var context = _db.CreateContext())
+        {
+            otherCustomer = SeedCustomer(context);
+            // Someone else takes the only campaign-wide redemption.
+            (await new CouponRepository(context).TryReserveRedemptionAsync(couponId, otherCustomer)).Should().BeTrue();
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            (await new CouponRepository(context).TryReserveRedemptionAsync(couponId, fixture.Customer.Id))
+                .Should().BeFalse("the global cap is exhausted");
+        }
+
+        using (var readContext = _db.CreateContext())
+        {
+            var counter = readContext.CouponCustomerRedemptionCounters
+                .SingleOrDefault(c => c.CouponId == couponId && c.CustomerId == fixture.Customer.Id);
+
+            (counter?.ReservedCount ?? 0).Should().Be(0, "a reservation that never became a booking must not consume the customer's allowance");
+        }
     }
 
     [Fact]

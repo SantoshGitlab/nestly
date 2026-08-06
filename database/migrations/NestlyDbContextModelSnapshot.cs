@@ -523,6 +523,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("customer_name_snapshot");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("idempotency_key");
+
                     b.Property<decimal>("PlatformFeeSnapshot")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
@@ -610,6 +615,10 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CreatedAtUtc")
                         .HasDatabaseName("ix_booking_created_at_utc");
+
+                    b.HasIndex("CustomerId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_customer_id_idempotency_key");
 
                     b.HasIndex("CustomerId", "Status")
                         .HasDatabaseName("ix_booking_customer_id_status");
@@ -1513,6 +1522,38 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_coupon_valid_from_utc_valid_to_utc");
 
                     b.ToTable("coupon", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CouponCustomerRedemptionCounter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CouponId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coupon_id");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<int>("ReservedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("reserved_count");
+
+                    b.HasKey("Id")
+                        .HasName("pk_coupon_customer_redemption_counter");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("ix_coupon_customer_redemption_counter_customer_id");
+
+                    b.HasIndex("CouponId", "CustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_coupon_customer_redemption_counter_coupon_id_customer_id");
+
+                    b.ToTable("coupon_customer_redemption_counter", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.CouponRedemption", b =>
@@ -2648,6 +2689,11 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasIndex("CreatedAtUtc")
                         .HasDatabaseName("ix_platform_escrow_ledger_created_at_utc");
 
+                    b.HasIndex("SourceReferenceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_platform_escrow_ledger_source_reference_id")
+                        .HasFilter("entry_type = 'Hold'");
+
                     b.HasIndex("BookingId", "CreatedAtUtc")
                         .HasDatabaseName("ix_platform_escrow_ledger_booking_id_created_at_utc");
 
@@ -2721,11 +2767,21 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("email");
 
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("latitude");
+
                     b.Property<string>("LegalName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("legal_name");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("longitude");
 
                     b.Property<string>("OnboardingStatus")
                         .IsRequired()
@@ -5092,6 +5148,23 @@ namespace Nestly.Infrastructure.Migrations
                         .HasForeignKey("ApplicableCategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_coupon_category_applicable_category_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CouponCustomerRedemptionCounter", b =>
+                {
+                    b.HasOne("Nestly.Domain.Coupon", null)
+                        .WithMany()
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coupon_customer_redemption_counter_coupon_coupon_id");
+
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coupon_customer_redemption_counter_customer_customer_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.CouponRedemption", b =>

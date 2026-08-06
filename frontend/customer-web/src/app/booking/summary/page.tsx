@@ -28,7 +28,8 @@ import {
   cx,
 } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
-import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { API_V1, ApiError, apiFetch, describeError, errorCode } from "@/lib/api";
+import { type BookingDraft, readDraft, writeDraft } from "@/lib/booking-draft";
 import { todayIsoDate } from "@/lib/date";
 import type {
   BookingSummary,
@@ -39,57 +40,15 @@ import type {
 } from "@/lib/types";
 
 /**
- * Draft persistence (task 228). Quantity, add-ons, address, date and slot are
- * plain component state with nothing else backing them, so navigating away
- * mid-review used to wipe every selection silently - most commonly via the
- * "+ Add a new address" link below, which leaves for /addresses/new and
- * always redirects to /addresses on save rather than back here, so even a
- * single detour to add an address cost the customer their quantity/add-on
- * choices. Restored only after mount (never during the initial render, see
- * the restore effect below) so the server-rendered markup and the client's
- * first paint stay identical - sessionStorage doesn't exist on the server
- * anyway, same reasoning as lib/location.ts's isBrowser guard.
+ * Largest quantity the "+" control will reach.
+ *
+ * Mirrors the server's Booking:MaxQuantityPerBooking, which is the authority
+ * and rejects anything above it (Booking.QuantityTooLarge). Held here too so
+ * the control simply stops rather than letting someone lean on it up to a
+ * ₹74,950 booking for fifty cleans in one four-hour window and only finding
+ * out at checkout. Keep the two in step if the server limit changes.
  */
-interface BookingDraft {
-  quantity: number;
-  addOnIds: string[];
-  addressId: string | null;
-  date: string;
-  slotWindowId: string | null;
-}
-
-function draftKey(serviceSlug: string): string {
-  return `nestly.booking-draft.${serviceSlug}`;
-}
-
-function readDraft(serviceSlug: string): BookingDraft | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(draftKey(serviceSlug));
-    return raw ? (JSON.parse(raw) as BookingDraft) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeDraft(serviceSlug: string, draft: BookingDraft): void {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.setItem(draftKey(serviceSlug), JSON.stringify(draft));
-  } catch {
-    // Storage can be unavailable (private mode, blocked cookies) - the
-    // booking still works, it just won't survive a detour off this page.
-  }
-}
-
-function clearDraft(serviceSlug: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.removeItem(draftKey(serviceSlug));
-  } catch {
-    // See above.
-  }
-}
+const MAX_QUANTITY = 10;
 
 /**
  * Booking summary / cart page (SRS 11.7, tasks 62a-f) with slot selection
@@ -129,13 +88,46 @@ function BookingSummaryScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
+   * A booking created from this draft that has not been paid for yet.
+   *
+   * Set the moment POST /bookings succeeds, so a customer who comes back here
+   * - most often by pressing Back from the payment screen to re-check
+   * something - is offered the booking they already have instead of silently
+   * being given a second one while the first sits in PaymentPending holding a
+   * slot.
+   */
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
+
+  /**
    * Double-submit guard. `isSubmitting` disables the button, but on a slow
    * connection a second click can land in the same tick as the first, before
    * React has re-rendered the disabled state - and a duplicate POST /bookings
    * creates a second real booking the customer then has to cancel. A ref is
    * checked and set synchronously, so the second call returns immediately.
+   *
+   * `navigated` keeps the guard closed for good once a booking exists. The
+   * route transition to the payment screen is not instant, and on a slow
+   * connection it is seconds long; re-enabling the button during it put an
+   * impatient customer one tap away from a second real booking, which is
+   * exactly what happened - three bookings from one intent, two of them
+   * stranded in PaymentPending holding slot capacity.
    */
   const inFlight = useRef(false);
+  const navigated = useRef(false);
+
+  /**
+   * Idempotency key (task 241). `inFlight`/`navigated` above stop a
+   * synchronous double-click, but not a client-side retry after a timeout,
+   * a flaky connection, or a second open tab - each of those is a genuinely
+   * new call that the guards above don't see, and each used to be able to
+   * create a second real booking from one intent. Keyed off the request's
+   * own content: the same key is replayed for an identical retry (so the
+   * backend recognises it and hands back the booking already created rather
+   * than a second one), but a real edit - address, slot, quantity, coupon -
+   * mints a fresh key, since that is honestly a different booking.
+   */
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const idempotencyRequestSignatureRef = useRef<string | null>(null);
 
   // Coupon (task 77, SRS 11.10.3). appliedCouponCode is the code the backend
   // has confirmed - couponInput is just the text box's draft value, kept
@@ -157,24 +149,63 @@ function BookingSummaryScreen() {
     queryFn: () => apiFetch<CustomerAddress[]>(`${API_V1}/addresses`, { authenticated: true }),
   });
 
-  // Default to the customer's default address once addresses load.
+  /**
+   * Whether an address sits in the area currently being booked.
+   *
+   * The slots, the price and the serviceability check are all computed for the
+   * locality chosen in the header, while the professional is sent to this
+   * address - so an address in another area cannot be served by the slot being
+   * booked. `pincodeId` is resolved server-side when the address is saved; an
+   * address with none matched no pincode we serve at all. Unknown until the
+   * locality has loaded, in which case nothing is flagged.
+   */
+  const isAddressInSelectedArea = (address: CustomerAddress): boolean =>
+    !locality?.pincodeId || address.pincodeId === locality.pincodeId;
+
+  // Default to the customer's default address once addresses load - but only
+  // to one that can actually be served here. A default address in another city
+  // is exactly what nobody re-reads before paying, and pre-selecting it walked
+  // customers into a booking no provider could fulfil.
   useEffect(() => {
     if (selectedAddressId !== null || !addressesQuery.data) return;
-    const preferred = addressesQuery.data.find((a) => a.isDefault) ?? addressesQuery.data[0];
+    const serviceable = addressesQuery.data.filter(isAddressInSelectedArea);
+    const preferred =
+      serviceable.find((a) => a.isDefault) ??
+      serviceable[0] ??
+      addressesQuery.data.find((a) => a.isDefault) ??
+      addressesQuery.data[0];
     if (preferred) setSelectedAddressId(preferred.id);
-  }, [addressesQuery.data, selectedAddressId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressesQuery.data, selectedAddressId, locality?.pincodeId]);
 
-  // Restore a draft left by a detour off this page - see the doc comment
-  // above readDraft. Deliberately once-per-serviceSlug, not on every render.
+  /**
+   * Whether the restore below has run yet.
+   *
+   * The persist effect must not write until it has. Both effects fire in the
+   * same commit on mount, and the restore's setState calls are only visible on
+   * the *next* render - so persisting immediately wrote this page's initial
+   * state (today's date, no slot, no pending booking) straight over the draft
+   * it was about to restore from, and the customer's selections were gone by
+   * the time the restored values came back. State rather than a ref precisely
+   * because the persist effect has to re-run once the restore lands.
+   */
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+
+  // Restore a draft left by a detour off this page, or by pressing Back from
+  // the payment screen - see the doc comment in lib/booking-draft.ts.
+  // Deliberately once-per-serviceSlug, not on every render.
   useEffect(() => {
     if (!serviceSlug) return;
     const draft = readDraft(serviceSlug);
-    if (!draft) return;
-    setQuantity(draft.quantity);
-    setSelectedAddOnIds(new Set(draft.addOnIds));
-    setSelectedAddressId(draft.addressId);
-    setSelectedDate(draft.date);
-    setSelectedSlotWindowId(draft.slotWindowId);
+    if (draft) {
+      setQuantity(draft.quantity);
+      setSelectedAddOnIds(new Set(draft.addOnIds));
+      setSelectedAddressId(draft.addressId);
+      setSelectedDate(draft.date);
+      setSelectedSlotWindowId(draft.slotWindowId);
+      setPendingBookingId(draft.pendingBookingId ?? null);
+    }
+    setHasRestoredDraft(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceSlug]);
 
@@ -195,18 +226,38 @@ function BookingSummaryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const draftState: BookingDraft = {
+    quantity,
+    addOnIds: Array.from(selectedAddOnIds),
+    addressId: selectedAddressId,
+    date: selectedDate,
+    slotWindowId: selectedSlotWindowId,
+    pendingBookingId,
+  };
+
   // Persist on every change so a detour (most commonly "+ Add a new address"
-  // below) doesn't cost the customer their selections.
+  // below) doesn't cost the customer their selections. Never before the
+  // restore above has had its say - see hasRestoredDraft.
   useEffect(() => {
-    if (!serviceSlug) return;
+    if (!serviceSlug || !hasRestoredDraft) return;
     writeDraft(serviceSlug, {
       quantity,
       addOnIds: Array.from(selectedAddOnIds),
       addressId: selectedAddressId,
       date: selectedDate,
       slotWindowId: selectedSlotWindowId,
+      pendingBookingId,
     });
-  }, [serviceSlug, quantity, selectedAddOnIds, selectedAddressId, selectedDate, selectedSlotWindowId]);
+  }, [
+    serviceSlug,
+    hasRestoredDraft,
+    quantity,
+    selectedAddOnIds,
+    selectedAddressId,
+    selectedDate,
+    selectedSlotWindowId,
+    pendingBookingId,
+  ]);
 
   const toggleAddOn = (id: string) => {
     setSelectedAddOnIds((prev) => {
@@ -249,6 +300,30 @@ function BookingSummaryScreen() {
       }),
     enabled: request !== null,
   });
+
+  /**
+   * A coupon that stops qualifying must not take the checkout down with it.
+   *
+   * The coupon rides on the shared summary request, so once the cart changes
+   * under it - dropping quantity back below the coupon's minimum order value
+   * is the classic case - every repricing call fails. The customer was left
+   * with "Couldn't price this booking", a Retry button that could never
+   * succeed, a permanently disabled "Proceed to book", and the coupon card
+   * that caused it far below the fold. Dropping the coupon and saying so in
+   * the coupon card keeps the booking priceable and puts the cause where the
+   * customer can act on it.
+   */
+  useEffect(() => {
+    const error = summaryQuery.error;
+    if (!appliedCouponCode || !(error instanceof ApiError)) return;
+    if (!errorCode(error)?.startsWith("Coupon.")) return;
+
+    setAppliedCouponCode(null);
+    setCouponMessage(null);
+    setCouponError(
+      `${appliedCouponCode} no longer applies to this booking and has been removed. ${describeError(error)}`,
+    );
+  }, [summaryQuery.error, appliedCouponCode]);
 
   const handleApplyCoupon = async () => {
     const code = couponInput.trim();
@@ -306,19 +381,30 @@ function BookingSummaryScreen() {
         return;
       }
 
+      const requestSignature = JSON.stringify(request);
+      if (idempotencyRequestSignatureRef.current !== requestSignature) {
+        idempotencyKeyRef.current = crypto.randomUUID();
+        idempotencyRequestSignatureRef.current = requestSignature;
+      }
+
       const booking = await apiFetch<{ id: string }>(`${API_V1}/bookings`, {
         method: "POST",
         authenticated: true,
-        body: JSON.stringify(request),
+        body: JSON.stringify({ ...request, idempotencyKey: idempotencyKeyRef.current }),
       });
 
-      // The booking exists now; a leftover draft would otherwise resurrect
-      // this exact quantity/add-on/slot selection on the next visit to the
-      // same service.
-      clearDraft(service.slug);
+      // The draft deliberately survives: the booking is created but not yet
+      // paid, and a customer who goes Back from the payment screen to
+      // re-check the address must find their selections intact rather than an
+      // empty page. It carries the new booking's id from here on, so this
+      // screen can offer to resume that unpaid booking instead of silently
+      // creating a second one. Cleared for real once payment succeeds (see
+      // booking/success).
+      writeDraft(service.slug, { ...draftState, pendingBookingId: booking.id });
+      setPendingBookingId(booking.id);
+
+      navigated.current = true;
       router.push(`/booking/payment/${booking.id}?serviceSlug=${service.slug}`);
-      // Deliberately no reset here: the navigation is in flight and leaving
-      // the button busy stops a second submit during the route transition.
       return;
     } catch (err) {
       // Everything the customer entered - quantity, add-ons, address, slot,
@@ -326,7 +412,10 @@ function BookingSummaryScreen() {
       // costs one click and no re-entry.
       setSubmitError(describeError(err));
     } finally {
-      if (!inFlight.current) return;
+      // Once a booking exists the button stays busy through the route
+      // transition and beyond - the customer's next action belongs on the
+      // payment screen, not here.
+      if (navigated.current) return;
       inFlight.current = false;
       setIsSubmitting(false);
     }
@@ -394,6 +483,30 @@ function BookingSummaryScreen() {
           <PageHeading title="Review your booking" subtitle={service.name} />
         </div>
 
+        {/* A booking from this draft already exists and is awaiting payment -
+            offer it back rather than letting the customer unknowingly create a
+            second one (they cannot tell two identical "Awaiting Payment" rows
+            apart afterwards). */}
+        {pendingBookingId ? (
+          <Alert
+            tone="info"
+            title="You already have this booking waiting for payment"
+            action={
+              <Button
+                size="sm"
+                onClick={() =>
+                  router.push(`/booking/payment/${pendingBookingId}?serviceSlug=${service.slug}`)
+                }
+              >
+                Continue payment
+              </Button>
+            }
+          >
+            Booking {pendingBookingId.slice(0, 8)} hasn&apos;t been paid for yet. Continue where you
+            left off, or change anything below and place a new booking instead.
+          </Alert>
+        ) : null}
+
         {/* Cart: service + add-ons (task 62a). */}
         <Card title="Service">
           <div className="flex items-baseline justify-between gap-4">
@@ -414,7 +527,11 @@ function BookingSummaryScreen() {
               <span className="nums w-8 text-center text-sm font-medium text-fg" aria-live="polite">
                 {quantity}
               </span>
-              <QuantityButton label="Increase quantity" onClick={() => setQuantity((q) => q + 1)}>
+              <QuantityButton
+                label="Increase quantity"
+                onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
+                disabled={quantity >= MAX_QUANTITY}
+              >
                 +
               </QuantityButton>
             </div>
@@ -490,6 +607,7 @@ function BookingSummaryScreen() {
             <div className="flex flex-col gap-2">
               {addressesQuery.data.map((address) => {
                 const isSelected = address.id === selectedAddressId;
+                const isOutsideArea = !isAddressInSelectedArea(address);
                 return (
                   <label
                     key={address.id}
@@ -498,6 +616,7 @@ function BookingSummaryScreen() {
                       isSelected
                         ? "border-brand-600 bg-brand-50 shadow-xs dark:bg-brand-500/10"
                         : "border-line bg-surface hover:border-line-strong hover:bg-surface-2",
+                      isOutsideArea && !isSelected && "opacity-70",
                     )}
                   >
                     <input
@@ -515,12 +634,24 @@ function BookingSummaryScreen() {
                             Default
                           </span>
                         ) : null}
+                        {isOutsideArea ? (
+                          <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning">
+                            Outside {locality?.name ?? "this area"}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="mt-0.5 block leading-relaxed text-fg-muted">
                         {address.line1}
                         {address.line2 ? `, ${address.line2}` : ""}, {address.city}{" "}
                         <span className="nums">{address.pincode}</span>
                       </span>
+                      {isOutsideArea && isSelected ? (
+                        <span className="mt-1.5 block text-xs leading-relaxed text-warning">
+                          We can&apos;t serve this address from the area you&apos;re booking in.
+                          Pick an address in {locality?.name ?? "this area"}, or change your
+                          location at the top of the page.
+                        </span>
+                      ) : null}
                     </span>
                   </label>
                 );

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
@@ -26,6 +27,7 @@ public class RescheduleService : IRescheduleService
     private readonly IRefundTransactionRepository _refundTransactionRepository;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IRescheduleRepository _rescheduleRepository;
+    private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
     private readonly ReschedulePolicyOptions _policy;
 
@@ -35,6 +37,7 @@ public class RescheduleService : IRescheduleService
         IRefundTransactionRepository refundTransactionRepository,
         ISlotAvailabilityService slotAvailabilityService,
         IRescheduleRepository rescheduleRepository,
+        IBusinessClock businessClock,
         TimeProvider timeProvider,
         IOptions<ReschedulePolicyOptions> policy)
     {
@@ -43,6 +46,7 @@ public class RescheduleService : IRescheduleService
         _refundTransactionRepository = refundTransactionRepository;
         _slotAvailabilityService = slotAvailabilityService;
         _rescheduleRepository = rescheduleRepository;
+        _businessClock = businessClock;
         _timeProvider = timeProvider;
         _policy = policy.Value;
     }
@@ -148,14 +152,42 @@ public class RescheduleService : IRescheduleService
 
         var previousSlot = new BookingSlotSummary(booking.SlotWindowId, booking.SlotWindowNameSnapshot, booking.SlotDate, booking.SlotStartTimeSnapshot, booking.SlotEndTimeSnapshot);
 
+        bool movingSlot = previousSlot.SlotWindowId != chosenSlot.SlotWindowId || previousSlot.Date != request.SlotDate;
+
+        // Take a seat on the target slot before giving up the current one.
+        // Availability above only reports what is free; it does not hold
+        // anything, so without this reservation a reschedule could move any
+        // number of bookings onto a capped window - the cap was only ever
+        // enforced on the create path (BookingService.CreateAsync).
+        if (movingSlot)
+        {
+            var reservation = await _slotAvailabilityService.ReserveSlotAsync(chosenSlot.SlotWindowId, request.SlotDate);
+            if (reservation.IsFailure)
+            {
+                return reservation.Error;
+            }
+        }
+
         decimal payableAmount = await ResolvePayableAmountAsync(booking.Id);
-        DateTime currentSlotStartUtc = booking.SlotDate.ToDateTime(TimeOnly.MinValue).Add(booking.SlotStartTimeSnapshot);
-        DateTime now = _timeProvider.GetUtcNow().DateTime;
+        // The snapshot is a business wall-clock time; lifting it to a real
+        // instant is what makes "how long until the slot" comparable with UTC
+        // now (see IBusinessClock) - subtracting the two directly skewed every
+        // late-reschedule fee decision by the business timezone's offset.
+        DateTime currentSlotStartUtc = _businessClock.ToUtc(booking.SlotDate, booking.SlotStartTimeSnapshot);
+        DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         var feeOutcome = RescheduleFeeCalculator.Compute(
             payableAmount, currentSlotStartUtc - now, _policy.LateFeeThresholdHours, _policy.LateRescheduleFeePercentage);
 
         booking.Reschedule(chosenSlot.SlotWindowId, request.SlotDate, chosenSlot.Name, chosenSlot.StartTime, chosenSlot.EndTime, request.Reason);
         await _bookingRepository.UpdateAsync(booking);
+
+        // Only once the move is committed: releasing first would let a
+        // concurrent booking take the seat this reschedule might still need to
+        // roll back to.
+        if (movingSlot)
+        {
+            await _slotAvailabilityService.ReleaseSlotAsync(previousSlot.SlotWindowId, previousSlot.Date);
+        }
 
         var history = new BookingReschedule(
             Guid.NewGuid(),
@@ -205,8 +237,10 @@ public class RescheduleService : IRescheduleService
                 reschedulesUsed, _policy.MaxReschedulesPerBooking, _policy.MinHoursBeforeSlot);
         }
 
-        DateTime slotStartUtc = booking.SlotDate.ToDateTime(TimeOnly.MinValue).Add(booking.SlotStartTimeSnapshot);
-        DateTime now = _timeProvider.GetUtcNow().DateTime;
+        // Business wall-clock lifted to a real instant before meeting UTC now
+        // - see IBusinessClock and the same correction in ExecuteRescheduleAsync.
+        DateTime slotStartUtc = _businessClock.ToUtc(booking.SlotDate, booking.SlotStartTimeSnapshot);
+        DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         double hoursUntilSlot = (slotStartUtc - now).TotalHours;
 
         if (hoursUntilSlot < (double)_policy.MinHoursBeforeSlot)

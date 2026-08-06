@@ -45,7 +45,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new PriceCalculationService(
                 new ServiceRepository(context),
                 new ServiceAddOnRepository(context),
@@ -53,7 +53,9 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceCityPriceRepository(context),
                 new CityPricingPolicyRepository(context)),
             couponService,
-            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)));
+            new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new ServiceabilityRepository(context),
+        TestServices.BookingOptions());
 
         return new BookingService(
             summaryService,
@@ -67,7 +69,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
                 new SlotBlackoutRepository(context),
                 new SlotBookingPolicyRepository(context),
                 new SlotCapacityRepository(context),
-                TimeProvider.System),
+                TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new CustomerSubscriptionRepository(context),
@@ -100,6 +102,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
         var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
         var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        address.LinkToGeography(pincode.Id, locality.Id);
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", servicePrice);
         var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -295,7 +298,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
 
         RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context)), BuildEscrowService(context), gateway, context);
+            new WalletService(new WalletLedgerRepository(context), context), BuildEscrowService(context), gateway, context);
 
         // 600 via gateway, then an over-ask of 500 (only 400 remains) must be rejected...
         using (var partialGatewayContext = _db.CreateContext())
@@ -327,7 +330,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         refunds.Should().HaveCount(2);
         refunds.Sum(r => r.Amount).Should().Be(1000m);
 
-        var walletBalance = await new WalletService(new WalletLedgerRepository(readContext)).GetBalanceAsync(fixture.Customer.Id);
+        var walletBalance = await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id);
         walletBalance.Value.Balance.Should().Be(400m, "only the wallet-settled portion credits the wallet");
     }
 }
