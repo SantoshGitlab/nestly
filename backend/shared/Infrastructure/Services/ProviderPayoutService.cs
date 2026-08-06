@@ -1,4 +1,5 @@
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.ProviderManagement;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -6,6 +7,15 @@ using Nestly.Domain;
 namespace Nestly.Infrastructure.Services;
 
 /// <inheritdoc cref="IProviderPayoutService"/>
+/// <remarks>
+/// Writes an audit entry for batch creation and every status change (task
+/// 132c gap fix, NESTLY-007): a payout batch and its Processing/Paid/Failed
+/// transitions are directly financial (bank reference, amount owed), the
+/// same "every write is audited" reasoning <c>CouponManagementService</c>'s
+/// doc comment gives for discount changes applies here. Staged before the
+/// repository call so the repository's own <c>SaveChangesAsync</c> commits
+/// both in one transaction.
+/// </remarks>
 public class ProviderPayoutService : IProviderPayoutService
 {
     /// <summary>
@@ -24,15 +34,18 @@ public class ProviderPayoutService : IProviderPayoutService
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderPayoutRepository _payoutRepository;
     private readonly IProviderEarningLedgerRepository _ledgerRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
     public ProviderPayoutService(
         IProviderRepository providerRepository,
         IProviderPayoutRepository payoutRepository,
-        IProviderEarningLedgerRepository ledgerRepository)
+        IProviderEarningLedgerRepository ledgerRepository,
+        IAuditLogWriter auditLogWriter)
     {
         _providerRepository = providerRepository;
         _payoutRepository = payoutRepository;
         _ledgerRepository = ledgerRepository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<Result<ProviderPayoutResponse>> CreateBatchAsync(Guid providerId, CreateProviderPayoutRequest request)
@@ -52,6 +65,13 @@ public class ProviderPayoutService : IProviderPayoutService
         }
 
         var payout = new ProviderPayout(Guid.NewGuid(), providerId, request.PeriodStart, request.PeriodEnd, total);
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "ProviderPayout",
+            payout.Id.ToString(),
+            "Created",
+            NewValues: $"ProviderId={providerId}; Status=(none)->{payout.Status}; TotalAmount={payout.TotalAmount}"));
+
         await _payoutRepository.AddAsync(payout);
 
         return ToResponse(payout, provider.DisplayName);
@@ -106,6 +126,8 @@ public class ProviderPayoutService : IProviderPayoutService
             return Error.NotFound("ProviderPayout.NotFound", "Payout was not found.");
         }
 
+        var previousStatus = payout.Status;
+
         try
         {
             switch (request.Status)
@@ -132,6 +154,12 @@ public class ProviderPayoutService : IProviderPayoutService
         {
             return Error.Business("ProviderPayout.InvalidTransition", ex.Message);
         }
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "ProviderPayout",
+            payout.Id.ToString(),
+            "StatusChanged",
+            NewValues: $"ProviderId={payout.ProviderId}; Status={previousStatus}->{payout.Status}; PayoutReference={payout.PayoutReference ?? "null"}"));
 
         await _payoutRepository.UpdateAsync(payout);
 

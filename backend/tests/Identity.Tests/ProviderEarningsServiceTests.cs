@@ -1,6 +1,8 @@
 using FluentAssertions;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.ProviderManagement;
 using Nestly.Domain;
+using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -32,7 +34,19 @@ public class ProviderEarningsServiceTests : IDisposable
 
     private ProviderEarningsService CreateService(NestlyDbContext context) => new(
         new ProviderEarningLedgerService(new ProviderRepository(context), new ProviderEarningLedgerRepository(context)),
-        new ProviderPayoutService(new ProviderRepository(context), new ProviderPayoutRepository(context), new ProviderEarningLedgerRepository(context)));
+        BuildPayoutService(context));
+
+    private static ProviderPayoutService BuildPayoutService(NestlyDbContext context) => new(
+        new ProviderRepository(context),
+        new ProviderPayoutRepository(context),
+        new ProviderEarningLedgerRepository(context),
+        new AuditLogWriter(context, new StubAuditContextProvider()));
+
+    private sealed class StubAuditContextProvider : IAuditContextProvider
+    {
+        public AuditContext GetCurrent() =>
+            new(AuditActorType.AdminUser, Guid.NewGuid(), IpAddress: "127.0.0.1", CorrelationId: "test-correlation-id");
+    }
 
     private async Task CreditAsync(NestlyDbContext context, Guid providerId, decimal amount)
     {
@@ -73,8 +87,7 @@ public class ProviderEarningsServiceTests : IDisposable
     {
         await using var context = _database.CreateContext();
         await CreditAsync(context, _providerId, 1000m);
-        var payoutRepository = new ProviderPayoutRepository(context);
-        var payoutService = new ProviderPayoutService(new ProviderRepository(context), payoutRepository, new ProviderEarningLedgerRepository(context));
+        var payoutService = BuildPayoutService(context);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         (await payoutService.CreateBatchAsync(_providerId, new CreateProviderPayoutRequest(today.AddDays(-7), today))).IsSuccess.Should().BeTrue();
 
@@ -89,7 +102,7 @@ public class ProviderEarningsServiceTests : IDisposable
     {
         await using var context = _database.CreateContext();
         await CreditAsync(context, _otherProviderId, 1000m);
-        var payoutService = new ProviderPayoutService(new ProviderRepository(context), new ProviderPayoutRepository(context), new ProviderEarningLedgerRepository(context));
+        var payoutService = BuildPayoutService(context);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var created = await payoutService.CreateBatchAsync(_otherProviderId, new CreateProviderPayoutRequest(today.AddDays(-7), today));
         created.IsSuccess.Should().BeTrue();
@@ -105,7 +118,7 @@ public class ProviderEarningsServiceTests : IDisposable
     {
         await using var context = _database.CreateContext();
         await CreditAsync(context, _providerId, 1000m);
-        var payoutService = new ProviderPayoutService(new ProviderRepository(context), new ProviderPayoutRepository(context), new ProviderEarningLedgerRepository(context));
+        var payoutService = BuildPayoutService(context);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var created = await payoutService.CreateBatchAsync(_providerId, new CreateProviderPayoutRequest(today.AddDays(-7), today));
         created.IsSuccess.Should().BeTrue();
@@ -168,7 +181,7 @@ public class ProviderEarningsServiceTests : IDisposable
     {
         await using var context = _database.CreateContext();
         await CreditAsync(context, _providerId, 1000m);
-        var payoutService = new ProviderPayoutService(new ProviderRepository(context), new ProviderPayoutRepository(context), new ProviderEarningLedgerRepository(context));
+        var payoutService = BuildPayoutService(context);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         (await payoutService.CreateBatchAsync(_providerId, new CreateProviderPayoutRequest(today.AddDays(-7), today))).IsSuccess.Should().BeTrue();
 
