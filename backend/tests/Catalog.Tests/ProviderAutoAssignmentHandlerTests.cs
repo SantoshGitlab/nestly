@@ -79,7 +79,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
             new ProviderBlackoutDateRepository(context),
             new ProviderCapacityRepository(context),
             context),
-        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new BookingProviderAssignmentRepository(context)),
+        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), context),
         new BookingProviderAssignmentRepository(context),
         Options.Create(new AutoAssignmentOptions { RetryAttempts = retryAttempts, Enabled = enabled }),
         NullLogger<ProviderAutoAssignmentHandler>.Instance);
@@ -202,7 +202,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         using (var context = _db.CreateContext())
         {
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(context), new ProviderRepository(context), new BookingProviderAssignmentRepository(context));
+                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), context);
 
             var firstAssign = await assignmentService.AssignBySystemAsync(f.BookingId, rejecter.Id);
             firstAssign.IsSuccess.Should().BeTrue();
