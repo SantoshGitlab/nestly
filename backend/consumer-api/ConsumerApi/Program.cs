@@ -117,6 +117,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// NESTLY-012: HSTS tells the browser to only ever use HTTPS for this host
+// going forward - skipped in Development since local dev typically runs
+// over plain HTTP.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
 app.UseHttpsRedirection();
 
 app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
