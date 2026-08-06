@@ -21,7 +21,7 @@ public sealed class ChatServiceTests : IClassFixture<TestDatabase>
 
     private static AdminChatService BuildAdminService(NestlyDbContext context) => new(
         new ChatThreadRepository(context), new ChatMessageRepository(context),
-        new BookingRepository(context), new SupportTicketRepository(context));
+        new BookingRepository(context), new SupportTicketRepository(context), new CustomerRepository(context));
 
     private Guid SeedCustomer(NestlyDbContext context)
     {
@@ -252,5 +252,101 @@ public sealed class ChatServiceTests : IClassFixture<TestDatabase>
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Code.Should().Be("Chat.BookingNotFound");
+    }
+
+    /// <summary>
+    /// The inbox's actual job: two different customers each messaging admin
+    /// independently must both show up, each correctly attributed - not
+    /// merged, not dropped, not cross-attributed to the other's name.
+    /// </summary>
+    [Fact]
+    public async Task ListThreadsAsync_surfaces_threads_from_multiple_customers_most_recent_first()
+    {
+        Guid firstCustomerId, firstBookingId, secondCustomerId, secondBookingId;
+        using (var context = _db.CreateContext())
+        {
+            firstCustomerId = SeedCustomer(context);
+            firstBookingId = SeedBooking(context, firstCustomerId);
+            secondCustomerId = SeedCustomer(context);
+            secondBookingId = SeedBooking(context, secondCustomerId);
+        }
+
+        Guid firstThreadId, secondThreadId;
+        using (var context = _db.CreateContext())
+        {
+            var service = BuildService(context);
+            var firstThread = await service.GetOrCreateThreadAsync(firstCustomerId, ChatContextType.Booking, firstBookingId);
+            firstThreadId = firstThread.Value.Id;
+            await service.SendMessageAsync(firstCustomerId, firstThreadId, new SendChatMessageRequest("From customer one"));
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var service = BuildService(context);
+            var secondThread = await service.GetOrCreateThreadAsync(secondCustomerId, ChatContextType.Booking, secondBookingId);
+            secondThreadId = secondThread.Value.Id;
+            // Sent after the first customer's message, so recency ordering
+            // has something to actually distinguish.
+            await service.SendMessageAsync(secondCustomerId, secondThreadId, new SendChatMessageRequest("From customer two"));
+        }
+
+        // The class fixture's database is shared across every test in this
+        // file (IClassFixture, not reset per test), so other tests' threads
+        // are also present here - fetch a page wide enough to contain them
+        // all and assert on our own two threads specifically, not on
+        // absolute count or position.
+        using var readContext = _db.CreateContext();
+        var result = await BuildAdminService(readContext).ListThreadsAsync(page: 1, pageSize: 100);
+
+        result.IsSuccess.Should().BeTrue();
+        var firstRow = result.Value.Items.Should().ContainSingle(i => i.ThreadId == firstThreadId).Subject;
+        var secondRow = result.Value.Items.Should().ContainSingle(i => i.ThreadId == secondThreadId).Subject;
+
+        firstRow.CustomerId.Should().Be(firstCustomerId);
+        firstRow.UnreadCount.Should().Be(1, "the admin has not read customer one's message yet");
+
+        secondRow.CustomerId.Should().Be(secondCustomerId);
+        secondRow.UnreadCount.Should().Be(1, "the admin has not read customer two's message yet");
+
+        // Each row is attributed to its own customer id (SeedCustomer gives
+        // every customer the same display name, so CustomerId - already
+        // asserted above - is what actually proves they were not swapped or
+        // merged), and recency ordering reflects who messaged more recently.
+        secondRow.LastMessageAtUtc.Should().BeAfter(firstRow.LastMessageAtUtc);
+        var secondIndex = result.Value.Items.ToList().FindIndex(i => i.ThreadId == secondThreadId);
+        var firstIndex = result.Value.Items.ToList().FindIndex(i => i.ThreadId == firstThreadId);
+        secondIndex.Should().BeLessThan(firstIndex, "most-recent-first ordering");
+    }
+
+    /// <summary>A support-ticket-context thread resolves its customer via SupportTicket.CustomerId, not Booking's snapshot columns - the other branch of the inbox's context-type switch.</summary>
+    [Fact]
+    public async Task ListThreadsAsync_resolves_customer_name_for_a_support_ticket_context()
+    {
+        Guid customerId, ticketId;
+        using (var context = _db.CreateContext())
+        {
+            customerId = SeedCustomer(context);
+            var ticket = new SupportTicket(Guid.NewGuid(), customerId, null, SupportTicketCategory.GeneralInquiry, "Help", "desc");
+            context.Add(ticket);
+            context.SaveChanges();
+            ticketId = ticket.Id;
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var adminService = BuildAdminService(context);
+            var thread = await adminService.GetOrCreateThreadAsync(ChatContextType.SupportTicket, ticketId);
+            await adminService.ReplyAsync(Guid.NewGuid(), thread.Value.Id, new SendChatMessageRequest("How can we help?"));
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildAdminService(readContext).ListThreadsAsync(page: 1, pageSize: 100);
+
+        result.IsSuccess.Should().BeTrue();
+        var row = result.Value.Items.Should().ContainSingle(i => i.ContextId == ticketId).Subject;
+        row.ContextType.Should().Be(ChatContextType.SupportTicket);
+        row.CustomerId.Should().Be(customerId);
+        row.CustomerName.Should().Be("Asha Rao");
+        row.UnreadCount.Should().Be(0, "the only message so far is the admin's own reply, not a customer message awaiting attention");
     }
 }

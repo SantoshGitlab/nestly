@@ -48,6 +48,18 @@ public class ChatController : ControllerBase
         _sendValidator = sendValidator;
     }
 
+    /// <summary>Every thread across every customer, most recent first - the inbox an admin opens before knowing which specific thread they want (task 193 follow-up).</summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(AdminChatThreadListResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListThreads([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize is < 1 or > 100 ? 20 : pageSize;
+
+        var result = await _chatService.ListThreadsAsync(page, pageSize);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Returns (or opens) the thread for a booking/support-ticket context - an admin may proactively message a customer, not only reply.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(ChatThreadResponse), StatusCodes.Status200OK)]

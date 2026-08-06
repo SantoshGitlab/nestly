@@ -103,6 +103,19 @@ public class SupportTicketRepository : ISupportTicketRepository
         return new AdminSupportTicketSearchResult(ordered, totalCount);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetCustomerIdsByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, Guid>();
+        }
+
+        return await _context.SupportTickets
+            .Where(t => ids.Contains(t.Id))
+            .Select(t => new { t.Id, t.CustomerId })
+            .ToDictionaryAsync(t => t.Id, t => t.CustomerId);
+    }
+
     /// <summary>Every filter is applied directly against <see cref="SupportTicket"/> columns (SRS 12.14.1), before any join or projection - same ordering rationale as <c>ReviewRepository.ApplyFilters</c>.</summary>
     private static IQueryable<SupportTicket> ApplyFilters(IQueryable<SupportTicket> query, AdminSupportTicketCriteria criteria)
     {

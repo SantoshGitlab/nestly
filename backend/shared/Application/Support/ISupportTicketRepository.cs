@@ -20,4 +20,14 @@ public interface ISupportTicketRepository
 
     /// <summary>Filtered/paginated admin ticket search across every customer (SRS 12.14.1, task 120f) - unlike <see cref="ListByCustomerAsync"/>, not scoped to a single customer.</summary>
     Task<AdminSupportTicketSearchResult> SearchAsync(AdminSupportTicketCriteria criteria, int page, int pageSize);
+
+    /// <summary>
+    /// Ticket id -> owning customer id, batched (admin chat inbox). Mirrors
+    /// <see cref="ICustomerRepository.GetNamesByIdsAsync"/>'s reasoning: the
+    /// inbox lists a page of threads and needs one column off each
+    /// support-ticket context, not the full aggregate a per-row
+    /// <see cref="GetByIdAsync"/> loop would pull. Ids with no matching
+    /// ticket are simply absent from the result.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetCustomerIdsByIdsAsync(IReadOnlyCollection<Guid> ids);
 }

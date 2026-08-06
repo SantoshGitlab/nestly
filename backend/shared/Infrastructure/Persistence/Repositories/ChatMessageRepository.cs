@@ -40,4 +40,18 @@ public class ChatMessageRepository : IChatMessageRepository
         _context.ChatMessages
             .Where(m => m.ThreadId == threadId && m.SenderId != readerId && m.ReadAtUtc == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(m => m.ReadAtUtc, readAtUtc));
+
+    public async Task<IReadOnlyDictionary<Guid, int>> CountUnreadByThreadIdsAsync(IReadOnlyCollection<Guid> threadIds)
+    {
+        if (threadIds.Count == 0)
+        {
+            return new Dictionary<Guid, int>();
+        }
+
+        return await _context.ChatMessages
+            .Where(m => threadIds.Contains(m.ThreadId) && m.SenderType != ChatSenderType.Admin && m.ReadAtUtc == null)
+            .GroupBy(m => m.ThreadId)
+            .Select(g => new { ThreadId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ThreadId, x => x.Count);
+    }
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Chat;
 using Nestly.Application.Support;
@@ -19,17 +20,20 @@ public class AdminChatService : IAdminChatService
     private readonly IChatMessageRepository _messageRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly ISupportTicketRepository _supportTicketRepository;
+    private readonly ICustomerRepository _customerRepository;
 
     public AdminChatService(
         IChatThreadRepository threadRepository,
         IChatMessageRepository messageRepository,
         IBookingRepository bookingRepository,
-        ISupportTicketRepository supportTicketRepository)
+        ISupportTicketRepository supportTicketRepository,
+        ICustomerRepository customerRepository)
     {
         _threadRepository = threadRepository;
         _messageRepository = messageRepository;
         _bookingRepository = bookingRepository;
         _supportTicketRepository = supportTicketRepository;
+        _customerRepository = customerRepository;
     }
 
     public async Task<Result<ChatThreadResponse>> GetOrCreateThreadAsync(ChatContextType contextType, Guid contextId)
@@ -104,6 +108,53 @@ public class AdminChatService : IAdminChatService
         // track which specific admin viewed the thread.
         await _messageRepository.MarkThreadReadAsync(threadId, Guid.Empty, DateTime.UtcNow);
         return Result.Success();
+    }
+
+    public async Task<Result<AdminChatThreadListResponse>> ListThreadsAsync(int page, int pageSize)
+    {
+        var (threads, totalCount) = await _threadRepository.ListAsync(page, pageSize);
+
+        // Resolve each thread's counterpart (customer name/mobile) in
+        // batches keyed by context type - one round trip per side of the
+        // page, not one per thread (same reasoning as IBookingRepository's
+        // own ListSummariesByIdsAsync/GetNamesByIdsAsync doc comments).
+        var bookingIds = threads.Where(t => t.ContextType == ChatContextType.Booking).Select(t => t.ContextId).ToList();
+        var ticketIds = threads.Where(t => t.ContextType == ChatContextType.SupportTicket).Select(t => t.ContextId).ToList();
+        var threadIds = threads.Select(t => t.Id).ToList();
+
+        var bookingsById = (await _bookingRepository.ListSummariesByIdsAsync(bookingIds)).ToDictionary(b => b.Id);
+        var ticketCustomerIds = await _supportTicketRepository.GetCustomerIdsByIdsAsync(ticketIds);
+        var ticketCustomerNames = await _customerRepository.GetNamesByIdsAsync(ticketCustomerIds.Values.ToList());
+        var unreadCounts = await _messageRepository.CountUnreadByThreadIdsAsync(threadIds);
+
+        var items = threads.Select(thread => ToSummaryResponse(thread, bookingsById, ticketCustomerIds, ticketCustomerNames, unreadCounts)).ToList();
+
+        return Result.Success(new AdminChatThreadListResponse(items, totalCount, page, pageSize));
+    }
+
+    private static AdminChatThreadSummaryResponse ToSummaryResponse(
+        ChatThread thread,
+        IReadOnlyDictionary<Guid, Booking> bookingsById,
+        IReadOnlyDictionary<Guid, Guid> ticketCustomerIds,
+        IReadOnlyDictionary<Guid, string> ticketCustomerNames,
+        IReadOnlyDictionary<Guid, int> unreadCounts)
+    {
+        // A context deleted after the thread was created (never happens
+        // today - nothing deletes a booking or ticket - but the lookup is
+        // still a dictionary miss, not a throw) falls back to "Unknown"
+        // rather than dropping the thread from the inbox entirely.
+        (Guid customerId, string customerName, string? customerMobile) = thread.ContextType switch
+        {
+            ChatContextType.Booking when bookingsById.TryGetValue(thread.ContextId, out var booking) =>
+                (booking.CustomerId, booking.CustomerNameSnapshot, booking.CustomerMobileSnapshot),
+            ChatContextType.SupportTicket when ticketCustomerIds.TryGetValue(thread.ContextId, out var ticketCustomerId) =>
+                (ticketCustomerId, ticketCustomerNames.GetValueOrDefault(ticketCustomerId, "Unknown"), null),
+            _ => (Guid.Empty, "Unknown", null)
+        };
+
+        return new AdminChatThreadSummaryResponse(
+            thread.Id, thread.ContextType, thread.ContextId, customerId, customerName, customerMobile,
+            thread.LastMessageAtUtc, unreadCounts.GetValueOrDefault(thread.Id, 0));
     }
 
     private async Task<Error?> ValidateContextExistsAsync(ChatContextType contextType, Guid contextId)

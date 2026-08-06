@@ -20,4 +20,12 @@ public interface IChatMessageRepository
     /// ChatMessage's doc comment for why. Returns the number of rows touched.
     /// </summary>
     Task<int> MarkThreadReadAsync(Guid threadId, Guid readerId, DateTime readAtUtc);
+
+    /// <summary>
+    /// Per-thread count of not-yet-admin-read messages (sender not Admin,
+    /// no read receipt), batched across a page of threads for the admin chat
+    /// inbox's unread badge - one GROUP BY instead of one COUNT per row.
+    /// Threads with no unread messages are simply absent from the result.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, int>> CountUnreadByThreadIdsAsync(IReadOnlyCollection<Guid> threadIds);
 }

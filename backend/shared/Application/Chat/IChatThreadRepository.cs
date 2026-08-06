@@ -13,4 +13,7 @@ public interface IChatThreadRepository
 
     /// <summary>Persists <see cref="ChatThread.TouchLastMessage"/>'s recency bump after a new message (task 191).</summary>
     Task UpdateAsync(ChatThread thread);
+
+    /// <summary>Every thread across every customer, most recent first (admin support-console inbox) - unlike <see cref="GetByContextAsync"/>, not scoped to one context.</summary>
+    Task<(IReadOnlyList<ChatThread> Threads, int TotalCount)> ListAsync(int page, int pageSize);
 }

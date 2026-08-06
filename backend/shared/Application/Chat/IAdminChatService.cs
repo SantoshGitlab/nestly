@@ -22,4 +22,7 @@ public interface IAdminChatService
 
     /// <summary>Marks every customer-authored message in the thread as read by this admin.</summary>
     Task<Result> MarkReadAsync(Guid threadId);
+
+    /// <summary>Every thread across every customer, most recent first (the support console's inbox) - how an admin reaches a thread without already knowing its booking/ticket id.</summary>
+    Task<Result<AdminChatThreadListResponse>> ListThreadsAsync(int page, int pageSize);
 }

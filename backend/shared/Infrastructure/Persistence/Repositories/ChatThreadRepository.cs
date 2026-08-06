@@ -30,4 +30,17 @@ public class ChatThreadRepository : IChatThreadRepository
         _context.ChatThreads.Update(thread);
         await _context.SaveChangesAsync();
     }
+
+    public async Task<(IReadOnlyList<ChatThread> Threads, int TotalCount)> ListAsync(int page, int pageSize)
+    {
+        int totalCount = await _context.ChatThreads.CountAsync();
+
+        var threads = await _context.ChatThreads
+            .OrderByDescending(t => t.LastMessageAtUtc)
+            .ApplyPaging(page, pageSize)
+            .AsNoTracking()
+            .ToListAsync();
+
+        return (threads, totalCount);
+    }
 }

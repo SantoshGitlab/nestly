@@ -15,3 +15,23 @@ public sealed record ChatMessageResponse(
 
 /// <summary>Same page-plus-total shape as <c>AdminSupportTicketSearchResult</c>.</summary>
 public sealed record ChatMessagePageResult(IReadOnlyList<ChatMessageResponse> Messages, int TotalCount, int Page, int PageSize);
+
+/// <summary>
+/// One row in the admin support-console chat inbox (task 193 follow-up:
+/// the console needs a starting point to reach any thread from, not just
+/// the reply view for a thread it already knows the id of). Carries enough
+/// about the thread's counterpart to triage without opening it - which
+/// customer, which booking/ticket, how many of their messages are still
+/// unread.
+/// </summary>
+public sealed record AdminChatThreadSummaryResponse(
+    Guid ThreadId,
+    ChatContextType ContextType,
+    Guid ContextId,
+    Guid CustomerId,
+    string CustomerName,
+    string? CustomerMobile,
+    DateTime LastMessageAtUtc,
+    int UnreadCount);
+
+public sealed record AdminChatThreadListResponse(IReadOnlyList<AdminChatThreadSummaryResponse> Items, int TotalCount, int Page, int PageSize);
