@@ -1,8 +1,10 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Moq;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Services;
 
@@ -31,7 +33,8 @@ public class ProviderOtpServiceTests : IDisposable
     }
 
     private ProviderOtpService CreateService(NestlyDbContext context) =>
-        new(context, _notificationProvider.Object);
+        new(context, _notificationProvider.Object,
+            Options.Create(new OtpOptions { Pepper = "test-only-otp-pepper-not-for-production-abc123" }));
 
     private static string ExtractCode(string message) =>
         System.Text.RegularExpressions.Regex.Match(message, @"\d{6}").Value;

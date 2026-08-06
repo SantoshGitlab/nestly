@@ -57,7 +57,7 @@ Rules:
 
 - All configuration is external (environment variables or mounted config).
 - Strongly typed configuration on the application side (see DOTNET.md).
-- Secrets (connection strings, JWT keys, payment gateway keys, SMS/email provider keys) must come from a secret store — never from source code or images.
+- Secrets (connection strings, JWT keys, OTP hashing pepper, payment gateway keys, SMS/email provider keys) must come from a secret store — never from source code or images.
 - Local development may use dotnet user-secrets / .env files that are gitignored.
 
 ## CI/CD PIPELINE

@@ -342,6 +342,14 @@ public static class DependencyInjection
         services.AddScoped<ICustomerAuthIdentityRepository, CustomerAuthIdentityRepository>();
         services.AddScoped<ICustomerSessionRepository, CustomerSessionRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
+
+        // No ValidateOnStart (same reasoning as JwtOptions above): admin-api
+        // shares AddInfrastructure but never resolves OtpOptions, so eager
+        // validation would force it to carry a pepper it never uses.
+        services
+            .AddOptions<OtpOptions>()
+            .Bind(configuration.GetSection(OtpOptions.SectionName))
+            .ValidateDataAnnotations();
         services.AddScoped<IOTPService, OtpService>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICustomerRegistrationService, CustomerRegistrationService>();

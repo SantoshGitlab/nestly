@@ -81,6 +81,7 @@ Secrets include:
 - Connection strings
 - API keys
 - JWT signing keys
+- OTP hashing pepper
 - Certificates
 - Third-party credentials
 

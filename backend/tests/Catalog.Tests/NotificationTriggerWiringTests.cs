@@ -190,7 +190,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            var otpService = new OtpService(context, otpProvider);
+            var otpService = new OtpService(context, otpProvider, Options.Create(new OtpOptions { Pepper = "test-only-otp-pepper-not-for-production-abc123" }));
             await otpService.GenerateAsync(mobile, OtpPurpose.Registration);
         }
 
@@ -199,7 +199,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         using (var context = _db.CreateContext())
         {
             var registrationService = new CustomerRegistrationService(
-                new CustomerRepository(context), new CustomerAuthIdentityRepository(context), new OtpService(context, otpProvider),
+                new CustomerRepository(context), new CustomerAuthIdentityRepository(context), new OtpService(context, otpProvider, Options.Create(new OtpOptions { Pepper = "test-only-otp-pepper-not-for-production-abc123" })),
                 BuildDispatchService(context), new ReferralRepository(context), new ReferralProgramConfigRepository(context),
                 NullLogger<CustomerRegistrationService>.Instance, Options.Create(new AccountOptions()));
 
