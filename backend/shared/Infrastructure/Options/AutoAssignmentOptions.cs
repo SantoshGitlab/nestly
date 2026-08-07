@@ -91,4 +91,68 @@ public class AutoAssignmentOptions
     /// </remarks>
     [Range(0.1, 1000.0)]
     public decimal RouteRankingRadiusKm { get; set; } = 25m;
+
+    /// <summary>
+    /// Task 289's kill switch: when false, <c>ProviderTravelFeasibilityService</c>
+    /// finds nothing and the eligibility gate is exactly what it was before
+    /// travel time between adjacent jobs became an input - a provider
+    /// finishing across the city at 11:00 is once again eligible for an 11:00
+    /// job. No route call is issued. Default true, same convention as
+    /// <see cref="Enabled"/> and <see cref="RouteRankingEnabled"/>: on by
+    /// default, an explicit override to turn off, so a routing outage or a
+    /// pathological schedule is one configuration change rather than a deploy.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="RouteRankingEnabled"/> on purpose: that one
+    /// only changes the <i>order</i> candidates are tried in, this one changes
+    /// who is eligible at all. Turning off ranking to stop spending money
+    /// should not quietly re-open the door to physically impossible
+    /// assignments, so neither switch implies the other.
+    /// </remarks>
+    public bool TravelBufferEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Fixed allowance added on top of the measured drive between two adjacent
+    /// jobs: parking, finding the door, and handover at both ends. Fifteen
+    /// minutes is a working guess with no production data behind it yet -
+    /// hence configurable rather than a constant - and errs towards the
+    /// provider, since the cost of being wrong is a late arrival at a
+    /// customer's home.
+    /// </summary>
+    /// <remarks>
+    /// Added only when there is a drive to buffer. A zero-length leg (the next
+    /// job at the same address - a second flat in one building, a follow-up for
+    /// the same customer) requires no gap at all, which is what keeps task
+    /// 288's deliberately-legal back-to-back case legal. Setting this to 0 is
+    /// therefore not the same as turning the check off: pure travel time is
+    /// still enforced.
+    /// </remarks>
+    [Range(0, 240)]
+    public int TravelHandoverBufferMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// The cost cap on task 289: how many route lookups one eligibility pass
+    /// may bill for. A "lookup" is one destination leg - one billed Routes API
+    /// element - and a single candidate needs at most two (the job before and
+    /// the job after), batched into one request.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Twenty is <see cref="MaxRouteCandidates"/> candidates x both legs: an
+    /// engine that walks the whole ranked list can still price every one of
+    /// them, and cannot fan out past that however many candidates a popular
+    /// city returns. In practice a pass costs far less - the vast majority of
+    /// candidates have no other job that day at all, and those cost nothing.
+    /// </para>
+    /// <para>
+    /// Past the cap the check does <b>not</b> stop running: it switches to the
+    /// local sandbox estimate, which needs no network and no billing account.
+    /// The cap bounds spending, not the invariant - a candidate is never
+    /// allowed through merely because the budget ran out. Setting it to 0 is
+    /// a legitimate posture: enforce travel feasibility on the free
+    /// approximation and never call the maps provider at all.
+    /// </para>
+    /// </remarks>
+    [Range(0, 200)]
+    public int MaxTravelRouteLookups { get; set; } = 20;
 }

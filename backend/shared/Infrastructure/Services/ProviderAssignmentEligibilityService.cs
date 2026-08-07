@@ -15,6 +15,7 @@ public class ProviderAssignmentEligibilityService : IProviderAssignmentEligibili
     private readonly IProviderBlackoutDateRepository _blackoutDateRepository;
     private readonly IProviderCapacityRepository _capacityRepository;
     private readonly IProviderScheduleConflictService _scheduleConflictService;
+    private readonly IProviderTravelFeasibilityService _travelFeasibilityService;
     private readonly NestlyDbContext _context;
 
     public ProviderAssignmentEligibilityService(
@@ -23,6 +24,7 @@ public class ProviderAssignmentEligibilityService : IProviderAssignmentEligibili
         IProviderBlackoutDateRepository blackoutDateRepository,
         IProviderCapacityRepository capacityRepository,
         IProviderScheduleConflictService scheduleConflictService,
+        IProviderTravelFeasibilityService travelFeasibilityService,
         NestlyDbContext context)
     {
         _bookingRepository = bookingRepository;
@@ -30,10 +32,11 @@ public class ProviderAssignmentEligibilityService : IProviderAssignmentEligibili
         _blackoutDateRepository = blackoutDateRepository;
         _capacityRepository = capacityRepository;
         _scheduleConflictService = scheduleConflictService;
+        _travelFeasibilityService = travelFeasibilityService;
         _context = context;
     }
 
-    public async Task<bool> IsEligibleAsync(Guid providerId, Guid bookingId)
+    public async Task<bool> IsEligibleAsync(Guid providerId, Guid bookingId, CancellationToken cancellationToken = default)
     {
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
         if (booking is null)
@@ -58,7 +61,16 @@ public class ProviderAssignmentEligibilityService : IProviderAssignmentEligibili
             return false;
         }
 
-        return await HasCapacityAsync(providerId, booking);
+        if (!await HasCapacityAsync(providerId, booking))
+        {
+            return false;
+        }
+
+        // Task 289: last, and only for a candidate nothing else has already
+        // refused. Every check above is a local database read; this one can
+        // cost a billed route lookup, so a candidate rejected for a blackout
+        // date or a full day must never spend one.
+        return await _travelFeasibilityService.FindConflictAsync(providerId, booking, cancellationToken) is null;
     }
 
     private async Task<bool> IsAvailableAsync(Guid providerId, Booking booking)
