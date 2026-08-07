@@ -42,6 +42,14 @@ export const rejectJob = (jobId: string) =>
 export const startJob = (jobId: string) =>
   apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/start`, { method: "POST", authenticated: true });
 
+/** Optional, task 270/283 - Start still works straight from Accepted, so tapping this is never required. */
+export const markJobEnRoute = (jobId: string) =>
+  apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/en-route`, { method: "POST", authenticated: true });
+
+/** Optional, same as markJobEnRoute - a provider can tap Start without ever marking Arrived. */
+export const markJobArrived = (jobId: string) =>
+  apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/arrived`, { method: "POST", authenticated: true });
+
 export const completeJob = (jobId: string) =>
   apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/complete`, { method: "POST", authenticated: true });
 

@@ -29,6 +29,8 @@ import {
   completeJob,
   getCompletionVerification,
   getJobDetail,
+  markJobArrived,
+  markJobEnRoute,
   rejectJob,
   startJob,
   submitCompletionProof,
@@ -100,6 +102,20 @@ export default function JobDetailPage() {
       toast("success", "Job started.");
     },
   });
+  const enRouteMutation = useMutation({
+    mutationFn: () => markJobEnRoute(jobId),
+    onSuccess: () => {
+      invalidate();
+      toast("success", "Customer notified you're on your way.");
+    },
+  });
+  const arrivedMutation = useMutation({
+    mutationFn: () => markJobArrived(jobId),
+    onSuccess: () => {
+      invalidate();
+      toast("success", "Customer notified you've arrived.");
+    },
+  });
   const completeMutation = useMutation({
     mutationFn: () => completeJob(jobId),
     onSuccess: () => {
@@ -120,6 +136,8 @@ export default function JobDetailPage() {
     acceptMutation.isPending ||
     rejectMutation.isPending ||
     startMutation.isPending ||
+    enRouteMutation.isPending ||
+    arrivedMutation.isPending ||
     completeMutation.isPending;
 
   const backLink = (
@@ -183,6 +201,8 @@ export default function JobDetailPage() {
     acceptMutation.error ??
     rejectMutation.error ??
     startMutation.error ??
+    enRouteMutation.error ??
+    arrivedMutation.error ??
     completeMutation.error ??
     proofMutation.error;
 
@@ -392,21 +412,60 @@ export default function JobDetailPage() {
           <LocationSharingCard status={locationSharingStatus} />
         ) : null}
 
-        {job.status === JobStatus.Accepted ? (
+        {job.status === JobStatus.Accepted ||
+        job.status === JobStatus.EnRoute ||
+        job.status === JobStatus.Arrived ? (
           <Card
             title="Ready to go?"
             description="Start the job when you arrive and begin work."
           >
-            <Button
-              type="button"
-              size="lg"
-              fullWidth
-              loading={startMutation.isPending}
-              disabled={anyActionPending}
-              onClick={() => startMutation.mutate()}
-            >
-              Start job
-            </Button>
+            <div className="flex flex-col gap-2.5">
+              {/* Neither is mandatory before Start - Accepted -> InProgress is
+                  a legal transition on its own (BookingLifecycle.cs). Once en
+                  route, though, Arrived is the only way forward: the
+                  lifecycle has no ProviderEnRoute -> InProgress edge, so Start
+                  is hidden rather than left to fail with a 422. */}
+              {job.status === JobStatus.Accepted ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  loading={enRouteMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => enRouteMutation.mutate()}
+                >
+                  On my way — notifies the customer
+                </Button>
+              ) : null}
+
+              {job.status === JobStatus.EnRoute ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  loading={arrivedMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => arrivedMutation.mutate()}
+                >
+                  I&apos;ve arrived — notifies the customer
+                </Button>
+              ) : null}
+
+              {job.status === JobStatus.Accepted || job.status === JobStatus.Arrived ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  fullWidth
+                  loading={startMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => startMutation.mutate()}
+                >
+                  Start job
+                </Button>
+              ) : null}
+            </div>
           </Card>
         ) : null}
 
