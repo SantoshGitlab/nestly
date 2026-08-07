@@ -128,6 +128,11 @@ public sealed class ProviderDoubleBookingTests : IClassFixture<TestDatabase>
         new ProviderBlackoutDateRepository(context),
         new ProviderCapacityRepository(context),
         new ProviderScheduleConflictService(context),
+        // Task 289 on the sandbox estimator: every booking here shares one
+        // address, so every leg is zero-length and the travel check never
+        // fires - including for the back-to-back case below, which stays legal
+        // precisely because there is no drive to make.
+        TravelFeasibilityFactory.Sandbox(context),
         context);
 
     // Sandbox route estimates (no HTTP, no key): these tests are about the

@@ -114,7 +114,7 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
 
         foreach (var candidate in candidates)
         {
-            if (!await _eligibilityService.IsEligibleAsync(candidate.ProviderId, bookingId))
+            if (!await _eligibilityService.IsEligibleAsync(candidate.ProviderId, bookingId, cancellationToken))
             {
                 continue;
             }

@@ -405,6 +405,11 @@ public static class DependencyInjection
         // #1), never replacing it.
         services.AddScoped<IProviderMatchingService, ProviderMatchingService>();
         services.AddScoped<IProviderCapacityRepository, ProviderCapacityRepository>();
+        // Task 289: travel time between adjacent same-day jobs. Scoped, not
+        // transient, on purpose - its route-lookup budget is instance state,
+        // and one instance per scope is what caps a whole eligibility pass
+        // rather than each candidate separately.
+        services.AddScoped<IProviderTravelFeasibilityService, ProviderTravelFeasibilityService>();
         services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
         // Task 195: completion verification (photo + checklist proof gating
         // the InProgress -> Completed transition, task 196) - registered

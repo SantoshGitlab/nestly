@@ -88,6 +88,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
             new ProviderBlackoutDateRepository(context),
             new ProviderCapacityRepository(context),
             new ProviderScheduleConflictService(context),
+            TravelFeasibilityFactory.Sandbox(context),
             context),
         new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context),
         new BookingProviderAssignmentRepository(context),

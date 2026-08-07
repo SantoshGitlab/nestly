@@ -23,6 +23,15 @@ public interface IProviderAssignmentEligibilityService
     /// #2; the overlap check above is the one rule both paths share). A
     /// provider with no availability windows configured at all is never
     /// eligible - "no schedule on file" is not "always available."
+    ///
+    /// Finally - and only once every free check above has passed, since this
+    /// one can cost a billed route lookup - the day has to be drivable: task
+    /// 289 (<see cref="IProviderTravelFeasibilityService"/>) refuses a
+    /// candidate whose adjacent same-day jobs are further away by road than the
+    /// gaps around this booking allow. That check is the one part of this gate
+    /// with a kill switch of its own
+    /// (<c>AutoAssignmentOptions.TravelBufferEnabled</c>), because unlike the
+    /// rest it depends on a third-party estimate.
     /// </summary>
-    Task<bool> IsEligibleAsync(Guid providerId, Guid bookingId);
+    Task<bool> IsEligibleAsync(Guid providerId, Guid bookingId, CancellationToken cancellationToken = default);
 }
