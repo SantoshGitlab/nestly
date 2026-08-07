@@ -7,13 +7,19 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.Notifications;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
+using Nestly.Infrastructure;
 
-namespace Nestly.ConsumerApi.Controllers;
+namespace Nestly.ProviderApi.Controllers;
 
-/// <summary>Push device token registration (SRS 19.1, task 156).</summary>
+/// <summary>
+/// Push device token registration for providers (task 277), mirroring
+/// consumer-api's <c>DeviceTokensController</c> field for field - the only
+/// difference is the scheme and that the caller's id becomes a
+/// <see cref="DeviceTokenOwner"/> provider, not a customer.
+/// </summary>
 [ApiController]
 [ApiVersion(1)]
-[Authorize]
+[Authorize(AuthenticationSchemes = DependencyInjection.ProviderJwtBearerScheme)]
 [Route("api/v{version:apiVersion}/device-tokens")]
 public class DeviceTokensController : ControllerBase
 {
@@ -62,7 +68,7 @@ public class DeviceTokensController : ControllerBase
     }
 
     private DeviceTokenOwner CurrentOwner() =>
-        DeviceTokenOwner.ForCustomer(User.GetSubjectId());
+        DeviceTokenOwner.ForProvider(User.GetSubjectId());
 
     private static ModelStateDictionary ToModelState(ValidationResult validation)
     {

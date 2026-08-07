@@ -32,6 +32,9 @@ public sealed class ReferralQualificationAndRewardTests : IClassFixture<TestData
                 new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
                 new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance),
                 new NotificationEventRepository(context),
+                new DeviceTokenRepository(context),
+                new CustomerRepository(context),
+                new ProviderRepository(context),
                 new NoOpMetricsService(),
                 NullLogger<NotificationDispatchService>.Instance),
             NullLogger<ReferralRewardService>.Instance);

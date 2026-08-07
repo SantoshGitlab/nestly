@@ -88,12 +88,10 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         Nestly.Infrastructure.Persistence.NestlyDbContext context,
         IOptionsMonitor<FulfilmentNotificationOptions>? fulfilmentOptions = null) =>
         new(
-            new CustomerRepository(context),
             new BookingRepository(context),
             new PaymentTransactionRepository(context),
             new BookingCancellationRepository(context),
             new RefundTransactionRepository(context),
-            new DeviceTokenRepository(context),
             new ProviderRepository(context),
             BuildDispatchService(context),
             fulfilmentOptions ?? TestServices.FulfilmentNotifications(),
@@ -108,6 +106,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         new(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(context),
+            new DeviceTokenRepository(context), new CustomerRepository(context), new ProviderRepository(context),
             new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);

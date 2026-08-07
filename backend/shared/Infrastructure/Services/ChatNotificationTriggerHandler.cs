@@ -105,7 +105,7 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
             ["MessagePreview"] = domainEvent.Body.Length > 120 ? domainEvent.Body[..120] + "..." : domainEvent.Body
         };
 
-        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(customerId.Value);
+        var deviceTokens = await _deviceTokenRepository.ListActiveByOwnerAsync(DeviceTokenOwner.ForCustomer(customerId.Value));
 
         await _notificationDispatchService.DispatchAsync(
             customerId.Value,
