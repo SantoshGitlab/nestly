@@ -513,6 +513,14 @@ public static class DependencyInjection
         services.AddScoped<IBookingTrackingRepository, BookingTrackingRepository>();
         services.AddScoped<IBookingEtaService, BookingEtaService>();
 
+        // Task 275: the read side of the same feature - consumer-api's
+        // GET /bookings/{bookingId}/tracking. Read-only and deliberately not
+        // a method on IBookingService: see IBookingTrackingQueryService for
+        // why the PII-bounded projection is kept out of the general booking
+        // reads. It computes nothing; IBookingEtaService above stays the only
+        // thing that pays for a route lookup.
+        services.AddScoped<IBookingTrackingQueryService, BookingTrackingQueryService>();
+
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's
         // doc comment for why this is its own type rather than shared code.
