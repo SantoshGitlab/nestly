@@ -205,6 +205,13 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(AutoAssignmentOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 269: not a secret, has safe production-sensible defaults -
+        // same reasoning as AutoAssignmentOptions directly above.
+        services
+            .AddOptions<ProviderLocationIngestOptions>()
+            .Bind(configuration.GetSection(ProviderLocationIngestOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
@@ -459,6 +466,12 @@ public static class DependencyInjection
         // not a second copy of the ledger/payout logic.
         services.AddScoped<IProviderJobService, ProviderJobService>();
         services.AddScoped<IProviderEarningsService, ProviderEarningsService>();
+
+        // Task 269: the live-location ingest behind provider-api's
+        // POST /jobs/{bookingId}/location. Separate from IProviderJobService
+        // above - see IProviderLocationIngestService for why the job
+        // lifecycle and this high-frequency write path are not one class.
+        services.AddScoped<IProviderLocationIngestService, ProviderLocationIngestService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's
