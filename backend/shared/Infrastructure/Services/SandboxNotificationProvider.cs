@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Nestly.BuildingBlocks.Privacy;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -28,7 +29,7 @@ public class SandboxNotificationProvider : INotificationProvider
             return Task.FromResult(Result.Failure(Error.Validation("Notification.InvalidRecipient", "Mobile number is required.")));
         }
 
-        _logger.LogInformation("Sandbox SMS simulated for {MaskedMobile}", Mask(toMobile));
+        _logger.LogInformation("Sandbox SMS simulated for {MaskedMobile}", ContactMasking.Mask(toMobile));
         return Task.FromResult(Result.Success());
     }
 
@@ -39,17 +40,7 @@ public class SandboxNotificationProvider : INotificationProvider
             return Task.FromResult(Result.Failure(Error.Validation("Notification.InvalidRecipient", "Email address is required.")));
         }
 
-        _logger.LogInformation("Sandbox email simulated for {MaskedEmail}", Mask(toEmail));
+        _logger.LogInformation("Sandbox email simulated for {MaskedEmail}", ContactMasking.Mask(toEmail));
         return Task.FromResult(Result.Success());
-    }
-
-    private static string Mask(string value)
-    {
-        if (value.Length <= 4)
-        {
-            return new string('*', value.Length);
-        }
-
-        return new string('*', value.Length - 4) + value[^4..];
     }
 }

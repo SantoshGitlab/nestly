@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Notifications;
+using Nestly.BuildingBlocks.Privacy;
 using Nestly.Domain;
 
 namespace Nestly.Infrastructure.Services;
@@ -91,7 +92,7 @@ public class NotificationDispatchService : INotificationDispatchService
         if (!await _templateRenderer.SupportsChannelAsync(eventType, channel, cancellationToken))
         {
             _logger.LogWarning("No notification template registered for {EventType}/{Channel} - skipping dispatch.", eventType, channel);
-            var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
+            var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
             untemplated.MarkFailed("No template registered for this event/channel combination.");
             await _repository.AddAsync(untemplated);
             _metricsService.RecordNotificationOutcome(channel.ToString(), succeeded: false, untemplated.ErrorReason);
@@ -99,7 +100,7 @@ public class NotificationDispatchService : INotificationDispatchService
         }
 
         var rendered = await _templateRenderer.RenderAsync(eventType, channel, variables, cancellationToken);
-        var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId);
+        var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId);
         await _repository.AddAsync(notification);
 
         var sendResult = channel switch
@@ -123,16 +124,5 @@ public class NotificationDispatchService : INotificationDispatchService
         _metricsService.RecordNotificationOutcome(channel.ToString(), sendResult.IsSuccess, notification.ErrorReason);
 
         return new NotificationDispatchOutcome(notification.Id, channel, notification.Status, notification.ErrorReason);
-    }
-
-    /// <summary>Same masking convention as <see cref="SandboxNotificationProvider"/> - the stored Recipient is for audit/dedup, never a fully readable contact.</summary>
-    private static string Mask(string value)
-    {
-        if (value.Length <= 4)
-        {
-            return new string('*', value.Length);
-        }
-
-        return new string('*', value.Length - 4) + value[^4..];
     }
 }

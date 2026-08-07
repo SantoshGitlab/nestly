@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Nestly.BuildingBlocks.Privacy;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -29,17 +30,7 @@ public class SandboxPushNotificationProvider : IPushNotificationProvider
             return Task.FromResult(Result.Failure(Error.Validation("Notification.InvalidRecipient", "A device token is required.")));
         }
 
-        _logger.LogInformation("Sandbox push simulated for device {MaskedToken}", Mask(deviceToken));
+        _logger.LogInformation("Sandbox push simulated for device {MaskedToken}", ContactMasking.Mask(deviceToken));
         return Task.FromResult(Result.Success());
-    }
-
-    private static string Mask(string value)
-    {
-        if (value.Length <= 4)
-        {
-            return new string('*', value.Length);
-        }
-
-        return new string('*', value.Length - 4) + value[^4..];
     }
 }
