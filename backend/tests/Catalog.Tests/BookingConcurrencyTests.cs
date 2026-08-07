@@ -79,6 +79,7 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
                 TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
+            new ProviderRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

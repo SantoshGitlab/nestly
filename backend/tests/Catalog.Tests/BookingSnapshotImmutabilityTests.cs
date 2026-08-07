@@ -74,6 +74,7 @@ public sealed class BookingSnapshotImmutabilityTests : IClassFixture<TestDatabas
                 TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
+            new ProviderRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

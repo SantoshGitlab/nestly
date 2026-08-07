@@ -113,6 +113,7 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                 TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
+            new ProviderRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
 

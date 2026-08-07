@@ -69,6 +69,7 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
                 TestServices.Clock()),
             metricsService,
             new BookingProviderAssignmentRepository(context),
+            new ProviderRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }
