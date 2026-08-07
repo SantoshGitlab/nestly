@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using FluentAssertions;
+using Nestly.Application;
 using Nestly.Application.Identity;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
