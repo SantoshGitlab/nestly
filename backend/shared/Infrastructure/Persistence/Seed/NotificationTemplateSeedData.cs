@@ -34,7 +34,15 @@ public static class NotificationTemplateSeedData
         return new Guid(hash);
     }
 
-    /// <summary>Every (EventType, Channel) combination task 87a-d's trigger wiring depends on - 8 event types x 3 channels.</summary>
+    /// <summary>
+    /// Every (EventType, Channel) combination the trigger wiring depends on -
+    /// one row per event type per channel, three channels throughout. Grown
+    /// by task 87a-d's original 8, then referral/recurring/subscription/
+    /// expiry, then task 276's five fulfilment events. Each growth spurt also
+    /// needs an incremental seed migration for live databases (see
+    /// <c>SeedFulfilmentNotificationTemplates</c>) - this list alone only
+    /// feeds tests and a freshly migrated database.
+    /// </summary>
     public static IReadOnlyList<SeedRow> BuildDefaults() =>
     [
         Row(NotificationEventType.Welcome, NotificationChannel.Sms, "welcome_sms", null,
@@ -147,7 +155,50 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.BookingExpired, NotificationChannel.Email, "booking_expired_email", "Your booking wasn't completed",
             "Hi {{CustomerName}},\n\nYour booking {{BookingId}} for {{ServiceName}} on {{SlotDate}} ({{SlotWindow}}) was cancelled because payment wasn't completed in time. No charge was made. Feel free to book again whenever you're ready."),
         Row(NotificationEventType.BookingExpired, NotificationChannel.Push, "booking_expired_push", "Booking not completed",
-            "Booking {{BookingId}} was cancelled - payment wasn't completed in time.")
+            "Booking {{BookingId}} was cancelled - payment wasn't completed in time."),
+
+        // Task 276: the fulfilment half of the lifecycle. {{ProviderName}} is
+        // the assigned provider's display name - the only new variable these
+        // bodies use. BookingNotificationTriggerHandler also supplies
+        // {{ProviderMobile}}, already masked through ContactMasking, which no
+        // default body references: templates are admin-editable at runtime
+        // (NotificationTemplatesController), so the variable an ops person
+        // might reach for has to be safe *before* they reach for it. A raw
+        // provider number must never become available to a template.
+        Row(NotificationEventType.ProviderAssigned, NotificationChannel.Sms, "provider_assigned_sms", null,
+            "{{ProviderName}} has been assigned to your {{ServiceName}} on {{SlotDate}}, {{SlotWindow}}. - Nestly"),
+        Row(NotificationEventType.ProviderAssigned, NotificationChannel.Email, "provider_assigned_email", "A professional has been assigned to your booking",
+            "Hi {{CustomerName}},\n\n{{ProviderName}} has been assigned to your {{ServiceName}} booking on {{SlotDate}} ({{SlotWindow}}). You can follow their progress in the app once they set off."),
+        Row(NotificationEventType.ProviderAssigned, NotificationChannel.Push, "provider_assigned_push", "Professional assigned",
+            "{{ProviderName}} will handle your {{ServiceName}} on {{SlotDate}}, {{SlotWindow}}."),
+
+        Row(NotificationEventType.ProviderEnRoute, NotificationChannel.Sms, "provider_en_route_sms", null,
+            "{{ProviderName}} is on the way for your {{ServiceName}}. Track them live in the app. - Nestly"),
+        Row(NotificationEventType.ProviderEnRoute, NotificationChannel.Email, "provider_en_route_email", "Your professional is on the way",
+            "Hi {{CustomerName}},\n\n{{ProviderName}} is on the way for your {{ServiceName}} booking {{BookingId}}. Open the app to follow their arrival."),
+        Row(NotificationEventType.ProviderEnRoute, NotificationChannel.Push, "provider_en_route_push", "On the way",
+            "{{ProviderName}} is on the way for your {{ServiceName}}."),
+
+        Row(NotificationEventType.ProviderArrived, NotificationChannel.Sms, "provider_arrived_sms", null,
+            "{{ProviderName}} has arrived for your {{ServiceName}}. - Nestly"),
+        Row(NotificationEventType.ProviderArrived, NotificationChannel.Email, "provider_arrived_email", "Your professional has arrived",
+            "Hi {{CustomerName}},\n\n{{ProviderName}} has arrived at your address for booking {{BookingId}}."),
+        Row(NotificationEventType.ProviderArrived, NotificationChannel.Push, "provider_arrived_push", "Arrived",
+            "{{ProviderName}} has arrived for your {{ServiceName}}."),
+
+        Row(NotificationEventType.JobStarted, NotificationChannel.Sms, "job_started_sms", null,
+            "{{ProviderName}} has started your {{ServiceName}}. - Nestly"),
+        Row(NotificationEventType.JobStarted, NotificationChannel.Email, "job_started_email", "Your service has started",
+            "Hi {{CustomerName}},\n\n{{ProviderName}} has started work on your {{ServiceName}} booking {{BookingId}}."),
+        Row(NotificationEventType.JobStarted, NotificationChannel.Push, "job_started_push", "Service started",
+            "{{ProviderName}} has started your {{ServiceName}}."),
+
+        Row(NotificationEventType.JobCompleted, NotificationChannel.Sms, "job_completed_sms", null,
+            "Your {{ServiceName}} is complete. Rate your experience in the app. - Nestly"),
+        Row(NotificationEventType.JobCompleted, NotificationChannel.Email, "job_completed_email", "Your service is complete",
+            "Hi {{CustomerName}},\n\nYour {{ServiceName}} booking {{BookingId}} has been completed by {{ProviderName}}. We'd love to hear how it went - you can leave a rating in the app."),
+        Row(NotificationEventType.JobCompleted, NotificationChannel.Push, "job_completed_push", "Service complete",
+            "Your {{ServiceName}} is complete. Tap to rate your experience.")
     ];
 
     private static SeedRow Row(NotificationEventType eventType, NotificationChannel channel, string templateKey, string? subject, string body) =>

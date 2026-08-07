@@ -41,4 +41,50 @@ internal static class TestServices
         Options.Create(maxQuantityPerBooking is null
             ? new BookingOptions()
             : new BookingOptions { MaxQuantityPerBooking = maxQuantityPerBooking.Value });
+
+    /// <summary>
+    /// The <see cref="IOptionsMonitor{TOptions}"/> equivalent of
+    /// <see cref="Options.Create{TOptions}"/> (task 276), which
+    /// Microsoft.Extensions.Options does not ship. Only
+    /// <c>BookingNotificationTriggerHandler</c> needs it today - it reads its
+    /// mute switches through a monitor so an ops mute takes effect on config
+    /// reload rather than at the next restart.
+    /// </summary>
+    public static IOptionsMonitor<T> Monitor<T>(T value) where T : class =>
+        new StaticOptionsMonitor<T>(value);
+
+    private sealed class StaticOptionsMonitor<T>(T value) : IOptionsMonitor<T>
+    {
+        public T CurrentValue => value;
+
+        public T Get(string? name) => value;
+
+        /// <summary>Nothing ever changes, so the "changed" callback is never invoked - a no-op disposable is the honest registration.</summary>
+        public IDisposable OnChange(Action<T, string?> listener) => NullDisposable.Instance;
+
+        private sealed class NullDisposable : IDisposable
+        {
+            public static readonly NullDisposable Instance = new();
+            public void Dispose() { }
+        }
+    }
+
+    /// <summary>
+    /// Fulfilment notification switches, all enabled unless a test names the
+    /// ones it wants muted (task 276).
+    /// </summary>
+    public static IOptionsMonitor<FulfilmentNotificationOptions> FulfilmentNotifications(
+        bool providerAssigned = true,
+        bool providerEnRoute = true,
+        bool providerArrived = true,
+        bool jobStarted = true,
+        bool jobCompleted = true) =>
+        Monitor(new FulfilmentNotificationOptions
+        {
+            ProviderAssignedEnabled = providerAssigned,
+            ProviderEnRouteEnabled = providerEnRoute,
+            ProviderArrivedEnabled = providerArrived,
+            JobStartedEnabled = jobStarted,
+            JobCompletedEnabled = jobCompleted
+        });
 }

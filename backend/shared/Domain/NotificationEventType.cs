@@ -43,5 +43,37 @@ public enum NotificationEventType
     SubscriptionPaymentFailed,
 
     /// <summary>A PaymentPending booking was auto-expired by BookingExpirySweepJob without ever being paid for (task 240).</summary>
-    BookingExpired
+    BookingExpired,
+
+    // Task 276: the fulfilment half of the booking lifecycle, which was
+    // entirely silent - BookingNotificationTriggerHandler mapped
+    // Assigned/InProgress/Completed to nothing, so a customer was never told
+    // a professional had been assigned, was on the way, had arrived, had
+    // started or had finished.
+    //
+    // APPENDED, NEVER INSERTED. The column stores the *name*
+    // (NotificationEventConfiguration/NotificationTemplateConfiguration both
+    // apply HasConversion<string>(), max length 30 - every name below fits),
+    // so persistence would tolerate insertion. The wire does not: AdminApi
+    // registers no JsonStringEnumConverter, so this enum serialises to the
+    // admin template screens as its ordinal and
+    // frontend/admin-web/src/lib/notification-template-types.ts mirrors those
+    // ordinals by hand. Inserting mid-enum would silently remap every
+    // already-deployed admin client's template rows. Same reasoning, and the
+    // same hazard, as BookingStatus and ProviderJobStatus.
+
+    /// <summary>A provider was assigned to the booking (AwaitingFulfilment -> Assigned). This is the moment the *offer* is made, not the moment the provider accepts it - see <c>BookingNotificationTriggerHandler</c>'s doc comment for why, and for what a rejection then re-assignment looks like to the customer.</summary>
+    ProviderAssigned,
+
+    /// <summary>The assigned provider set off for the address (-> <see cref="BookingStatus.ProviderEnRoute"/>). A mute candidate: chatty by nature, and the live tracking screen already says the same thing.</summary>
+    ProviderEnRoute,
+
+    /// <summary>The assigned provider reached the address but has not begun work (-> <see cref="BookingStatus.ProviderArrived"/>). The other mute candidate.</summary>
+    ProviderArrived,
+
+    /// <summary>The provider started the job (-> <see cref="BookingStatus.InProgress"/>).</summary>
+    JobStarted,
+
+    /// <summary>The provider marked the job finished (-> <see cref="BookingStatus.Completed"/>).</summary>
+    JobCompleted
 }

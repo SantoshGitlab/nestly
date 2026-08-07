@@ -244,6 +244,16 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(BookingEtaOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 276: per-event mute switches for the fulfilment-lifecycle
+        // notifications. Bound the same way as the three above; read through
+        // IOptionsMonitor rather than IOptions so a mute takes effect on
+        // config reload instead of at the next restart - see the options
+        // class for why that difference matters here and nowhere else.
+        services
+            .AddOptions<FulfilmentNotificationOptions>()
+            .Bind(configuration.GetSection(FulfilmentNotificationOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");

@@ -83,7 +83,9 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
-    private static BookingNotificationTriggerHandler BuildBookingHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
+    private static BookingNotificationTriggerHandler BuildBookingHandler(
+        Nestly.Infrastructure.Persistence.NestlyDbContext context,
+        IOptionsMonitor<FulfilmentNotificationOptions>? fulfilmentOptions = null) =>
         new(
             new CustomerRepository(context),
             new BookingRepository(context),
@@ -91,7 +93,9 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
             new BookingCancellationRepository(context),
             new RefundTransactionRepository(context),
             new DeviceTokenRepository(context),
+            new ProviderRepository(context),
             BuildDispatchService(context),
+            fulfilmentOptions ?? TestServices.FulfilmentNotifications(),
             NullLogger<BookingNotificationTriggerHandler>.Instance);
 
     private static SupportTicketNotificationTriggerHandler BuildTicketHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
