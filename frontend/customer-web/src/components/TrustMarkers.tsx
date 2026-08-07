@@ -1,4 +1,8 @@
+"use client";
+
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
+import { Reveal, revealItem, SPRING } from "@/components/motion";
 
 /** Trust markers / benefits (SRS 11.1.2). Static content - no backend-driven ratings/testimonials exist yet. */
 export function TrustMarkers() {
@@ -29,11 +33,14 @@ export function TrustMarkers() {
     // A plain grid, not a labelled section: the page that renders this already
     // provides the "Why book with Nestly" heading, and repeating it here would
     // announce the same landmark name twice.
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {markers.map((marker) => (
-        <div
+        <motion.div
           key={marker.title}
-          className="rounded-2xl border border-line bg-surface p-5 shadow-xs"
+          variants={revealItem}
+          whileHover={{ y: -4 }}
+          transition={SPRING}
+          className="rounded-2xl border border-line bg-surface p-5 shadow-xs transition-shadow duration-200 ease-out hover:shadow-md"
         >
           <span
             aria-hidden="true"
@@ -43,9 +50,9 @@ export function TrustMarkers() {
           </span>
           <p className="mt-3.5 text-sm font-semibold text-fg">{marker.title}</p>
           <p className="mt-1 text-sm leading-relaxed text-fg-muted">{marker.detail}</p>
-        </div>
+        </motion.div>
       ))}
-    </div>
+    </Reveal>
   );
 }
 

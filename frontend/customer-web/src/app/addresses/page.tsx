@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -126,9 +127,9 @@ function AddressBook() {
           }
         />
       ) : (
-        <ul className="flex flex-col gap-4">
+        <Reveal as="ul" className="flex flex-col gap-4">
           {query.data.map((address) => (
-            <li key={address.id}>
+            <RevealItem key={address.id}>
               <Card
                 title={address.label}
                 actions={address.isDefault ? <Badge tone="brand">Default</Badge> : null}
@@ -177,9 +178,9 @@ function AddressBook() {
                   </div>
                 </div>
               </Card>
-            </li>
+            </RevealItem>
           ))}
-        </ul>
+        </Reveal>
       )}
 
       {/* Replaces window.confirm, which ignores the design system, cannot be

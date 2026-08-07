@@ -50,7 +50,7 @@ export default function ServiceDetailPage() {
   const service = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-5xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
       <nav aria-label="Breadcrumb" className="mb-5 text-sm">
         <ol className="flex flex-wrap items-center gap-1.5 text-fg-muted">
           <li>

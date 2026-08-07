@@ -181,7 +181,7 @@ export default function JobDetailPage() {
     job.status === JobStatus.InProgress || job.status === JobStatus.Completed;
 
   return (
-    <div>
+    <div className="animate-rise">
       <PageHeading
         breadcrumbs={backLink}
         title={job.customerNameSnapshot}

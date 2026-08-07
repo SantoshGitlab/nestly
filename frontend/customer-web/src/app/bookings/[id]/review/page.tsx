@@ -233,7 +233,7 @@ function ReviewForm({ bookingId, onSubmitted }: { bookingId: string; onSubmitted
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading title="Leave a review" subtitle="Tell us how the service went." />
 
       <Card title="Rate your experience">

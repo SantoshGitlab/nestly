@@ -9,6 +9,7 @@ import {
   formatInstantDate,
   inr,
 } from "@/components/patterns";
+import { Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -395,9 +396,9 @@ function PlanSelectionView() {
           }
         />
       ) : (
-        <ul className="grid list-none grid-cols-1 gap-4 sm:grid-cols-2">
+        <Reveal as="ul" className="grid list-none grid-cols-1 gap-4 sm:grid-cols-2">
           {plansQuery.data.map((plan) => (
-            <li key={plan.id} className="flex">
+            <RevealItem key={plan.id} className="flex">
               <PlanCard
                 plan={plan}
                 pending={pendingPlanId === plan.id}
@@ -410,9 +411,9 @@ function PlanSelectionView() {
                   subscribeMutation.mutate(plan.id);
                 }}
               />
-            </li>
+            </RevealItem>
           ))}
-        </ul>
+        </Reveal>
       )}
     </main>
   );

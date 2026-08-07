@@ -69,7 +69,7 @@ function ProfileScreen() {
   const profile = profileQuery.data;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading title="Your profile" subtitle="View and edit your details and preferences." />
 
       <div className="flex flex-col gap-6">

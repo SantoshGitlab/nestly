@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
 import { CategoryTile } from "@/components/CategoryTile";
 import { CitySelector } from "@/components/CitySelector";
+import { Reveal, revealItem } from "@/components/motion";
 import { Alert, Button, EmptyState, PageHeading } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -76,10 +78,12 @@ function CategoryGrid({ cityId }: { cityId: string }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+    <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
       {query.data.map((category) => (
-        <CategoryTile key={category.id} category={category} />
+        <motion.div key={category.id} variants={revealItem}>
+          <CategoryTile category={category} />
+        </motion.div>
       ))}
-    </div>
+    </Reveal>
   );
 }

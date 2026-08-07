@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { MotionLink, Reveal, RevealItem } from "@/components/motion";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
   Card,
@@ -83,13 +84,13 @@ export function PayoutsSection() {
       description="Transfers to your registered bank account, newest first."
     >
       {/* Phone: the whole row is a link, sized to be tapped one-handed. */}
-      <ul className="flex flex-col gap-2.5 sm:hidden">
+      <Reveal as="ul" className="flex flex-col gap-2.5 sm:hidden">
         {payouts.map((payout) => (
-          <li key={payout.id}>
+          <RevealItem key={payout.id}>
             <PayoutCard payout={payout} />
-          </li>
+          </RevealItem>
         ))}
-      </ul>
+      </Reveal>
 
       <div className="hidden sm:block">
         <Table>
@@ -134,9 +135,10 @@ export function PayoutsSection() {
 /** One payout as a full-width tap target, for the phone layout. */
 function PayoutCard({ payout }: { payout: PayoutSummary }) {
   return (
-    <Link
+    <MotionLink
       href={`/earnings/payouts/${payout.id}`}
-      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-3.5 transition duration-fast ease-out hover:border-line-strong hover:bg-surface-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40"
+      variant="nudge"
+      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-3.5 transition duration-fast ease-out hover:border-line-strong hover:bg-surface-3"
     >
       <div className="min-w-0">
         <p className="nums text-sm font-semibold text-fg">{formatInr(payout.totalAmount)}</p>
@@ -157,7 +159,7 @@ function PayoutCard({ payout }: { payout: PayoutSummary }) {
           <path d="m9 18 6-6-6-6" />
         </svg>
       </div>
-    </Link>
+    </MotionLink>
   );
 }
 

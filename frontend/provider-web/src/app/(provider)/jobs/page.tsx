@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Reveal, RevealItem, SPRING } from "@/components/motion";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
   Button,
@@ -149,13 +151,13 @@ export default function JobsPage() {
             }
           />
         ) : (
-          <ul className="grid animate-fade-in gap-3 sm:grid-cols-2">
+          <Reveal as="ul" className="grid gap-3 sm:grid-cols-2">
             {query.data.map((job) => (
-              <li key={job.assignmentId}>
+              <RevealItem key={job.assignmentId}>
                 <JobCard job={job} />
-              </li>
+              </RevealItem>
             ))}
-          </ul>
+          </Reveal>
         )}
       </div>
     </div>
@@ -171,51 +173,54 @@ function JobCard({ job }: { job: JobListItem }) {
   const needsResponse = job.status === JobStatus.Assigned;
 
   return (
-    <Link
-      href={`/jobs/${job.bookingId}`}
-      className={cx(
-        "group flex h-full flex-col gap-3 rounded-2xl border bg-surface p-4 shadow-sm transition duration-fast ease-out",
-        "hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40",
-        needsResponse ? "border-warning/40" : "border-line",
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <JobStatusBadge status={job.status} />
-        <span className="nums shrink-0 text-sm font-semibold text-fg">
-          {formatInr(job.totalPayableSnapshot)}
-        </span>
-      </div>
+    <Link href={`/jobs/${job.bookingId}`} className="group block h-full">
+      <motion.div
+        whileHover={{ y: -5 }}
+        whileTap={{ scale: 0.97 }}
+        transition={SPRING}
+        className={cx(
+          "flex h-full flex-col gap-3 rounded-2xl border bg-surface p-4 shadow-sm transition duration-fast ease-out",
+          "group-hover:border-line-strong group-hover:shadow-md",
+          needsResponse ? "border-warning/40" : "border-line",
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <JobStatusBadge status={job.status} />
+          <span className="nums shrink-0 text-sm font-semibold text-fg">
+            {formatInr(job.totalPayableSnapshot)}
+          </span>
+        </div>
 
-      <div className="min-w-0">
-        <p className="truncate text-base font-semibold text-fg">{job.customerNameSnapshot}</p>
-        <p className="mt-0.5 nums text-sm text-fg-muted">
-          {formatIsoDate(job.slotDate)} · {formatTime(job.slotStartTimeSnapshot)}–
-          {formatTime(job.slotEndTimeSnapshot)}
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-fg">{job.customerNameSnapshot}</p>
+          <p className="mt-0.5 nums text-sm text-fg-muted">
+            {formatIsoDate(job.slotDate)} · {formatTime(job.slotStartTimeSnapshot)}–
+            {formatTime(job.slotEndTimeSnapshot)}
+          </p>
+        </div>
+
+        <p className="line-clamp-2 text-sm leading-relaxed text-fg-subtle">
+          {job.addressLine1Snapshot}, {job.addressCitySnapshot} {job.addressPincodeSnapshot}
         </p>
-      </div>
 
-      <p className="line-clamp-2 text-sm leading-relaxed text-fg-subtle">
-        {job.addressLine1Snapshot}, {job.addressCitySnapshot} {job.addressPincodeSnapshot}
-      </p>
-
-      {needsResponse && job.responseDeadline ? (
-        <p className="mt-auto flex items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 py-1.5 text-xs font-medium text-warning">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            className="h-3.5 w-3.5 shrink-0"
-            aria-hidden
-          >
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-          Respond by {formatDateTime(job.responseDeadline)}
-        </p>
-      ) : null}
+        {needsResponse && job.responseDeadline ? (
+          <p className="mt-auto flex items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 py-1.5 text-xs font-medium text-warning">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              className="h-3.5 w-3.5 shrink-0"
+              aria-hidden
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            Respond by {formatDateTime(job.responseDeadline)}
+          </p>
+        ) : null}
+      </motion.div>
     </Link>
   );
 }

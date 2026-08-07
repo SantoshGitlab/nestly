@@ -1,8 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { Reveal, revealItem } from "@/components/motion";
 import {
   Alert,
   Badge,
@@ -520,14 +522,26 @@ export default function ProviderDetailPage() {
         ) : performanceQuery.isError ? (
           <SectionError error={performanceQuery.error} onRetry={() => performanceQuery.refetch()} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatTile label="Total assignments" value={String(performanceQuery.data.totalAssignments)} />
-            <StatTile label="Accepted" value={String(performanceQuery.data.acceptedAssignments)} />
-            <StatTile label="Rejected" value={String(performanceQuery.data.rejectedAssignments)} />
-            <StatTile label="Completed jobs" value={String(performanceQuery.data.completedJobs)} />
-            <StatTile label="In-progress jobs" value={String(performanceQuery.data.inProgressJobs)} />
-            <StatTile label="Lifetime earnings" value={formatCurrency(performanceQuery.data.lifetimeEarnings)} />
-          </div>
+          <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <motion.div variants={revealItem}>
+              <StatTile label="Total assignments" value={String(performanceQuery.data.totalAssignments)} />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile label="Accepted" value={String(performanceQuery.data.acceptedAssignments)} />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile label="Rejected" value={String(performanceQuery.data.rejectedAssignments)} />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile label="Completed jobs" value={String(performanceQuery.data.completedJobs)} />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile label="In-progress jobs" value={String(performanceQuery.data.inProgressJobs)} />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile label="Lifetime earnings" value={formatCurrency(performanceQuery.data.lifetimeEarnings)} />
+            </motion.div>
+          </Reveal>
         )}
       </Card>
 

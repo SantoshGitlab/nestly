@@ -532,7 +532,7 @@ export default function SystemSettingsPage() {
   const { data, isPending, isError, error, refetch } = useAllSettings();
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="System settings"
         subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet and coupon rules (SRS 12.19)."

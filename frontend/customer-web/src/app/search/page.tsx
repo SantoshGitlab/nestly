@@ -1,11 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
 import { CategoryTile } from "@/components/CategoryTile";
+import { Reveal, revealItem } from "@/components/motion";
 import { SearchBar } from "@/components/SearchBar";
 import { ServiceCard } from "@/components/ServiceCard";
 import { Alert, Button, EmptyState, PageHeading, Skeleton } from "@/components/ui";
@@ -122,11 +124,13 @@ function SearchResults() {
                   {query.data.categories.length}
                 </span>
               </h2>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+              <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
                 {query.data.categories.map((category) => (
-                  <CategoryTile key={category.id} category={category} />
+                  <motion.div key={category.id} variants={revealItem}>
+                    <CategoryTile category={category} />
+                  </motion.div>
                 ))}
-              </div>
+              </Reveal>
             </section>
           ) : null}
 
@@ -141,17 +145,18 @@ function SearchResults() {
                   {query.data.services.length}
                 </span>
               </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Reveal className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {query.data.services.map((service) => (
-                  <ServiceCard
-                    key={service.id}
-                    slug={service.slug}
-                    name={service.name}
-                    description={service.description}
-                    price={service.price}
-                  />
+                  <motion.div key={service.id} variants={revealItem}>
+                    <ServiceCard
+                      slug={service.slug}
+                      name={service.name}
+                      description={service.description}
+                      price={service.price}
+                    />
+                  </motion.div>
                 ))}
-              </div>
+              </Reveal>
             </section>
           ) : null}
         </div>

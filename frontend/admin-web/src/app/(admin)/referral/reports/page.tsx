@@ -1,8 +1,10 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { useState } from "react";
 import { FilterBar, countActiveFilters, formatCurrency } from "@/components/data-table";
+import { Reveal, revealItem } from "@/components/motion";
 import { SectionError } from "@/components/screen-states";
 import { Card, Field, PageHeading, Skeleton, StatTile } from "@/components/ui";
 import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
@@ -112,20 +114,28 @@ export default function ReferralReportsPage() {
           ) : funnelQuery.error ? (
             <SectionError error={funnelQuery.error} onRetry={() => funnelQuery.refetch()} />
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatTile label="Invited" value={count(funnelQuery.data.invitedCount)} hint="Same as registered — invite clicks are not tracked." />
-              <StatTile label="Registered" value={count(funnelQuery.data.registeredCount)} />
-              <StatTile
-                label="Qualified"
-                value={count(funnelQuery.data.qualifiedCount)}
-                hint={share(funnelQuery.data.qualifiedCount, funnelQuery.data.registeredCount)}
-              />
-              <StatTile
-                label="Rewarded"
-                value={count(funnelQuery.data.rewardedCount)}
-                hint={share(funnelQuery.data.rewardedCount, funnelQuery.data.registeredCount)}
-              />
-            </div>
+            <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <motion.div variants={revealItem}>
+                <StatTile label="Invited" value={count(funnelQuery.data.invitedCount)} hint="Same as registered — invite clicks are not tracked." />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile label="Registered" value={count(funnelQuery.data.registeredCount)} />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile
+                  label="Qualified"
+                  value={count(funnelQuery.data.qualifiedCount)}
+                  hint={share(funnelQuery.data.qualifiedCount, funnelQuery.data.registeredCount)}
+                />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile
+                  label="Rewarded"
+                  value={count(funnelQuery.data.rewardedCount)}
+                  hint={share(funnelQuery.data.rewardedCount, funnelQuery.data.registeredCount)}
+                />
+              </motion.div>
+            </Reveal>
           )}
         </Card>
 
@@ -135,17 +145,23 @@ export default function ReferralReportsPage() {
           ) : costQuery.error ? (
             <SectionError error={costQuery.error} onRetry={() => costQuery.refetch()} />
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <StatTile label="Wallet credit" value={formatCurrency(costQuery.data.totalWalletCreditCost)} />
-              <StatTile label="Coupons" value={formatCurrency(costQuery.data.totalCouponCost)} />
-              <StatTile
-                label="Total cost"
-                value={formatCurrency(costQuery.data.totalCost)}
-                hint={`${count(costQuery.data.rewardedReferralCount)} referral rewards · ${count(
-                  costQuery.data.milestoneBonusCount,
-                )} milestone bonuses`}
-              />
-            </div>
+            <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <motion.div variants={revealItem}>
+                <StatTile label="Wallet credit" value={formatCurrency(costQuery.data.totalWalletCreditCost)} />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile label="Coupons" value={formatCurrency(costQuery.data.totalCouponCost)} />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile
+                  label="Total cost"
+                  value={formatCurrency(costQuery.data.totalCost)}
+                  hint={`${count(costQuery.data.rewardedReferralCount)} referral rewards · ${count(
+                    costQuery.data.milestoneBonusCount,
+                  )} milestone bonuses`}
+                />
+              </motion.div>
+            </Reveal>
           )}
         </Card>
       </div>

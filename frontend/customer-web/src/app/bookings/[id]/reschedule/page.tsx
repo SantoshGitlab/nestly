@@ -136,7 +136,12 @@ function RescheduleBookingScreen() {
   };
 
   return (
-    <main className={cx("mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", STICKY_BAR_SPACER)}>
+    <main
+      className={cx(
+        "mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
+        STICKY_BAR_SPACER,
+      )}
+    >
       <PageHeading
         title="Reschedule booking"
         subtitle={`Reschedules used: ${eligibility.reschedulesUsed} of ${eligibility.maxReschedulesPerBooking}`}

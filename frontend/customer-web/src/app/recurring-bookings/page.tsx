@@ -9,6 +9,7 @@ import {
   formatCalendarDate,
   recurringPlanStatusTone,
 } from "@/components/patterns";
+import { Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -92,13 +93,13 @@ function RecurringBookingsScreen() {
           }
         />
       ) : (
-        <ul className="flex flex-col gap-4">
+        <Reveal as="ul" className="flex flex-col gap-4">
           {query.data.map((plan) => (
-            <li key={plan.id}>
+            <RevealItem key={plan.id}>
               <PlanCard plan={plan} />
-            </li>
+            </RevealItem>
           ))}
-        </ul>
+        </Reveal>
       )}
     </main>
   );

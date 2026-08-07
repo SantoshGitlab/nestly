@@ -1,9 +1,11 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
 import type { ChangeEvent } from "react";
+import { Reveal, revealItem } from "@/components/motion";
 import { Alert, Button, Field, PageHeading, Skeleton, StatTile, cx } from "@/components/ui";
 import {
   DataTable,
@@ -291,29 +293,39 @@ export default function DashboardPage() {
               <span className="nums">{query.data.dateTo}</span>
               {query.isFetching ? " · refreshing…" : ""}
             </p>
-            <div
+            <Reveal
               className={cx(
-                "grid animate-fade-in grid-cols-2 gap-4 transition-opacity duration-fast ease-out sm:grid-cols-3 lg:grid-cols-5",
+                "grid grid-cols-2 gap-4 transition-opacity duration-fast ease-out sm:grid-cols-3 lg:grid-cols-5",
                 query.isFetching && "opacity-60",
               )}
             >
-              <StatTile label="Bookings" value={query.data.bookingsCount.toLocaleString("en-IN")} />
-              <StatTile
-                label="Revenue"
-                value={formatCurrency(query.data.revenueTotal)}
-                title={formatCurrency(query.data.revenueTotal)}
-              />
-              <StatTile label="Cancellations" value={query.data.cancellationsCount.toLocaleString("en-IN")} />
-              <StatTile
-                label="Refund amount"
-                value={formatCurrency(query.data.refundAmountTotal)}
-                title={formatCurrency(query.data.refundAmountTotal)}
-              />
-              <StatTile
-                label="Open support tickets"
-                value={query.data.openSupportTicketsCount.toLocaleString("en-IN")}
-              />
-            </div>
+              <motion.div variants={revealItem}>
+                <StatTile label="Bookings" value={query.data.bookingsCount.toLocaleString("en-IN")} />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile
+                  label="Revenue"
+                  value={formatCurrency(query.data.revenueTotal)}
+                  title={formatCurrency(query.data.revenueTotal)}
+                />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile label="Cancellations" value={query.data.cancellationsCount.toLocaleString("en-IN")} />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile
+                  label="Refund amount"
+                  value={formatCurrency(query.data.refundAmountTotal)}
+                  title={formatCurrency(query.data.refundAmountTotal)}
+                />
+              </motion.div>
+              <motion.div variants={revealItem}>
+                <StatTile
+                  label="Open support tickets"
+                  value={query.data.openSupportTicketsCount.toLocaleString("en-IN")}
+                />
+              </motion.div>
+            </Reveal>
           </>
         )}
       </section>

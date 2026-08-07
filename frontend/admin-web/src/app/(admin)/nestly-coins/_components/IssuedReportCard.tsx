@@ -1,7 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { useState } from "react";
+import { Reveal, revealItem } from "@/components/motion";
 import { Alert, Button, Card, Field, Skeleton, StatTile } from "@/components/ui";
 import { FormActions, formatCurrency } from "@/components/data-table";
 import { SectionError } from "@/components/screen-states";
@@ -93,24 +95,30 @@ export function IssuedReportCard({ audience }: { audience: NestlyCoinsAudience }
         ) : reportQuery.isError ? (
           <SectionError error={reportQuery.error} onRetry={() => void reportQuery.refetch()} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatTile
-              label="Issued"
-              value={formatCurrency(reportQuery.data.totalIssued)}
-              title={formatCurrency(reportQuery.data.totalIssued)}
-            />
-            <StatTile
-              label="Clawed back"
-              value={formatCurrency(reportQuery.data.totalClawedBack)}
-              title={formatCurrency(reportQuery.data.totalClawedBack)}
-            />
-            <StatTile
-              label="Net outstanding"
-              value={formatCurrency(reportQuery.data.netOutstanding)}
-              title={formatCurrency(reportQuery.data.netOutstanding)}
-              hint="Issued minus clawed back — the liability still on the books."
-            />
-          </div>
+          <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <motion.div variants={revealItem}>
+              <StatTile
+                label="Issued"
+                value={formatCurrency(reportQuery.data.totalIssued)}
+                title={formatCurrency(reportQuery.data.totalIssued)}
+              />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile
+                label="Clawed back"
+                value={formatCurrency(reportQuery.data.totalClawedBack)}
+                title={formatCurrency(reportQuery.data.totalClawedBack)}
+              />
+            </motion.div>
+            <motion.div variants={revealItem}>
+              <StatTile
+                label="Net outstanding"
+                value={formatCurrency(reportQuery.data.netOutstanding)}
+                title={formatCurrency(reportQuery.data.netOutstanding)}
+                hint="Issued minus clawed back — the liability still on the books."
+              />
+            </motion.div>
+          </Reveal>
         )}
       </div>
     </Card>

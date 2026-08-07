@@ -84,7 +84,7 @@ function SupportTicketDetailScreen() {
   const ticket = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-3xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading
         title={ticket.subject}
         subtitle={`Ticket ID: ${ticket.id}`}

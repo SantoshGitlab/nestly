@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { formatInstant, supportStatusTone } from "@/components/patterns";
+import { MotionLink, Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -73,13 +74,13 @@ function SupportTicketsScreen() {
           action={<RaiseIssueLink />}
         />
       ) : (
-        <ul className="flex list-none flex-col gap-3">
+        <Reveal as="ul" className="flex list-none flex-col gap-3">
           {query.data.map((ticket) => (
-            <li key={ticket.id}>
+            <RevealItem key={ticket.id}>
               <TicketRow ticket={ticket} />
-            </li>
+            </RevealItem>
           ))}
-        </ul>
+        </Reveal>
       )}
     </main>
   );
@@ -100,8 +101,9 @@ function RaiseIssueLink() {
 
 function TicketRow({ ticket }: { ticket: SupportTicketSummaryResponse }) {
   return (
-    <Link
+    <MotionLink
       href={`/support/${ticket.id}`}
+      variant="nudge"
       className="block rounded-2xl border border-line bg-surface p-4 shadow-sm transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
     >
       <div className="flex items-start justify-between gap-3">
@@ -119,7 +121,7 @@ function TicketRow({ ticket }: { ticket: SupportTicketSummaryResponse }) {
           ? ` · Updated ${formatInstant(ticket.updatedAtUtc)}`
           : ""}
       </p>
-    </Link>
+    </MotionLink>
   );
 }
 

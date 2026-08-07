@@ -1,6 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "motion/react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { ApiError } from "@/lib/api";
@@ -26,5 +27,9 @@ export function Providers({ children }: { children: ReactNode }) {
       }),
   );
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <MotionConfig reducedMotion="user">
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    </MotionConfig>
+  );
 }
