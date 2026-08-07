@@ -2009,6 +2009,16 @@ Optional for:
 - Lat/long capture
 - Pincode mapping
 
+Since Phase 16 (end-to-end order tracking), Google Maps is no longer merely
+optional overall: live tracking's ETA and auto-assignment's provider ranking
+both depend on it for real road-travel-time data. Both features degrade
+gracefully to a free local estimator when no API key is configured (see
+`docs/TRACKING.md` §3, §8), so the *system* still runs without a key, but
+the *accuracy* of ETAs and assignment ranking depends on one being
+configured in any environment where that accuracy matters. See
+`docs/TRACKING.md` for the full configuration surface and
+`docs/RUNBOOK-DEPLOYMENT.md` §142a.1 for key provisioning.
+
 ## 31. STATUS TRANSITION MATRIX
 
 ### 31.1 Booking Transition Examples

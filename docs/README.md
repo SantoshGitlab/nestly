@@ -39,6 +39,7 @@ Every topic has exactly **one authoritative document**.
 | [REFERRAL.md](REFERRAL.md) | Referral (Refer & Earn) module specification (Phase 9) |
 | [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md) | Subscription, Recurring Bookings, In-App Chat, Completion Verification specification (Phase 10) |
 | [NESTLY-COINS.md](NESTLY-COINS.md) | Nestly Coins (reorder loyalty currency for customers and providers) specification (Phase 11) |
+| [TRACKING.md](TRACKING.md) | End-to-end order tracking (Phase 16) — state machine, location ingest, ETA pipeline, tracking hub, and the Google Maps configuration surface |
 | [tasks.csv](tasks.csv) | Development backlog — phased tasks, priorities and dependencies |
 | [archive/](archive/) | Original Word-format versions of these documents (historical) |
 
@@ -92,6 +93,10 @@ Every topic has exactly **one authoritative document**.
 | Deployment | DEVOPS.md |
 | Monitoring | DEVOPS.md |
 | Provider module design | PROVIDER.md |
+| Live order tracking | TRACKING.md |
+| Location ingest throttling/retention | TRACKING.md |
+| ETA / routing pipeline | TRACKING.md |
+| Google Maps API key management | TRACKING.md |
 | Development backlog | tasks.csv |
 
 ## OWNERSHIP RULES
