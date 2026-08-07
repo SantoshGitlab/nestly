@@ -76,14 +76,38 @@ public static class DependencyInjection
     /// hub type underneath this prefix, so a second prefix would buy no
     /// isolation while doubling the subscriptions each server holds - and
     /// tracking and chat are the same trust boundary anyway (same Redis, same
-    /// deployment, same operators). The value still reads "chat" because it
-    /// was minted when chat was the only hub (task 190); renaming it is a
-    /// wire-format change that would partition chat delivery between old and
-    /// new instances for the length of a rolling deploy, which is not worth
-    /// paying for cosmetics. Named here so the next reader sees that this is
-    /// a deliberate misnomer rather than a chat-only setting.
+    /// deployment, same operators).
     /// </summary>
-    private const string SignalRChannelPrefix = "nestly-chat";
+    /// <remarks>
+    /// <para>
+    /// Task 274 widened this from the literal <c>"nestly-chat"</c>, which was
+    /// minted when chat was the only hub (task 190). Task 273's tracking hub
+    /// broadcasts through the same backplane, so a prefix naming one hub was
+    /// actively misleading about which traffic it carries. Widening the one
+    /// prefix, rather than adding a tracking-specific second one, keeps that
+    /// "one prefix, hub-type namespacing underneath" property intact.
+    /// </para>
+    /// <para>
+    /// <b>Rolling-deploy consequence, and it is not cosmetic.</b> This string
+    /// is a wire format: a server subscribes to <c>{prefix}:{hubType}:...</c>
+    /// and publishes to the same. While old and new instances run side by side
+    /// they are on two disjoint sets of Redis channels, so for the length of
+    /// the rollout the backplane is effectively partitioned - a chat message
+    /// or a tracking frame produced on a new instance never reaches a
+    /// connection parked on an old one, and vice versa. In-flight messages
+    /// published under the old prefix are not migrated; they are delivered to
+    /// old-prefix subscribers only and are otherwise dropped. Nothing is
+    /// persisted incorrectly and nothing needs replaying: chat messages are
+    /// committed to the database before they are broadcast and the client
+    /// re-reads the thread on reconnect, and a lost tracking frame is
+    /// explicitly acceptable (docs/ARCHITECTURE.md, "DOMAIN EVENT DISPATCH AND
+    /// DELIVERY"). The user-visible cost is bounded by the rollout window and
+    /// ends when the last old instance drains. Deploy accordingly - drain
+    /// rather than overlap if the window is long - and do not change this
+    /// value again casually.
+    /// </para>
+    /// </remarks>
+    private const string SignalRChannelPrefix = "nestly-realtime";
 
     /// <summary>
     /// Registers infrastructure services: persistence, caching (T017),
