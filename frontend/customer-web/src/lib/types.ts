@@ -417,6 +417,47 @@ export interface BookingListItem {
 }
 
 /**
+ * Live tracking response shapes (task 275/281). Mirror
+ * Nestly.Application.Tracking.BookingTrackingContracts.cs field for field -
+ * see that file's doc comments for why each is this narrow (no price, no
+ * timeline, no raw phone number: this is the response most exposed to a
+ * stolen customer token, polled continuously while a stranger is en route to
+ * a home address).
+ */
+export interface TrackedProviderSummary {
+  displayName: string;
+  photoUrl: string | null;
+  rating: number | null;
+  maskedPhone: string | null;
+}
+
+export interface TrackedLocation {
+  latitude: number;
+  longitude: number;
+  recordedAtUtc: string;
+}
+
+export interface TrackedEta {
+  etaSeconds: number;
+  etaComputedAtUtc: string;
+}
+
+export interface TrackedDestination {
+  latitude: number;
+  longitude: number;
+}
+
+export interface BookingTrackingResponse {
+  bookingId: string;
+  status: BookingStatus;
+  statusLabel: string;
+  provider: TrackedProviderSummary | null;
+  providerLocation: TrackedLocation | null;
+  eta: TrackedEta | null;
+  destination: TrackedDestination;
+}
+
+/**
  * Recurring booking plan shapes mirror the C# records in
  * Nestly.Application.RecurringBookings (RecurringBookingPlanContracts.cs) -
  * see RecurringBookingPlansController.

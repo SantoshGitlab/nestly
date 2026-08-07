@@ -243,6 +243,16 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
             </Badge>
           ) : null}
         </div>
+
+        {isBookingTrackable(booking.status) ? (
+          <Link
+            href={`/bookings/${booking.id}/track`}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
+          >
+            <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-fg-on-brand" />
+            Track live
+          </Link>
+        ) : null}
       </div>
     </Card>
   );
