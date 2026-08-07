@@ -448,4 +448,103 @@ public sealed class ProviderMatchingServiceRouteRankingTests : IClassFixture<Tes
         candidates.Select(c => c.ProviderId).Should().Equal([fastestByRoad.Id, nearestByAir.Id]);
         candidates.Should().OnlyContain(c => c.TravelDurationSeconds != null);
     }
+
+    // -----------------------------------------------------------------------
+    // Task 286 - the same guarantees, driven through the real Google provider
+    // over a stubbed handler instead of a stubbed IRouteEstimateProvider. The
+    // tests above prove the ranker behaves given a degraded response; these
+    // prove the maps integration actually produces one when Google is down,
+    // so the two halves cannot drift apart.
+    // -----------------------------------------------------------------------
+
+    private const string SampleApiKey = "AIzaSyC286-not-a-real-key-9f3b1c7d5e2a4680";
+
+    private static GoogleMapsRouteEstimateProvider BuildGoogleProvider(StubHttpMessageHandler handler) =>
+        new(new StubHttpClientFactory(handler),
+            new InMemoryCacheService(),
+            new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
+            Options.Create(new GoogleMapsOptions { ApiKey = SampleApiKey }),
+            new RecordingLogger<GoogleMapsRouteEstimateProvider>());
+
+    /// <summary>
+    /// A total Google outage must not make auto-assignment non-deterministic.
+    /// Every estimate degrades to the sandbox, so the response carries no road
+    /// information, the straight-line ordering stands, and two runs over the
+    /// same data produce the same list - which is what makes an assignment
+    /// reproducible when someone asks afterwards why this provider was picked.
+    /// </summary>
+    [Fact]
+    public async Task FindCandidatesAsync_returns_a_deterministic_order_when_google_answers_nothing()
+    {
+        Fixture f;
+        Provider nearestByAir, fartherByAir;
+        Guid bookingId;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            nearestByAir = AddEligibleProvider(context, f, BookingLatitude, OneKilometreWest);
+            fartherByAir = AddEligibleProvider(context, f, BookingLatitude, FiveKilometresWest);
+            bookingId = AddBooking(context, f);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+
+        var first = await BuildService(
+                readContext,
+                BuildGoogleProvider(StubHttpMessageHandler.Responding(System.Net.HttpStatusCode.InternalServerError)))
+            .FindCandidatesAsync(bookingId);
+
+        var second = await BuildService(
+                readContext,
+                BuildGoogleProvider(StubHttpMessageHandler.Throwing(() => new HttpRequestException("No such host is known."))))
+            .FindCandidatesAsync(bookingId);
+
+        first.Select(c => c.ProviderId).Should().Equal(
+            [nearestByAir.Id, fartherByAir.Id],
+            "a sandbox-only response is the same Haversine number rescaled, so the straight-line order stands");
+        first.Should().OnlyContain(c => c.TravelDurationSeconds == null);
+        second.Select(c => c.ProviderId).Should().Equal(
+            first.Select(c => c.ProviderId),
+            "two different outages must not produce two different assignment orders");
+    }
+
+    /// <summary>
+    /// And when Google does answer, but answers identically for two
+    /// candidates, the order is still fixed - by Provider.Id. The tiebreak is
+    /// the whole of the determinism guarantee: without it, two candidates the
+    /// road agrees exactly about would come back in whatever order the database
+    /// happened to hand them over in.
+    /// </summary>
+    [Fact]
+    public async Task FindCandidatesAsync_breaks_a_tie_by_provider_id_when_google_returns_identical_durations()
+    {
+        Fixture f;
+        Provider nearer, farther;
+        Guid bookingId;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            nearer = AddEligibleProvider(context, f, BookingLatitude, OneKilometreWest);
+            farther = AddEligibleProvider(context, f, BookingLatitude, FiveKilometresWest);
+            bookingId = AddBooking(context, f);
+            context.SaveChanges();
+        }
+
+        // Identical durations, different distances: only the Provider.Id
+        // tiebreak can decide this, and it must decide it the same way twice.
+        var handler = StubHttpMessageHandler.RespondingWithJson(
+            """
+            [{"destinationIndex":0,"distanceMeters":1100,"duration":"900s","condition":"ROUTE_EXISTS"},
+             {"destinationIndex":1,"distanceMeters":5400,"duration":"900s","condition":"ROUTE_EXISTS"}]
+            """);
+
+        using var readContext = _db.CreateContext();
+        var candidates = await BuildService(readContext, BuildGoogleProvider(handler)).FindCandidatesAsync(bookingId);
+
+        candidates.Should().OnlyContain(c => c.TravelDurationSeconds == 900);
+        candidates.Select(c => c.ProviderId).Should().Equal(
+            new[] { nearer.Id, farther.Id }.OrderBy(id => id),
+            "an exact tie falls back to Provider.Id - deterministic, and carrying no ranking meaning");
+    }
 }
