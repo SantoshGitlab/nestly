@@ -118,6 +118,44 @@ public sealed class BookingTrackingBroadcastHandlerTests
             .And.NotBe(ExpectedGroup);
     }
 
+    // --- Failure path never leaks the payload into logs (task 278 item 7) ---
+
+    /// <summary>
+    /// When the send itself fails (Redis unreachable, etc.), the catch block
+    /// this handler runs logs the method name and booking id only - never the
+    /// coordinates, ETA seconds or status values the frame carried. A raw
+    /// coordinate landing in a log sink is exactly the leak task 278 asks to
+    /// rule out, and the failure path is the one place a naive
+    /// <c>catch (Exception ex) { _logger.LogError(ex, "Broadcast failed: {Payload}", payload); }</c>
+    /// would introduce it.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_location_broadcast_logs_the_booking_id_but_never_the_coordinates()
+    {
+        var hub = new RecordingHubContext { ThrowOnSend = new InvalidOperationException("Redis unreachable") };
+        var logger = new RecordingLogger<BookingTrackingBroadcastHandler>();
+        var handler = new BookingTrackingBroadcastHandler(hub, logger);
+
+        await handler.Handle(LocationUpdated(BookingId), CancellationToken.None);
+
+        logger.Text.Should().Contain(BookingId.ToString());
+        logger.Text.Should().NotContain("12.9716", "the latitude must never reach the log stream");
+        logger.Text.Should().NotContain("77.5946", "the longitude must never reach the log stream");
+    }
+
+    [Fact]
+    public async Task A_failed_eta_broadcast_logs_the_booking_id_but_never_the_eta_seconds()
+    {
+        var hub = new RecordingHubContext { ThrowOnSend = new InvalidOperationException("Redis unreachable") };
+        var logger = new RecordingLogger<BookingTrackingBroadcastHandler>();
+        var handler = new BookingTrackingBroadcastHandler(hub, logger);
+
+        await handler.Handle(EtaUpdated(), CancellationToken.None);
+
+        logger.Text.Should().Contain(BookingId.ToString());
+        logger.Text.Should().NotContain("540", "the raw ETA value must never reach the log stream");
+    }
+
     // --- Payload shape ---
 
     [Fact]
