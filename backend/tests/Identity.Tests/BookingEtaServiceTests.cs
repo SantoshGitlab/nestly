@@ -346,6 +346,11 @@ public class BookingEtaServiceTests : IDisposable
         var route = new StubRouteEstimateProvider();
         var etaService = BookingEtaTestFactory.CreateEtaService(context, route);
 
+        // A fix exists, so nothing but the trackable-state check can stop the
+        // computation - without it this test would pass on the missing-ping
+        // early return instead and prove nothing.
+        await PingAsync(context, new NoOpBookingEtaService(), bookingId, StartLatitude, DateTime.UtcNow);
+
         var bookingRepository = new BookingRepository(context);
         var booking = await bookingRepository.GetByIdAsync(bookingId);
         booking!.TransitionTo(BookingStatus.CancelledByCustomer, "Customer changed their mind.");
