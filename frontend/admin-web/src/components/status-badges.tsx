@@ -26,6 +26,8 @@ const BOOKING_STATUS_TONES: Record<BookingStatus, BadgeTone> = {
   [BookingStatus.Confirmed]: "info",
   [BookingStatus.AwaitingFulfilment]: "info",
   [BookingStatus.Assigned]: "info",
+  [BookingStatus.ProviderEnRoute]: "brand",
+  [BookingStatus.ProviderArrived]: "brand",
   [BookingStatus.InProgress]: "brand",
   [BookingStatus.Completed]: "success",
   [BookingStatus.CancelledByCustomer]: "danger",
@@ -33,6 +35,7 @@ const BOOKING_STATUS_TONES: Record<BookingStatus, BadgeTone> = {
   [BookingStatus.Rescheduled]: "warning",
   [BookingStatus.RefundPending]: "warning",
   [BookingStatus.Refunded]: "neutral",
+  [BookingStatus.Expired]: "neutral",
 };
 
 export function bookingStatusTone(status: BookingStatus): BadgeTone {

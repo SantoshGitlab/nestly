@@ -11,18 +11,24 @@ namespace Nestly.Catalog.Tests;
 ///
 /// <see cref="ExpectedTransitions"/> below is authored independently of
 /// <see cref="BookingLifecycle"/>'s own table (hand-transcribed from SRS
-/// 13.1's 13-state matrix, not derived by reading BookingLifecycle.cs's
+/// 13.1's state matrix, not derived by reading BookingLifecycle.cs's
 /// source at test-write time reflectively) so this suite actually catches a
 /// future accidental edit to that table - a test that just replayed
 /// BookingLifecycle's own dictionary back at itself would always pass.
 ///
-/// One intentional addition beyond the original SRS 13.1 matrix: Assigned
-/// -&gt; AwaitingFulfilment (task 159). SRS 31.1's transition list is
-/// explicitly "Examples", not exhaustive, so this does not contradict it -
-/// when the provider assigned to a booking rejects the job,
+/// Intentional additions beyond the original SRS 13.1 matrix (SRS 31.1's
+/// transition list is explicitly "Examples", not exhaustive, so none of these
+/// contradict it):
+/// <list type="bullet">
+/// <item>Assigned -&gt; AwaitingFulfilment (task 159) - when the provider
+/// assigned to a booking rejects the job,
 /// <c>IBookingProviderAssignmentService.RejectAsync</c> returns the booking to
 /// AwaitingFulfilment so it re-enters the assignable pool for manual admin
-/// reassignment (PROVIDER.md OPEN DECISIONS #1).
+/// reassignment (PROVIDER.md OPEN DECISIONS #1).</item>
+/// <item>The Assigned -&gt; ProviderEnRoute -&gt; ProviderArrived -&gt;
+/// InProgress tracking chain (task 264), which runs alongside the original
+/// Assigned -&gt; InProgress edge rather than replacing it.</item>
+/// </list>
 /// </summary>
 public sealed class BookingLifecycleTransitionTests
 {
@@ -34,7 +40,9 @@ public sealed class BookingLifecycleTransitionTests
             [BookingStatus.PaymentFailed] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.Confirmed] = [BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.AwaitingFulfilment] = [BookingStatus.Assigned, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
-            [BookingStatus.Assigned] = [BookingStatus.InProgress, BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+            [BookingStatus.Assigned] = [BookingStatus.ProviderEnRoute, BookingStatus.InProgress, BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+            [BookingStatus.ProviderEnRoute] = [BookingStatus.ProviderArrived, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
+            [BookingStatus.ProviderArrived] = [BookingStatus.InProgress, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.InProgress] = [BookingStatus.Completed, BookingStatus.CancelledByAdmin],
             [BookingStatus.Completed] = [BookingStatus.RefundPending],
             [BookingStatus.CancelledByCustomer] = [BookingStatus.RefundPending, BookingStatus.Refunded],
@@ -56,7 +64,7 @@ public sealed class BookingLifecycleTransitionTests
         }
     }
 
-    /// <summary>Every one of the 13×13 (from, to) combinations, checked against the independently-authored expected table.</summary>
+    /// <summary>Every one of the N×N (from, to) combinations, checked against the independently-authored expected table.</summary>
     [Theory]
     [MemberData(nameof(AllStatusPairs))]
     public void IsValidTransition_matches_the_SRS_13_1_matrix_for_every_pair(BookingStatus from, BookingStatus to)
@@ -204,5 +212,113 @@ public sealed class BookingLifecycleTransitionTests
 
         booking.TransitionTo(BookingStatus.PaymentPending);
         booking.Status.Should().Be(BookingStatus.PaymentPending);
+    }
+
+    // --- Task 264: the ProviderEnRoute/ProviderArrived tracking states ---
+
+    private static Booking BookingAtAssigned()
+    {
+        var booking = NewBooking();
+        booking.TransitionTo(BookingStatus.PaymentPending);
+        booking.TransitionTo(BookingStatus.Confirmed);
+        booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+        booking.TransitionTo(BookingStatus.Assigned);
+        return booking;
+    }
+
+    [Fact]
+    public void Tracking_chain_walks_Assigned_to_EnRoute_to_Arrived_to_InProgress_recording_every_hop()
+    {
+        var booking = BookingAtAssigned();
+
+        booking.TransitionTo(BookingStatus.ProviderEnRoute, "Provider set off.");
+        booking.TransitionTo(BookingStatus.ProviderArrived, "Provider reached the address.");
+        booking.TransitionTo(BookingStatus.InProgress, "Provider started the job.");
+        booking.TransitionTo(BookingStatus.Completed);
+
+        booking.Status.Should().Be(BookingStatus.Completed);
+        booking.StatusHistory.Select(h => h.ToStatus).Should().Equal(
+            BookingStatus.Initiated, BookingStatus.PaymentPending, BookingStatus.Confirmed,
+            BookingStatus.AwaitingFulfilment, BookingStatus.Assigned, BookingStatus.ProviderEnRoute,
+            BookingStatus.ProviderArrived, BookingStatus.InProgress, BookingStatus.Completed);
+    }
+
+    /// <summary>
+    /// The regression this task's transition table most has to protect:
+    /// tapping en-route is optional, so a provider who goes straight from
+    /// Assigned to starting work must not be blocked by the new chain.
+    /// </summary>
+    [Fact]
+    public void Assigned_can_still_go_straight_to_InProgress_without_passing_through_the_tracking_states()
+    {
+        BookingLifecycle.IsValidTransition(BookingStatus.Assigned, BookingStatus.InProgress).Should().BeTrue();
+
+        var booking = BookingAtAssigned();
+        booking.TransitionTo(BookingStatus.InProgress);
+
+        booking.Status.Should().Be(BookingStatus.InProgress);
+        booking.StatusHistory.Select(h => h.ToStatus).Should().NotContain(
+            [BookingStatus.ProviderEnRoute, BookingStatus.ProviderArrived]);
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.ProviderArrived, BookingStatus.ProviderEnRoute)]
+    [InlineData(BookingStatus.ProviderArrived, BookingStatus.Assigned)]
+    [InlineData(BookingStatus.ProviderEnRoute, BookingStatus.Assigned)]
+    [InlineData(BookingStatus.InProgress, BookingStatus.ProviderArrived)]
+    [InlineData(BookingStatus.InProgress, BookingStatus.ProviderEnRoute)]
+    public void Tracking_states_never_run_backwards(BookingStatus from, BookingStatus to)
+    {
+        BookingLifecycle.IsValidTransition(from, to).Should().BeFalse();
+    }
+
+    [Fact]
+    public void EnRoute_cannot_skip_Arrived_and_Assigned_cannot_skip_straight_to_Arrived()
+    {
+        BookingLifecycle.IsValidTransition(BookingStatus.ProviderEnRoute, BookingStatus.InProgress).Should().BeFalse();
+        BookingLifecycle.IsValidTransition(BookingStatus.Assigned, BookingStatus.ProviderArrived).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.ProviderEnRoute)]
+    [InlineData(BookingStatus.ProviderArrived)]
+    public void Cancel_and_reschedule_stay_available_from_both_tracking_states(BookingStatus trackingStatus)
+    {
+        BookingLifecycle.IsValidTransition(trackingStatus, BookingStatus.CancelledByCustomer).Should().BeTrue();
+        BookingLifecycle.IsValidTransition(trackingStatus, BookingStatus.CancelledByAdmin).Should().BeTrue();
+        BookingLifecycle.IsValidTransition(trackingStatus, BookingStatus.Rescheduled).Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_customer_can_still_cancel_while_the_provider_is_on_the_way()
+    {
+        var booking = BookingAtAssigned();
+        booking.TransitionTo(BookingStatus.ProviderEnRoute);
+
+        booking.TransitionTo(BookingStatus.CancelledByCustomer, "Customer no longer needs the service.");
+        booking.TransitionTo(BookingStatus.RefundPending);
+
+        booking.Status.Should().Be(BookingStatus.RefundPending);
+    }
+
+    [Fact]
+    public void A_booking_can_still_be_rescheduled_after_the_provider_has_arrived()
+    {
+        var booking = BookingAtAssigned();
+        booking.TransitionTo(BookingStatus.ProviderEnRoute);
+        booking.TransitionTo(BookingStatus.ProviderArrived);
+
+        booking.TransitionTo(BookingStatus.Rescheduled, "Customer was not home.");
+        booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+
+        booking.Status.Should().Be(BookingStatus.AwaitingFulfilment);
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.ProviderEnRoute)]
+    [InlineData(BookingStatus.ProviderArrived)]
+    public void Neither_tracking_state_is_terminal(BookingStatus trackingStatus)
+    {
+        BookingLifecycle.IsTerminal(trackingStatus).Should().BeFalse();
     }
 }

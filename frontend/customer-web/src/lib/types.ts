@@ -329,6 +329,13 @@ export interface BookingSummary {
  * serialises over the wire as its ordinal (a plain number), not its name -
  * this mapping must stay in sync with BookingStatus.cs if that enum's order
  * ever changes.
+ *
+ * Because the ordinal *is* the wire value, new statuses are only ever
+ * appended on the C# side: renumbering an existing member would silently
+ * remap every booking an already-deployed client is holding. That is why the
+ * task-264 tracking states sit at 14/15 rather than between Assigned and
+ * InProgress where the lifecycle actually puts them - BookingLifecycle.cs,
+ * not this declaration order, is the authority on what follows what.
  */
 export enum BookingStatus {
   Initiated = 0,
@@ -344,6 +351,10 @@ export enum BookingStatus {
   Rescheduled = 10,
   RefundPending = 11,
   Refunded = 12,
+  Expired = 13,
+  /** Task 264. Appended after Expired, not inserted next to Assigned where it belongs chronologically - see the note below. */
+  ProviderEnRoute = 14,
+  ProviderArrived = 15,
 }
 
 /** Matches Nestly.Domain.BookingStatusBucket's member names - passed as the `bucket` query string value, which ASP.NET binds by name. */
@@ -403,6 +414,47 @@ export interface BookingListItem {
   status: BookingStatus;
   statusLabel: string;
   createdAtUtc: string;
+}
+
+/**
+ * Live tracking response shapes (task 275/281). Mirror
+ * Nestly.Application.Tracking.BookingTrackingContracts.cs field for field -
+ * see that file's doc comments for why each is this narrow (no price, no
+ * timeline, no raw phone number: this is the response most exposed to a
+ * stolen customer token, polled continuously while a stranger is en route to
+ * a home address).
+ */
+export interface TrackedProviderSummary {
+  displayName: string;
+  photoUrl: string | null;
+  rating: number | null;
+  maskedPhone: string | null;
+}
+
+export interface TrackedLocation {
+  latitude: number;
+  longitude: number;
+  recordedAtUtc: string;
+}
+
+export interface TrackedEta {
+  etaSeconds: number;
+  etaComputedAtUtc: string;
+}
+
+export interface TrackedDestination {
+  latitude: number;
+  longitude: number;
+}
+
+export interface BookingTrackingResponse {
+  bookingId: string;
+  status: BookingStatus;
+  statusLabel: string;
+  provider: TrackedProviderSummary | null;
+  providerLocation: TrackedLocation | null;
+  eta: TrackedEta | null;
+  destination: TrackedDestination;
 }
 
 /**

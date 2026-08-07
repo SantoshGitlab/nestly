@@ -63,6 +63,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
+            new ProviderRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }
@@ -225,7 +226,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext), setupContext);
             var assignResult = await assignmentService.AssignAsync(bookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }
@@ -238,7 +239,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         {
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(acceptContext), new ProviderRepository(acceptContext), new ServiceRepository(acceptContext),
-                new BookingProviderAssignmentRepository(acceptContext), acceptContext);
+                new BookingProviderAssignmentRepository(acceptContext), new ProviderScheduleConflictService(acceptContext), acceptContext);
             var acceptResult = await assignmentService.AcceptAsync(bookingId, providerId);
             acceptResult.IsSuccess.Should().BeTrue();
         }
@@ -354,5 +355,121 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
         var all = await service.ListAsync(fixture.Customer.Id, bucket: null);
         all.Value.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Task 275's second deliverable: the booking detail names WHO is coming,
+    /// not just that someone was assigned. This is the non-tracking path -
+    /// the customer opening their booking before (or after) the live tracking
+    /// window still needs the provider's identity.
+    /// </summary>
+    [Fact]
+    public async Task GetDetailAsync_names_the_provider_once_one_is_assigned()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        Guid bookingId;
+        using (var createContext = _db.CreateContext())
+        {
+            var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            bookingId = created.Value.Id;
+        }
+
+        var beforeAssignment = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
+        beforeAssignment.Value.Provider.Should().BeNull("nobody has been assigned yet, so there is nobody to name");
+
+        using (var setupContext = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(setupContext).GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.Confirmed);
+            booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+            await new BookingRepository(setupContext).UpdateAsync(booking);
+
+            var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876500275");
+            provider.ChangeStatus(ProviderStatus.Active);
+            setupContext.Add(provider);
+            await setupContext.SaveChangesAsync();
+
+            var assignmentService = new BookingProviderAssignmentService(
+                new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext), setupContext);
+            var assignResult = await assignmentService.AssignAsync(bookingId, Guid.NewGuid(), new AssignProviderRequest(provider.Id, ResponseDeadline: null));
+            assignResult.IsSuccess.Should().BeTrue();
+        }
+
+        var afterAssign = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
+
+        afterAssign.Value.Provider.Should().NotBeNull();
+        afterAssign.Value.Provider!.DisplayName.Should().Be("Ravi's Repairs", "the trading name is what a customer recognises, not the legal name");
+        afterAssign.Value.Provider.DisplayName.Should().NotBe("Ravi Kumar");
+
+        // No column backs either yet - pinned so that whoever adds one has to
+        // come back through this test rather than shipping a fabricated value.
+        afterAssign.Value.Provider.PhotoUrl.Should().BeNull();
+        afterAssign.Value.Provider.Rating.Should().BeNull();
+    }
+
+    /// <summary>
+    /// The provider summary must not outlive the assignment. A booking whose
+    /// provider was withdrawn is back to "nobody is coming", and a detail
+    /// response still naming them would have the customer waiting for someone
+    /// who is no longer on the job.
+    /// </summary>
+    [Fact]
+    public async Task GetDetailAsync_drops_the_provider_summary_when_the_assignment_is_no_longer_live()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        Guid bookingId;
+        using (var createContext = _db.CreateContext())
+        {
+            var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            bookingId = created.Value.Id;
+        }
+
+        Guid providerId;
+        using (var setupContext = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(setupContext).GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.Confirmed);
+            booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+            await new BookingRepository(setupContext).UpdateAsync(booking);
+
+            var provider = new Provider(Guid.NewGuid(), "Meena Rao", "Meena Home Services", ProviderType.Individual, "+919876500276");
+            provider.ChangeStatus(ProviderStatus.Active);
+            setupContext.Add(provider);
+            await setupContext.SaveChangesAsync();
+            providerId = provider.Id;
+
+            var assignmentService = new BookingProviderAssignmentService(
+                new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext), setupContext);
+            await assignmentService.AssignAsync(bookingId, Guid.NewGuid(), new AssignProviderRequest(providerId, ResponseDeadline: null));
+        }
+
+        (await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId))
+            .Value.Provider.Should().NotBeNull();
+
+        using (var rejectContext = _db.CreateContext())
+        {
+            var assignmentService = new BookingProviderAssignmentService(
+                new BookingRepository(rejectContext), new ProviderRepository(rejectContext), new ServiceRepository(rejectContext),
+                new BookingProviderAssignmentRepository(rejectContext), new ProviderScheduleConflictService(rejectContext), rejectContext);
+            var rejectResult = await assignmentService.RejectAsync(bookingId, new RejectAssignmentRequest("Unavailable"));
+            rejectResult.IsSuccess.Should().BeTrue();
+        }
+
+        var afterReject = await BuildService(_db.CreateContext()).GetDetailAsync(fixture.Customer.Id, bookingId);
+
+        afterReject.Value.ProviderAssignmentStatus.Should().BeNull();
+        afterReject.Value.Provider.Should().BeNull("the summary is keyed off the LIVE assignment, not the booking's assignment history");
     }
 }

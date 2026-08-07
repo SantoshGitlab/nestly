@@ -1,7 +1,9 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
 
@@ -11,12 +13,30 @@ namespace Nestly.Catalog.Tests;
 /// Covers task 244: candidate discovery (skill + service-area match) and
 /// distance ranking for the automatic-assignment engine (PROVIDER.md OPEN
 /// DECISIONS - AUTOMATIC ASSIGNMENT).
+///
+/// Task 267's road-travel-time ranking is covered separately in
+/// <see cref="ProviderMatchingServiceRouteRankingTests"/>; these tests keep
+/// asserting the straight-line behaviour, which is still what the service
+/// does whenever no real road data is available.
 /// </summary>
 public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
 {
     private readonly TestDatabase _db;
 
     public ProviderMatchingServiceTests(TestDatabase db) => _db = db;
+
+    /// <summary>
+    /// Task 267 gave the service a routing dependency. These tests use the
+    /// real <see cref="SandboxRouteEstimateProvider"/> - no HTTP, no key, no
+    /// stub - precisely because a sandbox-only response is defined to carry no
+    /// road information: the service ignores it and every assertion below
+    /// stays an assertion about straight-line ranking, unchanged by task 267.
+    /// </summary>
+    private static ProviderMatchingService BuildService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
+        new BookingRepository(context),
+        context,
+        new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
+        Options.Create(new AutoAssignmentOptions()));
 
     private sealed record Fixture(
         Customer Customer, City City, Pincode Pincode, Category Category, Service Service, SlotWindow Window);
@@ -88,7 +108,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().ContainSingle(c => c.ProviderId == provider.Id);
@@ -116,7 +136,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().BeEmpty();
@@ -147,7 +167,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().BeEmpty();
@@ -182,7 +202,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().ContainSingle(c => c.ProviderId == matchingProvider.Id);
@@ -217,7 +237,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().HaveCount(3);
@@ -259,7 +279,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         var expectedOrder = new[] { first.Id, second.Id }.OrderBy(id => id).ToList();
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().HaveCount(2);
@@ -288,7 +308,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId, excludeProviderIds: [provider.Id]);
 
         candidates.Should().BeEmpty();
@@ -315,7 +335,7 @@ public sealed class ProviderMatchingServiceTests : IClassFixture<TestDatabase>
         }
 
         using var readContext = _db.CreateContext();
-        var service = new ProviderMatchingService(new BookingRepository(readContext), readContext);
+        var service = BuildService(readContext);
         var candidates = await service.FindCandidatesAsync(bookingId);
 
         candidates.Should().BeEmpty();

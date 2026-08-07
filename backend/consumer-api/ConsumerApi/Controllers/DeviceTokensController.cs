@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.Notifications;
 using Nestly.BuildingBlocks.Extensions;
+using Nestly.Domain;
 
 namespace Nestly.ConsumerApi.Controllers;
 
@@ -37,7 +38,7 @@ public class DeviceTokensController : ControllerBase
             return ValidationProblem(ToModelState(validation));
         }
 
-        var result = await _deviceTokenService.RegisterAsync(CurrentCustomerId(), request);
+        var result = await _deviceTokenService.RegisterAsync(CurrentOwner(), request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
@@ -46,7 +47,7 @@ public class DeviceTokensController : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<DeviceTokenResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List()
     {
-        var result = await _deviceTokenService.ListAsync(CurrentCustomerId());
+        var result = await _deviceTokenService.ListAsync(CurrentOwner());
         return Ok(result.Value);
     }
 
@@ -56,12 +57,12 @@ public class DeviceTokensController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Revoke(Guid id)
     {
-        var result = await _deviceTokenService.RevokeAsync(CurrentCustomerId(), id);
+        var result = await _deviceTokenService.RevokeAsync(CurrentOwner(), id);
         return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
-    private Guid CurrentCustomerId() =>
-        User.GetSubjectId();
+    private DeviceTokenOwner CurrentOwner() =>
+        DeviceTokenOwner.ForCustomer(User.GetSubjectId());
 
     private static ModelStateDictionary ToModelState(ValidationResult validation)
     {

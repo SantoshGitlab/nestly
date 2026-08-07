@@ -37,6 +37,7 @@ using Nestly.Application.ProviderManagement;
 using Nestly.Application.ProviderProfile;
 using Nestly.Application.NestlyCoins;
 using Nestly.Application.Referral;
+using Nestly.Application.Routing;
 using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
@@ -45,6 +46,7 @@ using Nestly.Application.Reviews;
 using Nestly.Application.Settings;
 using Nestly.Application.Subscriptions;
 using Nestly.Application.Support;
+using Nestly.Application.Tracking;
 using Nestly.Application.Wallet;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
@@ -67,6 +69,45 @@ namespace Nestly.Infrastructure;
 public static class DependencyInjection
 {
     private const string DatabaseConnectionName = "Database";
+
+    /// <summary>
+    /// Redis channel prefix for the SignalR backplane. ONE prefix for every
+    /// hub, not one per hub: the backplane already namespaces its channels by
+    /// hub type underneath this prefix, so a second prefix would buy no
+    /// isolation while doubling the subscriptions each server holds - and
+    /// tracking and chat are the same trust boundary anyway (same Redis, same
+    /// deployment, same operators).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Task 274 widened this from the literal <c>"nestly-chat"</c>, which was
+    /// minted when chat was the only hub (task 190). Task 273's tracking hub
+    /// broadcasts through the same backplane, so a prefix naming one hub was
+    /// actively misleading about which traffic it carries. Widening the one
+    /// prefix, rather than adding a tracking-specific second one, keeps that
+    /// "one prefix, hub-type namespacing underneath" property intact.
+    /// </para>
+    /// <para>
+    /// <b>Rolling-deploy consequence, and it is not cosmetic.</b> This string
+    /// is a wire format: a server subscribes to <c>{prefix}:{hubType}:...</c>
+    /// and publishes to the same. While old and new instances run side by side
+    /// they are on two disjoint sets of Redis channels, so for the length of
+    /// the rollout the backplane is effectively partitioned - a chat message
+    /// or a tracking frame produced on a new instance never reaches a
+    /// connection parked on an old one, and vice versa. In-flight messages
+    /// published under the old prefix are not migrated; they are delivered to
+    /// old-prefix subscribers only and are otherwise dropped. Nothing is
+    /// persisted incorrectly and nothing needs replaying: chat messages are
+    /// committed to the database before they are broadcast and the client
+    /// re-reads the thread on reconnect, and a lost tracking frame is
+    /// explicitly acceptable (docs/ARCHITECTURE.md, "DOMAIN EVENT DISPATCH AND
+    /// DELIVERY"). The user-visible cost is bounded by the rollout window and
+    /// ends when the last old instance drains. Deploy accordingly - drain
+    /// rather than overlap if the window is long - and do not change this
+    /// value again casually.
+    /// </para>
+    /// </remarks>
+    private const string SignalRChannelPrefix = "nestly-realtime";
 
     /// <summary>
     /// Registers infrastructure services: persistence, caching (T017),
@@ -189,6 +230,30 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(AutoAssignmentOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Task 269: not a secret, has safe production-sensible defaults -
+        // same reasoning as AutoAssignmentOptions directly above.
+        services
+            .AddOptions<ProviderLocationIngestOptions>()
+            .Bind(configuration.GetSection(ProviderLocationIngestOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 271: how often a tracked booking may pay for a route lookup -
+        // deliberately not the same knob as the ingest throttle above.
+        services
+            .AddOptions<BookingEtaOptions>()
+            .Bind(configuration.GetSection(BookingEtaOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 276: per-event mute switches for the fulfilment-lifecycle
+        // notifications. Bound the same way as the three above; read through
+        // IOptionsMonitor rather than IOptions so a mute takes effect on
+        // config reload instead of at the next restart - see the options
+        // class for why that difference matters here and nowhere else.
+        services
+            .AddOptions<FulfilmentNotificationOptions>()
+            .Bind(configuration.GetSection(FulfilmentNotificationOptions.SectionName))
+            .ValidateDataAnnotations();
+
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
@@ -228,22 +293,22 @@ public static class DependencyInjection
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
 
-        // Task 190: real-time chat transport. One SignalR hub type
-        // (ChatHub) mapped by both consumer-api and admin-api - see its doc
-        // comment for why a shared Redis backplane, not two independent hub
-        // instances, is what makes a message persisted by one API process
-        // reach a live connection held by the other. Falls back to a
-        // single-process hub (still fully correct for local dev/tests,
-        // where only one API instance is ever running) when Redis is not
-        // configured, same graceful-degradation shape as AddCaching above.
-        var chatCacheOptions = new CacheOptions();
-        configuration.GetSection(CacheOptions.SectionName).Bind(chatCacheOptions);
+        // Tasks 190/273: real-time transport, shared by every hub in the
+        // process (ChatHub, BookingTrackingHub) - see their doc comments for
+        // why a shared Redis backplane, not independent per-API hub
+        // instances, is what makes an event produced by one API process reach
+        // a live connection held by another. Falls back to a single-process
+        // hub (still fully correct for local dev/tests, where only one API
+        // instance is ever running) when Redis is not configured, same
+        // graceful-degradation shape as AddCaching above.
+        var signalRCacheOptions = new CacheOptions();
+        configuration.GetSection(CacheOptions.SectionName).Bind(signalRCacheOptions);
         var signalRBuilder = services.AddSignalR();
-        if (chatCacheOptions.IsRedisConfigured)
+        if (signalRCacheOptions.IsRedisConfigured)
         {
-            signalRBuilder.AddStackExchangeRedis(chatCacheOptions.ConnectionString!, options =>
+            signalRBuilder.AddStackExchangeRedis(signalRCacheOptions.ConnectionString!, options =>
             {
-                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("nestly-chat");
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal(SignalRChannelPrefix);
             });
         }
 
@@ -252,6 +317,11 @@ public static class DependencyInjection
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IAdminChatService, AdminChatService>();
         services.AddSingleton<IChatPresenceTracker, ChatPresenceTracker>();
+
+        // Task 273: the tracking hub's access rule. Scoped, like the
+        // repositories it reads through - it answers one question per hub
+        // invocation and holds no state between them.
+        services.AddScoped<BookingTrackingAuthorizer>();
 
         // Application.DependencyInjection.AddApplication() only scans the
         // Application assembly for MediatR handlers, so this second
@@ -393,6 +463,10 @@ public static class DependencyInjection
         // provider-identity registrations above, which are the provider's own
         // self-service auth/onboarding (tasks 145a-146c).
         services.AddScoped<IBookingProviderAssignmentRepository, BookingProviderAssignmentRepository>();
+        // Task 288: the "one person, one place at a time" invariant, shared by
+        // the manual admin path below and the automatic engine's eligibility
+        // gate - registered before both, since both depend on it.
+        services.AddScoped<IProviderScheduleConflictService, ProviderScheduleConflictService>();
         services.AddScoped<IBookingProviderAssignmentService, BookingProviderAssignmentService>();
         // Phase 14 (tasks 242-250): the automatic-assignment engine's
         // candidate ranking - a new writer of BookingProviderAssignment
@@ -400,6 +474,11 @@ public static class DependencyInjection
         // #1), never replacing it.
         services.AddScoped<IProviderMatchingService, ProviderMatchingService>();
         services.AddScoped<IProviderCapacityRepository, ProviderCapacityRepository>();
+        // Task 289: travel time between adjacent same-day jobs. Scoped, not
+        // transient, on purpose - its route-lookup budget is instance state,
+        // and one instance per scope is what caps a whole eligibility pass
+        // rather than each candidate separately.
+        services.AddScoped<IProviderTravelFeasibilityService, ProviderTravelFeasibilityService>();
         services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
         // Task 195: completion verification (photo + checklist proof gating
         // the InProgress -> Completed transition, task 196) - registered
@@ -412,6 +491,11 @@ public static class DependencyInjection
         services.AddScoped<IProviderPayoutRepository, ProviderPayoutRepository>();
         services.AddScoped<IProviderPayoutService, ProviderPayoutService>();
         services.AddScoped<IProviderBackgroundCheckRepository, ProviderBackgroundCheckRepository>();
+        // Task 268: the append-only location trail behind Provider's single
+        // last-known coordinate pair. Registered beside the provider
+        // repositories rather than with the booking ones because a ping
+        // belongs to a provider and only optionally to a booking.
+        services.AddScoped<IProviderLocationPingRepository, ProviderLocationPingRepository>();
         services.AddScoped<IProviderManagementService, ProviderManagementService>();
         services.AddScoped<IProviderKycApprovalService, ProviderKycApprovalService>();
 
@@ -424,6 +508,28 @@ public static class DependencyInjection
         // not a second copy of the ledger/payout logic.
         services.AddScoped<IProviderJobService, ProviderJobService>();
         services.AddScoped<IProviderEarningsService, ProviderEarningsService>();
+
+        // Task 269: the live-location ingest behind provider-api's
+        // POST /jobs/{bookingId}/location. Separate from IProviderJobService
+        // above - see IProviderLocationIngestService for why the job
+        // lifecycle and this high-frequency write path are not one class.
+        services.AddScoped<IProviderLocationIngestService, ProviderLocationIngestService>();
+
+        // Task 271: the ETA computed off that ingest path (and off the
+        // en-route transition), plus the one-row-per-booking tracking state it
+        // is stored on. Scoped like every other write-path service; the
+        // BookingStatusChangedEvent handler that clears a finished job's ETA is
+        // discovered by the MediatR assembly scan, not registered here.
+        services.AddScoped<IBookingTrackingRepository, BookingTrackingRepository>();
+        services.AddScoped<IBookingEtaService, BookingEtaService>();
+
+        // Task 275: the read side of the same feature - consumer-api's
+        // GET /bookings/{bookingId}/tracking. Read-only and deliberately not
+        // a method on IBookingService: see IBookingTrackingQueryService for
+        // why the PII-bounded projection is kept out of the general booking
+        // reads. It computes nothing; IBookingEtaService above stays the only
+        // thing that pays for a route lookup.
+        services.AddScoped<IBookingTrackingQueryService, BookingTrackingQueryService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's
@@ -636,6 +742,8 @@ public static class DependencyInjection
         // when a production provider lands.
         services.AddScoped<INotificationProvider, SandboxNotificationProvider>();
 
+        services.AddRouteEstimates(configuration);
+
         return services;
     }
 
@@ -674,10 +782,15 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
-                options.Events = ChatHubJwtEvents.Create();
+                options.Events = HubJwtEvents.Create();
             });
 
         services.AddAuthorization();
+
+        // Task 273: every principal this process can authenticate is a
+        // customer, which is what tells the shared hubs how to read a
+        // token's "sub" - see RealtimeActorContext.
+        services.AddSingleton(new RealtimeActorContext(RealtimeActorKind.Customer));
 
         return services;
     }
@@ -717,8 +830,11 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
-                options.Events = ChatHubJwtEvents.Create();
+                options.Events = HubJwtEvents.Create();
             });
+
+        // Task 273: see AddJwtAuthentication - admin-api authenticates admins.
+        services.AddSingleton(new RealtimeActorContext(RealtimeActorKind.Admin));
 
         // Task 96b: one authorization policy per permission code in the
         // matrix (AdminPermissionCatalog), so controllers can write
@@ -772,9 +888,19 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+
+                // Task 273: this was missing entirely, so a provider's
+                // WebSocket handshake could never authenticate - the browser
+                // client has no way to send an Authorization header on it and
+                // this process was not reading the query-string token the
+                // other two APIs have read since task 190.
+                options.Events = HubJwtEvents.Create();
             });
 
         services.AddAuthorization();
+
+        // Task 273: see AddJwtAuthentication - provider-api authenticates providers.
+        services.AddSingleton(new RealtimeActorContext(RealtimeActorKind.Provider));
 
         return services;
     }

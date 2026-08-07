@@ -1,4 +1,5 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
@@ -46,7 +47,17 @@ public enum BookingProviderAssignmentStatus
 /// admin/provider UI can show a full assignment trail per booking (task 159:
 /// "surfaces the booking as needs reassignment").
 /// </summary>
-public class BookingProviderAssignment : Entity<Guid>
+/// <remarks>
+/// An <see cref="AggregateRoot{TId}"/> rather than a plain
+/// <see cref="Entity{TId}"/> since task 272. It was already a root in every
+/// way that matters - its own table, its own repository, never loaded as a
+/// navigation off <see cref="Booking"/> - and the base type is what makes its
+/// events reachable: <c>DomainEventDispatchInterceptor</c> only scans
+/// <c>ChangeTracker.Entries&lt;AggregateRoot&lt;Guid&gt;&gt;()</c>, so an
+/// event raised on a plain entity is collected, saved and silently never
+/// dispatched.
+/// </remarks>
+public class BookingProviderAssignment : AggregateRoot<Guid>
 {
     public Guid BookingId { get; private set; }
     public Guid ProviderId { get; private set; }
@@ -103,12 +114,21 @@ public class BookingProviderAssignment : Entity<Guid>
         ResponseDeadline = responseDeadline;
     }
 
-    /// <summary>The provider accepts the job (task 151, provider-api - exposed here so that future controller can call it through the same shared service).</summary>
+    /// <summary>
+    /// The provider accepts the job (task 151, provider-api - exposed here so
+    /// that future controller can call it through the same shared service).
+    /// Raises <see cref="ProviderAssignmentAcceptedEvent"/> (task 272): this
+    /// is the moment a job becomes trackable, and until now it produced no
+    /// signal at all, so nothing - not the customer's tracking screen, not the
+    /// "a professional accepted your booking" notification (task 276) - could
+    /// react to it.
+    /// </summary>
     public void Accept()
     {
         EnsureOutstanding();
         Status = BookingProviderAssignmentStatus.Accepted;
         RespondedAt = DateTime.UtcNow;
+        RaiseDomainEvent(new ProviderAssignmentAcceptedEvent(Id, BookingId, ProviderId, RespondedAt.Value));
     }
 
     /// <summary>The provider rejects the job (task 159) - the booking's own re-assignment handling lives in <c>IBookingProviderAssignmentService.RejectAsync</c>, not here.</summary>

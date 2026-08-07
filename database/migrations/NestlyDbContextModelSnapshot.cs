@@ -1005,6 +1005,58 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("booking_status_history", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.BookingTracking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime?>("EtaComputedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("eta_computed_at_utc");
+
+                    b.Property<int?>("EtaDistanceMetres")
+                        .HasColumnType("integer")
+                        .HasColumnName("eta_distance_metres");
+
+                    b.Property<decimal?>("EtaOriginLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("eta_origin_latitude");
+
+                    b.Property<decimal?>("EtaOriginLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("eta_origin_longitude");
+
+                    b.Property<int?>("EtaSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("eta_seconds");
+
+                    b.Property<string>("EtaSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("eta_source");
+
+                    b.Property<Guid?>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_booking_tracking");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_booking_tracking_booking_id");
+
+                    b.ToTable("booking_tracking", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2778,6 +2830,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("legal_name");
 
+                    b.Property<DateTime?>("LocationUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("location_updated_at_utc");
+
                     b.Property<decimal?>("Longitude")
                         .HasPrecision(9, 6)
                         .HasColumnType("numeric(9,6)")
@@ -3118,6 +3174,62 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_provider_kyc_document_provider_id");
 
                     b.ToTable("provider_kyc_document", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderLocationPing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("AccuracyMetres")
+                        .HasPrecision(8, 1)
+                        .HasColumnType("numeric(8,1)")
+                        .HasColumnName("accuracy_metres");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("longitude");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at_utc");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at_utc");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_location_ping");
+
+                    b.HasIndex("BookingId", "RecordedAtUtc")
+                        .HasDatabaseName("ix_provider_location_ping_booking_id_recorded_at_utc");
+
+                    b.HasIndex("ProviderId", "RecordedAtUtc")
+                        .HasDatabaseName("ix_provider_location_ping_provider_id_recorded_at_utc");
+
+                    b.ToTable("provider_location_ping", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.ProviderLoginAttempt", b =>

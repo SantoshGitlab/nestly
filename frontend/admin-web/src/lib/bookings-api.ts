@@ -11,6 +11,7 @@ import type {
   AdminBookingSearchParams,
   AdminBookingSearchResponse,
   AdminBookingStatusUpdateRequest,
+  AdminBookingTrackingResponse,
   AdminCancelBookingRequest,
   AdminRefundRequest,
   AdminRescheduleBookingRequest,
@@ -69,3 +70,7 @@ export const getBookingCompletionProof = (bookingId: string) =>
   apiFetch<BookingCompletionProofResponse | undefined>(`${BOOKINGS_BASE}/${bookingId}/completion-proof`, {
     authenticated: true,
   });
+
+/** Live tracking snapshot for the ops view (task 284). Rejects with a 404 ApiError - see AdminBookingTrackingResponse's doc comment - when there is no live data to show; the caller renders that as a plain state, not an error. */
+export const getBookingTracking = (bookingId: string) =>
+  apiFetch<AdminBookingTrackingResponse>(`${BOOKINGS_BASE}/${bookingId}/tracking`, { authenticated: true });

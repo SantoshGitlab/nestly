@@ -221,19 +221,61 @@ public class Booking : AggregateRoot<Guid>
         Status = newStatus;
         RecordStatusHistory(previousStatus, newStatus, reason);
         RaiseDomainEvent(new BookingStatusChangedEvent(Id, previousStatus, newStatus));
+        RaiseTrackingEvent(newStatus);
+    }
+
+    /// <summary>
+    /// Raises the tracking-specific companion event for the two fulfilment
+    /// states task 264 added (task 272). Raised from the transition itself
+    /// rather than from task 270's en-route/arrived endpoints, which do not
+    /// exist yet: the transition is the fact, and putting the raise here means
+    /// every future caller - the provider endpoints, an admin correction, a
+    /// test - produces the same signal without having to know to.
+    ///
+    /// <see cref="BookingStatusChangedEvent"/> is still raised for these two
+    /// transitions as well; a handler subscribes to one stream or the other,
+    /// never both.
+    /// </summary>
+    private void RaiseTrackingEvent(BookingStatus newStatus)
+    {
+        switch (newStatus)
+        {
+            case BookingStatus.ProviderEnRoute:
+                RaiseDomainEvent(new ProviderEnRouteEvent(Id, AssignedProviderId));
+                break;
+            case BookingStatus.ProviderArrived:
+                RaiseDomainEvent(new ProviderArrivedEvent(Id, AssignedProviderId));
+                break;
+        }
     }
 
     /// <summary>
     /// Moves the booking to a new slot (SRS 11.15, tasks 82a-d, 83). Goes
     /// through the transient <see cref="BookingStatus.Rescheduled"/> status
     /// on its way to <see cref="BookingStatus.AwaitingFulfilment"/> - both
-    /// hops are recorded in <see cref="StatusHistory"/>, and any provider
-    /// assignment the booking had is implicitly cleared by landing back on
-    /// AwaitingFulfilment rather than Assigned, since that assignment was
-    /// made against the old slot. Eligibility (status/window/count-limit)
-    /// and the new slot's own availability are the caller's
-    /// responsibility (<c>IRescheduleService</c>) - this method only
-    /// enforces the lifecycle transition itself.
+    /// hops are recorded in <see cref="StatusHistory"/>.
+    ///
+    /// <para>
+    /// <b>This method does NOT touch <see cref="AssignedProviderId"/> or the
+    /// live <c>BookingProviderAssignment</c> row</b> (corrected task 290 -
+    /// an earlier version of this comment claimed the assignment was
+    /// "implicitly cleared by landing back on AwaitingFulfilment", which was
+    /// false on both counts: landing on AwaitingFulfilment is a status label,
+    /// not a write to either the display field or the assignment table, and
+    /// this method's own slot-field mutations happen with the old assignment
+    /// still fully in place). A caller that reschedules an Assigned booking
+    /// must decide separately whether the same provider stays on the job for
+    /// the new slot - see
+    /// <c>RescheduleService.ReconcileProviderAssignmentAfterRescheduleAsync</c>,
+    /// which reuses <c>IProviderScheduleConflictService</c> (task 288) to
+    /// keep the provider when they are still free, or withdraw them
+    /// (<c>BookingProviderAssignment.Withdraw</c> plus <c>AssignProvider(null)</c>)
+    /// when the new slot now conflicts with another job.
+    /// </para>
+    ///
+    /// Eligibility (status/window/count-limit) and the new slot's own
+    /// availability are the caller's responsibility (<c>IRescheduleService</c>)
+    /// - this method only enforces the lifecycle transition itself.
     /// </summary>
     public void Reschedule(
         Guid newSlotWindowId, DateOnly newSlotDate, string newSlotWindowName, TimeSpan newSlotStartTime, TimeSpan newSlotEndTime, string? reason)

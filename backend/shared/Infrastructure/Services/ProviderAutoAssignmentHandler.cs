@@ -30,7 +30,8 @@ namespace Nestly.Infrastructure.Services;
 /// delivers it; this handler only had to start reading the booking's own
 /// assignment history to know it is a retry rather than a first attempt.
 ///
-/// Ranks candidates via <see cref="IProviderMatchingService"/> (task 244),
+/// Ranks candidates via <see cref="IProviderMatchingService"/> (task 244, by
+/// real road travel time since task 267),
 /// excluding every provider with a Rejected row against this booking
 /// (regardless of who assigned them - a rejection means "this provider said
 /// no to this booking," full stop). Stops after <see cref="AutoAssignmentOptions.RetryAttempts"/>
@@ -103,17 +104,17 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
             .Select(a => a.ProviderId)
             .ToList();
 
-        await TryAssignAsync(domainEvent.BookingId, excludeProviderIds);
+        await TryAssignAsync(domainEvent.BookingId, excludeProviderIds, cancellationToken);
     }
 
     /// <summary>Assigns the first eligible ranked candidate not in <paramref name="excludeProviderIds"/>. Returns whether a provider was assigned, so callers can tell an eligible pick from "nothing left to try."</summary>
-    public async Task<bool> TryAssignAsync(Guid bookingId, IReadOnlyCollection<Guid>? excludeProviderIds)
+    public async Task<bool> TryAssignAsync(Guid bookingId, IReadOnlyCollection<Guid>? excludeProviderIds, CancellationToken cancellationToken = default)
     {
-        var candidates = await _matchingService.FindCandidatesAsync(bookingId, excludeProviderIds);
+        var candidates = await _matchingService.FindCandidatesAsync(bookingId, excludeProviderIds, cancellationToken);
 
         foreach (var candidate in candidates)
         {
-            if (!await _eligibilityService.IsEligibleAsync(candidate.ProviderId, bookingId))
+            if (!await _eligibilityService.IsEligibleAsync(candidate.ProviderId, bookingId, cancellationToken))
             {
                 continue;
             }
@@ -121,9 +122,13 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
             var result = await _assignmentService.AssignBySystemAsync(bookingId, candidate.ProviderId);
             if (result.IsSuccess)
             {
+                // Both figures, because they answer different questions: the
+                // km is straight-line (unchanged units, task 243), while the
+                // travel time is what actually ordered the list (task 267) -
+                // and is null when the ranking fell back to distance.
                 _logger.LogInformation(
-                    "Auto-assigned provider {ProviderId} to booking {BookingId} ({DistanceKm} km).",
-                    candidate.ProviderId, bookingId, candidate.DistanceKm);
+                    "Auto-assigned provider {ProviderId} to booking {BookingId} ({DistanceKm} km straight line, {TravelDurationSeconds} s by road).",
+                    candidate.ProviderId, bookingId, candidate.DistanceKm, candidate.TravelDurationSeconds);
                 return true;
             }
 

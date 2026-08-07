@@ -23,6 +23,8 @@ export enum JobStatus {
   InProgress = 4,
   Completed = 5,
   Withdrawn = 6,
+  EnRoute = 7,
+  Arrived = 8,
 }
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
@@ -33,6 +35,8 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   [JobStatus.InProgress]: "In progress",
   [JobStatus.Completed]: "Completed",
   [JobStatus.Withdrawn]: "Cancelled by customer",
+  [JobStatus.EnRoute]: "On the way",
+  [JobStatus.Arrived]: "Arrived",
 };
 
 export function jobStatusLabel(status: JobStatus): string {
@@ -132,4 +136,23 @@ export interface BookingCompletionProofResponse {
   checklistAnswers: CompletionChecklistAnswer[];
   submittedByProviderId: string;
   submittedAtUtc: string;
+}
+
+/**
+ * Mirrors Nestly.Application.ProviderJobs.RecordProviderLocationRequest/
+ * Response (ProviderLocationContracts.cs) - task 282's client for task 269's
+ * ingest endpoint. `accuracyMetres` is optional on the wire (nullable on the
+ * C# side) since not every browser/device reports one.
+ */
+export interface RecordProviderLocationRequest {
+  latitude: number;
+  longitude: number;
+  accuracyMetres: number | null;
+  recordedAtUtc: string;
+}
+
+export interface RecordProviderLocationResponse {
+  accepted: boolean;
+  pingId: string | null;
+  nextAcceptedAfterUtc: string;
 }

@@ -41,6 +41,44 @@ readiness (`/health/ready`) endpoints each API exposes (wired via
 on all three services, then check `/metrics` (Prometheus scrape endpoint,
 task 137) is serving the new build.
 
+### 142a.1 — Google Maps API keys
+
+Phase 16 (order tracking, `docs/TRACKING.md`) made routing and live tracking
+depend on Google Maps — SRS §30.3 previously called maps "optional" for
+address autocomplete/lat-long capture only; that is no longer the whole
+picture. **Two separate keys** are required, provisioned and restricted
+differently — see `docs/TRACKING.md` §7 for what each key does and why they
+must not be the same key:
+
+- **Server key** — set `GoogleMaps__ApiKey` as a secret on each API's
+  deploy environment (same secret-store mechanism as the other
+  `STAGING_*`/`PRODUCTION_*` secrets referenced above — never a committed
+  appsettings value). In Google Cloud Console: restrict to the **Routes
+  API** only, and restrict by server/IP.
+- **Browser key** — set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` as a build-time
+  env var for `frontend/customer-web` and `frontend/admin-web` (not
+  `provider-web`, which renders no map). In Google Cloud Console: restrict
+  by **HTTP referrer** to the deployed frontend origin(s) — an IP
+  restriction is meaningless for a key shipped in client-side JavaScript.
+
+**Both keys are optional at the infrastructure level** — absent either one,
+the corresponding feature degrades gracefully (server: routing falls back
+to the free local sandbox estimator; browser: the tracking screen/card
+renders without a map) rather than failing the deploy. Do not treat a
+missing-key report as a deploy blocker by default; confirm first whether
+degraded behavior is acceptable for that environment.
+
+**Quota and billing alerting:** before enabling the server key in a
+production-traffic environment, set a budget alert in Google Cloud Billing
+for the Maps Platform project (Billing → Budgets & alerts), and set a quota
+alert on the Routes API (APIs & Services → Quotas) at a threshold well
+below the point where `GoogleMapsOptions.MaxDestinationsPerEstimate`'s cost
+ceiling would be hit at expected traffic. No alert is wired into this
+repo's own alerting today (`docs/DEVOPS.md` OPEN DECISIONS — monitoring
+stack unresolved, same gap noted in 142c) — this is a Cloud Console
+configuration step, not a code change, and it is separate from and in
+addition to that unresolved decision.
+
 ## 142b — Rollback
 
 `.github/workflows/rollback.yml`, triggered manually

@@ -101,6 +101,40 @@ public record BookingSummaryResponse(
 public record BookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatus ToStatus, string ToStatusLabel, string? Reason, DateTime ChangedAtUtc);
 
 /// <summary>
+/// Who is coming (task 275). Identity only - the three things a customer
+/// needs to recognise the person at the door - and deliberately not the
+/// provider's id, phone, email or status: this rides on a general booking
+/// read, and a general read is the wrong place to widen PII exposure.
+///
+/// <paramref name="PhotoUrl"/> and <paramref name="Rating"/> are nullable
+/// because no column backs either today (see <see cref="From"/>); the fields
+/// exist now so the shape does not change under the frontends when the data
+/// arrives, and a null renders as the placeholder avatar / hidden rating a
+/// live tracking screen already needs for a brand-new provider.
+/// </summary>
+public record BookingProviderSummary(string DisplayName, string? PhotoUrl, double? Rating)
+{
+    /// <summary>
+    /// The single mapping from the aggregate, shared by the booking detail
+    /// and the live tracking response so the two can never disagree about
+    /// who the provider is.
+    ///
+    /// PhotoUrl and Rating are hardcoded null, in one place, on purpose:
+    /// <see cref="Domain.Provider"/> has no photo column, and
+    /// <see cref="Domain.Review"/> is scoped to a service, not a provider
+    /// (no ProviderId on it, no per-provider aggregate on IReviewRepository),
+    /// so there is no honest value to return. Deriving a "provider rating"
+    /// from the service reviews left on their bookings would put a number a
+    /// customer reads as being about this person on top of data that is not -
+    /// a product decision and a schema change, not something to infer inside
+    /// a response mapper. Left null rather than faked, and left visible here
+    /// rather than dropped from the contract.
+    /// </summary>
+    public static BookingProviderSummary From(Provider provider) =>
+        new(provider.DisplayName, null, null);
+}
+
+/// <summary>
 /// Full booking detail (SRS 11.13, task 60c). <paramref name="CouponCode"/>/
 /// <paramref name="CouponDiscountAmount"/> mirror the booking's own
 /// snapshot (immutable once created, unlike the live re-validated preview
@@ -113,7 +147,13 @@ public record BookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatu
 /// <see cref="Domain.BookingProviderAssignment"/> row (task 208) - <see cref="Domain.BookingStatus"/>
 /// itself stays "Assigned" through both the offer and the provider's accept,
 /// so this is how the customer sees an accept the moment it happens rather
-/// than only once the provider starts the job.
+/// than only once the provider starts the job. <paramref name="Provider"/>
+/// (task 275) answers the question the status alone cannot - WHO is coming -
+/// and is populated off the same live assignment, so it appears and
+/// disappears with <paramref name="ProviderAssignmentStatus"/>. Appended
+/// last: this is a positional record, and inserting a parameter mid-list
+/// would silently re-bind every argument after it at the one call site that
+/// builds it.
 /// </summary>
 public record BookingDetailResponse(
     Guid Id,
@@ -129,7 +169,8 @@ public record BookingDetailResponse(
     string? CouponCode,
     decimal? CouponDiscountAmount,
     decimal FinalPayable,
-    BookingProviderAssignmentStatus? ProviderAssignmentStatus);
+    BookingProviderAssignmentStatus? ProviderAssignmentStatus,
+    BookingProviderSummary? Provider);
 
 /// <summary>A row in the booking list (SRS 11.13, task 60b) - a lighter shape than the detail, for a list screen.</summary>
 public record BookingListItemResponse(

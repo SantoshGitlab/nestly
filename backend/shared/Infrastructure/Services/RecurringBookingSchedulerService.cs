@@ -173,7 +173,7 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
 
         var service = await _serviceRepository.GetByIdAsync(plan.ServiceId);
         var slotWindow = await _slotWindowRepository.GetByIdAsync(plan.SlotWindowId);
-        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(plan.CustomerId);
+        var deviceTokens = await _deviceTokenRepository.ListActiveByOwnerAsync(DeviceTokenOwner.ForCustomer(plan.CustomerId));
         var recipient = new NotificationRecipient(customer.Mobile, customer.Email, deviceTokens.Select(t => t.Token).ToList());
 
         var variables = new Dictionary<string, string>

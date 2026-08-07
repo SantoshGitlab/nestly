@@ -27,17 +27,20 @@ namespace Nestly.ProviderApi.Controllers;
 public class JobsController : ControllerBase
 {
     private readonly IProviderJobService _jobService;
+    private readonly IProviderLocationIngestService _locationIngestService;
     private readonly IValidator<RejectJobRequest> _rejectValidator;
     private readonly IValidator<UploadJobCompletionProofRequest> _completionProofValidator;
     private readonly IValidator<SubmitCompletionProofRequest> _submitCompletionProofValidator;
 
     public JobsController(
         IProviderJobService jobService,
+        IProviderLocationIngestService locationIngestService,
         IValidator<RejectJobRequest> rejectValidator,
         IValidator<UploadJobCompletionProofRequest> completionProofValidator,
         IValidator<SubmitCompletionProofRequest> submitCompletionProofValidator)
     {
         _jobService = jobService;
+        _locationIngestService = locationIngestService;
         _rejectValidator = rejectValidator;
         _completionProofValidator = completionProofValidator;
         _submitCompletionProofValidator = submitCompletionProofValidator;
@@ -99,6 +102,39 @@ public class JobsController : ControllerBase
     public async Task<IActionResult> Start(Guid bookingId)
     {
         var result = await _jobService.StartAsync(CurrentProviderId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Mark an accepted job as en route - the provider has set off for the
+    /// customer's address (task 270). Optional: <see cref="Start"/> still works
+    /// straight from an accepted job, so a provider who never taps this is not
+    /// blocked. Re-tapping while already en route answers 200 with the
+    /// unchanged job rather than a conflict, so a client retrying over a bad
+    /// connection is not punished for it.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/en-route")]
+    [ProducesResponseType(typeof(ProviderJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> MarkEnRoute(Guid bookingId)
+    {
+        var result = await _jobService.MarkEnRouteAsync(CurrentProviderId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Mark an en-route job as arrived - the provider has reached the address
+    /// but has not begun the work (task 270). Idempotent on a re-tap, same as
+    /// <see cref="MarkEnRoute"/>.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/arrived")]
+    [ProducesResponseType(typeof(ProviderJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> MarkArrived(Guid bookingId)
+    {
+        var result = await _jobService.MarkArrivedAsync(CurrentProviderId(), bookingId);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
@@ -167,6 +203,35 @@ public class JobsController : ControllerBase
         }
 
         return result.Value is null ? NoContent() : Ok(result.Value);
+    }
+
+    /// <summary>
+    /// Report the provider's current position for a job in flight (task 269).
+    /// Fails closed: 403 unless the caller is the provider on this booking's
+    /// live assignment, 409 unless the job has been accepted and the booking
+    /// is still in a trackable state - so no position is ever collected before
+    /// the provider accepts or after the job ends. Accepted fixes answer 200;
+    /// fixes dropped by the per-booking throttle answer 202, since the client
+    /// did nothing wrong and must not retry them.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/location")]
+    [ProducesResponseType(typeof(RecordProviderLocationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(RecordProviderLocationResponse), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RecordLocation(Guid bookingId, [FromBody] RecordProviderLocationRequest request)
+    {
+        var result = await _locationIngestService.RecordAsync(CurrentProviderId(), bookingId, request);
+        if (result.IsFailure)
+        {
+            return result.ToProblemResult();
+        }
+
+        return result.Value.Accepted
+            ? Ok(result.Value)
+            : StatusCode(StatusCodes.Status202Accepted, result.Value);
     }
 
     private Guid CurrentProviderId() =>

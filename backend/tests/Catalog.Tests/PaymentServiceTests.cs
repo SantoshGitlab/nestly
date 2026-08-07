@@ -69,6 +69,7 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
                 TestServices.Clock()),
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
+            new ProviderRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

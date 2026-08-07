@@ -88,7 +88,12 @@ export enum CustomerStatus {
   SoftDeleted = 3,
 }
 
-/** Mirrors Nestly.Domain.BookingStatus's declaration order exactly. */
+/**
+ * Mirrors Nestly.Domain.BookingStatus's declaration order exactly. Because
+ * the ordinal is the wire value, new statuses are only ever appended on the
+ * C# side - the task-264 tracking states therefore sit at 14/15 rather than
+ * between Assigned and InProgress where the lifecycle puts them.
+ */
 export enum BookingStatus {
   Initiated = 0,
   PaymentPending = 1,
@@ -103,6 +108,9 @@ export enum BookingStatus {
   Rescheduled = 10,
   RefundPending = 11,
   Refunded = 12,
+  Expired = 13,
+  ProviderEnRoute = 14,
+  ProviderArrived = 15,
 }
 
 /** Mirrors Nestly.Domain.WalletEntryType's declaration order exactly. */

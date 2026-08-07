@@ -61,7 +61,7 @@ public sealed class SubscriptionNotificationTriggerHandler :
             return;
         }
 
-        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(customerId);
+        var deviceTokens = await _deviceTokenRepository.ListActiveByOwnerAsync(DeviceTokenOwner.ForCustomer(customerId));
         var recipient = new NotificationRecipient(customer.Mobile, customer.Email, deviceTokens.Select(t => t.Token).ToList());
 
         await _notificationDispatchService.DispatchAsync(

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.Bookings;
+using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
 
@@ -19,15 +20,18 @@ public class BookingsController : ControllerBase
 {
     private readonly IBookingSummaryService _bookingSummaryService;
     private readonly IBookingService _bookingService;
+    private readonly IBookingTrackingQueryService _trackingQueryService;
     private readonly IValidator<BookingSummaryRequest> _summaryValidator;
 
     public BookingsController(
         IBookingSummaryService bookingSummaryService,
         IBookingService bookingService,
+        IBookingTrackingQueryService trackingQueryService,
         IValidator<BookingSummaryRequest> summaryValidator)
     {
         _bookingSummaryService = bookingSummaryService;
         _bookingService = bookingService;
+        _trackingQueryService = trackingQueryService;
         _summaryValidator = summaryValidator;
     }
 
@@ -85,6 +89,26 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> Detail(Guid id)
     {
         var result = await _bookingService.GetDetailAsync(CurrentCustomerId(), id);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// The live tracking snapshot for a booking in progress (task 275) - the
+    /// one-shot read the tracking screen loads before the SignalR hub starts
+    /// pushing updates into it.
+    ///
+    /// Narrower than <see cref="Detail"/> on purpose: status, who is coming
+    /// (with a masked phone, never the raw number), where they are, when they
+    /// are expected, and where they are heading. No 403 is documented because
+    /// none is possible - someone else's booking is a 404, so this endpoint
+    /// cannot be used to confirm a booking id exists.
+    /// </summary>
+    [HttpGet("{id:guid}/tracking")]
+    [ProducesResponseType(typeof(BookingTrackingResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Tracking(Guid id)
+    {
+        var result = await _trackingQueryService.GetForCustomerAsync(CurrentCustomerId(), id);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

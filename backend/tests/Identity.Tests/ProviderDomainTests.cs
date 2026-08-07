@@ -95,6 +95,51 @@ public class ProviderDomainTests
     }
 
     [Fact]
+    public void A_provider_who_has_never_shared_a_location_has_no_location_timestamp()
+    {
+        // Task 268: null here means "never located", which must stay
+        // distinguishable from "located, but long ago".
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+
+        provider.LocationUpdatedAtUtc.Should().BeNull();
+    }
+
+    [Fact]
+    public void UpdateLocation_stamps_the_current_time_when_the_caller_did_not_observe_the_fix()
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+        var before = DateTime.UtcNow;
+
+        provider.UpdateLocation(12.9716m, 77.5946m);
+
+        provider.LocationUpdatedAtUtc.Should().BeOnOrAfter(before).And.BeOnOrBefore(DateTime.UtcNow);
+    }
+
+    [Fact]
+    public void UpdateLocation_keeps_the_observed_time_a_caller_supplies()
+    {
+        // Task 268: a ping delivered late (queued upload) must not be stamped
+        // "now" - that is exactly what makes a stale position look fresh.
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+        var observedAtUtc = DateTime.UtcNow.AddMinutes(-7);
+
+        provider.UpdateLocation(12.9716m, 77.5946m, observedAtUtc);
+
+        provider.LocationUpdatedAtUtc.Should().Be(observedAtUtc);
+    }
+
+    [Fact]
+    public void UpdateLocation_clears_the_location_timestamp_along_with_the_coordinates()
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+919876543210");
+        provider.UpdateLocation(12.9716m, 77.5946m);
+
+        provider.UpdateLocation(null, null);
+
+        provider.LocationUpdatedAtUtc.Should().BeNull();
+    }
+
+    [Fact]
     public void A_kyc_document_starts_pending_and_records_the_admin_who_approves_it()
     {
         var adminUserId = Guid.NewGuid();

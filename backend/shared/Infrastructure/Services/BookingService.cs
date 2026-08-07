@@ -26,6 +26,11 @@ public class BookingService : IBookingService
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IMetricsService _metricsService;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
+    // Task 275: read-only, and only ever for the assigned provider's own
+    // display identity. Booking deliberately has no Provider navigation
+    // (PROVIDER.md scope boundary), so the one place that needs to name the
+    // provider resolves it through the repository instead.
+    private readonly IProviderRepository _providerRepository;
     private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
     // Same reasoning as RefundService: the slot-capacity reservation, coupon
     // reservation, subscription free-visit consumption and the booking write
@@ -47,6 +52,7 @@ public class BookingService : IBookingService
         ISlotAvailabilityService slotAvailabilityService,
         IMetricsService metricsService,
         IBookingProviderAssignmentRepository assignmentRepository,
+        IProviderRepository providerRepository,
         ICustomerSubscriptionRepository customerSubscriptionRepository,
         NestlyDbContext context)
     {
@@ -57,6 +63,7 @@ public class BookingService : IBookingService
         _slotAvailabilityService = slotAvailabilityService;
         _metricsService = metricsService;
         _assignmentRepository = assignmentRepository;
+        _providerRepository = providerRepository;
         _customerSubscriptionRepository = customerSubscriptionRepository;
         _context = context;
     }
@@ -76,7 +83,7 @@ public class BookingService : IBookingService
             if (existingByKey is not null)
             {
                 var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(existingByKey.Id);
-                return Result.Success(ToDetailResponse(existingByKey, activeAssignment?.Status));
+                return Result.Success(ToDetailResponse(existingByKey, activeAssignment?.Status, await ProviderSummaryFor(activeAssignment)));
             }
         }
 
@@ -236,7 +243,7 @@ public class BookingService : IBookingService
                 }
 
                 var winnerAssignment = await _assignmentRepository.GetActiveByBookingAsync(winner.Id);
-                return Result.Success(ToDetailResponse(winner, winnerAssignment?.Status));
+                return Result.Success(ToDetailResponse(winner, winnerAssignment?.Status, await ProviderSummaryFor(winnerAssignment)));
             }
 
             if (summary.Coupon is not null)
@@ -247,7 +254,7 @@ public class BookingService : IBookingService
             await dbTransaction.CommitAsync();
 
             _metricsService.RecordBookingCreated(succeeded: true);
-            return Result.Success(ToDetailResponse(booking, providerAssignmentStatus: null));
+            return Result.Success(ToDetailResponse(booking, providerAssignmentStatus: null, provider: null));
         }
         catch
         {
@@ -277,7 +284,7 @@ public class BookingService : IBookingService
         }
 
         var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
-        return Result.Success(ToDetailResponse(booking, activeAssignment?.Status));
+        return Result.Success(ToDetailResponse(booking, activeAssignment?.Status, await ProviderSummaryFor(activeAssignment)));
     }
 
     private static BookingListItemResponse ToListItem(Booking booking) => new(
@@ -289,7 +296,30 @@ public class BookingService : IBookingService
         BookingStatusMapper.LabelFor(booking.Status),
         booking.CreatedAtUtc);
 
-    private static BookingDetailResponse ToDetailResponse(Booking booking, BookingProviderAssignmentStatus? providerAssignmentStatus)
+    /// <summary>
+    /// Who is coming, for a booking that has a live assignment (task 275).
+    /// Keyed off the assignment the caller already loaded rather than
+    /// <see cref="Booking.AssignedProviderId"/>: the two agree today, but the
+    /// assignment is the row that goes away on a reject/reassign, and the
+    /// customer must stop seeing a provider the moment they are off the job.
+    /// One extra read by primary key, and only when a provider is actually
+    /// assigned - an unassigned booking's detail costs exactly what it did.
+    /// </summary>
+    private async Task<BookingProviderSummary?> ProviderSummaryFor(BookingProviderAssignment? assignment)
+    {
+        if (assignment is null)
+        {
+            return null;
+        }
+
+        var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
+        return provider is null ? null : BookingProviderSummary.From(provider);
+    }
+
+    private static BookingDetailResponse ToDetailResponse(
+        Booking booking,
+        BookingProviderAssignmentStatus? providerAssignmentStatus,
+        BookingProviderSummary? provider)
     {
         var item = booking.Items.Count > 0 ? booking.Items[0] : null;
 
@@ -323,6 +353,7 @@ public class BookingService : IBookingService
             booking.CouponCodeSnapshot,
             booking.CouponDiscountAmountSnapshot,
             booking.TotalPayableSnapshot,
-            providerAssignmentStatus);
+            providerAssignmentStatus,
+            provider);
     }
 }

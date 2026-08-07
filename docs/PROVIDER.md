@@ -87,7 +87,7 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 - **Auth:** register, otp/send, otp/verify, login, refresh, logout
 - **Profile/Onboarding:** get/update profile, upload KYC documents, get KYC status, update service areas, update skills
 - **Availability:** get/update availability, set blackout dates
-- **Jobs:** list jobs (filter by status/date), get job detail, accept/reject/start/complete job, upload completion proof
+- **Jobs:** list jobs (filter by status/date), get job detail, accept/reject/start/complete job, mark en-route/arrived (task 270 — both optional, start stays reachable without them), report location (task 269), upload completion proof
 - **Earnings:** get earnings summary, get earnings ledger, list payouts, get payout detail
 
 ### Admin-Facing Additions (extend existing `admin-api`)
@@ -188,6 +188,31 @@ approach as the five above.
    revisit if candidate volume ever makes an in-process O(n) scan (task
    244's actual approach — filter by skill/area first, then rank the much
    smaller remaining set by distance) too slow for real query patterns.
+   *(Superseded as the **ranking** key by task 267, which orders the
+   surviving candidates by real road travel time from `IRouteEstimateProvider`
+   instead — a straight line picks the wrong provider whenever a river, a
+   highway or a one-way system puts the nearest-by-air candidate furthest by
+   road. Haversine is still the whole story everywhere else: it pre-filters
+   which candidates are worth a billed route call
+   (`AutoAssignmentOptions.RouteRankingRadiusKm`/`MaxRouteCandidates`, cost
+   caps only — never an eligibility filter), it orders everything not priced,
+   and it is the ordering the engine falls back to when
+   `AutoAssignmentOptions.RouteRankingEnabled` is off or the routing provider
+   returned no real road data. Still no PostGIS, and still no new dependency
+   in this solution — the routing seam was already built for booking
+   tracking.)*
+
+   One approximation is taken deliberately and stated here rather than
+   buried: the provider drives **to** the customer, but the batched routing
+   API takes one origin and many destinations, so the engine asks the mirror
+   question — from the booking's address out to each candidate — and treats
+   the answer as the inbound leg. Traffic is directional, so the two are not
+   the same number. The alternative is one HTTP round trip per candidate
+   instead of one per booking: the same billed element count, but N times the
+   latency on a path that must not hold up a booking. The bias applies
+   equally to every candidate (they share one origin), so it distorts the
+   *ranking* only where one candidate's own asymmetry differs from its
+   peers' — a far smaller error than the straight-line ordering it replaces.
 
 2. **Capacity: hard-enforced for auto-assignment only, still advisory for
    manual.** `ProviderCapacity`'s doc comment states it is "advisory only in
@@ -197,7 +222,10 @@ approach as the five above.
    no human in the loop to notice an overload the way an admin browsing a
    list would. Manual admin assignment keeps today's advisory-only behaviour
    unchanged; enforcing it there too is a separate, undecided product
-   question this task does not resolve.
+   question this task does not resolve. *(Still true for the capacity
+   **limits**. Decision 7 below separates out the one thing that is not a
+   limit at all — being in two places at once — and makes that a hard stop on
+   both paths.)*
 
 3. **Rating: still not an input — corrected while implementing task 244.**
    Decision 4 above (task 144) left this "deferred, not discarded... once
@@ -246,6 +274,25 @@ approach as the five above.
    pool would just cycle the same providers. Configurable
    (`AutoAssignmentOptions`, task 248), not hardcoded — the number itself
    is a guess with no production data behind it yet.
+
+7. **Time overlap: a hard invariant on every path, not a capacity limit
+   (task 288).** Decision 2 treats `ProviderCapacity` as policy — hard for the
+   engine, advisory for an admin. Overlapping slots are not policy: one person
+   cannot be in two places at once, so an admin gets the same refusal the
+   engine does (409 `BookingProviderAssignment.ProviderDoubleBooked`, naming
+   the booking collided with, rather than a silent filter). Three things this
+   fixed, all of which meant nothing prevented double-booking at all: a
+   provider with no `provider_capacity` row (which is every provider — nothing
+   in the codebase can create one) counted as *unlimited*; `MaxJobsPerSlot`
+   compared slot-window **identity**, so 09:00-11:00 and 10:00-12:00 in two
+   different windows never collided; and the slot time snapshots were never
+   compared between bookings anywhere. The rule: same provider, same
+   `slot_date`, live assignment (`Assigned`/`Accepted` only), and half-open
+   overlap `NewStart < ExistingEnd && ExistingStart < NewEnd` — half-open so
+   back-to-back 09:00-11:00 and 11:00-13:00 jobs stay legal. Checked inside a
+   Serializable transaction and backed on PostgreSQL by an `EXCLUDE USING
+   gist` constraint on `booking`; that constraint is not reproducible on the
+   SQLite test provider and the divergence is documented in the migration.
 
 ## NEXT STEPS
 

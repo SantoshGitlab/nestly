@@ -11,6 +11,8 @@ import type {
   JobListItem,
   JobListParams,
   JobListResponse,
+  RecordProviderLocationRequest,
+  RecordProviderLocationResponse,
   SubmitCompletionProofRequest,
   SubmitCompletionVerificationRequest,
 } from "./jobs-types";
@@ -40,6 +42,14 @@ export const rejectJob = (jobId: string) =>
 export const startJob = (jobId: string) =>
   apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/start`, { method: "POST", authenticated: true });
 
+/** Optional, task 270/283 - Start still works straight from Accepted, so tapping this is never required. */
+export const markJobEnRoute = (jobId: string) =>
+  apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/en-route`, { method: "POST", authenticated: true });
+
+/** Optional, same as markJobEnRoute - a provider can tap Start without ever marking Arrived. */
+export const markJobArrived = (jobId: string) =>
+  apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/arrived`, { method: "POST", authenticated: true });
+
 export const completeJob = (jobId: string) =>
   apiFetch<JobDetail>(`${JOBS_BASE}/${jobId}/complete`, { method: "POST", authenticated: true });
 
@@ -61,4 +71,18 @@ export const submitCompletionVerification = (jobId: string, request: SubmitCompl
 export const getCompletionVerification = (jobId: string) =>
   apiFetch<BookingCompletionProofResponse | undefined>(`${JOBS_BASE}/${jobId}/completion-verification`, {
     authenticated: true,
+  });
+
+/**
+ * One location fix (task 269/282). The server throttles independently of
+ * this client (`ProviderLocationIngestOptions`, ~15s minimum interval) and
+ * answers 202 rather than 200 for a fix it accepted-but-dropped as too soon -
+ * both are a successful `apiFetch` call, not a thrown error, so a throttled
+ * ping never surfaces as a failure to the provider.
+ */
+export const recordProviderLocation = (jobId: string, request: RecordProviderLocationRequest) =>
+  apiFetch<RecordProviderLocationResponse>(`${JOBS_BASE}/${jobId}/location`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
   });

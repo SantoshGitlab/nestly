@@ -24,4 +24,22 @@ public interface INotificationDispatchService
         Guid? bookingId = null,
         Guid? supportTicketId = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Looks up the contact details and active push devices for one principal
+    /// (task 277). Before this, every caller assembled the recipient itself
+    /// from <c>ICustomerRepository</c> plus
+    /// <c>IDeviceTokenRepository.ListActiveByCustomerAsync</c>, which is why
+    /// there was no way to address a <b>provider</b>: no caller had the code
+    /// for it and device tokens could not belong to one.
+    ///
+    /// <para>
+    /// Never throws for a missing principal - an unknown id resolves to a
+    /// recipient with no channels at all, which <c>DispatchAsync</c> then
+    /// turns into zero outcomes. That matches how the trigger handlers already
+    /// treat a deleted row (log and carry on) rather than failing a
+    /// post-commit notification.
+    /// </para>
+    /// </summary>
+    Task<NotificationRecipient> ResolveRecipientAsync(DeviceTokenOwner owner, CancellationToken cancellationToken = default);
 }

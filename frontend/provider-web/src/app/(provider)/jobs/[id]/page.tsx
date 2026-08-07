@@ -20,6 +20,8 @@ import {
   Textarea,
   useToast,
 } from "@/components/ui";
+import { useJobStatusLive } from "@/hooks/useJobStatusLive";
+import { isLocationShareable, useLocationSharing } from "@/hooks/useLocationSharing";
 import { isNotImplemented } from "@/lib/api";
 import { formatDateTime, formatInr, formatIsoDate, formatTime } from "@/lib/format";
 import {
@@ -27,6 +29,8 @@ import {
   completeJob,
   getCompletionVerification,
   getJobDetail,
+  markJobArrived,
+  markJobEnRoute,
   rejectJob,
   startJob,
   submitCompletionProof,
@@ -35,6 +39,7 @@ import {
 import { JobStatus, jobStatusLabel } from "@/lib/jobs-types";
 import { JobStatusBadge } from "../_components/JobStatusBadge";
 import type { BookingCompletionProofResponse, CompletionChecklistAnswer } from "@/lib/jobs-types";
+import type { LocationSharingStatus } from "@/hooks/useLocationSharing";
 
 /**
  * Job detail (docs/PROVIDER.md's `booking_provider_assignment` bridge table):
@@ -61,6 +66,12 @@ export default function JobDetailPage() {
     queryKey: ["provider-job-completion-verification", jobId],
     queryFn: () => getCompletionVerification(jobId),
   });
+
+  useJobStatusLive(jobId);
+  const { status: locationSharingStatus } = useLocationSharing(
+    jobId,
+    !!query.data && isLocationShareable(query.data.status),
+  );
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["provider-job", jobId] });
@@ -91,6 +102,20 @@ export default function JobDetailPage() {
       toast("success", "Job started.");
     },
   });
+  const enRouteMutation = useMutation({
+    mutationFn: () => markJobEnRoute(jobId),
+    onSuccess: () => {
+      invalidate();
+      toast("success", "Customer notified you're on your way.");
+    },
+  });
+  const arrivedMutation = useMutation({
+    mutationFn: () => markJobArrived(jobId),
+    onSuccess: () => {
+      invalidate();
+      toast("success", "Customer notified you've arrived.");
+    },
+  });
   const completeMutation = useMutation({
     mutationFn: () => completeJob(jobId),
     onSuccess: () => {
@@ -111,6 +136,8 @@ export default function JobDetailPage() {
     acceptMutation.isPending ||
     rejectMutation.isPending ||
     startMutation.isPending ||
+    enRouteMutation.isPending ||
+    arrivedMutation.isPending ||
     completeMutation.isPending;
 
   const backLink = (
@@ -174,6 +201,8 @@ export default function JobDetailPage() {
     acceptMutation.error ??
     rejectMutation.error ??
     startMutation.error ??
+    enRouteMutation.error ??
+    arrivedMutation.error ??
     completeMutation.error ??
     proofMutation.error;
 
@@ -379,21 +408,64 @@ export default function JobDetailPage() {
           </div>
         </Card>
 
-        {job.status === JobStatus.Accepted ? (
+        {isLocationShareable(job.status) ? (
+          <LocationSharingCard status={locationSharingStatus} />
+        ) : null}
+
+        {job.status === JobStatus.Accepted ||
+        job.status === JobStatus.EnRoute ||
+        job.status === JobStatus.Arrived ? (
           <Card
             title="Ready to go?"
             description="Start the job when you arrive and begin work."
           >
-            <Button
-              type="button"
-              size="lg"
-              fullWidth
-              loading={startMutation.isPending}
-              disabled={anyActionPending}
-              onClick={() => startMutation.mutate()}
-            >
-              Start job
-            </Button>
+            <div className="flex flex-col gap-2.5">
+              {/* Neither is mandatory before Start - Accepted -> InProgress is
+                  a legal transition on its own (BookingLifecycle.cs). Once en
+                  route, though, Arrived is the only way forward: the
+                  lifecycle has no ProviderEnRoute -> InProgress edge, so Start
+                  is hidden rather than left to fail with a 422. */}
+              {job.status === JobStatus.Accepted ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  loading={enRouteMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => enRouteMutation.mutate()}
+                >
+                  On my way — notifies the customer
+                </Button>
+              ) : null}
+
+              {job.status === JobStatus.EnRoute ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  fullWidth
+                  loading={arrivedMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => arrivedMutation.mutate()}
+                >
+                  I&apos;ve arrived — notifies the customer
+                </Button>
+              ) : null}
+
+              {job.status === JobStatus.Accepted || job.status === JobStatus.Arrived ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  fullWidth
+                  loading={startMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => startMutation.mutate()}
+                >
+                  Start job
+                </Button>
+              ) : null}
+            </div>
           </Card>
         ) : null}
 
@@ -471,6 +543,89 @@ export default function JobDetailPage() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Task 282's status panel for {@link useLocationSharing}. Every branch is
+ * informational, never blocking: a provider who denies location access can
+ * still Start/Complete the job exactly as before, which is the point of
+ * "must handle permission-denied by degrading to a clear 'sharing off' state
+ * rather than breaking the job flow" - nothing here ever disables another
+ * card's button.
+ */
+function LocationSharingCard({ status }: { status: LocationSharingStatus }) {
+  const copy: Record<LocationSharingStatus, { title: string; description: string; tone: "info" | "warning" }> = {
+    idle: {
+      title: "Starting location sharing…",
+      description: "The customer sees your live position while this job is active.",
+      tone: "info",
+    },
+    requesting: {
+      title: "Waiting for location permission",
+      description: "Allow location access so the customer can see you're on the way.",
+      tone: "info",
+    },
+    sharing: {
+      title: "Sharing your live location",
+      description:
+        "The customer can see your position while this job is active. Only works while this app is open and the screen is on - it does not run in the background.",
+      tone: "info",
+    },
+    denied: {
+      title: "Location sharing is off",
+      description:
+        "You denied location access, so the customer won't see your live position. You can still start and complete this job normally - turn it on from your browser's site settings if you change your mind.",
+      tone: "warning",
+    },
+    unsupported: {
+      title: "Location sharing isn't available",
+      description: "This browser doesn't support location sharing. The job flow still works normally.",
+      tone: "warning",
+    },
+    error: {
+      title: "Location sharing paused",
+      description: "We're having trouble getting a location fix. Retrying automatically.",
+      tone: "warning",
+    },
+  };
+
+  const { title, description, tone } = copy[status];
+
+  return (
+    <Card>
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className={
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full " +
+            (tone === "warning" ? "bg-warning-soft text-warning" : "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300")
+          }
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+          >
+            <path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11Z" />
+            <circle cx="12" cy="10" r="2.5" />
+          </svg>
+        </span>
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium text-fg">
+            {status === "sharing" ? (
+              <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+            ) : null}
+            {title}
+          </p>
+          <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{description}</p>
+        </div>
+      </div>
+    </Card>
   );
 }
 

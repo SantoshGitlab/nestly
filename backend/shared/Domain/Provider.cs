@@ -76,6 +76,16 @@ public class Provider : Entity<Guid>
     public decimal? Latitude { get; private set; }
     public decimal? Longitude { get; private set; }
 
+    /// <summary>
+    /// Task 268: when the coordinates above were observed, null whenever they
+    /// are. Without it the pair is a last-known location with no age, so a fix
+    /// from three seconds ago and one from three days ago are
+    /// indistinguishable - and only one of them should be routed to a customer
+    /// as "your technician is here". Not <c>UpdatedAt</c>: that moves on every
+    /// profile edit, which says nothing about the location.
+    /// </summary>
+    public DateTime? LocationUpdatedAtUtc { get; private set; }
+
     protected Provider() { }
 
     public Provider(
@@ -140,7 +150,16 @@ public class Provider : Entity<Guid>
     /// previously set location (e.g. the provider relocated and hasn't
     /// re-shared a new one yet).
     /// </summary>
-    public void UpdateLocation(decimal? latitude, decimal? longitude)
+    /// <param name="observedAtUtc">
+    /// Task 268: when the fix was actually taken, for callers that know -
+    /// notably location-ping ingest, where a queued upload can deliver a fix
+    /// minutes after the device took it and stamping "now" would make a stale
+    /// position look fresh. Omitted by callers who are supplying coordinates
+    /// rather than observing them (an admin editing the profile), who get the
+    /// current time. Cleared along with the coordinates: a timestamp for a
+    /// location that no longer exists is worse than none.
+    /// </param>
+    public void UpdateLocation(decimal? latitude, decimal? longitude, DateTime? observedAtUtc = null)
     {
         if (latitude.HasValue != longitude.HasValue)
         {
@@ -149,6 +168,7 @@ public class Provider : Entity<Guid>
 
         Latitude = latitude;
         Longitude = longitude;
+        LocationUpdatedAtUtc = latitude.HasValue ? observedAtUtc ?? DateTime.UtcNow : null;
         UpdatedAt = DateTime.UtcNow;
     }
 

@@ -267,6 +267,107 @@ point is a follow-up once real hosting/subdomain decisions in DEVOPS.md are
 made and a proper redirect can be set up at the infrastructure layer instead
 of in application code.
 
+## DOMAIN EVENT DISPATCH AND DELIVERY (task 272, resolved 2026-08-07)
+
+Phase 16's order tracking adds a family of domain events
+(`ProviderAssignmentAcceptedEvent`, `ProviderEnRouteEvent`,
+`ProviderArrivedEvent`, `ProviderLocationUpdatedEvent`,
+`BookingEtaUpdatedEvent`) whose consumers include both a live SignalR
+broadcast and, later, customer notifications. Those two consumers do not
+tolerate loss equally, so the delivery guarantee has to be written down
+rather than assumed.
+
+**Decision: keep in-process, post-commit MediatR dispatch with no outbox —
+and forbid notification triggers from depending on it alone.**
+
+How dispatch actually works today (`DomainEventDispatchInterceptor`, a
+`SaveChangesInterceptor`):
+
+1. Aggregates collect events in memory via `AggregateRoot<TId>.RaiseDomainEvent`.
+2. `SavedChangesAsync` — i.e. **after** the transaction has committed —
+   sweeps `ChangeTracker.Entries<AggregateRoot<Guid>>()`, drains their
+   events, and publishes each one through `IPublisher.Publish` in the same
+   process, on the same thread, inside the same request.
+3. There is **no outbox table, no queue, no retry, and no dead-letter.** An
+   event is published exactly once, best-effort, and then it is gone.
+
+Three consequences follow, and none of them are bugs:
+
+- Only aggregate roots are swept. An event raised on a plain `Entity<TId>` is
+  collected and silently never dispatched. Task 272 promoted
+  `BookingProviderAssignment` and `ProviderLocationPing` to
+  `AggregateRoot<Guid>` for exactly this reason; anything else that starts
+  raising events must do the same.
+- A handler that throws propagates out of `SaveChangesAsync` to the caller
+  **after** the data has already been committed. The write succeeded; the
+  request reports failure. Handlers must therefore treat their own failure as
+  their problem, not the transaction's.
+- If the process dies between commit and publish, every event from that save
+  is lost with no record that it ever existed.
+
+**A lost tracking broadcast is acceptable.** REST remains the source of
+truth for tracking: `GET /api/v1/bookings/{bookingId}/tracking` (task 275)
+returns the current status, latest location and ETA from the database, and
+the customer-web client re-reads it on connect, on reconnect and on a
+polling fallback. A dropped `ProviderLocationUpdated` frame costs the user
+at most one stale marker position until the next ping or the next re-read.
+Buying durability for that with an outbox would add a table, a dispatcher
+and an at-least-once contract to protect data that is superseded seconds
+later anyway.
+
+**A lost notification is not acceptable.** "A professional is on the way" is
+not re-derivable by the customer from a screen they are not looking at; if
+the SMS/push never goes out, nothing else in the system will ever send it.
+Hence the rule:
+
+> **A notification trigger must not depend solely on a post-commit domain
+> event handler that can throw.** Every customer-facing notification needs a
+> durable record of the intent to send it — written in the same transaction
+> as the state change that warrants it — and a retry path (a sweep over
+> unsent records) that does not depend on the in-process handler having run.
+> The post-commit handler may remain as the fast path; it must not be the
+> only path.
+
+**Known violation, deliberately not fixed here:**
+`BookingNotificationTriggerHandler` (`backend/shared/Infrastructure/Services/BookingNotificationTriggerHandler.cs`)
+is exactly the shape the rule forbids. It is an
+`INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>`
+that, post-commit, re-reads the booking, customer, payment/cancellation/refund
+and device tokens from repositories and then calls
+`INotificationDispatchService`. `DispatchAsync` itself is careful — it never
+throws for an individual channel's send failure — but the four repository
+reads ahead of it can, and a process death anywhere in that window loses the
+booking-confirmed, payment-failed, cancelled, rescheduled, refunded and
+expired notifications for that save with nothing left behind to retry from.
+`ChatNotificationTriggerHandler`, `SupportTicketNotificationTriggerHandler`
+and `SubscriptionNotificationTriggerHandler` share the shape.
+
+**Task 276 did not fix it, and said so.** That task added the fulfilment-half
+triggers (ProviderAssigned/ProviderEnRoute/ProviderArrived/JobStarted/
+JobCompleted) to `BookingNotificationTriggerHandler`, and they carry exactly
+the same guarantee as the six that were already there: **at-most-once,
+best-effort, never retried.** The handler also gained a fifth post-commit
+repository read (the provider, for the name the templates render), so the
+window in which a throw or a process death silently loses a notification is
+marginally wider than before, not narrower.
+
+This was a deliberate scope call rather than an oversight. The durable-intent
+record and its sweep is a schema change, a write inside every notification-
+warranting transaction, a background job and a delivery-idempotency rule — and
+it has to be applied to `BookingNotificationTriggerHandler`,
+`ChatNotificationTriggerHandler`, `SupportTicketNotificationTriggerHandler` and
+`SubscriptionNotificationTriggerHandler` together, since a rule half the
+handlers follow is not a rule. Bundling that into a task whose brief was
+"wire up five triggers" would have meant reviewing the two changes as one.
+
+**Recommended as its own row.** Until it exists, the honest statement to make
+about any notification in this system — the five new ones included — is that
+the state change is durable and the telling of it is not. Nothing else in the
+system will notice or resend a notification that was lost between the commit
+and the send. Anywhere that guarantee is not good enough (a payment failure a
+customer must act on, say) the correct answer is that row, not another
+handler.
+
 ## DOMAIN DESIGN PRINCIPLES
 
 The domain model should:

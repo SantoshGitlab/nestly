@@ -11,6 +11,7 @@ import {
 import { MotionLink, Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, EmptyState, PageHeading, Skeleton, Tabs } from "@/components/ui";
+import { isBookingTrackable } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { BookingListItem, BookingStatusBucket } from "@/lib/types";
 
@@ -115,36 +116,54 @@ function BookingsScreen() {
         <Reveal as="ul" className="flex flex-col gap-3">
           {query.data.map((booking) => (
             <RevealItem key={booking.id}>
-              <MotionLink
-                href={`/bookings/${booking.id}`}
-                variant="nudge"
-                className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4 shadow-sm transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 hover:shadow-md sm:p-5"
-              >
-                <span className="flex min-w-0 flex-col gap-1.5">
-                  <span className="truncate font-medium text-fg">{booking.serviceName}</span>
-                  <span className="nums text-sm text-fg-muted">
-                    {formatCalendarDate(booking.slotDate)}
+              {/* relative wrapper, not the row link itself: the Track pill
+                  below is a sibling <Link> stacked on top via absolute
+                  positioning, not a descendant of the row's own <Link> - a
+                  button/link nested inside an anchor is invalid HTML (see
+                  ActionCtas' doc comment on the booking detail page for the
+                  same rule). */}
+              <div className="relative">
+                <MotionLink
+                  href={`/bookings/${booking.id}`}
+                  variant="nudge"
+                  className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4 shadow-sm transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 hover:shadow-md sm:p-5"
+                >
+                  <span className="flex min-w-0 flex-col gap-1.5">
+                    <span className="truncate font-medium text-fg">{booking.serviceName}</span>
+                    <span className="nums text-sm text-fg-muted">
+                      {formatCalendarDate(booking.slotDate)}
+                    </span>
+                    <BookingStatusBadge status={booking.status} label={booking.statusLabel} />
                   </span>
-                  <BookingStatusBadge status={booking.status} label={booking.statusLabel} />
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="nums text-base font-semibold text-fg">
-                    {inr(booking.totalPayable)}
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className="nums text-base font-semibold text-fg">
+                      {inr(booking.totalPayable)}
+                    </span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 text-fg-subtle transition-transform duration-fast ease-out group-hover:translate-x-0.5"
+                      aria-hidden
+                    >
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
                   </span>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-4 w-4 text-fg-subtle transition-transform duration-fast ease-out group-hover:translate-x-0.5"
-                    aria-hidden
+                </MotionLink>
+
+                {isBookingTrackable(booking.status) ? (
+                  <Link
+                    href={`/bookings/${booking.id}/track`}
+                    className="absolute right-4 top-4 inline-flex h-7 items-center gap-1 rounded-full bg-brand-600 px-3 text-xs font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 sm:right-5 sm:top-5"
                   >
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
-                </span>
-              </MotionLink>
+                    <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-fg-on-brand" />
+                    Track
+                  </Link>
+                ) : null}
+              </div>
             </RevealItem>
           ))}
         </Reveal>

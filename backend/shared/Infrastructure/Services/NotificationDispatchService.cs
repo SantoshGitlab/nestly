@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Nestly.Application;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Notifications;
+using Nestly.BuildingBlocks.Privacy;
 using Nestly.Domain;
 
 namespace Nestly.Infrastructure.Services;
@@ -19,6 +21,9 @@ public class NotificationDispatchService : INotificationDispatchService
     private readonly INotificationProvider _notificationProvider;
     private readonly IPushNotificationProvider _pushNotificationProvider;
     private readonly INotificationEventRepository _repository;
+    private readonly IDeviceTokenRepository _deviceTokenRepository;
+    private readonly ICustomerRepository _customerRepository;
+    private readonly IProviderRepository _providerRepository;
     private readonly IMetricsService _metricsService;
     private readonly ILogger<NotificationDispatchService> _logger;
 
@@ -27,6 +32,9 @@ public class NotificationDispatchService : INotificationDispatchService
         INotificationProvider notificationProvider,
         IPushNotificationProvider pushNotificationProvider,
         INotificationEventRepository repository,
+        IDeviceTokenRepository deviceTokenRepository,
+        ICustomerRepository customerRepository,
+        IProviderRepository providerRepository,
         IMetricsService metricsService,
         ILogger<NotificationDispatchService> logger)
     {
@@ -34,8 +42,68 @@ public class NotificationDispatchService : INotificationDispatchService
         _notificationProvider = notificationProvider;
         _pushNotificationProvider = pushNotificationProvider;
         _repository = repository;
+        _deviceTokenRepository = deviceTokenRepository;
+        _customerRepository = customerRepository;
+        _providerRepository = providerRepository;
         _metricsService = metricsService;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Task 277. The provider branch is the point of the row: a provider now
+    /// has device tokens of its own (<see cref="DeviceTokenOwner"/>), so
+    /// "tell the provider" is finally expressible.
+    ///
+    /// <para>
+    /// <b>The owner kind decides which table is read, always.</b> It is never
+    /// inferred from whether a lookup happened to find a row, so a provider id
+    /// that collides with a customer id cannot resolve to that customer's
+    /// phone number - the customer table is not consulted at all on the
+    /// provider branch. Same reason
+    /// <c>IDeviceTokenRepository.ListActiveByOwnerAsync</c> takes an owner
+    /// rather than a bare Guid.
+    /// </para>
+    /// </summary>
+    public async Task<NotificationRecipient> ResolveRecipientAsync(DeviceTokenOwner owner, CancellationToken cancellationToken = default)
+    {
+        var deviceTokens = (await _deviceTokenRepository.ListActiveByOwnerAsync(owner))
+            .Select(t => t.Token)
+            .ToList();
+
+        switch (owner.Kind)
+        {
+            case DeviceTokenOwnerKind.Customer:
+            {
+                var customer = await _customerRepository.GetByIdAsync(owner.Id);
+                if (customer is null)
+                {
+                    _logger.LogWarning("Customer {CustomerId} not found while resolving a notification recipient.", owner.Id);
+                }
+
+                return new NotificationRecipient(customer?.Mobile, customer?.Email, deviceTokens);
+            }
+
+            case DeviceTokenOwnerKind.Provider:
+            {
+                var provider = await _providerRepository.GetByIdAsync(owner.Id);
+                if (provider is null)
+                {
+                    _logger.LogWarning("Provider {ProviderId} not found while resolving a notification recipient.", owner.Id);
+                }
+
+                // Provider.Phone is the SMS channel's address, mirroring
+                // Customer.Mobile. It is the raw number on purpose: this is a
+                // delivery address, not a template variable. Provider numbers
+                // are masked where they would be *rendered* into a message
+                // (BookingNotificationTriggerHandler.AddProviderVariablesAsync),
+                // and NotificationDispatchService already masks whatever it
+                // writes to the notification_event audit row.
+                return new NotificationRecipient(provider?.Phone, provider?.Email, deviceTokens);
+            }
+
+            default:
+                throw new NotSupportedException($"Device token owner kind {owner.Kind} has no recipient resolver wired up yet.");
+        }
     }
 
     public async Task<IReadOnlyList<NotificationDispatchOutcome>> DispatchAsync(
@@ -91,7 +159,7 @@ public class NotificationDispatchService : INotificationDispatchService
         if (!await _templateRenderer.SupportsChannelAsync(eventType, channel, cancellationToken))
         {
             _logger.LogWarning("No notification template registered for {EventType}/{Channel} - skipping dispatch.", eventType, channel);
-            var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
+            var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
             untemplated.MarkFailed("No template registered for this event/channel combination.");
             await _repository.AddAsync(untemplated);
             _metricsService.RecordNotificationOutcome(channel.ToString(), succeeded: false, untemplated.ErrorReason);
@@ -99,7 +167,7 @@ public class NotificationDispatchService : INotificationDispatchService
         }
 
         var rendered = await _templateRenderer.RenderAsync(eventType, channel, variables, cancellationToken);
-        var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId);
+        var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId);
         await _repository.AddAsync(notification);
 
         var sendResult = channel switch
@@ -123,16 +191,5 @@ public class NotificationDispatchService : INotificationDispatchService
         _metricsService.RecordNotificationOutcome(channel.ToString(), sendResult.IsSuccess, notification.ErrorReason);
 
         return new NotificationDispatchOutcome(notification.Id, channel, notification.Status, notification.ErrorReason);
-    }
-
-    /// <summary>Same masking convention as <see cref="SandboxNotificationProvider"/> - the stored Recipient is for audit/dedup, never a fully readable contact.</summary>
-    private static string Mask(string value)
-    {
-        if (value.Length <= 4)
-        {
-            return new string('*', value.Length);
-        }
-
-        return new string('*', value.Length - 4) + value[^4..];
     }
 }

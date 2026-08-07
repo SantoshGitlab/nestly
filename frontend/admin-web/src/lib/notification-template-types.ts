@@ -9,7 +9,17 @@
  * and must stay in declaration-order sync with its C# source.
  */
 
-/** Mirrors Nestly.Domain.NotificationEventType's declaration order exactly. */
+/**
+ * Mirrors Nestly.Domain.NotificationEventType's declaration order exactly.
+ *
+ * Task 276 completed this mirror. It had stopped at SupportTicketUpdate = 7
+ * while the C# enum grew to 16 through the referral, recurring-booking, chat,
+ * subscription and booking-expiry work, so nine event types' templates were
+ * unreachable from the admin screens - the list filter could not name them and
+ * the create form could not offer them. The ordinals below are not a choice:
+ * every value's number is fixed by its position in the C# enum, which is why
+ * that enum is only ever appended to.
+ */
 export enum NotificationEventType {
   Welcome = 0,
   BookingConfirmed = 1,
@@ -19,6 +29,20 @@ export enum NotificationEventType {
   BookingRescheduled = 5,
   RefundProcessed = 6,
   SupportTicketUpdate = 7,
+  ReferralRegistered = 8,
+  ReferralRewardCredited = 9,
+  RecurringBookingUpcoming = 10,
+  RecurringBookingSkipped = 11,
+  NewChatMessage = 12,
+  SubscriptionRenewed = 13,
+  SubscriptionExpiringSoon = 14,
+  SubscriptionPaymentFailed = 15,
+  BookingExpired = 16,
+  ProviderAssigned = 17,
+  ProviderEnRoute = 18,
+  ProviderArrived = 19,
+  JobStarted = 20,
+  JobCompleted = 21,
 }
 
 /** Mirrors Nestly.Domain.NotificationChannel's declaration order exactly. */
@@ -37,6 +61,20 @@ export const NOTIFICATION_EVENT_TYPE_LABELS: Record<NotificationEventType, strin
   [NotificationEventType.BookingRescheduled]: "Booking rescheduled",
   [NotificationEventType.RefundProcessed]: "Refund processed",
   [NotificationEventType.SupportTicketUpdate]: "Support ticket update",
+  [NotificationEventType.ReferralRegistered]: "Referral registered",
+  [NotificationEventType.ReferralRewardCredited]: "Referral reward credited",
+  [NotificationEventType.RecurringBookingUpcoming]: "Recurring booking upcoming",
+  [NotificationEventType.RecurringBookingSkipped]: "Recurring booking skipped",
+  [NotificationEventType.NewChatMessage]: "New chat message",
+  [NotificationEventType.SubscriptionRenewed]: "Subscription renewed",
+  [NotificationEventType.SubscriptionExpiringSoon]: "Subscription expiring soon",
+  [NotificationEventType.SubscriptionPaymentFailed]: "Subscription payment failed",
+  [NotificationEventType.BookingExpired]: "Booking expired",
+  [NotificationEventType.ProviderAssigned]: "Professional assigned",
+  [NotificationEventType.ProviderEnRoute]: "Professional on the way",
+  [NotificationEventType.ProviderArrived]: "Professional arrived",
+  [NotificationEventType.JobStarted]: "Job started",
+  [NotificationEventType.JobCompleted]: "Job completed",
 };
 
 export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {

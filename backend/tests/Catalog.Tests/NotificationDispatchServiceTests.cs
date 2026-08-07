@@ -67,6 +67,49 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         return customer.Id;
     }
 
+    private Guid SeedProvider(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "9" + Guid.NewGuid().ToString("N")[..9]);
+        context.Add(provider);
+        context.SaveChanges();
+        return provider.Id;
+    }
+
+    /// <summary>
+    /// Task 277: the call the fulfilment notification chain waits on - before
+    /// this method existed, no code path could address a provider at all (see
+    /// BookingNotificationTriggerHandler's doc comment on why the customer/
+    /// device-token lookups moved here).
+    /// </summary>
+    [Fact]
+    public async Task ResolveRecipientAsync_resolves_a_provider_owner_from_the_provider_table_not_the_customer_table()
+    {
+        Guid providerId;
+        using (var context = _db.CreateContext())
+        {
+            providerId = SeedProvider(context);
+        }
+
+        using (var tokenContext = _db.CreateContext())
+        {
+            await new DeviceTokenRepository(tokenContext).AddAsync(
+                new DeviceToken(Guid.NewGuid(), DeviceTokenOwner.ForProvider(providerId), DevicePlatform.Fcm, "provider-token-" + Guid.NewGuid()));
+        }
+
+        using var dispatchContext = _db.CreateContext();
+        var service = new NotificationDispatchService(
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),
+            new FakeNotificationProvider(), new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance),
+            new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext),
+            new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext),
+            new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+
+        var recipient = await service.ResolveRecipientAsync(DeviceTokenOwner.ForProvider(providerId));
+
+        recipient.Mobile.Should().NotBeNullOrEmpty();
+        recipient.PushDeviceTokens.Should().ContainSingle(t => t.StartsWith("provider-token-"));
+    }
+
     [Fact]
     public async Task DispatchAsync_sends_and_logs_both_channels_when_both_contacts_are_present()
     {
@@ -79,7 +122,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext), new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com"),
@@ -108,7 +151,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext), new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", Email: null),
@@ -130,7 +173,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider { FailSms = true };
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext), new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com"),
@@ -154,7 +197,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var provider = new FakeNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), provider, new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext), new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
         await service.DispatchAsync(customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", null), new Dictionary<string, string>());
 
@@ -177,7 +220,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var pushProvider = new FakePushNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new FakeNotificationProvider(), pushProvider, new NotificationEventRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new FakeNotificationProvider(), pushProvider, new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext), new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient(null, null, ["device-a", "device-b"]),
@@ -202,7 +245,7 @@ public sealed class NotificationDispatchServiceTests : IClassFixture<TestDatabas
         var pushProvider = new FakePushNotificationProvider();
         using var dispatchContext = _db.CreateContext();
         var service = new NotificationDispatchService(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), smsEmailProvider, pushProvider, new NotificationEventRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), smsEmailProvider, pushProvider, new NotificationEventRepository(dispatchContext), new DeviceTokenRepository(dispatchContext), new CustomerRepository(dispatchContext), new ProviderRepository(dispatchContext), new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);
 
         var outcomes = await service.DispatchAsync(
             customerId, NotificationEventType.Welcome, new NotificationRecipient("9876543210", "asha@example.com", ["device-a"]),

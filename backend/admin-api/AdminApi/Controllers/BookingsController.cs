@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.BookingManagement;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
 using Nestly.Infrastructure;
@@ -44,6 +45,7 @@ public class BookingsController : ControllerBase
     private readonly IBookingProviderAssignmentService _assignmentService;
     private readonly IBookingCompletionProofRepository _completionProofRepository;
     private readonly IBookingRepository _bookingRepository;
+    private readonly IBookingTrackingQueryService _trackingQueryService;
     private readonly IValidator<AdminBookingSearchRequest> _searchValidator;
     private readonly IValidator<AdminBookingStatusUpdateRequest> _statusUpdateValidator;
     private readonly IValidator<AdminCancelBookingRequest> _cancelValidator;
@@ -57,6 +59,7 @@ public class BookingsController : ControllerBase
         IBookingProviderAssignmentService assignmentService,
         IBookingCompletionProofRepository completionProofRepository,
         IBookingRepository bookingRepository,
+        IBookingTrackingQueryService trackingQueryService,
         IValidator<AdminBookingSearchRequest> searchValidator,
         IValidator<AdminBookingStatusUpdateRequest> statusUpdateValidator,
         IValidator<AdminCancelBookingRequest> cancelValidator,
@@ -69,6 +72,7 @@ public class BookingsController : ControllerBase
         _assignmentService = assignmentService;
         _completionProofRepository = completionProofRepository;
         _bookingRepository = bookingRepository;
+        _trackingQueryService = trackingQueryService;
         _searchValidator = searchValidator;
         _statusUpdateValidator = statusUpdateValidator;
         _cancelValidator = cancelValidator;
@@ -200,12 +204,13 @@ public class BookingsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
-    /// <summary>Assigns (or reassigns) a provider to a booking (task 147, PROVIDER.md OPEN DECISIONS #1 - manual admin-driven assignment). Gated behind "bookings.write" - the existing permission code, per PROVIDER.md's SCOPE BOUNDARY this is Booking-domain behaviour, not a separate Provider-module permission.</summary>
+    /// <summary>Assigns (or reassigns) a provider to a booking (task 147, PROVIDER.md OPEN DECISIONS #1 - manual admin-driven assignment). Gated behind "bookings.write" - the existing permission code, per PROVIDER.md's SCOPE BOUNDARY this is Booking-domain behaviour, not a separate Provider-module permission. Returns 409 with "BookingProviderAssignment.ProviderDoubleBooked" when the provider is already on an overlapping job (task 288) - unlike their advisory capacity limits, that one is a hard stop even for an admin.</summary>
     [HttpPost("{bookingId:guid}/assign-provider")]
     [Authorize(Policy = WritePolicy)]
     [ProducesResponseType(typeof(BookingProviderAssignmentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> AssignProvider(Guid bookingId, [FromBody] AssignProviderRequest request)
     {
@@ -282,6 +287,17 @@ public class BookingsController : ControllerBase
         }
 
         return result.Value is null ? NoContent() : Ok(result.Value);
+    }
+
+    /// <summary>Live tracking snapshot for the admin ops view (task 284) - same shape task 275 built for the customer screen, minus the ownership check.</summary>
+    [HttpGet("{bookingId:guid}/tracking")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(BookingTrackingResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTracking(Guid bookingId)
+    {
+        var result = await _trackingQueryService.GetForAdminAsync(bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
     private Guid CurrentAdminUserId() =>

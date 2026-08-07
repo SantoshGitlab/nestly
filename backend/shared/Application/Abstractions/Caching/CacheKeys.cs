@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Nestly.Application.Abstractions.Caching;
 
 /// <summary>
@@ -23,7 +25,26 @@ public static class CacheKeys
 
         /// <summary>Chat presence (task 190) - shared across consumer-api/admin-api/provider-api, each its own process.</summary>
         public const string ChatPresence = "chat-presence";
+
+        /// <summary>Road travel estimates from an external routing provider (task 266).</summary>
+        public const string RouteEstimate = "route-estimate";
     }
+
+    /// <summary>
+    /// Decimal places coordinates are rounded to before they become part of a
+    /// route-estimate key (task 266). Four places is ~11 m of latitude (and
+    /// ~10-11 m of longitude at Indian latitudes) - deliberately coarser than
+    /// a raw GPS fix so a provider idling at a traffic light keeps hitting the
+    /// same cached leg, and deliberately finer than the ~111 m that three
+    /// places would give, which could snap a point across a divided road onto
+    /// the wrong carriageway. The rounding error it introduces sits well
+    /// inside the 5-20 m a phone fix is already uncertain by, so it costs no
+    /// real accuracy.
+    /// </summary>
+    public const int RouteEstimateCoordinateDecimals = 4;
+
+    private static readonly string CoordinateFormat =
+        "F" + RouteEstimateCoordinateDecimals.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>A single service's catalog projection.</summary>
     public static string Service(Guid serviceId) =>
@@ -63,6 +84,41 @@ public static class CacheKeys
     /// <summary>Set of live SignalR connection ids for one user, regardless of which API's hub they connected through (task 190).</summary>
     public static string ChatPresence(Guid userId) =>
         Compose(Areas.ChatPresence, "user", userId.ToString("D"));
+
+    /// <summary>
+    /// One origin-to-destination road leg from an external routing provider
+    /// (task 266). Coordinates are rounded to
+    /// <see cref="RouteEstimateCoordinateDecimals"/> places so that a moving
+    /// provider's successive fixes collapse onto the same key instead of
+    /// missing the cache on every ping.
+    /// </summary>
+    /// <remarks>
+    /// The key is derived from coordinates only. The routing provider's API
+    /// key is never part of it - a cache key travels to Redis, appears in
+    /// <c>redis-cli</c> output and in this application's own cache-miss logs,
+    /// none of which is a place a credential belongs.
+    /// </remarks>
+    public static string RouteEstimate(
+        decimal originLatitude,
+        decimal originLongitude,
+        decimal destinationLatitude,
+        decimal destinationLongitude) =>
+        Compose(
+            Areas.RouteEstimate,
+            FormatCoordinate(originLatitude),
+            FormatCoordinate(originLongitude),
+            FormatCoordinate(destinationLatitude),
+            FormatCoordinate(destinationLongitude));
+
+    /// <summary>
+    /// Rounds and formats one coordinate component for a cache key. Rounding
+    /// mode and culture are both stated explicitly: a key computed on a
+    /// <c>de-DE</c> host must be byte-identical to one computed on
+    /// <c>en-IN</c>, or replicas would silently keep separate caches.
+    /// </summary>
+    private static string FormatCoordinate(decimal degrees) =>
+        Math.Round(degrees, RouteEstimateCoordinateDecimals, MidpointRounding.AwayFromZero)
+            .ToString(CoordinateFormat, CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Builds a key from pre-validated segments. Kept private so every key in

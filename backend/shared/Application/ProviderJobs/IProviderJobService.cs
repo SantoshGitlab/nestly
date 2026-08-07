@@ -23,8 +23,44 @@ public interface IProviderJobService
 
     Task<Result<ProviderJobDetailResponse>> RejectAsync(Guid providerId, Guid bookingId, RejectJobRequest request);
 
-    /// <summary>Marks an accepted job as started (provider has arrived / begun work) - moves the booking to <see cref="Nestly.Domain.BookingStatus.InProgress"/>.</summary>
+    /// <summary>
+    /// Marks an accepted job as started - the provider has begun the work
+    /// itself, moving the booking to
+    /// <see cref="Nestly.Domain.BookingStatus.InProgress"/>. Arrival is no
+    /// longer conflated into this: task 264 split
+    /// <see cref="Nestly.Domain.BookingStatus.ProviderEnRoute"/> and
+    /// <see cref="Nestly.Domain.BookingStatus.ProviderArrived"/> out as their
+    /// own states so a customer can be shown "On the way"/"Arrived" before
+    /// work begins. Both are optional - Assigned -&gt; InProgress stays a legal
+    /// transition, so a provider who never taps en-route/arrived can still
+    /// start here.
+    /// </summary>
     Task<Result<ProviderJobDetailResponse>> StartAsync(Guid providerId, Guid bookingId);
+
+    /// <summary>
+    /// Marks the provider as travelling to the customer's address - moves the
+    /// booking to <see cref="Nestly.Domain.BookingStatus.ProviderEnRoute"/>
+    /// (task 270). Optional: <see cref="StartAsync"/> remains reachable
+    /// straight from <see cref="Nestly.Domain.BookingStatus.Assigned"/>, so a
+    /// provider who never taps it is not blocked.
+    ///
+    /// Idempotent while already en route: a re-tap from a client retrying over
+    /// a bad connection succeeds and returns the unchanged job rather than
+    /// failing, since the caller's intent (the booking is en route) already
+    /// holds. No second transition happens, so no second
+    /// <c>ProviderEnRouteEvent</c> and no duplicate status-history row.
+    /// </summary>
+    Task<Result<ProviderJobDetailResponse>> MarkEnRouteAsync(Guid providerId, Guid bookingId);
+
+    /// <summary>
+    /// Marks the provider as having reached the customer's address - moves the
+    /// booking to <see cref="Nestly.Domain.BookingStatus.ProviderArrived"/>
+    /// (task 270). Reachable from
+    /// <see cref="Nestly.Domain.BookingStatus.ProviderEnRoute"/> only, per
+    /// <c>BookingLifecycle</c>'s table, and idempotent on a re-tap for the
+    /// same reason as <see cref="MarkEnRouteAsync"/>.
+    /// </summary>
+    Task<Result<ProviderJobDetailResponse>> MarkArrivedAsync(Guid providerId, Guid bookingId);
 
     /// <summary>
     /// Marks an in-progress job as completed - moves the booking to
