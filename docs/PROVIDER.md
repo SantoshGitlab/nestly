@@ -87,7 +87,7 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 - **Auth:** register, otp/send, otp/verify, login, refresh, logout
 - **Profile/Onboarding:** get/update profile, upload KYC documents, get KYC status, update service areas, update skills
 - **Availability:** get/update availability, set blackout dates
-- **Jobs:** list jobs (filter by status/date), get job detail, accept/reject/start/complete job, upload completion proof
+- **Jobs:** list jobs (filter by status/date), get job detail, accept/reject/start/complete job, mark en-route/arrived (task 270 — both optional, start stays reachable without them), report location (task 269), upload completion proof
 - **Earnings:** get earnings summary, get earnings ledger, list payouts, get payout detail
 
 ### Admin-Facing Additions (extend existing `admin-api`)

@@ -105,6 +105,39 @@ public class JobsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Mark an accepted job as en route - the provider has set off for the
+    /// customer's address (task 270). Optional: <see cref="Start"/> still works
+    /// straight from an accepted job, so a provider who never taps this is not
+    /// blocked. Re-tapping while already en route answers 200 with the
+    /// unchanged job rather than a conflict, so a client retrying over a bad
+    /// connection is not punished for it.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/en-route")]
+    [ProducesResponseType(typeof(ProviderJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> MarkEnRoute(Guid bookingId)
+    {
+        var result = await _jobService.MarkEnRouteAsync(CurrentProviderId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Mark an en-route job as arrived - the provider has reached the address
+    /// but has not begun the work (task 270). Idempotent on a re-tap, same as
+    /// <see cref="MarkEnRoute"/>.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/arrived")]
+    [ProducesResponseType(typeof(ProviderJobDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> MarkArrived(Guid bookingId)
+    {
+        var result = await _jobService.MarkArrivedAsync(CurrentProviderId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Mark an in-progress job as completed.</summary>
     [HttpPost("{bookingId:guid}/complete")]
     [ProducesResponseType(typeof(ProviderJobDetailResponse), StatusCodes.Status200OK)]

@@ -156,6 +156,78 @@ public class ProviderJobService : IProviderJobService
         return ToDetailResponse(assignment, booking);
     }
 
+    public Task<Result<ProviderJobDetailResponse>> MarkEnRouteAsync(Guid providerId, Guid bookingId) =>
+        TransitionAcceptedJobAsync(providerId, bookingId, BookingStatus.ProviderEnRoute, "Provider is en route to the customer.");
+
+    public Task<Result<ProviderJobDetailResponse>> MarkArrivedAsync(Guid providerId, Guid bookingId) =>
+        TransitionAcceptedJobAsync(providerId, bookingId, BookingStatus.ProviderArrived, "Provider arrived at the customer's address.");
+
+    /// <summary>
+    /// The shared body of <see cref="MarkEnRouteAsync"/>/<see cref="MarkArrivedAsync"/>
+    /// (task 270), guarded exactly like <see cref="StartAsync"/>: the caller
+    /// must own this booking's live assignment and that assignment must be
+    /// Accepted, or the job is reported as not found rather than refused, so a
+    /// non-owning provider learns nothing about whose booking it is (SRS 28.3
+    /// IDOR).
+    ///
+    /// Which target statuses are reachable from where is left entirely to
+    /// <see cref="BookingLifecycle"/> via <see cref="Booking.TransitionTo"/> -
+    /// no local status set is re-stated here, so this cannot drift from the
+    /// table that task 264 wrote (in particular: en-route stays optional
+    /// because Assigned -&gt; InProgress is still legal there, and arrived is
+    /// mandatory before InProgress because ProviderEnRoute -&gt; InProgress is
+    /// not).
+    /// </summary>
+    private async Task<Result<ProviderJobDetailResponse>> TransitionAcceptedJobAsync(
+        Guid providerId,
+        Guid bookingId,
+        BookingStatus targetStatus,
+        string reason)
+    {
+        var resolved = await ResolveAcceptedAsync(providerId, bookingId);
+        if (resolved is null)
+        {
+            return NotFoundError();
+        }
+
+        var (assignment, booking) = resolved.Value;
+
+        // IDEMPOTENT RE-TAP, and the reason this is not a 409. These two taps
+        // come from a phone on the move, where the request can succeed and the
+        // response still be lost; the client's only sane recovery is to send it
+        // again. Answering the retry with a conflict would turn every flaky
+        // moment into an error the provider has to interpret, so a re-tap that
+        // asks for the state the booking is already in is treated as satisfied
+        // and answers 200 with the unchanged job - the same body a first tap
+        // returns, so the client needs no special case.
+        //
+        // Returning early rather than re-transitioning is the point: it is what
+        // keeps a retry from appending a second status-history row and raising
+        // a second ProviderEnRouteEvent/ProviderArrivedEvent (task 272 raises
+        // those from the transition itself - nothing here raises them).
+        //
+        // Only the no-op is forgiven. A tap for a state the booking has already
+        // moved past (en-route after arrival) is a real client error and still
+        // fails on the transition table below.
+        if (booking.Status == targetStatus)
+        {
+            return ToDetailResponse(assignment, booking);
+        }
+
+        try
+        {
+            booking.TransitionTo(targetStatus, reason);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error.Business("ProviderJob.InvalidTransition", ex.Message);
+        }
+
+        await _bookingRepository.UpdateAsync(booking);
+
+        return ToDetailResponse(assignment, booking);
+    }
+
     public async Task<Result<ProviderJobDetailResponse>> CompleteAsync(Guid providerId, Guid bookingId)
     {
         var resolved = await ResolveAcceptedAsync(providerId, bookingId);
@@ -297,6 +369,8 @@ public class ProviderJobService : IProviderJobService
         {
             BookingStatus.Completed => ProviderJobStatus.Completed,
             BookingStatus.InProgress => ProviderJobStatus.InProgress,
+            BookingStatus.ProviderArrived => ProviderJobStatus.Arrived,
+            BookingStatus.ProviderEnRoute => ProviderJobStatus.EnRoute,
             _ => ProviderJobStatus.Accepted
         },
         _ => ProviderJobStatus.Assigned

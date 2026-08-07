@@ -32,7 +32,22 @@ public enum ProviderJobStatus
     Completed,
 
     /// <summary>The booking was cancelled (by the customer or an admin) while this assignment was still outstanding or accepted - nothing left for the provider to do (task 208).</summary>
-    Withdrawn
+    Withdrawn,
+
+    // Task 270: the provider-facing projection of task 264's two fulfilment
+    // states, so /en-route and /arrived answer with a status the caller can
+    // tell apart from Accepted. Appended rather than slotted in after
+    // Accepted where they belong chronologically: provider-api registers no
+    // JsonStringEnumConverter, so this enum crosses the wire as its ordinal
+    // and frontend/provider-web/src/lib/jobs-types.ts mirrors those ordinals
+    // by hand - inserting mid-enum would renumber InProgress onwards and
+    // silently remap every already-deployed client's job status.
+
+    /// <summary>Accepted and the provider is travelling to the address (booking <see cref="Nestly.Domain.BookingStatus.ProviderEnRoute"/>).</summary>
+    EnRoute,
+
+    /// <summary>Accepted and the provider has reached the address but has not begun work (booking <see cref="Nestly.Domain.BookingStatus.ProviderArrived"/>).</summary>
+    Arrived
 }
 
 public sealed record ProviderJobItemResponse(string NameSnapshot, int Quantity, decimal UnitPriceSnapshot);

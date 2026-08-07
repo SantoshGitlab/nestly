@@ -4,6 +4,7 @@ using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
 using Nestly.Domain;
+using Nestly.Domain.Events;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -195,6 +196,273 @@ public class ProviderJobServiceTests : IDisposable
 
         var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
         booking!.Status.Should().Be(BookingStatus.Completed);
+    }
+
+    // --- Task 270: en-route / arrived ---
+    //
+    // TestDatabase registers no DomainEventDispatchInterceptor, so a saved
+    // aggregate keeps its raised events instead of having them cleared on
+    // SaveChanges. That is what lets the "exactly once" assertions below count
+    // events on the booking the repository hands back. It is a divergence from
+    // the running app (which does dispatch and clear); the events themselves
+    // are raised by Booking.TransitionTo either way.
+
+    [Fact]
+    public async Task MarkEnRouteAsync_moves_an_accepted_job_to_ProviderEnRoute()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.MarkEnRouteAsync(_providerId, bookingId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Status.Should().Be(ProviderJobStatus.EnRoute);
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.ProviderEnRoute);
+    }
+
+    [Fact]
+    public async Task MarkArrivedAsync_moves_an_en_route_job_to_ProviderArrived()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.MarkArrivedAsync(_providerId, bookingId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Status.Should().Be(ProviderJobStatus.Arrived);
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.ProviderArrived);
+    }
+
+    [Fact]
+    public async Task MarkEnRouteAsync_rejects_a_provider_who_is_not_on_the_live_assignment()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.MarkEnRouteAsync(_otherProviderId, bookingId);
+
+        result.IsFailure.Should().BeTrue();
+        // NotFound, not Forbidden: a provider with no assignment on this
+        // booking must not learn that it exists (SRS 28.3 IDOR) - same answer
+        // StartAsync gives.
+        result.Error.Code.Should().Be("ProviderJob.NotFound");
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.Assigned);
+    }
+
+    [Fact]
+    public async Task MarkArrivedAsync_rejects_a_provider_who_is_not_on_the_live_assignment()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.MarkArrivedAsync(_otherProviderId, bookingId);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderJob.NotFound");
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.ProviderEnRoute);
+    }
+
+    [Fact]
+    public async Task MarkEnRouteAsync_rejects_an_assignment_that_has_not_been_accepted_yet()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        // Assigned but never accepted - the booking sits in Assigned both
+        // before and after the provider answers the offer, so the booking
+        // status alone would wrongly let this through.
+        var bookingId = await SeedAssignedBookingAsync(context);
+
+        var result = await service.MarkEnRouteAsync(_providerId, bookingId);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderJob.NotFound");
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.Assigned);
+    }
+
+    [Fact]
+    public async Task MarkArrivedAsync_rejects_an_assignment_that_has_not_been_accepted_yet()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+
+        var result = await service.MarkArrivedAsync(_providerId, bookingId);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderJob.NotFound");
+    }
+
+    [Fact]
+    public async Task MarkEnRouteAsync_re_tapped_while_already_en_route_succeeds_without_transitioning_again()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var reTap = await service.MarkEnRouteAsync(_providerId, bookingId);
+
+        reTap.IsSuccess.Should().BeTrue();
+        reTap.Value.Status.Should().Be(ProviderJobStatus.EnRoute);
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.ProviderEnRoute);
+        booking.StatusHistory.Where(h => h.ToStatus == BookingStatus.ProviderEnRoute).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task MarkArrivedAsync_re_tapped_while_already_arrived_succeeds_without_transitioning_again()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkArrivedAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var reTap = await service.MarkArrivedAsync(_providerId, bookingId);
+
+        reTap.IsSuccess.Should().BeTrue();
+        reTap.Value.Status.Should().Be(ProviderJobStatus.Arrived);
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.ProviderArrived);
+        booking.StatusHistory.Where(h => h.ToStatus == BookingStatus.ProviderArrived).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task MarkEnRouteAsync_raises_ProviderEnRouteEvent_exactly_once_even_when_re_tapped()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        // Booking.TransitionTo raises this (task 272); the service must not
+        // raise it a second time, and the re-tap must not transition again.
+        var raised = booking!.DomainEvents.OfType<ProviderEnRouteEvent>().Should().ContainSingle().Subject;
+        raised.BookingId.Should().Be(bookingId);
+        raised.ProviderId.Should().Be(_providerId);
+    }
+
+    [Fact]
+    public async Task MarkArrivedAsync_raises_ProviderArrivedEvent_exactly_once_even_when_re_tapped()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        (await service.MarkArrivedAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkArrivedAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        var raised = booking!.DomainEvents.OfType<ProviderArrivedEvent>().Should().ContainSingle().Subject;
+        raised.BookingId.Should().Be(bookingId);
+        raised.ProviderId.Should().Be(_providerId);
+    }
+
+    [Fact]
+    public async Task StartAsync_still_works_straight_from_Assigned_without_en_route_or_arrived()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var started = await service.StartAsync(_providerId, bookingId);
+
+        started.IsSuccess.Should().BeTrue();
+        started.Value.Status.Should().Be(ProviderJobStatus.InProgress);
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.InProgress);
+        booking.DomainEvents.OfType<ProviderEnRouteEvent>().Should().BeEmpty();
+        booking.DomainEvents.OfType<ProviderArrivedEvent>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StartAsync_is_rejected_while_the_provider_is_only_en_route()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var started = await service.StartAsync(_providerId, bookingId);
+
+        // Task 264 deliberately left ProviderEnRoute -> InProgress off the
+        // transition table: a provider passes through Arrived. Once en route,
+        // arrival is the only way on.
+        started.IsFailure.Should().BeTrue();
+        started.Error.Code.Should().Be("ProviderJob.InvalidTransition");
+
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.Status.Should().Be(BookingStatus.ProviderEnRoute);
+    }
+
+    [Fact]
+    public async Task MarkEnRouteAsync_is_rejected_once_the_provider_has_already_arrived()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkArrivedAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.MarkEnRouteAsync(_providerId, bookingId);
+
+        // Idempotency forgives a no-op re-tap, not a step backwards.
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderJob.InvalidTransition");
+    }
+
+    [Fact]
+    public async Task Full_lifecycle_through_en_route_and_arrived_reaches_Completed()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+        var bookingId = await SeedAssignedBookingAsync(context);
+
+        (await service.AcceptAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkArrivedAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.StartAsync(_providerId, bookingId)).IsSuccess.Should().BeTrue();
+        (await service.SubmitCompletionProofAsync(
+            _providerId, bookingId, new SubmitCompletionProofRequest(["s3://proofs/job-photo.jpg"], []))).IsSuccess.Should().BeTrue();
+
+        var completed = await service.CompleteAsync(_providerId, bookingId);
+
+        completed.IsSuccess.Should().BeTrue();
+        completed.Value.Status.Should().Be(ProviderJobStatus.Completed);
     }
 
     [Fact]

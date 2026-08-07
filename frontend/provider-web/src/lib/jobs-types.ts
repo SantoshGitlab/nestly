@@ -23,6 +23,8 @@ export enum JobStatus {
   InProgress = 4,
   Completed = 5,
   Withdrawn = 6,
+  EnRoute = 7,
+  Arrived = 8,
 }
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
@@ -33,6 +35,8 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   [JobStatus.InProgress]: "In progress",
   [JobStatus.Completed]: "Completed",
   [JobStatus.Withdrawn]: "Cancelled by customer",
+  [JobStatus.EnRoute]: "On the way",
+  [JobStatus.Arrived]: "Arrived",
 };
 
 export function jobStatusLabel(status: JobStatus): string {

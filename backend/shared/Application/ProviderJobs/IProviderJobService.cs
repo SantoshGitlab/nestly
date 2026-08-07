@@ -38,6 +38,31 @@ public interface IProviderJobService
     Task<Result<ProviderJobDetailResponse>> StartAsync(Guid providerId, Guid bookingId);
 
     /// <summary>
+    /// Marks the provider as travelling to the customer's address - moves the
+    /// booking to <see cref="Nestly.Domain.BookingStatus.ProviderEnRoute"/>
+    /// (task 270). Optional: <see cref="StartAsync"/> remains reachable
+    /// straight from <see cref="Nestly.Domain.BookingStatus.Assigned"/>, so a
+    /// provider who never taps it is not blocked.
+    ///
+    /// Idempotent while already en route: a re-tap from a client retrying over
+    /// a bad connection succeeds and returns the unchanged job rather than
+    /// failing, since the caller's intent (the booking is en route) already
+    /// holds. No second transition happens, so no second
+    /// <c>ProviderEnRouteEvent</c> and no duplicate status-history row.
+    /// </summary>
+    Task<Result<ProviderJobDetailResponse>> MarkEnRouteAsync(Guid providerId, Guid bookingId);
+
+    /// <summary>
+    /// Marks the provider as having reached the customer's address - moves the
+    /// booking to <see cref="Nestly.Domain.BookingStatus.ProviderArrived"/>
+    /// (task 270). Reachable from
+    /// <see cref="Nestly.Domain.BookingStatus.ProviderEnRoute"/> only, per
+    /// <c>BookingLifecycle</c>'s table, and idempotent on a re-tap for the
+    /// same reason as <see cref="MarkEnRouteAsync"/>.
+    /// </summary>
+    Task<Result<ProviderJobDetailResponse>> MarkArrivedAsync(Guid providerId, Guid bookingId);
+
+    /// <summary>
     /// Marks an in-progress job as completed - moves the booking to
     /// <see cref="Nestly.Domain.BookingStatus.Completed"/>. The resulting
     /// <c>BookingStatusChangedEvent</c> is what triggers escrow release and
