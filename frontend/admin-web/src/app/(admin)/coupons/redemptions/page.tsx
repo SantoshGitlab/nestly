@@ -1,8 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { Reveal, revealItem } from "@/components/motion";
 import { Badge, Button, Card, Field, PageHeading, Skeleton, StatTile } from "@/components/ui";
 import { DataTable, formatCurrency } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
@@ -176,28 +178,30 @@ function CouponRedemptionReport() {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* While the first load is in flight there is no total yet, and a
-              tile reading "0" is a wrong number stated as fact. */}
-          {hasTotals ? (
-            <>
+        {hasTotals ? (
+          <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <motion.div variants={revealItem}>
               <StatTile
                 label="Total redemptions"
                 value={reportQuery.data.totalRedemptions.toLocaleString("en-IN")}
               />
+            </motion.div>
+            <motion.div variants={revealItem}>
               <StatTile
                 label="Total discount given"
                 value={formatCurrency(reportQuery.data.totalDiscountAmount)}
                 title={formatCurrency(reportQuery.data.totalDiscountAmount)}
               />
-            </>
-          ) : (
-            <>
-              <StatTileSkeleton />
-              <StatTileSkeleton />
-            </>
-          )}
-        </div>
+            </motion.div>
+          </Reveal>
+        ) : (
+          // While the first load is in flight there is no total yet, and a
+          // tile reading "0" is a wrong number stated as fact.
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <StatTileSkeleton />
+            <StatTileSkeleton />
+          </div>
+        )}
 
         <DataTable
           title="Per-coupon breakdown"

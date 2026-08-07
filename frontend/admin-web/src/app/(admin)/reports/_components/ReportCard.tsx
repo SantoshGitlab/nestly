@@ -1,6 +1,9 @@
 "use client";
 
+import { motion } from "motion/react";
+import { Children } from "react";
 import type { ReactNode } from "react";
+import { Reveal, revealItem } from "@/components/motion";
 import { Button, Card, Skeleton } from "@/components/ui";
 import { SectionError } from "@/components/screen-states";
 
@@ -69,15 +72,17 @@ export function ReportCard({
 /** Responsive row of `StatTile`s — the shape every report's headline numbers use. */
 export function StatGrid({ children, columns = 3 }: { children: ReactNode; columns?: 2 | 3 }) {
   return (
-    <div
+    <Reveal
       className={
         columns === 2
           ? "grid grid-cols-1 gap-4 sm:grid-cols-2"
           : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
       }
     >
-      {children}
-    </div>
+      {Children.map(children, (child) => (
+        <motion.div variants={revealItem}>{child}</motion.div>
+      ))}
+    </Reveal>
   );
 }
 

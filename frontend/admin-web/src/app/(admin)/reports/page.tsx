@@ -215,7 +215,7 @@ export default function ReportsPage() {
         subtitle="Standard admin reports over one shared date range with CSV export, plus an async export queue for large ranges (SRS 12.18)."
       />
 
-      <div className="flex flex-col gap-6">
+      <div className="flex animate-rise flex-col gap-6">
         <FilterBar
           columns={3}
           submitLabel="Apply"
