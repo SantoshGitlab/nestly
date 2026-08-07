@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
+using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
@@ -20,6 +21,7 @@ public class ProviderLocationIngestService : IProviderLocationIngestService
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderLocationPingRepository _pingRepository;
+    private readonly IBookingEtaService _etaService;
     private readonly ProviderLocationIngestOptions _options;
 
     public ProviderLocationIngestService(
@@ -27,12 +29,14 @@ public class ProviderLocationIngestService : IProviderLocationIngestService
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderRepository providerRepository,
         IProviderLocationPingRepository pingRepository,
+        IBookingEtaService etaService,
         IOptions<ProviderLocationIngestOptions> options)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _providerRepository = providerRepository;
         _pingRepository = pingRepository;
+        _etaService = etaService;
         _options = options.Value;
     }
 
@@ -151,6 +155,21 @@ public class ProviderLocationIngestService : IProviderLocationIngestService
         // that spent four minutes in an offline queue must not read as fresh.
         provider.UpdateLocation(request.Latitude, request.Longitude, recordedAtUtc);
         await _providerRepository.UpdateAsync(provider);
+
+        // Task 271. Called on every accepted ping and on no rejected one, but
+        // the ETA does NOT recompute on every accepted ping: the service
+        // applies its own time/distance throttle so that a route lookup - which
+        // is billed - is not bought at whatever rate this endpoint happens to
+        // accept fixes. The two throttles are independent on purpose; tightening
+        // MinimumIntervalSeconds here does not reduce the maps bill and
+        // loosening it does not raise it.
+        //
+        // Last, and unguarded, because it cannot fail this request: the ping is
+        // already durable, the response below is already earned, and
+        // IBookingEtaService swallows and logs its own faults precisely so a
+        // routing hiccup cannot turn an accepted fix into an error the
+        // provider's app will retry.
+        await _etaService.RefreshAsync(bookingId);
 
         return new RecordProviderLocationResponse(
             Accepted: true,

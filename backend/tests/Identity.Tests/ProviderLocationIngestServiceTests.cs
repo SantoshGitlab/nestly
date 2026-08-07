@@ -5,6 +5,7 @@ using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Tracking;
 using Nestly.Domain;
 using Nestly.Domain.Events;
 using Nestly.Infrastructure.Options;
@@ -55,18 +56,21 @@ public class ProviderLocationIngestServiceTests : IDisposable
 
     private static ProviderLocationIngestService CreateIngestService(
         NestlyDbContext context,
-        ProviderLocationIngestOptions? options = null) => new(
+        ProviderLocationIngestOptions? options = null,
+        IBookingEtaService? etaService = null) => new(
         new BookingRepository(context),
         new BookingProviderAssignmentRepository(context),
         new ProviderRepository(context),
         new ProviderLocationPingRepository(context),
+        etaService ?? new NoOpBookingEtaService(),
         Microsoft.Extensions.Options.Options.Create(options ?? new ProviderLocationIngestOptions()));
 
     private static ProviderJobService CreateJobService(NestlyDbContext context) => new(
         new BookingRepository(context),
         new BookingProviderAssignmentRepository(context),
         CreateAssignmentService(context),
-        new BookingCompletionProofRepository(context));
+        new BookingCompletionProofRepository(context),
+        new NoOpBookingEtaService());
 
     private static BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),

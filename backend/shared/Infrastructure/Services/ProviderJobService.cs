@@ -2,6 +2,7 @@ using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -14,17 +15,20 @@ public class ProviderJobService : IProviderJobService
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly IBookingProviderAssignmentService _assignmentService;
     private readonly IBookingCompletionProofRepository _completionProofRepository;
+    private readonly IBookingEtaService _etaService;
 
     public ProviderJobService(
         IBookingRepository bookingRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         IBookingProviderAssignmentService assignmentService,
-        IBookingCompletionProofRepository completionProofRepository)
+        IBookingCompletionProofRepository completionProofRepository,
+        IBookingEtaService etaService)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _assignmentService = assignmentService;
         _completionProofRepository = completionProofRepository;
+        _etaService = etaService;
     }
 
     public async Task<Result<ProviderJobSearchResponse>> ListAsync(Guid providerId, ProviderJobStatus? status, DateOnly? date)
@@ -156,8 +160,28 @@ public class ProviderJobService : IProviderJobService
         return ToDetailResponse(assignment, booking);
     }
 
-    public Task<Result<ProviderJobDetailResponse>> MarkEnRouteAsync(Guid providerId, Guid bookingId) =>
-        TransitionAcceptedJobAsync(providerId, bookingId, BookingStatus.ProviderEnRoute, "Provider is en route to the customer.");
+    public async Task<Result<ProviderJobDetailResponse>> MarkEnRouteAsync(Guid providerId, Guid bookingId)
+    {
+        var result = await TransitionAcceptedJobAsync(
+            providerId, bookingId, BookingStatus.ProviderEnRoute, "Provider is en route to the customer.");
+
+        // Task 271. The one moment an ETA is worth having before any driving
+        // has been reported: the provider has just set off, so the customer's
+        // screen turns from "assigned" to a live journey and the first estimate
+        // should not wait for the first location ping. Refreshing on the
+        // idempotent re-tap too is harmless and cheaper than special-casing it
+        // - the service's own throttle rejects the second one.
+        //
+        // Not applied to MarkArrivedAsync: an arrived provider's remaining
+        // travel time is zero by definition, and paying a routing provider to
+        // be told so would be spending money to learn nothing.
+        if (result.IsSuccess)
+        {
+            await _etaService.RefreshAsync(bookingId);
+        }
+
+        return result;
+    }
 
     public Task<Result<ProviderJobDetailResponse>> MarkArrivedAsync(Guid providerId, Guid bookingId) =>
         TransitionAcceptedJobAsync(providerId, bookingId, BookingStatus.ProviderArrived, "Provider arrived at the customer's address.");

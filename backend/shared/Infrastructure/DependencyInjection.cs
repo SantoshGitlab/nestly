@@ -46,6 +46,7 @@ using Nestly.Application.Reviews;
 using Nestly.Application.Settings;
 using Nestly.Application.Subscriptions;
 using Nestly.Application.Support;
+using Nestly.Application.Tracking;
 using Nestly.Application.Wallet;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
@@ -210,6 +211,13 @@ public static class DependencyInjection
         services
             .AddOptions<ProviderLocationIngestOptions>()
             .Bind(configuration.GetSection(ProviderLocationIngestOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Task 271: how often a tracked booking may pay for a route lookup -
+        // deliberately not the same knob as the ingest throttle above.
+        services
+            .AddOptions<BookingEtaOptions>()
+            .Bind(configuration.GetSection(BookingEtaOptions.SectionName))
             .ValidateDataAnnotations();
 
         string connectionString = configuration.GetConnectionString(DatabaseConnectionName) ??
@@ -472,6 +480,14 @@ public static class DependencyInjection
         // above - see IProviderLocationIngestService for why the job
         // lifecycle and this high-frequency write path are not one class.
         services.AddScoped<IProviderLocationIngestService, ProviderLocationIngestService>();
+
+        // Task 271: the ETA computed off that ingest path (and off the
+        // en-route transition), plus the one-row-per-booking tracking state it
+        // is stored on. Scoped like every other write-path service; the
+        // BookingStatusChangedEvent handler that clears a finished job's ETA is
+        // discovered by the MediatR assembly scan, not registered here.
+        services.AddScoped<IBookingTrackingRepository, BookingTrackingRepository>();
+        services.AddScoped<IBookingEtaService, BookingEtaService>();
 
         // Tasks 95a-95g: admin panel authentication. Separate registrations
         // from the customer identity services above - see AdminLoginService's
