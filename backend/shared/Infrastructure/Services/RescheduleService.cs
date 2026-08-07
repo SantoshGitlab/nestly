@@ -1,13 +1,18 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Nestly.Application;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.Payments;
+using Nestly.Application.ProviderManagement;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reschedules;
 using Nestly.Application.Slots;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -19,6 +24,20 @@ namespace Nestly.Infrastructure.Services;
 /// New-slot availability is re-checked through <see cref="ISlotAvailabilityService"/>
 /// (Phase 2's slot engine) at confirmation time, never trusted from an
 /// earlier lookup (task 82c).
+///
+/// <para>
+/// <b>Task 290 - a reschedule does not automatically drop the assigned
+/// provider.</b> <see cref="Booking.Reschedule"/> only moves the slot; it
+/// never touches <see cref="Booking.AssignedProviderId"/> or the live
+/// <c>BookingProviderAssignment</c> row (see that method's own doc comment,
+/// corrected by this task). <see cref="ReconcileProviderAssignmentAfterRescheduleAsync"/>
+/// is what decides, after every reschedule, whether the same professional
+/// stays on the job: kept when the new slot is still free for them (reusing
+/// <see cref="IProviderScheduleConflictService"/>, the exact predicate task
+/// 288 built for initial assignment, rather than a second one), dropped back
+/// to <see cref="BookingStatus.AwaitingFulfilment"/> - <c>Reschedule</c>'s
+/// own destination - when it now conflicts with another job.
+/// </para>
 /// </summary>
 public class RescheduleService : IRescheduleService
 {
@@ -27,6 +46,9 @@ public class RescheduleService : IRescheduleService
     private readonly IRefundTransactionRepository _refundTransactionRepository;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IRescheduleRepository _rescheduleRepository;
+    private readonly IBookingProviderAssignmentRepository _assignmentRepository;
+    private readonly IProviderScheduleConflictService _scheduleConflictService;
+    private readonly NestlyDbContext _context;
     private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
     private readonly ReschedulePolicyOptions _policy;
@@ -37,6 +59,9 @@ public class RescheduleService : IRescheduleService
         IRefundTransactionRepository refundTransactionRepository,
         ISlotAvailabilityService slotAvailabilityService,
         IRescheduleRepository rescheduleRepository,
+        IBookingProviderAssignmentRepository assignmentRepository,
+        IProviderScheduleConflictService scheduleConflictService,
+        NestlyDbContext context,
         IBusinessClock businessClock,
         TimeProvider timeProvider,
         IOptions<ReschedulePolicyOptions> policy)
@@ -46,6 +71,9 @@ public class RescheduleService : IRescheduleService
         _refundTransactionRepository = refundTransactionRepository;
         _slotAvailabilityService = slotAvailabilityService;
         _rescheduleRepository = rescheduleRepository;
+        _assignmentRepository = assignmentRepository;
+        _scheduleConflictService = scheduleConflictService;
+        _context = context;
         _businessClock = businessClock;
         _timeProvider = timeProvider;
         _policy = policy.Value;
@@ -181,6 +209,11 @@ public class RescheduleService : IRescheduleService
         booking.Reschedule(chosenSlot.SlotWindowId, request.SlotDate, chosenSlot.Name, chosenSlot.StartTime, chosenSlot.EndTime, request.Reason);
         await _bookingRepository.UpdateAsync(booking);
 
+        // Task 290: the slot move above always persists regardless of what
+        // happens to the assignment - only "keep the same professional" can
+        // fail, and it must never take the reschedule itself down with it.
+        booking = await ReconcileProviderAssignmentAfterRescheduleAsync(booking);
+
         // Only once the move is committed: releasing first would let a
         // concurrent booking take the seat this reschedule might still need to
         // roll back to.
@@ -219,6 +252,104 @@ public class RescheduleService : IRescheduleService
             reschedulesUsed,
             _policy.MaxReschedulesPerBooking,
             history.CreatedAtUtc));
+    }
+
+    /// <summary>
+    /// Task 290. Called after the slot move has already been persisted -
+    /// decides what happens to the booking's live provider assignment
+    /// against the *new* slot (already set on <paramref name="booking"/> by
+    /// this point, which is what makes <see cref="IProviderScheduleConflictService.FindConflictAsync"/>'s
+    /// own self-exclusion correct here rather than comparing against the old
+    /// slot). Returns the booking to keep using - normally the same instance,
+    /// but a fresh reload after the race-losing branch below.
+    /// </summary>
+    private async Task<Booking> ReconcileProviderAssignmentAfterRescheduleAsync(Booking booking)
+    {
+        if (booking.AssignedProviderId is not { } providerId)
+        {
+            return booking;
+        }
+
+        var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(booking.Id);
+        if (activeAssignment is null)
+        {
+            // AssignedProviderId set with no backing live assignment row -
+            // a stale display field, not something this task's fix should
+            // carry forward silently.
+            booking.AssignProvider(null);
+            await _bookingRepository.UpdateAsync(booking);
+            return booking;
+        }
+
+        // Task 288's own reasoning applies verbatim: the read this decides on
+        // and the write that acts on it must not be split by a concurrent
+        // assignment on the same connection. See BookingProviderAssignmentService's
+        // class doc comment for what Serializable does and does not guarantee
+        // per database provider (Postgres' ex_booking_provider_no_double_booking
+        // exclusion constraint is the backstop caught below; SQLite has neither).
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var conflict = await _scheduleConflictService.FindConflictAsync(providerId, booking);
+
+        try
+        {
+            if (conflict is null)
+            {
+                booking.TransitionTo(BookingStatus.Assigned, "Reschedule kept the assigned professional; the new slot is still free for them.");
+            }
+            else
+            {
+                activeAssignment.Withdraw();
+                await _assignmentRepository.UpdateAsync(activeAssignment);
+                booking.AssignProvider(null);
+            }
+
+            await _bookingRepository.UpdateAsync(booking);
+            await dbTransaction.CommitAsync();
+            return booking;
+        }
+        catch (DbUpdateException)
+        {
+            // Either the exclusion constraint rejected the write or the
+            // serializable transaction lost a race - a competing assignment
+            // committed between the conflict check above and this write.
+            // The slot move already persisted before this method ran; only
+            // "keep the same professional" failed, so drop the assignment
+            // and leave the booking needing reassignment rather than
+            // surfacing this as a raw 500 to the caller.
+            await dbTransaction.RollbackAsync();
+            DetachPendingAssignmentWrites();
+
+            var freshBooking = await _bookingRepository.GetByIdAsync(booking.Id)
+                ?? throw new InvalidOperationException($"Booking {booking.Id} disappeared mid-reschedule.");
+            var freshAssignment = await _assignmentRepository.GetActiveByBookingAsync(booking.Id);
+            if (freshAssignment is not null)
+            {
+                freshAssignment.Withdraw();
+                await _assignmentRepository.UpdateAsync(freshAssignment);
+            }
+
+            freshBooking.AssignProvider(null);
+            if (freshBooking.Status == BookingStatus.Assigned)
+            {
+                freshBooking.TransitionTo(BookingStatus.AwaitingFulfilment, "Reassignment needed - the professional was double-booked by a concurrent change.");
+            }
+
+            await _bookingRepository.UpdateAsync(freshBooking);
+            return freshBooking;
+        }
+    }
+
+    private void DetachPendingAssignmentWrites()
+    {
+        var pending = _context.ChangeTracker.Entries()
+            .Where(e => e.Entity is BookingProviderAssignment or Booking)
+            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+            .ToList();
+
+        foreach (var entry in pending)
+        {
+            entry.State = EntityState.Detached;
+        }
     }
 
     private async Task<RescheduleEligibilityResponse> EvaluateEligibilityAsync(Booking booking)

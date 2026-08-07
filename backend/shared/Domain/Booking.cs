@@ -253,13 +253,29 @@ public class Booking : AggregateRoot<Guid>
     /// Moves the booking to a new slot (SRS 11.15, tasks 82a-d, 83). Goes
     /// through the transient <see cref="BookingStatus.Rescheduled"/> status
     /// on its way to <see cref="BookingStatus.AwaitingFulfilment"/> - both
-    /// hops are recorded in <see cref="StatusHistory"/>, and any provider
-    /// assignment the booking had is implicitly cleared by landing back on
-    /// AwaitingFulfilment rather than Assigned, since that assignment was
-    /// made against the old slot. Eligibility (status/window/count-limit)
-    /// and the new slot's own availability are the caller's
-    /// responsibility (<c>IRescheduleService</c>) - this method only
-    /// enforces the lifecycle transition itself.
+    /// hops are recorded in <see cref="StatusHistory"/>.
+    ///
+    /// <para>
+    /// <b>This method does NOT touch <see cref="AssignedProviderId"/> or the
+    /// live <c>BookingProviderAssignment</c> row</b> (corrected task 290 -
+    /// an earlier version of this comment claimed the assignment was
+    /// "implicitly cleared by landing back on AwaitingFulfilment", which was
+    /// false on both counts: landing on AwaitingFulfilment is a status label,
+    /// not a write to either the display field or the assignment table, and
+    /// this method's own slot-field mutations happen with the old assignment
+    /// still fully in place). A caller that reschedules an Assigned booking
+    /// must decide separately whether the same provider stays on the job for
+    /// the new slot - see
+    /// <c>RescheduleService.ReconcileProviderAssignmentAfterRescheduleAsync</c>,
+    /// which reuses <c>IProviderScheduleConflictService</c> (task 288) to
+    /// keep the provider when they are still free, or withdraw them
+    /// (<c>BookingProviderAssignment.Withdraw</c> plus <c>AssignProvider(null)</c>)
+    /// when the new slot now conflicts with another job.
+    /// </para>
+    ///
+    /// Eligibility (status/window/count-limit) and the new slot's own
+    /// availability are the caller's responsibility (<c>IRescheduleService</c>)
+    /// - this method only enforces the lifecycle transition itself.
     /// </summary>
     public void Reschedule(
         Guid newSlotWindowId, DateOnly newSlotDate, string newSlotWindowName, TimeSpan newSlotStartTime, TimeSpan newSlotEndTime, string? reason)

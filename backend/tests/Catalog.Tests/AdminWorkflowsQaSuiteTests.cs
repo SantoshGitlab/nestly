@@ -242,7 +242,7 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                 new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
-            new BookingRescheduleRepository(context), TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions())),
+            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions())),
         new RefundService(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),

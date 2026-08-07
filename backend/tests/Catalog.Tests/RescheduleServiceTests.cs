@@ -4,11 +4,13 @@ using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
+using Nestly.Application.ProviderManagement;
 using Nestly.Application.Reschedules;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
 
@@ -96,6 +98,9 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
             new RefundTransactionRepository(context),
             BuildSlotAvailabilityService(context),
             new BookingRescheduleRepository(context),
+            new BookingProviderAssignmentRepository(context),
+            new ProviderScheduleConflictService(context),
+            context,
             TestServices.Clock(timeProvider),
             timeProvider,
             Options.Create(policy ?? new ReschedulePolicyOptions()));
@@ -279,6 +284,144 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
 
         result.Value.IsEligible.Should().BeFalse();
         result.Value.IneligibilityReason.Should().Contain("maximum");
+    }
+
+    // --- Task 290: rescheduling an Assigned booking must not silently keep
+    // (or silently drop) the provider - it must check the new slot. ---
+
+    private static BookingProviderAssignmentService BuildAssignmentService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
+        new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
+        new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);
+
+    private static Provider SeedProvider(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    {
+        var provider = new Provider(
+            Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual,
+            "+9198" + Guid.NewGuid().ToString("N")[..8]);
+        provider.ChangeStatus(ProviderStatus.Active);
+        context.Add(provider);
+        context.SaveChanges();
+        return provider;
+    }
+
+    /// <summary>Walks the booking to AwaitingFulfilment and assigns <paramref name="providerId"/> via the real assignment service, exactly the way task 147's admin flow does.</summary>
+    private static async Task AssignProviderAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, Guid bookingId, Guid providerId)
+    {
+        var booking = await new BookingRepository(context).GetByIdAsync(bookingId);
+        booking!.TransitionTo(BookingStatus.AwaitingFulfilment, "test");
+        await new BookingRepository(context).UpdateAsync(booking);
+
+        var result = await BuildAssignmentService(context).AssignAsync(
+            bookingId, Guid.NewGuid(), new AssignProviderRequest(providerId, ResponseDeadline: null));
+        result.IsSuccess.Should().BeTrue();
+    }
+
+    /// <summary>A second, minimal booking occupying the given provider's entire slot window on <paramref name="date"/> - the conflict test's collision.</summary>
+    private static void SeedConflictingAssignment(
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, Guid providerId, DateOnly date, TimeSpan startTime, TimeSpan endTime)
+    {
+        var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Other Customer", CustomerStatus.Active);
+        context.Add(customer);
+
+        var booking = new Booking(
+            Guid.NewGuid(), customer.Id,
+            new CustomerSnapshot("Other Customer", customer.Mobile),
+            null,
+            new AddressSnapshot("Home", "1 Other St", null, null, "560002", "Bengaluru", "Karnataka", 12.95m, 77.6m, "Other", "9000000001"),
+            new SlotSnapshot(Guid.NewGuid(), date, "Conflict window", startTime, endTime),
+            new PriceSnapshot(500m, 1, 500m, 0, 0, 500m, 0, 0, 0, 500m));
+        foreach (var step in new[] { BookingStatus.PaymentPending, BookingStatus.Confirmed, BookingStatus.AwaitingFulfilment, BookingStatus.Assigned })
+        {
+            booking.TransitionTo(step, "test");
+        }
+
+        context.Add(booking);
+        context.SaveChanges();
+
+        var assignment = new BookingProviderAssignment(Guid.NewGuid(), booking.Id, providerId, BookingAssignedByType.System, null, null);
+        assignment.Accept();
+        context.Add(assignment);
+        context.SaveChanges();
+    }
+
+    [Fact]
+    public async Task ConfirmRescheduleAsync_keeps_the_assigned_provider_when_the_new_slot_is_still_free_for_them()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, 2001m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddDays(-5));
+
+        Guid providerId;
+        using (var context = _db.CreateContext())
+        {
+            providerId = SeedProvider(context).Id;
+            await AssignProviderAsync(context, fixture.BookingId, providerId);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildRescheduleService(context, timeProvider).ConfirmRescheduleAsync(
+                fixture.Customer.Id, fixture.BookingId,
+                new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Need a different day"));
+
+            result.IsSuccess.Should().BeTrue();
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+
+        booking!.Status.Should().Be(BookingStatus.Assigned, "the provider was free at the new slot, so the reschedule kept them assigned rather than falling back to AwaitingFulfilment");
+        booking.AssignedProviderId.Should().Be(providerId);
+
+        var activeAssignment = await new BookingProviderAssignmentRepository(readContext).GetActiveByBookingAsync(fixture.BookingId);
+        activeAssignment.Should().NotBeNull();
+        activeAssignment!.ProviderId.Should().Be(providerId);
+        activeAssignment.Status.Should().Be(BookingProviderAssignmentStatus.Assigned, "the original assignment row survives untouched when the reschedule keeps the same provider");
+    }
+
+    /// <summary>
+    /// The core of task 290: before this fix, Booking.Reschedule moved the
+    /// slot while leaving AssignedProviderId and the live assignment row
+    /// untouched, with nothing checking whether the provider was even free
+    /// at the new time - so a reschedule could silently slide a booking on
+    /// top of the same provider's other job.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmRescheduleAsync_drops_the_assigned_provider_when_the_new_slot_now_conflicts_with_another_job()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, 2002m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddDays(-5));
+
+        Guid providerId;
+        using (var context = _db.CreateContext())
+        {
+            providerId = SeedProvider(context).Id;
+            await AssignProviderAsync(context, fixture.BookingId, providerId);
+
+            // Occupies the provider's entire day on the target reschedule
+            // date (the new slot window is 14:00-18:00, see SeedPaidBookingAsync) -
+            // any reschedule into that window now collides.
+            SeedConflictingAssignment(context, providerId, fixture.NewSlotDate, TimeSpan.FromHours(0), TimeSpan.FromHours(23) + TimeSpan.FromMinutes(59));
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildRescheduleService(context, timeProvider).ConfirmRescheduleAsync(
+                fixture.Customer.Id, fixture.BookingId,
+                new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Need a different day"));
+
+            result.IsSuccess.Should().BeTrue("the slot move itself must still succeed even though the provider has to be dropped");
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+
+        booking!.Status.Should().Be(BookingStatus.AwaitingFulfilment, "the provider now conflicts with another job, so the booking needs reassignment rather than silently double-booking them");
+        booking.AssignedProviderId.Should().BeNull();
+
+        var activeAssignment = await new BookingProviderAssignmentRepository(readContext).GetActiveByBookingAsync(fixture.BookingId);
+        activeAssignment.Should().BeNull("the original assignment was withdrawn, not left live alongside a cleared display field");
     }
 
     private sealed class FakeTimeProvider : TimeProvider
