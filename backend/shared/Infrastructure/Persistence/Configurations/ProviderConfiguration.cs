@@ -26,5 +26,9 @@ public class ProviderConfiguration : IEntityTypeConfiguration<Provider>
         // now carry real-world coordinates.
         builder.Property(x => x.Latitude).HasPrecision(9, 6);
         builder.Property(x => x.Longitude).HasPrecision(9, 6);
+
+        // Task 268. Nullable: null exactly when the coordinates are, so a
+        // never-located provider is distinguishable from one located long ago.
+        builder.Property(x => x.LocationUpdatedAtUtc);
     }
 }

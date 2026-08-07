@@ -417,6 +417,11 @@ public static class DependencyInjection
         services.AddScoped<IProviderPayoutRepository, ProviderPayoutRepository>();
         services.AddScoped<IProviderPayoutService, ProviderPayoutService>();
         services.AddScoped<IProviderBackgroundCheckRepository, ProviderBackgroundCheckRepository>();
+        // Task 268: the append-only location trail behind Provider's single
+        // last-known coordinate pair. Registered beside the provider
+        // repositories rather than with the booking ones because a ping
+        // belongs to a provider and only optionally to a booking.
+        services.AddScoped<IProviderLocationPingRepository, ProviderLocationPingRepository>();
         services.AddScoped<IProviderManagementService, ProviderManagementService>();
         services.AddScoped<IProviderKycApprovalService, ProviderKycApprovalService>();
 
