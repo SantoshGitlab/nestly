@@ -70,6 +70,21 @@ public static class DependencyInjection
     private const string DatabaseConnectionName = "Database";
 
     /// <summary>
+    /// Redis channel prefix for the SignalR backplane. ONE prefix for every
+    /// hub, not one per hub: the backplane already namespaces its channels by
+    /// hub type underneath this prefix, so a second prefix would buy no
+    /// isolation while doubling the subscriptions each server holds - and
+    /// tracking and chat are the same trust boundary anyway (same Redis, same
+    /// deployment, same operators). The value still reads "chat" because it
+    /// was minted when chat was the only hub (task 190); renaming it is a
+    /// wire-format change that would partition chat delivery between old and
+    /// new instances for the length of a rolling deploy, which is not worth
+    /// paying for cosmetics. Named here so the next reader sees that this is
+    /// a deliberate misnomer rather than a chat-only setting.
+    /// </summary>
+    private const string SignalRChannelPrefix = "nestly-chat";
+
+    /// <summary>
     /// Registers infrastructure services: persistence, caching (T017),
     /// background jobs (T018), auditing (T020), health checks, and — as each
     /// capability lands — external providers.
@@ -229,22 +244,22 @@ public static class DependencyInjection
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
 
-        // Task 190: real-time chat transport. One SignalR hub type
-        // (ChatHub) mapped by both consumer-api and admin-api - see its doc
-        // comment for why a shared Redis backplane, not two independent hub
-        // instances, is what makes a message persisted by one API process
-        // reach a live connection held by the other. Falls back to a
-        // single-process hub (still fully correct for local dev/tests,
-        // where only one API instance is ever running) when Redis is not
-        // configured, same graceful-degradation shape as AddCaching above.
-        var chatCacheOptions = new CacheOptions();
-        configuration.GetSection(CacheOptions.SectionName).Bind(chatCacheOptions);
+        // Tasks 190/273: real-time transport, shared by every hub in the
+        // process (ChatHub, BookingTrackingHub) - see their doc comments for
+        // why a shared Redis backplane, not independent per-API hub
+        // instances, is what makes an event produced by one API process reach
+        // a live connection held by another. Falls back to a single-process
+        // hub (still fully correct for local dev/tests, where only one API
+        // instance is ever running) when Redis is not configured, same
+        // graceful-degradation shape as AddCaching above.
+        var signalRCacheOptions = new CacheOptions();
+        configuration.GetSection(CacheOptions.SectionName).Bind(signalRCacheOptions);
         var signalRBuilder = services.AddSignalR();
-        if (chatCacheOptions.IsRedisConfigured)
+        if (signalRCacheOptions.IsRedisConfigured)
         {
-            signalRBuilder.AddStackExchangeRedis(chatCacheOptions.ConnectionString!, options =>
+            signalRBuilder.AddStackExchangeRedis(signalRCacheOptions.ConnectionString!, options =>
             {
-                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("nestly-chat");
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal(SignalRChannelPrefix);
             });
         }
 
@@ -253,6 +268,11 @@ public static class DependencyInjection
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IAdminChatService, AdminChatService>();
         services.AddSingleton<IChatPresenceTracker, ChatPresenceTracker>();
+
+        // Task 273: the tracking hub's access rule. Scoped, like the
+        // repositories it reads through - it answers one question per hub
+        // invocation and holds no state between them.
+        services.AddScoped<BookingTrackingAuthorizer>();
 
         // Application.DependencyInjection.AddApplication() only scans the
         // Application assembly for MediatR handlers, so this second
@@ -686,10 +706,15 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
-                options.Events = ChatHubJwtEvents.Create();
+                options.Events = HubJwtEvents.Create();
             });
 
         services.AddAuthorization();
+
+        // Task 273: every principal this process can authenticate is a
+        // customer, which is what tells the shared hubs how to read a
+        // token's "sub" - see RealtimeActorContext.
+        services.AddSingleton(new RealtimeActorContext(RealtimeActorKind.Customer));
 
         return services;
     }
@@ -729,8 +754,11 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
-                options.Events = ChatHubJwtEvents.Create();
+                options.Events = HubJwtEvents.Create();
             });
+
+        // Task 273: see AddJwtAuthentication - admin-api authenticates admins.
+        services.AddSingleton(new RealtimeActorContext(RealtimeActorKind.Admin));
 
         // Task 96b: one authorization policy per permission code in the
         // matrix (AdminPermissionCatalog), so controllers can write
@@ -784,9 +812,19 @@ public static class DependencyInjection
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30)
                 };
+
+                // Task 273: this was missing entirely, so a provider's
+                // WebSocket handshake could never authenticate - the browser
+                // client has no way to send an Authorization header on it and
+                // this process was not reading the query-string token the
+                // other two APIs have read since task 190.
+                options.Events = HubJwtEvents.Create();
             });
 
         services.AddAuthorization();
+
+        // Task 273: see AddJwtAuthentication - provider-api authenticates providers.
+        services.AddSingleton(new RealtimeActorContext(RealtimeActorKind.Provider));
 
         return services;
     }

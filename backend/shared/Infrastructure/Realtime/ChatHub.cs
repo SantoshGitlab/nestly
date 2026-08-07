@@ -22,7 +22,7 @@ namespace Nestly.Infrastructure.Realtime;
 /// send path (including for a client that never opens a socket at all), the
 /// hub purely for live delivery and presence.
 ///
-/// One hub TYPE, mapped at the same route (<see cref="ChatHubRoutes.ChatPath"/>)
+/// One hub TYPE, mapped at the same route (<see cref="HubRoutes.ChatPath"/>)
 /// by both consumer-api (customer JWT, the process's default auth scheme)
 /// and admin-api (admin JWT, its default scheme) - <c>[Authorize]</c> with no
 /// explicit scheme resolves to whichever scheme is default in the hosting
@@ -43,7 +43,7 @@ namespace Nestly.Infrastructure.Realtime;
 /// <c>?access_token=</c> on the connection URL instead; each API's
 /// JwtBearerOptions.OnMessageReceived (see DependencyInjection.AddJwtAuthentication
 /// / AddAdminJwtAuthentication) reads it back off the query string for
-/// requests under <see cref="ChatHubRoutes.ChatPath"/> only - the standard,
+/// requests under <see cref="HubRoutes.Prefix"/> - the standard,
 /// Microsoft-documented pattern for SignalR + ASP.NET Core JWT auth.
 /// </summary>
 [Authorize]

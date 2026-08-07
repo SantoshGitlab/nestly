@@ -6,6 +6,7 @@ using Nestly.Application;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Realtime;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -98,6 +99,12 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+
+// Task 273: live order tracking. provider-api mapped no hub at all before
+// this - the provider side of tracking is the half that produces the data
+// (location pings, en-route/arrived), so without this the provider app had
+// no socket to receive the acknowledgements and status echoes on.
+app.MapHub<BookingTrackingHub>(HubRoutes.TrackingPath);
 
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });

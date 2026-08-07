@@ -149,7 +149,12 @@ app.MapControllers();
 // see its doc comment for why one shared hub type (behind the Redis
 // backplane, not two independent per-API hubs) is required for cross-process
 // delivery between a customer's connection and an admin's.
-app.MapHub<ChatHub>(ChatHubRoutes.ChatPath);
+app.MapHub<ChatHub>(HubRoutes.ChatPath);
+
+// Task 273: live order tracking for an admin supervising fulfilment - same
+// hub type as the other two APIs, gated on the bookings-read permission
+// claim (BookingTrackingAuthorizer).
+app.MapHub<BookingTrackingHub>(HubRoutes.TrackingPath);
 
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
