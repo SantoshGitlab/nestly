@@ -11,7 +11,7 @@ import {
   DetailRow,
   PriceBreakdownList,
   ScreenSkeleton,
-  bookingStatusTone,
+  Timeline,
   formatCalendarDate,
   formatInstant,
   formatTimeRange,
@@ -21,6 +21,7 @@ import {
 } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Button, Card, PageHeading, Skeleton, cx } from "@/components/ui";
+import { isBookingTrackable, useBookingTracking } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import {
   BookingProviderAssignmentStatus,
@@ -33,9 +34,11 @@ import {
 import type {
   BookingCompletionProofResponse,
   BookingDetail,
-  BookingStatusTimelineEntry,
   RefundTransactionResponse,
 } from "@/lib/types";
+
+/** REST poll cadence while a booking is trackable - the socket (useBookingTracking) is the fast path, this is the guaranteed one. */
+const TRACKING_POLL_INTERVAL_MS = 15_000;
 
 /** Both reachable only via RefundPending/Refunded in BookingLifecycle - see BookingStatusMapper.cs. */
 const REFUND_STATUSES: BookingStatus[] = [BookingStatus.RefundPending, BookingStatus.Refunded];
@@ -67,7 +70,15 @@ function BookingDetailScreen() {
   const query = useQuery({
     queryKey: ["booking", id],
     queryFn: () => apiFetch<BookingDetail>(`${API_V1}/bookings/${id}`, { authenticated: true }),
+    // Polling fallback for whenever the socket below never connects - stops
+    // the instant the booking leaves a trackable status, so a closed booking
+    // is never re-fetched on a timer. The socket, when it does connect, wins
+    // the race in practice since a status change invalidates immediately.
+    refetchInterval: (query) =>
+      query.state.data && isBookingTrackable(query.state.data.status) ? TRACKING_POLL_INTERVAL_MS : false,
   });
+
+  useBookingTracking(query.data && isBookingTrackable(query.data.status) ? id : undefined);
 
   if (query.isPending) {
     return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
@@ -356,131 +367,6 @@ function refundStatusTone(status: RefundStatus) {
     default:
       return "info" as const;
   }
-}
-
-/**
- * Vertical status rail. The last recorded transition is the booking's current
- * state, so it carries the filled marker; everything before it is history.
- *
- * `providerAssignmentStatus` is appended as a live node rather than folded
- * into the history list: it is not a BookingStatusHistory row (it tracks the
- * separate BookingProviderAssignment entity, task 208) and it has no
- * changed-at of its own, so presenting it as a dated history entry would be
- * inventing data.
- */
-function Timeline({
-  entries,
-  currentStatus,
-  providerAssignmentStatus,
-}: {
-  entries: BookingStatusTimelineEntry[];
-  currentStatus: BookingStatus;
-  providerAssignmentStatus: BookingProviderAssignmentStatus | null;
-}) {
-  const hasAssignment = providerAssignmentStatus !== null;
-
-  if (entries.length === 0 && !hasAssignment) {
-    return <p className="text-sm text-fg-muted">No status history yet.</p>;
-  }
-
-  const lastIndex = entries.length - 1;
-
-  return (
-    <ol className="flex flex-col">
-      {entries.map((entry, index) => {
-        const isLast = index === lastIndex;
-        const isCurrent = isLast && !hasAssignment;
-        return (
-          <TimelineNode
-            key={`${entry.toStatus}-${entry.changedAtUtc}-${index}`}
-            tone={bookingStatusTone(entry.toStatus)}
-            filled={isLast}
-            isCurrent={isCurrent}
-            showRail={!isLast || hasAssignment}
-            title={entry.toStatusLabel}
-            meta={formatInstant(entry.changedAtUtc)}
-          >
-            {entry.reason ? <p className="mt-1 text-sm text-fg-muted">{entry.reason}</p> : null}
-          </TimelineNode>
-        );
-      })}
-
-      {hasAssignment ? (
-        <TimelineNode
-          tone={providerAssignmentTone(providerAssignmentStatus)}
-          filled
-          isCurrent
-          showRail={false}
-          title={providerAssignmentLabel(providerAssignmentStatus)}
-          meta="Professional assignment"
-        >
-          <p className="mt-1 text-sm text-fg-muted">
-            {providerAssignmentStatus === BookingProviderAssignmentStatus.Accepted
-              ? "Your professional has confirmed and will arrive in your slot window."
-              : "This updates on its own — no action needed from you."}
-          </p>
-        </TimelineNode>
-      ) : null}
-
-      {/* A booking sitting in a status with no recorded history at all would
-          otherwise render an empty rail. */}
-      {entries.length === 0 && hasAssignment ? (
-        <li className="sr-only">Current status: {currentStatus}</li>
-      ) : null}
-    </ol>
-  );
-}
-
-const NODE_TONES = {
-  neutral: "bg-surface-3 text-fg-subtle ring-line",
-  brand: "bg-brand-600 text-fg-on-brand ring-brand-600/25",
-  success: "bg-success text-bg ring-success/25",
-  warning: "bg-warning text-bg ring-warning/25",
-  danger: "bg-danger text-bg ring-danger/25",
-  info: "bg-info text-bg ring-info/25",
-  accent: "bg-accent-500 text-bg ring-accent-500/25",
-} as const;
-
-function TimelineNode({
-  tone,
-  filled,
-  isCurrent,
-  showRail,
-  title,
-  meta,
-  children,
-}: {
-  tone: keyof typeof NODE_TONES;
-  filled: boolean;
-  isCurrent: boolean;
-  showRail: boolean;
-  title: string;
-  meta: string;
-  children?: ReactNode;
-}) {
-  return (
-    <li className="flex gap-3">
-      <div className="flex flex-col items-center">
-        <span
-          aria-hidden
-          className={cx(
-            "mt-1 h-3 w-3 shrink-0 rounded-full ring-4",
-            filled ? NODE_TONES[tone] : "bg-line-strong ring-transparent",
-            isCurrent && "animate-pop",
-          )}
-        />
-        {showRail ? <span className="w-px flex-1 bg-line" /> : null}
-      </div>
-      <div className={cx("min-w-0 flex-1", showRail ? "pb-5" : "pb-0")}>
-        <p className="text-sm font-medium text-fg">
-          {title}
-          {isCurrent ? <span className="sr-only"> (current)</span> : null}
-        </p>
-        <p className="mt-0.5 text-xs text-fg-subtle">{meta}</p>
-        {children}
-      </div>
-    </li>
-  );
 }
 
 /**
