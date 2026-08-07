@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Nestly.Application;
+using Nestly.Application.Identity;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
@@ -79,8 +80,38 @@ public sealed class BookingTrackingHubTests : IClassFixture<TestDatabase>
         };
     }
 
-    private static ClaimsPrincipal Principal(Guid subjectId) =>
-        new(new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.Sub, subjectId.ToString())], "TestJwt"));
+    private static ClaimsPrincipal Principal(Guid subjectId, params Claim[] additionalClaims)
+    {
+        var claims = new List<Claim> { new(JwtRegisteredClaimNames.Sub, subjectId.ToString()) };
+        claims.AddRange(additionalClaims);
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "TestJwt"));
+    }
+
+    private static Claim AdminPermission(string code) => new(AdminClaimTypes.Permission, code);
+
+    private static Provider SeedProvider(NestlyDbContext context)
+    {
+        var provider = new Provider(
+            Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual,
+            "+9198" + Guid.NewGuid().ToString("N")[..8]);
+        provider.ChangeStatus(ProviderStatus.Active);
+        context.Add(provider);
+        context.SaveChanges();
+        return provider;
+    }
+
+    private static void SeedAssignment(NestlyDbContext context, Booking booking, Provider provider, bool accepted = true)
+    {
+        var assignment = new BookingProviderAssignment(
+            Guid.NewGuid(), booking.Id, provider.Id, BookingAssignedByType.System, null, null);
+        if (accepted)
+        {
+            assignment.Accept();
+        }
+
+        context.Add(assignment);
+        context.SaveChanges();
+    }
 
     private static Booking SeedTrackableBooking(NestlyDbContext context, Guid customerId)
     {
@@ -197,5 +228,72 @@ public sealed class BookingTrackingHubTests : IClassFixture<TestDatabase>
         await hub.LeaveBooking(bookingId);
 
         groups.Removed.Should().ContainSingle(g => g.ConnectionId == "conn-5" && g.GroupName == TrackingGroups.Booking(bookingId));
+    }
+
+    // --- Task 285: the hub wiring for the other two actor kinds. Every
+    // JoinBooking test above only ever ran RealtimeActorKind.Customer -
+    // BookingTrackingAuthorizerTests already proves the authorizer answers
+    // correctly for Provider and Admin in isolation, but not that the hub
+    // actually threads a Provider-/Admin-scoped RealtimeActorContext through
+    // to it end to end. ---
+
+    [Fact]
+    public async Task JoinBooking_adds_the_assigned_providers_connection_to_the_bookings_group()
+    {
+        using var context = _db.CreateContext();
+        var booking = SeedTrackableBooking(context, Guid.NewGuid());
+        var provider = SeedProvider(context);
+        SeedAssignment(context, booking, provider);
+
+        var hub = Hub(context, RealtimeActorKind.Provider, Principal(provider.Id), "conn-provider", out var groups);
+
+        await hub.JoinBooking(booking.Id);
+
+        groups.Added.Should().ContainSingle(g => g.ConnectionId == "conn-provider" && g.GroupName == TrackingGroups.Booking(booking.Id));
+    }
+
+    [Fact]
+    public async Task JoinBooking_never_adds_a_provider_who_is_not_on_the_live_assignment()
+    {
+        using var context = _db.CreateContext();
+        var booking = SeedTrackableBooking(context, Guid.NewGuid());
+        var otherProvider = SeedProvider(context);
+
+        var hub = Hub(context, RealtimeActorKind.Provider, Principal(otherProvider.Id), "conn-provider-2", out var groups);
+
+        var act = () => hub.JoinBooking(booking.Id);
+
+        await act.Should().ThrowAsync<HubException>().WithMessage(BookingTrackingHub.AccessDeniedMessage);
+        groups.Added.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task JoinBooking_adds_an_admin_connection_holding_the_bookings_read_permission()
+    {
+        using var context = _db.CreateContext();
+        var booking = SeedTrackableBooking(context, Guid.NewGuid());
+
+        var hub = Hub(
+            context, RealtimeActorKind.Admin,
+            Principal(Guid.NewGuid(), AdminPermission(BookingTrackingAuthorizer.AdminPermissionCode)),
+            "conn-admin", out var groups);
+
+        await hub.JoinBooking(booking.Id);
+
+        groups.Added.Should().ContainSingle(g => g.ConnectionId == "conn-admin" && g.GroupName == TrackingGroups.Booking(booking.Id));
+    }
+
+    [Fact]
+    public async Task JoinBooking_never_adds_an_admin_connection_without_the_bookings_read_permission()
+    {
+        using var context = _db.CreateContext();
+        var booking = SeedTrackableBooking(context, Guid.NewGuid());
+
+        var hub = Hub(context, RealtimeActorKind.Admin, Principal(Guid.NewGuid()), "conn-admin-2", out var groups);
+
+        var act = () => hub.JoinBooking(booking.Id);
+
+        await act.Should().ThrowAsync<HubException>().WithMessage(BookingTrackingHub.AccessDeniedMessage);
+        groups.Added.Should().BeEmpty();
     }
 }
