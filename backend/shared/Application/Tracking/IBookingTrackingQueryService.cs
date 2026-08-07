@@ -32,4 +32,18 @@ public interface IBookingTrackingQueryService
     /// first two are indistinguishable from each other.
     /// </summary>
     Task<Result<BookingTrackingResponse>> GetForCustomerAsync(Guid customerId, Guid bookingId);
+
+    /// <summary>
+    /// The same snapshot for admin-web's live ops view (task 284) - no
+    /// ownership check, since an admin is not scoped to one customer, but
+    /// otherwise identical: still a 404 (never an empty 200) for a
+    /// nonexistent booking or one outside its tracking window, using the same
+    /// two error codes as <see cref="GetForCustomerAsync"/> so the two
+    /// surfaces cannot silently disagree about when tracking exists. The
+    /// permission check (an admin needs bookings.read) is the controller's
+    /// job, same as every other admin-api read - this method does not take a
+    /// caller id to check against, because there is nothing here to check it
+    /// against.
+    /// </summary>
+    Task<Result<BookingTrackingResponse>> GetForAdminAsync(Guid bookingId);
 }

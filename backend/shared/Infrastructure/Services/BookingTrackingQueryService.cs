@@ -82,19 +82,48 @@ public sealed class BookingTrackingQueryService : IBookingTrackingQueryService
                 "Live tracking is not available for this booking.");
         }
 
+        return Result.Success(await BuildSnapshotAsync(booking));
+    }
+
+    public async Task<Result<BookingTrackingResponse>> GetForAdminAsync(Guid bookingId)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("Booking.NotFound", "The specified booking does not exist.");
+        }
+
+        if (!BookingLifecycle.IsTrackable(booking.Status))
+        {
+            return Error.NotFound(
+                "Booking.TrackingUnavailable",
+                "Live tracking is not available for this booking.");
+        }
+
+        return Result.Success(await BuildSnapshotAsync(booking));
+    }
+
+    /// <summary>
+    /// The part <see cref="GetForCustomerAsync"/> and <see cref="GetForAdminAsync"/>
+    /// actually share - everything after the two callers' different access
+    /// checks have already passed. Takes the booking, not just its id, so
+    /// neither caller re-fetches it a second time.
+    /// </summary>
+    private async Task<BookingTrackingResponse> BuildSnapshotAsync(Booking booking)
+    {
         // The live assignment, so a provider who rejected or was reassigned
         // off the job stops appearing here immediately - same rule as the
         // booking detail's provider summary and as the hub's provider-side
         // check.
-        var assignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+        var assignment = await _assignmentRepository.GetActiveByBookingAsync(booking.Id);
         var provider = assignment is null
             ? null
             : await _providerRepository.GetByIdAsync(assignment.ProviderId);
 
-        var latestPing = await _locationPingRepository.GetLatestForBookingAsync(bookingId);
-        var tracking = await _trackingRepository.GetByBookingAsync(bookingId);
+        var latestPing = await _locationPingRepository.GetLatestForBookingAsync(booking.Id);
+        var tracking = await _trackingRepository.GetByBookingAsync(booking.Id);
 
-        return Result.Success(new BookingTrackingResponse(
+        return new BookingTrackingResponse(
             booking.Id,
             booking.Status,
             BookingStatusMapper.LabelFor(booking.Status),
@@ -112,6 +141,6 @@ public sealed class BookingTrackingQueryService : IBookingTrackingQueryService
             tracking is { HasEta: true }
                 ? new TrackedEta(tracking.EtaSeconds!.Value, tracking.EtaComputedAtUtc!.Value)
                 : null,
-            new TrackedDestination(booking.AddressLatitudeSnapshot, booking.AddressLongitudeSnapshot)));
+            new TrackedDestination(booking.AddressLatitudeSnapshot, booking.AddressLongitudeSnapshot));
     }
 }

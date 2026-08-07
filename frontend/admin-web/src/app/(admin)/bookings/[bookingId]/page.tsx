@@ -26,12 +26,15 @@ import {
   formatDateTime,
 } from "@/components/data-table";
 import { BookingStatusBadge } from "@/components/status-badges";
-import { describeError } from "@/lib/api";
+import { TrackingMap } from "@/components/TrackingMap";
+import { isBookingTrackable, useAdminBookingTrackingLive } from "@/hooks/useAdminBookingTrackingLive";
+import { ApiError, describeError } from "@/lib/api";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import {
   cancelBooking,
   getBookingCompletionProof,
   getBookingDetail,
+  getBookingTracking,
   refundBooking,
   rescheduleBooking,
   updateBookingStatus,
@@ -402,6 +405,8 @@ export default function BookingDetailPage() {
       </Card>
 
       {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+
+      <TrackingCard bookingId={booking.id} bookingStatus={booking.status} />
 
       <Card title="Status timeline" description="Full history (SRS 12.11.2-3)">
         <ol className="flex flex-col gap-2 text-sm">
@@ -781,6 +786,122 @@ function BookingDetailSkeleton() {
       ))}
     </div>
   );
+}
+
+/**
+ * Live ops view (task 284): last known provider location on a map, ETA, and
+ * seconds since the last fix, kept live over the same `/hubs/tracking` hub
+ * the customer and provider screens use (task 273), with the admin JWT.
+ *
+ * A 404 from `getBookingTracking` - `Booking.TrackingUnavailable` for a
+ * booking outside its trackable window, or, in principle, `Booking.NotFound`
+ * - is the plain "no live data" state the task asks for, not an error: most
+ * bookings in this list were never tracked (never assigned, or completed
+ * long ago), and that is the ordinary case, not a failure to retry.
+ */
+function TrackingCard({ bookingId, bookingStatus }: { bookingId: string; bookingStatus: BookingStatus }) {
+  const trackable = isBookingTrackable(bookingStatus);
+
+  const query = useQuery({
+    queryKey: ["admin-booking-tracking", bookingId],
+    queryFn: () => getBookingTracking(bookingId),
+    enabled: trackable,
+    refetchInterval: trackable ? 15_000 : false,
+  });
+
+  useAdminBookingTrackingLive(bookingId, trackable);
+
+  if (!trackable) {
+    return (
+      <Card title="Live tracking">
+        <p className="text-sm text-fg-muted">
+          This booking was never tracked, or tracking has ended - live location data is only available while a
+          professional is assigned and en route.
+        </p>
+      </Card>
+    );
+  }
+
+  if (query.isPending) {
+    return (
+      <Card title="Live tracking">
+        <SkeletonText lines={2} />
+      </Card>
+    );
+  }
+
+  if (query.isError) {
+    if (query.error instanceof ApiError && query.error.status === 404) {
+      return (
+        <Card title="Live tracking">
+          <p className="text-sm text-fg-muted">No live data for this booking yet.</p>
+        </Card>
+      );
+    }
+
+    return (
+      <Card title="Live tracking">
+        <Alert
+          tone="error"
+          action={
+            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
+              Retry
+            </Button>
+          }
+        >
+          {describeError(query.error)}
+        </Alert>
+      </Card>
+    );
+  }
+
+  const tracking = query.data;
+
+  return (
+    <Card title="Live tracking" description="Subscribed to the live tracking hub - updates without a refresh">
+      <div className="flex flex-col gap-4">
+        <TrackingMap
+          providerLocation={
+            tracking.providerLocation
+              ? { latitude: tracking.providerLocation.latitude, longitude: tracking.providerLocation.longitude }
+              : null
+          }
+          destination={tracking.destination}
+        />
+
+        <DescriptionList
+          items={[
+            {
+              label: "Provider",
+              value: tracking.provider ? tracking.provider.displayName : "Not assigned",
+            },
+            {
+              label: "Last known location",
+              value: tracking.providerLocation
+                ? `${tracking.providerLocation.latitude.toFixed(5)}, ${tracking.providerLocation.longitude.toFixed(5)}`
+                : "No fix received yet",
+            },
+            {
+              label: "Last fix age",
+              value: tracking.providerLocation
+                ? `${secondsSince(tracking.providerLocation.recordedAtUtc)}s ago`
+                : "—",
+            },
+            {
+              label: "ETA",
+              value: tracking.eta ? `~${Math.round(tracking.eta.etaSeconds / 60)} min` : "Not yet calculated",
+            },
+          ]}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function secondsSince(utc: string): number {
+  const then = new Date(utc).getTime();
+  if (Number.isNaN(then)) return 0;
+  return Math.max(0, Math.round((Date.now() - then) / 1000));
 }
 
 /** Photo + checklist evidence the provider submitted at job completion - dispute-review evidence (tasks 195-198, SRS 12.11.2). */

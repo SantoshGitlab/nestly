@@ -466,4 +466,52 @@ public sealed class BookingTrackingQueryServiceTests : IClassFixture<TestDatabas
         result.Value.Provider.Should().BeNull();
         result.Value.Destination.Should().NotBeNull("the destination is on the booking itself and never depends on a provider");
     }
+
+    // --- Task 284: GetForAdminAsync - no ownership check, otherwise identical rules ---
+
+    [Fact]
+    public async Task Admin_reads_a_trackable_booking_regardless_of_which_customer_owns_it()
+    {
+        Guid bookingId;
+        using (var context = _db.CreateContext())
+        {
+            var booking = SeedBooking(context, Guid.NewGuid(), BookingStatus.ProviderEnRoute);
+            var provider = SeedProvider(context);
+            SeedAssignment(context, booking, provider);
+            bookingId = booking.Id;
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await Service(readContext).GetForAdminAsync(bookingId);
+
+        result.IsSuccess.Should().BeTrue("an admin is not scoped to one customer's bookings");
+        result.Value.BookingId.Should().Be(bookingId);
+        result.Value.Provider.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Admin_read_of_a_nonexistent_booking_is_not_found()
+    {
+        using var readContext = _db.CreateContext();
+        var result = await Service(readContext).GetForAdminAsync(Guid.NewGuid());
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Booking.NotFound");
+    }
+
+    [Fact]
+    public async Task Admin_read_outside_the_trackable_window_is_the_same_no_live_data_code_as_the_customer_path()
+    {
+        Guid bookingId;
+        using (var context = _db.CreateContext())
+        {
+            bookingId = SeedBooking(context, Guid.NewGuid(), BookingStatus.Completed).Id;
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await Service(readContext).GetForAdminAsync(bookingId);
+
+        result.IsFailure.Should().BeTrue("a completed booking has no live data left to show - admin-web's ops view renders its own no-live-data state off this");
+        result.Error.Code.Should().Be("Booking.TrackingUnavailable");
+    }
 }

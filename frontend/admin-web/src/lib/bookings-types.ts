@@ -271,3 +271,43 @@ export interface BookingCompletionProofResponse {
   submittedByProviderId: string;
   submittedAtUtc: string;
 }
+
+/**
+ * Live tracking snapshot for the ops view (task 284) - mirrors
+ * Nestly.Application.Tracking.BookingTrackingContracts.cs field for field,
+ * the same shape task 275/281 already ported into customer-web's types.ts.
+ * A 404 (Booking.NotFound or Booking.TrackingUnavailable) means "no live
+ * data" - see the tracking card's handling in the booking detail page.
+ */
+export interface AdminTrackedProviderSummary {
+  displayName: string;
+  photoUrl: string | null;
+  rating: number | null;
+  maskedPhone: string | null;
+}
+
+export interface AdminTrackedLocation {
+  latitude: number;
+  longitude: number;
+  recordedAtUtc: string;
+}
+
+export interface AdminTrackedEta {
+  etaSeconds: number;
+  etaComputedAtUtc: string;
+}
+
+export interface AdminTrackedDestination {
+  latitude: number;
+  longitude: number;
+}
+
+export interface AdminBookingTrackingResponse {
+  bookingId: string;
+  status: BookingStatus;
+  statusLabel: string;
+  provider: AdminTrackedProviderSummary | null;
+  providerLocation: AdminTrackedLocation | null;
+  eta: AdminTrackedEta | null;
+  destination: AdminTrackedDestination;
+}
