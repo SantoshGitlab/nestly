@@ -222,7 +222,7 @@ function NewRecurringBookingPlanScreen() {
   return (
     <main
       className={cx(
-        "mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10",
+        "mx-auto flex w-full max-w-3xl animate-rise flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10",
         STICKY_BAR_SPACER,
       )}
     >

@@ -105,7 +105,7 @@ function WalletScreen() {
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading title="Wallet" subtitle="Your Nestly wallet balance and transaction history." />
 
-      <div className="flex flex-col gap-6">
+      <div className="flex animate-rise flex-col gap-6">
         <BalanceCard query={balanceQuery} />
         <LedgerCard query={ledgerQuery} />
       </div>

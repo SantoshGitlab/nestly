@@ -1,10 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { useState } from "react";
 import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
 import { CategoryTile } from "@/components/CategoryTile";
 import { CitySelector } from "@/components/CitySelector";
+import { Reveal, revealItem } from "@/components/motion";
 import { Alert, Button, EmptyState } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -97,11 +99,13 @@ function CityCategoryGrid({ cityId }: { cityId: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid animate-fade-in grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+      <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
         {visible.map((category) => (
-          <CategoryTile key={category.id} category={category} />
+          <motion.div key={category.id} variants={revealItem}>
+            <CategoryTile category={category} />
+          </motion.div>
         ))}
-      </div>
+      </Reveal>
 
       {!showAll && query.data.length > visible.length ? (
         <Button variant="secondary" className="mx-auto" onClick={() => setShowAll(true)}>

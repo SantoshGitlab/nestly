@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ServiceCard } from "@/components/ServiceCard";
+import { Reveal, revealItem } from "@/components/motion";
 import { Alert, Button, EmptyState, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CategoryDetail } from "@/lib/types";
@@ -101,18 +103,19 @@ export default function CategoryDetailPage() {
             }
           />
         ) : (
-          <div className="grid animate-fade-in grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {category.services.map((service) => (
-              <ServiceCard
-                key={service.id}
-                slug={service.slug}
-                name={service.name}
-                description={service.description}
-                price={service.price}
-                addOnCount={service.addOns.length}
-              />
+              <motion.div key={service.id} variants={revealItem}>
+                <ServiceCard
+                  slug={service.slug}
+                  name={service.name}
+                  description={service.description}
+                  price={service.price}
+                  addOnCount={service.addOns.length}
+                />
+              </motion.div>
             ))}
-          </div>
+          </Reveal>
         )}
       </section>
     </main>

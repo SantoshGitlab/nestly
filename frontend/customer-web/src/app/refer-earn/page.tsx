@@ -2,8 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { formatInstantDate, inr } from "@/components/patterns";
+import { Reveal, revealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -89,7 +91,7 @@ function ReferEarnScreen() {
         subtitle="Share Nestly with friends and earn a reward for every qualifying booking."
       />
 
-      <div className="flex flex-col gap-6">
+      <div className="flex animate-rise flex-col gap-6">
         <ShareCard query={summaryQuery} />
         <StatsRow query={summaryQuery} />
         <HistoryCard query={historyQuery} />
@@ -271,12 +273,20 @@ function StatsRow({ query }: { query: UseQueryResult<ReferralSummaryResponse> })
   const summary = query.data;
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <StatTile label="Invited" value={`${summary.invitedCount}`} />
-      <StatTile label="Qualified" value={`${summary.qualifiedCount}`} />
-      <StatTile label="Rewarded" value={`${summary.rewardedCount}`} />
-      <StatTile label="Total earned" value={inr(summary.totalEarned)} />
-    </div>
+    <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <motion.div variants={revealItem}>
+        <StatTile label="Invited" value={`${summary.invitedCount}`} />
+      </motion.div>
+      <motion.div variants={revealItem}>
+        <StatTile label="Qualified" value={`${summary.qualifiedCount}`} />
+      </motion.div>
+      <motion.div variants={revealItem}>
+        <StatTile label="Rewarded" value={`${summary.rewardedCount}`} />
+      </motion.div>
+      <motion.div variants={revealItem}>
+        <StatTile label="Total earned" value={inr(summary.totalEarned)} />
+      </motion.div>
+    </Reveal>
   );
 }
 

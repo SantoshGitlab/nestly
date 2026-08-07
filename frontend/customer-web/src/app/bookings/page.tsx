@@ -8,6 +8,7 @@ import {
   formatCalendarDate,
   inr,
 } from "@/components/patterns";
+import { MotionLink, Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, EmptyState, PageHeading, Skeleton, Tabs } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -111,11 +112,12 @@ function BookingsScreen() {
           }
         />
       ) : (
-        <ul className="flex animate-fade-in flex-col gap-3">
+        <Reveal as="ul" className="flex flex-col gap-3">
           {query.data.map((booking) => (
-            <li key={booking.id}>
-              <Link
+            <RevealItem key={booking.id}>
+              <MotionLink
                 href={`/bookings/${booking.id}`}
+                variant="nudge"
                 className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4 shadow-sm transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 hover:shadow-md sm:p-5"
               >
                 <span className="flex min-w-0 flex-col gap-1.5">
@@ -142,10 +144,10 @@ function BookingsScreen() {
                     <path d="m9 18 6-6-6-6" />
                   </svg>
                 </span>
-              </Link>
-            </li>
+              </MotionLink>
+            </RevealItem>
           ))}
-        </ul>
+        </Reveal>
       )}
     </main>
   );

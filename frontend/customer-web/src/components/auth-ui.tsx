@@ -35,7 +35,7 @@ export function AuthShell({
         className="absolute -top-40 left-1/2 -z-10 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-brand-500/10 blur-3xl"
       />
 
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md animate-rise">
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-2" aria-label="Nestly home">
             <span

@@ -210,7 +210,7 @@ function BookingPaymentScreen() {
   return (
     <main
       className={cx(
-        "mx-auto grid w-full max-w-4xl gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_22rem]",
+        "mx-auto grid w-full max-w-4xl animate-rise gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_22rem]",
         STICKY_BAR_SPACER,
       )}
     >

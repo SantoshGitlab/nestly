@@ -52,7 +52,7 @@ function EditAddress() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-12">
+    <main className="mx-auto w-full max-w-2xl animate-rise px-6 py-12">
       <PageHeading title="Edit address" />
 
       {query.isPending ? (
