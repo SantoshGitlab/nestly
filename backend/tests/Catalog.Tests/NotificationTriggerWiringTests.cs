@@ -9,6 +9,7 @@ using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Support;
+using Nestly.BuildingBlocks.Privacy;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Domain.Events;
@@ -354,6 +355,242 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         var notifications = await new NotificationEventRepository(readContext).ListByCustomerAsync(customerId);
         notifications.Where(n => n.EventType == NotificationEventType.SupportTicketUpdate).Should().HaveCount(2, "one per channel - SMS and email");
     }
+
+    // --- Task 276: the fulfilment half of the lifecycle ---
+    //
+    // Every case below drives the handler with the BookingStatusChangedEvent
+    // that Booking.TransitionTo raises for the transition under test, which is
+    // the same object MediatR delivers in production. Two channels are always
+    // in play (the seeded customer has both a mobile and an email, and no
+    // device tokens), so "fired exactly once" reads as exactly two
+    // notification_event rows - one per channel - and a double-send shows up
+    // as four.
+    //
+    // SQLite/PostgreSQL divergence: TestDatabase runs EnsureCreated on
+    // in-memory SQLite and never applies migrations, so the notification_template
+    // rows that 20260807104500_SeedFulfilmentNotificationTemplates inserts on a
+    // real database are absent here. The templates reach these tests through
+    // FakeNotificationTemplateRepository, which reads the same
+    // NotificationTemplateSeedData.BuildDefaults the migration inserts from -
+    // one source, two consumers, so a template added to one and not the other
+    // cannot pass both. What is genuinely not covered here is the migration's
+    // own INSERT running against Postgres.
+
+    /// <summary>
+    /// Seeds a booking walked to <paramref name="target"/> through the real
+    /// lifecycle, with a provider assigned, and returns the customer/booking
+    /// ids and the status it came from - the handler is driven with a
+    /// (from, to) pair, and inventing one that the lifecycle cannot produce
+    /// would test a transition that never happens.
+    /// </summary>
+    /// <summary>Provider.Phone is uniquely indexed, so every seeded provider needs its own - the fixture's database is shared by every test in this class.</summary>
+    private static int _providerPhoneSequence;
+
+    private async Task<(Guid CustomerId, Guid BookingId, BookingStatus From, string ProviderDisplayName, string ProviderPhone)> SeedFulfilmentBookingAsync(BookingStatus target)
+    {
+        var path = new List<BookingStatus>
+        {
+            BookingStatus.PaymentPending,
+            BookingStatus.Confirmed,
+            BookingStatus.AwaitingFulfilment,
+            BookingStatus.Assigned
+        };
+
+        if (target is BookingStatus.ProviderEnRoute or BookingStatus.ProviderArrived)
+        {
+            path.Add(BookingStatus.ProviderEnRoute);
+        }
+
+        if (target == BookingStatus.ProviderArrived)
+        {
+            path.Add(BookingStatus.ProviderArrived);
+        }
+
+        if (target is BookingStatus.InProgress or BookingStatus.Completed)
+        {
+            path.Add(BookingStatus.InProgress);
+        }
+
+        if (target == BookingStatus.Completed)
+        {
+            path.Add(BookingStatus.Completed);
+        }
+
+        path[^1].Should().Be(target, "the walk has to end on the status under test, so the from-status below is the real predecessor");
+
+        using var context = _db.CreateContext();
+        var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active, $"asha-{Guid.NewGuid():N}@example.com");
+        string providerPhone = "+9198765" + Interlocked.Increment(ref _providerPhoneSequence).ToString("D5");
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi Kumar", ProviderType.Individual, providerPhone);
+        var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 999m);
+        var booking = new Booking(
+            Guid.NewGuid(), customer.Id, new CustomerSnapshot(customer.Name, customer.Mobile), null,
+            new AddressSnapshot("Home", "221B", null, null, "560001", "Bengaluru", "Karnataka", 12.9m, 77.5m, "Asha Rao", "9876543210"),
+            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+            new PriceSnapshot(999m, 1, 999m, 0, 0, 999m, 0, 0, 0, 999m));
+        booking.AddItem(Guid.NewGuid(), service.Id, service.Name, service.Slug, 999m, 1);
+
+        foreach (var status in path)
+        {
+            booking.TransitionTo(status);
+        }
+
+        booking.AssignProvider(provider.Id);
+
+        context.Add(customer);
+        context.Add(provider);
+        context.Add(category);
+        context.Add(service);
+        context.Add(booking);
+        await context.SaveChangesAsync();
+
+        return (customer.Id, booking.Id, path[^2], provider.DisplayName, providerPhone);
+    }
+
+    private async Task<IReadOnlyList<NotificationEvent>> HandleAndReadAsync(
+        Guid customerId, Guid bookingId, BookingStatus from, BookingStatus to,
+        IOptionsMonitor<FulfilmentNotificationOptions>? fulfilmentOptions = null)
+    {
+        using (var handlerContext = _db.CreateContext())
+        {
+            var handler = BuildBookingHandler(handlerContext, fulfilmentOptions);
+            await handler.Handle(
+                new DomainEventNotification<BookingStatusChangedEvent>(new BookingStatusChangedEvent(bookingId, from, to)),
+                CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        return await new NotificationEventRepository(readContext).ListByCustomerAsync(customerId);
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.Assigned, NotificationEventType.ProviderAssigned)]
+    [InlineData(BookingStatus.ProviderEnRoute, NotificationEventType.ProviderEnRoute)]
+    [InlineData(BookingStatus.ProviderArrived, NotificationEventType.ProviderArrived)]
+    [InlineData(BookingStatus.InProgress, NotificationEventType.JobStarted)]
+    [InlineData(BookingStatus.Completed, NotificationEventType.JobCompleted)]
+    public async Task Each_fulfilment_transition_dispatches_its_own_event_exactly_once(BookingStatus target, NotificationEventType expected)
+    {
+        var (customerId, bookingId, from, _, _) = await SeedFulfilmentBookingAsync(target);
+
+        var notifications = await HandleAndReadAsync(customerId, bookingId, from, target);
+
+        notifications.Where(n => n.EventType == expected).Should().HaveCount(2, "one per channel - SMS and email - and no more");
+        notifications.Should().OnlyContain(n => n.EventType == expected, "a fulfilment transition dispatches exactly one event type");
+        notifications.Should().OnlyContain(n => n.Status == NotificationDeliveryStatus.Sent);
+    }
+
+    [Fact]
+    public async Task Fulfilment_notifications_name_the_assigned_provider()
+    {
+        var (customerId, bookingId, from, providerName, _) = await SeedFulfilmentBookingAsync(BookingStatus.ProviderEnRoute);
+
+        var notifications = await HandleAndReadAsync(customerId, bookingId, from, BookingStatus.ProviderEnRoute);
+
+        notifications.Should().OnlyContain(n => n.PayloadJson!.Contains(providerName));
+    }
+
+    /// <summary>
+    /// The provider's phone reaches templates already masked. Asserted on the
+    /// persisted payload because that is the same dictionary the renderer
+    /// substitutes from - a raw number here is a raw number one
+    /// admin template edit away from an SMS, since template bodies are
+    /// editable at runtime.
+    /// </summary>
+    [Fact]
+    public async Task Provider_mobile_reaches_templates_masked_and_never_raw()
+    {
+        var (customerId, bookingId, from, _, providerPhone) = await SeedFulfilmentBookingAsync(BookingStatus.ProviderArrived);
+
+        var notifications = await HandleAndReadAsync(customerId, bookingId, from, BookingStatus.ProviderArrived);
+
+        notifications.Should().NotBeEmpty();
+        notifications.Should().OnlyContain(n => !n.PayloadJson!.Contains(providerPhone));
+        notifications.Should().OnlyContain(n => n.PayloadJson!.Contains(ContactMasking.Mask(providerPhone)));
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.Assigned, NotificationEventType.ProviderAssigned)]
+    [InlineData(BookingStatus.ProviderEnRoute, NotificationEventType.ProviderEnRoute)]
+    [InlineData(BookingStatus.ProviderArrived, NotificationEventType.ProviderArrived)]
+    [InlineData(BookingStatus.InProgress, NotificationEventType.JobStarted)]
+    [InlineData(BookingStatus.Completed, NotificationEventType.JobCompleted)]
+    public async Task Muting_one_fulfilment_event_suppresses_it(BookingStatus target, NotificationEventType muted)
+    {
+        var (customerId, bookingId, from, _, _) = await SeedFulfilmentBookingAsync(target);
+
+        var notifications = await HandleAndReadAsync(customerId, bookingId, from, target, MuteOnly(muted));
+
+        notifications.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.Assigned, NotificationEventType.ProviderAssigned)]
+    [InlineData(BookingStatus.ProviderEnRoute, NotificationEventType.ProviderEnRoute)]
+    [InlineData(BookingStatus.ProviderArrived, NotificationEventType.ProviderArrived)]
+    [InlineData(BookingStatus.InProgress, NotificationEventType.JobStarted)]
+    [InlineData(BookingStatus.Completed, NotificationEventType.JobCompleted)]
+    public async Task Muting_the_other_four_fulfilment_events_leaves_this_one_alone(BookingStatus target, NotificationEventType expected)
+    {
+        var (customerId, bookingId, from, _, _) = await SeedFulfilmentBookingAsync(target);
+
+        var notifications = await HandleAndReadAsync(customerId, bookingId, from, target, MuteAllExcept(expected));
+
+        notifications.Where(n => n.EventType == expected).Should().HaveCount(2, "muting the other four must not touch this one");
+    }
+
+    /// <summary>
+    /// The mute is scoped to the five fulfilment events. Muting every one of
+    /// them must leave the money-and-cancellation notifications alone -
+    /// FulfilmentNotificationOptions is deliberately not a general
+    /// "notifications off" switch.
+    /// </summary>
+    [Fact]
+    public async Task Muting_every_fulfilment_event_does_not_mute_the_cancellation_notification()
+    {
+        var (customerId, bookingId, _, _, _) = await SeedFulfilmentBookingAsync(BookingStatus.Assigned);
+        var allMuted = TestServices.FulfilmentNotifications(false, false, false, false, false);
+
+        var notifications = await HandleAndReadAsync(
+            customerId, bookingId, BookingStatus.Assigned, BookingStatus.CancelledByCustomer, allMuted);
+
+        notifications.Should().OnlyContain(n => n.EventType == NotificationEventType.BookingCancelled);
+        notifications.Should().HaveCount(2, "one per channel");
+    }
+
+    /// <summary>
+    /// A provider rejecting the job walks the booking Assigned -&gt;
+    /// AwaitingFulfilment. That is a fulfilment-half transition immediately
+    /// adjacent to two that do notify, and it must stay silent - the customer
+    /// cannot act on "your booking is looking for someone again".
+    /// </summary>
+    [Fact]
+    public async Task A_provider_rejection_back_to_AwaitingFulfilment_stays_silent()
+    {
+        var (customerId, bookingId, _, _, _) = await SeedFulfilmentBookingAsync(BookingStatus.Assigned);
+
+        var notifications = await HandleAndReadAsync(
+            customerId, bookingId, BookingStatus.Assigned, BookingStatus.AwaitingFulfilment);
+
+        notifications.Should().BeEmpty();
+    }
+
+    private static IOptionsMonitor<FulfilmentNotificationOptions> MuteOnly(NotificationEventType eventType) =>
+        TestServices.FulfilmentNotifications(
+            providerAssigned: eventType != NotificationEventType.ProviderAssigned,
+            providerEnRoute: eventType != NotificationEventType.ProviderEnRoute,
+            providerArrived: eventType != NotificationEventType.ProviderArrived,
+            jobStarted: eventType != NotificationEventType.JobStarted,
+            jobCompleted: eventType != NotificationEventType.JobCompleted);
+
+    private static IOptionsMonitor<FulfilmentNotificationOptions> MuteAllExcept(NotificationEventType eventType) =>
+        TestServices.FulfilmentNotifications(
+            providerAssigned: eventType == NotificationEventType.ProviderAssigned,
+            providerEnRoute: eventType == NotificationEventType.ProviderEnRoute,
+            providerArrived: eventType == NotificationEventType.ProviderArrived,
+            jobStarted: eventType == NotificationEventType.JobStarted,
+            jobCompleted: eventType == NotificationEventType.JobCompleted);
 
     [Fact]
     public async Task A_transition_with_no_configured_trigger_dispatches_nothing()

@@ -342,12 +342,31 @@ expired notifications for that save with nothing left behind to retry from.
 `ChatNotificationTriggerHandler`, `SupportTicketNotificationTriggerHandler`
 and `SubscriptionNotificationTriggerHandler` share the shape.
 
-Fixing this belongs to task 276, which is already adding the fulfilment-half
-notification triggers (ProviderAssigned/ProviderEnRoute/ProviderArrived/
-JobStarted/JobCompleted) and is the point at which the durable-intent record
-and its retry sweep should be introduced — for the new triggers and the
-existing ones together, rather than doubling the number of handlers built the
-wrong way first.
+**Task 276 did not fix it, and said so.** That task added the fulfilment-half
+triggers (ProviderAssigned/ProviderEnRoute/ProviderArrived/JobStarted/
+JobCompleted) to `BookingNotificationTriggerHandler`, and they carry exactly
+the same guarantee as the six that were already there: **at-most-once,
+best-effort, never retried.** The handler also gained a fifth post-commit
+repository read (the provider, for the name the templates render), so the
+window in which a throw or a process death silently loses a notification is
+marginally wider than before, not narrower.
+
+This was a deliberate scope call rather than an oversight. The durable-intent
+record and its sweep is a schema change, a write inside every notification-
+warranting transaction, a background job and a delivery-idempotency rule — and
+it has to be applied to `BookingNotificationTriggerHandler`,
+`ChatNotificationTriggerHandler`, `SupportTicketNotificationTriggerHandler` and
+`SubscriptionNotificationTriggerHandler` together, since a rule half the
+handlers follow is not a rule. Bundling that into a task whose brief was
+"wire up five triggers" would have meant reviewing the two changes as one.
+
+**Recommended as its own row.** Until it exists, the honest statement to make
+about any notification in this system — the five new ones included — is that
+the state change is durable and the telling of it is not. Nothing else in the
+system will notice or resend a notification that was lost between the commit
+and the send. Anywhere that guarantee is not good enough (a payment failure a
+customer must act on, say) the correct answer is that row, not another
+handler.
 
 ## DOMAIN DESIGN PRINCIPLES
 
