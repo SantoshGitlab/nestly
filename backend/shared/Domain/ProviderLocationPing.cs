@@ -1,4 +1,5 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
@@ -44,8 +45,17 @@ public enum ProviderLocationSource
 /// no operational payoff. The pruning job that enforces this is not built here
 /// (docs/TRACKING.md, task 287).
 /// </para>
+/// <para>
+/// An <see cref="AggregateRoot{TId}"/> rather than a plain
+/// <see cref="Entity{TId}"/> since task 272, for the same reason as
+/// <see cref="BookingProviderAssignment"/>: it is already its own root (own
+/// table, own repository, no owning navigation), and
+/// <c>DomainEventDispatchInterceptor</c> only scans aggregate roots, so
+/// <see cref="ProviderLocationUpdatedEvent"/> would otherwise be raised and
+/// silently dropped.
+/// </para>
 /// </remarks>
-public class ProviderLocationPing : Entity<Guid>
+public class ProviderLocationPing : AggregateRoot<Guid>
 {
     private const decimal MinimumLatitude = -90m;
     private const decimal MaximumLatitude = 90m;
@@ -131,5 +141,12 @@ public class ProviderLocationPing : Entity<Guid>
         RecordedAtUtc = recordedAtUtc;
         ReceivedAtUtc = receivedAtUtc;
         Source = source;
+
+        // Raised on construction rather than by the ingest endpoint (task
+        // 269): appending a fix IS the event, this type has no mutators for a
+        // later raise to hang off, and EF materializes through the protected
+        // parameterless constructor, so reading a trail back never re-raises.
+        RaiseDomainEvent(new ProviderLocationUpdatedEvent(
+            Id, ProviderId, BookingId, Latitude, Longitude, AccuracyMetres, RecordedAtUtc));
     }
 }

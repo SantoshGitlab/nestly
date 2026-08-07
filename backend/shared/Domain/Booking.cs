@@ -221,6 +221,32 @@ public class Booking : AggregateRoot<Guid>
         Status = newStatus;
         RecordStatusHistory(previousStatus, newStatus, reason);
         RaiseDomainEvent(new BookingStatusChangedEvent(Id, previousStatus, newStatus));
+        RaiseTrackingEvent(newStatus);
+    }
+
+    /// <summary>
+    /// Raises the tracking-specific companion event for the two fulfilment
+    /// states task 264 added (task 272). Raised from the transition itself
+    /// rather than from task 270's en-route/arrived endpoints, which do not
+    /// exist yet: the transition is the fact, and putting the raise here means
+    /// every future caller - the provider endpoints, an admin correction, a
+    /// test - produces the same signal without having to know to.
+    ///
+    /// <see cref="BookingStatusChangedEvent"/> is still raised for these two
+    /// transitions as well; a handler subscribes to one stream or the other,
+    /// never both.
+    /// </summary>
+    private void RaiseTrackingEvent(BookingStatus newStatus)
+    {
+        switch (newStatus)
+        {
+            case BookingStatus.ProviderEnRoute:
+                RaiseDomainEvent(new ProviderEnRouteEvent(Id, AssignedProviderId));
+                break;
+            case BookingStatus.ProviderArrived:
+                RaiseDomainEvent(new ProviderArrivedEvent(Id, AssignedProviderId));
+                break;
+        }
     }
 
     /// <summary>
