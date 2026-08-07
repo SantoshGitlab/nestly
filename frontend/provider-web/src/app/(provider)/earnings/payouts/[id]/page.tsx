@@ -90,7 +90,7 @@ export default function PayoutDetailPage() {
   const payout = query.data;
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl animate-rise">
       <PageHeading
         breadcrumbs={backLink}
         title={formatInr(payout.totalAmount)}
