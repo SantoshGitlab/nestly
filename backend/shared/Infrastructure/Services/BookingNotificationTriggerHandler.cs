@@ -83,35 +83,29 @@ namespace Nestly.Infrastructure.Services;
 /// </summary>
 public sealed class BookingNotificationTriggerHandler : INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>
 {
-    private readonly ICustomerRepository _customerRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly ICancellationRepository _cancellationRepository;
     private readonly IRefundTransactionRepository _refundRepository;
-    private readonly IDeviceTokenRepository _deviceTokenRepository;
     private readonly IProviderRepository _providerRepository;
     private readonly INotificationDispatchService _notificationDispatchService;
     private readonly IOptionsMonitor<FulfilmentNotificationOptions> _fulfilmentOptions;
     private readonly ILogger<BookingNotificationTriggerHandler> _logger;
 
     public BookingNotificationTriggerHandler(
-        ICustomerRepository customerRepository,
         IBookingRepository bookingRepository,
         IPaymentTransactionRepository paymentRepository,
         ICancellationRepository cancellationRepository,
         IRefundTransactionRepository refundRepository,
-        IDeviceTokenRepository deviceTokenRepository,
         IProviderRepository providerRepository,
         INotificationDispatchService notificationDispatchService,
         IOptionsMonitor<FulfilmentNotificationOptions> fulfilmentOptions,
         ILogger<BookingNotificationTriggerHandler> logger)
     {
-        _customerRepository = customerRepository;
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
         _cancellationRepository = cancellationRepository;
         _refundRepository = refundRepository;
-        _deviceTokenRepository = deviceTokenRepository;
         _providerRepository = providerRepository;
         _notificationDispatchService = notificationDispatchService;
         _fulfilmentOptions = fulfilmentOptions;
@@ -168,10 +162,18 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
             return;
         }
 
-        var customer = await _customerRepository.GetByIdAsync(booking.CustomerId);
-        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(booking.CustomerId);
-        var recipient = new NotificationRecipient(
-            customer?.Mobile ?? booking.CustomerMobileSnapshot, customer?.Email, deviceTokens.Select(t => t.Token).ToList());
+        // Task 277: the customer/device-token lookups this used to do inline
+        // now live in INotificationDispatchService.ResolveRecipientAsync, which
+        // is the same call the provider side needs. Behaviour is unchanged -
+        // the ?? below reproduces the old `customer?.Mobile ??
+        // booking.CustomerMobileSnapshot` exactly, including the case where a
+        // customer row exists with a blank mobile (blank wins, snapshot is only
+        // a fallback for a missing customer). The snapshot fallback stays here
+        // rather than moving into the resolver because it is booking data; the
+        // resolver only knows principals.
+        var recipient = await _notificationDispatchService.ResolveRecipientAsync(
+            DeviceTokenOwner.ForCustomer(booking.CustomerId), cancellationToken);
+        recipient = recipient with { Mobile = recipient.Mobile ?? booking.CustomerMobileSnapshot };
 
         foreach (var eventType in eventTypes)
         {

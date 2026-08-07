@@ -58,7 +58,7 @@ public sealed class SupportTicketNotificationTriggerHandler : INotificationHandl
             ["Status"] = domainEvent.ToStatus.ToString()
         };
 
-        var deviceTokens = await _deviceTokenRepository.ListActiveByCustomerAsync(domainEvent.CustomerId);
+        var deviceTokens = await _deviceTokenRepository.ListActiveByOwnerAsync(DeviceTokenOwner.ForCustomer(domainEvent.CustomerId));
 
         await _notificationDispatchService.DispatchAsync(
             domainEvent.CustomerId,

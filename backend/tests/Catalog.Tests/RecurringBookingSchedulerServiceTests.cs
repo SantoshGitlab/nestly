@@ -122,6 +122,9 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
             new NoOpNotificationProvider(),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance),
             new NotificationEventRepository(context),
+            new DeviceTokenRepository(context),
+            new CustomerRepository(context),
+            new ProviderRepository(context),
             new NoOpMetricsService(),
             NullLogger<NotificationDispatchService>.Instance);
 

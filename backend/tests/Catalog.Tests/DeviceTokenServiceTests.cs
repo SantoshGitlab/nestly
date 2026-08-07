@@ -25,6 +25,42 @@ public sealed class DeviceTokenServiceTests : IClassFixture<TestDatabase>
         return customer.Id;
     }
 
+    private Guid SeedProvider(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "9" + Guid.NewGuid().ToString("N")[..9]);
+        context.Add(provider);
+        context.SaveChanges();
+        return provider.Id;
+    }
+
+    /// <summary>
+    /// Task 277: a provider now has its own device tokens, and the two id
+    /// spaces are strangers even when they collide - a provider-owned
+    /// registration must never surface in a customer's list.
+    /// </summary>
+    [Fact]
+    public async Task RegisterAsync_registers_a_token_for_a_provider_owner_and_keeps_it_out_of_the_customers_list()
+    {
+        Guid providerId, customerId;
+        using (var context = _db.CreateContext())
+        {
+            providerId = SeedProvider(context);
+            customerId = SeedCustomer(context);
+        }
+
+        using var context2 = _db.CreateContext();
+        var result = await BuildService(context2).RegisterAsync(DeviceTokenOwner.ForProvider(providerId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
+
+        result.IsSuccess.Should().BeTrue();
+
+        using var readContext = _db.CreateContext();
+        var providerTokens = await BuildService(readContext).ListAsync(DeviceTokenOwner.ForProvider(providerId));
+        var customerTokens = await BuildService(readContext).ListAsync(DeviceTokenOwner.ForCustomer(customerId));
+
+        providerTokens.Value.Should().ContainSingle();
+        customerTokens.Value.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task RegisterAsync_creates_a_new_active_token()
     {
@@ -35,7 +71,7 @@ public sealed class DeviceTokenServiceTests : IClassFixture<TestDatabase>
         }
 
         using var context2 = _db.CreateContext();
-        var result = await BuildService(context2).RegisterAsync(customerId, new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
+        var result = await BuildService(context2).RegisterAsync(DeviceTokenOwner.ForCustomer(customerId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
 
         result.IsSuccess.Should().BeTrue();
         result.Value.IsActive.Should().BeTrue();
@@ -55,18 +91,18 @@ public sealed class DeviceTokenServiceTests : IClassFixture<TestDatabase>
         Guid tokenId;
         using (var context = _db.CreateContext())
         {
-            var registered = await BuildService(context).RegisterAsync(customerId, new RegisterDeviceTokenRequest(DevicePlatform.Fcm, token));
+            var registered = await BuildService(context).RegisterAsync(DeviceTokenOwner.ForCustomer(customerId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, token));
             tokenId = registered.Value.Id;
         }
 
         using (var context = _db.CreateContext())
         {
-            var revoked = await BuildService(context).RevokeAsync(customerId, tokenId);
+            var revoked = await BuildService(context).RevokeAsync(DeviceTokenOwner.ForCustomer(customerId), tokenId);
             revoked.IsSuccess.Should().BeTrue();
         }
 
         using var reRegisterContext = _db.CreateContext();
-        var result = await BuildService(reRegisterContext).RegisterAsync(customerId, new RegisterDeviceTokenRequest(DevicePlatform.Fcm, token));
+        var result = await BuildService(reRegisterContext).RegisterAsync(DeviceTokenOwner.ForCustomer(customerId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, token));
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(tokenId, "the same device row is reactivated, not duplicated");
@@ -86,17 +122,17 @@ public sealed class DeviceTokenServiceTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            await BuildService(context).RegisterAsync(customerAId, new RegisterDeviceTokenRequest(DevicePlatform.Fcm, token));
+            await BuildService(context).RegisterAsync(DeviceTokenOwner.ForCustomer(customerAId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, token));
         }
 
         using var context2 = _db.CreateContext();
-        var result = await BuildService(context2).RegisterAsync(customerBId, new RegisterDeviceTokenRequest(DevicePlatform.Apns, token));
+        var result = await BuildService(context2).RegisterAsync(DeviceTokenOwner.ForCustomer(customerBId), new RegisterDeviceTokenRequest(DevicePlatform.Apns, token));
 
         result.IsSuccess.Should().BeTrue();
 
         using var readContext = _db.CreateContext();
-        var listA = await BuildService(readContext).ListAsync(customerAId);
-        var listB = await BuildService(readContext).ListAsync(customerBId);
+        var listA = await BuildService(readContext).ListAsync(DeviceTokenOwner.ForCustomer(customerAId));
+        var listB = await BuildService(readContext).ListAsync(DeviceTokenOwner.ForCustomer(customerBId));
         listA.Value.Should().BeEmpty("the device now belongs to customer B");
         listB.Value.Should().ContainSingle(t => t.Token == token && t.Platform == DevicePlatform.Apns);
     }
@@ -114,12 +150,12 @@ public sealed class DeviceTokenServiceTests : IClassFixture<TestDatabase>
         Guid tokenId;
         using (var context = _db.CreateContext())
         {
-            var registered = await BuildService(context).RegisterAsync(ownerId, new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
+            var registered = await BuildService(context).RegisterAsync(DeviceTokenOwner.ForCustomer(ownerId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
             tokenId = registered.Value.Id;
         }
 
         using var context2 = _db.CreateContext();
-        var result = await BuildService(context2).RevokeAsync(otherId, tokenId);
+        var result = await BuildService(context2).RevokeAsync(DeviceTokenOwner.ForCustomer(otherId), tokenId);
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Code.Should().Be("DeviceToken.NotFound");
@@ -137,17 +173,17 @@ public sealed class DeviceTokenServiceTests : IClassFixture<TestDatabase>
         Guid tokenId;
         using (var context = _db.CreateContext())
         {
-            var registered = await BuildService(context).RegisterAsync(customerId, new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
+            var registered = await BuildService(context).RegisterAsync(DeviceTokenOwner.ForCustomer(customerId), new RegisterDeviceTokenRequest(DevicePlatform.Fcm, "token-" + Guid.NewGuid()));
             tokenId = registered.Value.Id;
         }
 
         using (var context = _db.CreateContext())
         {
-            await BuildService(context).RevokeAsync(customerId, tokenId);
+            await BuildService(context).RevokeAsync(DeviceTokenOwner.ForCustomer(customerId), tokenId);
         }
 
         using var readContext = _db.CreateContext();
-        var result = await BuildService(readContext).ListAsync(customerId);
+        var result = await BuildService(readContext).ListAsync(DeviceTokenOwner.ForCustomer(customerId));
 
         result.Value.Should().BeEmpty();
     }
