@@ -53,7 +53,7 @@ public sealed class GoogleMapsRouteEstimateProvider : IRouteEstimateProvider
     public const string HttpClientName = "GoogleMaps.Routes";
 
     private const string ComputeRouteMatrixUri = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
-    private const string ApiKeyHeaderName = "X-Api-Key";
+    private const string ApiKeyHeaderName = "X-Goog-Api-Key";
     private const string FieldMaskHeaderName = "X-Goog-FieldMask";
 
     /// <summary>
@@ -73,7 +73,7 @@ public sealed class GoogleMapsRouteEstimateProvider : IRouteEstimateProvider
     /// </summary>
     private const string RoutingPreference = "TRAFFIC_AWARE";
 
-    private const string MetricUnits = "IMPERIAL";
+    private const string MetricUnits = "METRIC";
 
     /// <summary>Per-element condition meaning a route was found.</summary>
     private const string RouteExistsCondition = "ROUTE_EXISTS";
@@ -262,7 +262,6 @@ public sealed class GoogleMapsRouteEstimateProvider : IRouteEstimateProvider
             // The key travels as a header, never as a query parameter, so it
             // cannot leak through the request URI into logs or exceptions.
             request.Headers.TryAddWithoutValidation(ApiKeyHeaderName, _options.ApiKey);
-            request.RequestUri = new Uri(ComputeRouteMatrixUri + "?key=" + _options.ApiKey);
             request.Headers.TryAddWithoutValidation(FieldMaskHeaderName, FieldMask);
             request.Content = JsonContent.Create(BuildRequestBody(origin, destinations), options: SerializerOptions);
 
@@ -365,6 +364,10 @@ public sealed class GoogleMapsRouteEstimateProvider : IRouteEstimateProvider
 
         // An element carries its own status; a non-zero google.rpc.Status code
         // means this pair failed even though the request as a whole succeeded.
+        if (element.Status?.Code is not (null or 0))
+        {
+            return false;
+        }
 
         if (!string.Equals(element.Condition, RouteExistsCondition, StringComparison.Ordinal))
         {
