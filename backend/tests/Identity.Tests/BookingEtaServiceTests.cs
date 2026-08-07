@@ -381,6 +381,15 @@ public class BookingEtaServiceTests : IDisposable
         await HandleAsync(BookingStatus.AwaitingFulfilment, BookingStatus.Assigned);
         cleared.Should().BeEmpty("moves within the trackable window, and into it, leave the ETA alone");
 
+        // Transitions that never touch the trackable window at all. Reading
+        // FromStatus is what keeps this handler off the tracking table for the
+        // great majority of status changes in the system, which have no ETA to
+        // clear and never did.
+        await HandleAsync(BookingStatus.PaymentPending, BookingStatus.Confirmed);
+        await HandleAsync(BookingStatus.Confirmed, BookingStatus.AwaitingFulfilment);
+        await HandleAsync(BookingStatus.Completed, BookingStatus.RefundPending);
+        cleared.Should().BeEmpty("a booking that was never trackable has no estimate to take away");
+
         await HandleAsync(BookingStatus.InProgress, BookingStatus.Completed);
         await HandleAsync(BookingStatus.ProviderEnRoute, BookingStatus.CancelledByCustomer);
         cleared.Should().Equal(bookingId, bookingId);
