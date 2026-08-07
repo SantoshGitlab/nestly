@@ -6,7 +6,8 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "cwd": "frontend/customer-web",
-      "port": 3000
+      "port": 3000,
+      "autoPort": true
     },
     {
       "name": "admin-web",
@@ -27,21 +28,21 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "backend/consumer-api/ConsumerApi"],
       "port": 5257,
-      "url": "http://localhost:5257/swagger"
+      "url": "http://localhost:5257/"
     },
     {
       "name": "admin-api",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "backend/admin-api/AdminApi"],
       "port": 5177,
-      "url": "http://localhost:5177/swagger"
+      "url": "http://localhost:5177/"
     },
     {
       "name": "provider-api",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "backend/provider-api/ProviderApi"],
       "port": 5337,
-      "url": "http://localhost:5337/swagger"
+      "url": "http://localhost:5337/"
     }
   ]
 }
