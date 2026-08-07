@@ -11,6 +11,8 @@ import type {
   JobListItem,
   JobListParams,
   JobListResponse,
+  RecordProviderLocationRequest,
+  RecordProviderLocationResponse,
   SubmitCompletionProofRequest,
   SubmitCompletionVerificationRequest,
 } from "./jobs-types";
@@ -61,4 +63,18 @@ export const submitCompletionVerification = (jobId: string, request: SubmitCompl
 export const getCompletionVerification = (jobId: string) =>
   apiFetch<BookingCompletionProofResponse | undefined>(`${JOBS_BASE}/${jobId}/completion-verification`, {
     authenticated: true,
+  });
+
+/**
+ * One location fix (task 269/282). The server throttles independently of
+ * this client (`ProviderLocationIngestOptions`, ~15s minimum interval) and
+ * answers 202 rather than 200 for a fix it accepted-but-dropped as too soon -
+ * both are a successful `apiFetch` call, not a thrown error, so a throttled
+ * ping never surfaces as a failure to the provider.
+ */
+export const recordProviderLocation = (jobId: string, request: RecordProviderLocationRequest) =>
+  apiFetch<RecordProviderLocationResponse>(`${JOBS_BASE}/${jobId}/location`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
   });

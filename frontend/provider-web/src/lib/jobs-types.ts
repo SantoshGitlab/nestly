@@ -137,3 +137,22 @@ export interface BookingCompletionProofResponse {
   submittedByProviderId: string;
   submittedAtUtc: string;
 }
+
+/**
+ * Mirrors Nestly.Application.ProviderJobs.RecordProviderLocationRequest/
+ * Response (ProviderLocationContracts.cs) - task 282's client for task 269's
+ * ingest endpoint. `accuracyMetres` is optional on the wire (nullable on the
+ * C# side) since not every browser/device reports one.
+ */
+export interface RecordProviderLocationRequest {
+  latitude: number;
+  longitude: number;
+  accuracyMetres: number | null;
+  recordedAtUtc: string;
+}
+
+export interface RecordProviderLocationResponse {
+  accepted: boolean;
+  pingId: string | null;
+  nextAcceptedAfterUtc: string;
+}
