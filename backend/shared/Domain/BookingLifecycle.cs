@@ -54,4 +54,30 @@ public static class BookingLifecycle
     /// <summary>No further transitions are possible from this status.</summary>
     public static bool IsTerminal(BookingStatus status) =>
         Transitions[status].Length == 0;
+
+    /// <summary>
+    /// The fulfilment window during which live tracking is meaningful (task
+    /// 273): a provider is committed to the job and has not finished it. Lives
+    /// here, next to the transition table, because it is a statement about the
+    /// lifecycle rather than about any one feature - the tracking hub, the
+    /// location-ingest endpoint and the tracking read model all have to agree
+    /// on it, and three copies of this set would be three chances to disagree.
+    ///
+    /// Everything before <see cref="BookingStatus.Assigned"/> has no provider
+    /// to track, and everything after <see cref="BookingStatus.InProgress"/>
+    /// (completed, cancelled, refunded) has nothing left to watch - so a
+    /// customer who could track a booking a minute ago is denied the moment it
+    /// leaves this set.
+    /// </summary>
+    private static readonly HashSet<BookingStatus> TrackableStatuses =
+    [
+        BookingStatus.Assigned,
+        BookingStatus.ProviderEnRoute,
+        BookingStatus.ProviderArrived,
+        BookingStatus.InProgress
+    ];
+
+    /// <summary>Whether live tracking is available for a booking in this status - see <see cref="TrackableStatuses"/>.</summary>
+    public static bool IsTrackable(BookingStatus status) =>
+        TrackableStatuses.Contains(status);
 }

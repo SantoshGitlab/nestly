@@ -136,7 +136,13 @@ app.MapControllers();
 
 // Task 190: real-time chat transport - see ChatHub's doc comment for the
 // JWT-over-query-string auth and cross-process (Redis backplane) design.
-app.MapHub<ChatHub>(ChatHubRoutes.ChatPath);
+app.MapHub<ChatHub>(HubRoutes.ChatPath);
+
+// Task 273: live order tracking for the customer watching their booking.
+// The same hub type provider-api and admin-api map, for the same
+// cross-process reason chat has - the location pings this customer sees are
+// ingested by provider-api, not here.
+app.MapHub<BookingTrackingHub>(HubRoutes.TrackingPath);
 
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
