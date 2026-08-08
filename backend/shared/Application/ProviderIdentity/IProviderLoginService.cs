@@ -16,4 +16,13 @@ public interface IProviderLoginService
     Task<Result<ProviderLoginResponse>> RefreshAsync(RefreshProviderTokenRequest request);
 
     Task<Result> LogoutAsync(LogoutProviderRequest request);
+
+    /// <summary>
+    /// Dev-only: issues a real session for a seeded provider without OTP
+    /// verification. Reuses the same session-issuing path as
+    /// <see cref="LoginWithOtpAsync"/> — see provider-api's Program.cs for the
+    /// environment/secret gating that makes this unreachable outside
+    /// Development. Never call this from a production code path.
+    /// </summary>
+    Task<Result<ProviderLoginResponse>> DevLoginAsync(string mobile);
 }

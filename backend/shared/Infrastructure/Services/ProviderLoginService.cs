@@ -124,6 +124,27 @@ public class ProviderLoginService : IProviderLoginService
         return Result.Success();
     }
 
+    /// <summary>
+    /// Dev-only: mints a session for the given mobile number's provider with
+    /// no OTP check. This is additive — it does not touch
+    /// <see cref="LoginWithOtpAsync"/> or the OTP path, it just calls the same
+    /// <see cref="IssueSessionAsync"/> that a real login uses. All gating
+    /// (environment check, shared-secret header, route registration) lives in
+    /// provider-api's Program.cs; this method itself has no gate, so it must
+    /// never be reachable from a controller or endpoint outside that gated
+    /// registration.
+    /// </summary>
+    public async Task<Result<ProviderLoginResponse>> DevLoginAsync(string mobile)
+    {
+        var provider = await _providerRepository.GetByPhoneAsync(mobile);
+        if (provider is null)
+        {
+            return Result.Failure<ProviderLoginResponse>(Error.NotFound("ProviderLogin.NotFound", "No account found for this mobile number."));
+        }
+
+        return await IssueSessionAsync(provider);
+    }
+
     private async Task<Result<ProviderLoginResponse>> IssueSessionAsync(Provider provider, string? deviceInfo = null, string? ipAddress = null)
     {
         if (provider.Status is ProviderStatus.Suspended or ProviderStatus.Deactivated)

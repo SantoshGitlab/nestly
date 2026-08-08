@@ -11,6 +11,15 @@ import { Alert, Button, Field } from "@/components/ui";
 import { describeError, describeLoginError } from "@/lib/api";
 import { requestLoginOtp, verifyLoginOtp } from "@/lib/auth-api";
 import { isAuthenticated, storeSession, subscribeToAuthChanges } from "@/lib/auth";
+import type { ProviderLoginResponse } from "@/lib/types";
+
+// Dev-only test-auth backdoor (docs/DEVOPS.md "Dev-only provider test
+// login"). NEXT_PUBLIC_ENABLE_DEV_AUTH is unset by default in every
+// committed env file, so this button and the /api/dev-login route it calls
+// are both dark in a normal checkout - it only appears when a developer
+// opts in locally. The shared secret itself never reaches this bundle: it
+// stays server-side in /api/dev-login (see that route for why).
+const DEV_AUTH_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH === "true";
 
 // Basic shape validation before spending a request; the server remains the
 // authority on what counts as a valid mobile number.
@@ -133,6 +142,25 @@ export default function ProviderLoginPage() {
     otpForm.reset({ otpCode: "" });
   };
 
+  const [devSigningIn, setDevSigningIn] = useState(false);
+  const devSignIn = async () => {
+    setError(null);
+    setDevSigningIn(true);
+    try {
+      const response = await fetch("/api/dev-login", { method: "POST" });
+      if (!response.ok) {
+        throw new Error("Dev sign-in failed. Is provider-api running with DevAuth configured?");
+      }
+      const session = (await response.json()) as ProviderLoginResponse;
+      storeSession(session);
+      router.push("/jobs");
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setDevSigningIn(false);
+    }
+  };
+
   return (
     <AuthShell
       title="Provider sign in"
@@ -165,7 +193,7 @@ export default function ProviderLoginPage() {
               inputMode="tel"
               autoComplete="tel"
               autoFocus
-              placeholder="e.g. 9876543210"
+              placeholder="+919876543210"
               error={mobileForm.formState.errors.mobile?.message}
               {...mobileForm.register("mobile")}
             />
@@ -196,6 +224,19 @@ export default function ProviderLoginPage() {
             </Button>
           </form>
         )}
+
+        {DEV_AUTH_ENABLED ? (
+          <Button
+            type="button"
+            variant="ghost"
+            fullWidth
+            loading={devSigningIn}
+            onClick={devSignIn}
+            className="border border-dashed border-amber-500 text-amber-600 dark:text-amber-400"
+          >
+            Dev sign in (test provider) — local only, skips OTP
+          </Button>
+        ) : null}
       </div>
     </AuthShell>
   );
