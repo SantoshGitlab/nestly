@@ -125,6 +125,68 @@ Correlation IDs must flow from the frontend through APIs into logs.
 - Static frontend assets should be served via CDN where possible.
 - Traffic spikes during promotions must be considered in capacity planning (SRS §6.2).
 
+## DEV-ONLY PROVIDER TEST LOGIN
+
+QA/browser-automation tools that exercise provider-web's authenticated
+screens (jobs, availability, earnings, profile) cannot complete a real OTP
+login: some automation tools refuse to type OTP codes at all, treating it as
+an auth-bypass action, and there is no way to read a generated OTP out of
+`SandboxNotificationProvider` through the UI. To unblock that testing without
+touching real OTP verification, provider-api exposes one dev-only endpoint
+that mints a real session for the seeded `+919888888888` E2E Test Provider
+(`database/seed/dev-provider-seed.sql`), skipping OTP entirely.
+
+**NEVER enable this in Staging or Production.** It is gated so that doing so
+is a structural impossibility, not a matter of convention:
+
+1. **Route only exists in Development.** `POST /api/v1/auth/dev/login-as-provider`
+   is registered inside `if (app.Environment.IsDevelopment())` in
+   `backend/provider-api/ProviderApi/Program.cs` — in any other environment
+   the route is never mapped, so it 404s. This is on top of, not instead of,
+   the usual environment check.
+2. **Second gate: a shared secret.** The caller must send the request header
+   `X-Dev-Auth-Key` matching `DevAuth:Key` from configuration. That key is
+   defined **only** in `appsettings.Development.json` — it does not exist in
+   `appsettings.json` or `appsettings.Production.json`, so even a
+   misconfigured deployment has nothing to match the header against.
+3. **Additive, not a bypass branch.** The endpoint calls a new
+   `ProviderLoginService.DevLoginAsync` method that reuses the same
+   session-issuing code (`IssueSessionAsync`, token generation) as a real
+   login. It does not modify `AuthController`'s `login/otp/verify` endpoint
+   or `LoginWithOtpAsync` in any way.
+4. **Loud, auditable logging.** Every call logs a structured warning
+   (`"SECURITY: dev-only auth bypass used"`) so any accidental exposure
+   would show up immediately in logs/alerts.
+
+### Enabling it locally
+
+Backend (`backend/provider-api/ProviderApi`), already set in
+`appsettings.Development.json`:
+
+```json
+"DevAuth": { "Key": "dev-only-provider-auth-key-local-1234567890" }
+```
+
+Frontend (`frontend/provider-web`), in a gitignored `.env.local` (never
+commit these):
+
+```
+NEXT_PUBLIC_ENABLE_DEV_AUTH=true
+DEV_AUTH_KEY=dev-only-provider-auth-key-local-1234567890
+```
+
+`NEXT_PUBLIC_ENABLE_DEV_AUTH` controls whether the "Dev sign in (test
+provider)" button renders on `/login` — it is unset by default, so the
+button does not exist in a normal checkout. `DEV_AUTH_KEY` is deliberately
+**not** `NEXT_PUBLIC_*`: it is read server-side only, inside the Next.js
+route handler at `frontend/provider-web/src/app/api/dev-login/route.ts`,
+which proxies to provider-api with the `X-Dev-Auth-Key` header attached. The
+key never reaches the browser bundle.
+
+With both set, clicking the button on `/login` signs in as the seeded E2E
+Test Provider and lands on `/jobs` with a normal, fully-working session
+(same access/refresh tokens a real OTP login would produce).
+
 ## OPEN DECISIONS
 
 Decided:

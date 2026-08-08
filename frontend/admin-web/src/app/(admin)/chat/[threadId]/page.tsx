@@ -65,7 +65,15 @@ function AdminChatThreadScreen() {
 
   useEffect(() => {
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/chat`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      // withCredentials: false - auth rides the query-string token via
+      // accessTokenFactory, not cookies (admin-api's CORS policy is
+      // credential-less by design, see AddNestlyCors); matches
+      // customer-web's ChatWidget/useBookingTracking connections to the
+      // same hub. Without this the browser's default XHR withCredentials:true
+      // makes SignalR's negotiate preflight require
+      // Access-Control-Allow-Credentials: true, which the API never sends,
+      // so the connection is blocked by CORS before it starts.
+      .withUrl(`${API_BASE_URL}/hubs/chat`, { accessTokenFactory: () => getAccessToken() ?? "", withCredentials: false })
       .withAutomaticReconnect()
       .build();
 

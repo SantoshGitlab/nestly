@@ -53,13 +53,15 @@ const EMPTY_CREATE_FORM: CreateFormValues = { fullName: "", email: "", password:
 /**
  * Admin user management (SRS 12.2.1, tasks 97a-97d): search/filter, create,
  * and a link into each account's detail page for role assignment,
- * activate/deactivate and password reset. Gated on the "admin-users" write
- * permission for the create form the same way every other admin screen gates
- * its mutating controls - the API enforces this server-side regardless.
+ * activate/deactivate and password reset. Gated on the "settings" write
+ * permission for the create form - AdminModules has no separate "admin-users"
+ * module (see NAV_MODULES' admin-users entry, which is also keyed on
+ * "settings.read"), so admin user management rides on the settings module's
+ * grants. The API enforces this server-side regardless.
  */
 export default function AdminUsersPage() {
   const claims = useAdminClaims();
-  const canWrite = canWriteModule(claims, "admin-users");
+  const canWrite = canWriteModule(claims, "settings");
   const queryClient = useQueryClient();
   const pushToast = useToast();
 

@@ -94,7 +94,13 @@ public class ProfileController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> SubmitKycDocument([FromBody] SubmitProviderKycDocumentBody body)
     {
-        var request = new SubmitProviderKycDocumentRequest(CurrentProviderId(), body.DocType, body.FileRef, body.DocNumber);
+        if (!Enum.TryParse<Nestly.Domain.ProviderKycDocumentType>(body.DocType, ignoreCase: true, out var docType))
+        {
+            ModelState.AddModelError(nameof(body.DocType), $"'{body.DocType}' is not a valid document type.");
+            return ValidationProblem(ModelState);
+        }
+
+        var request = new SubmitProviderKycDocumentRequest(CurrentProviderId(), docType, body.FileRef, body.DocNumber);
         var validation = await _kycDocumentValidator.ValidateAsync(request);
         if (!validation.IsValid)
         {
@@ -173,6 +179,11 @@ public class ProfileController : ControllerBase
 /// provider id is deliberately excluded here (unlike
 /// <see cref="SubmitProviderKycDocumentRequest"/>) and taken from the JWT
 /// instead, so a caller can never submit a document against another
-/// provider's id (SRS 28.3 IDOR).
+/// provider's id (SRS 28.3 IDOR). <c>DocType</c> is a string (its enum's
+/// name, e.g. "IdentityProof") rather than the raw enum type: provider-api
+/// has no JsonStringEnumConverter registered, so binding the enum directly
+/// here would require the wire format to be its ordinal number instead -
+/// inconsistent with <see cref="ProviderKycDocumentResponse"/>'s own DocType,
+/// which is already a string for the same reason.
 /// </summary>
-public record SubmitProviderKycDocumentBody(Nestly.Domain.ProviderKycDocumentType DocType, string FileRef, string? DocNumber);
+public record SubmitProviderKycDocumentBody(string DocType, string FileRef, string? DocNumber);

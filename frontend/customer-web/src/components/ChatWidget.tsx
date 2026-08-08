@@ -71,8 +71,14 @@ export function ChatWidget({ contextType, contextId }: { contextType: ChatContex
     // than an Authorization header, which a browser can't set on a WebSocket
     // handshake) puts the JWT on ?access_token= for the client automatically -
     // exactly what ChatHubJwtEvents.OnMessageReceived reads back server-side.
+    // withCredentials: false - auth rides the query-string token above, not
+    // cookies, so the negotiate request shouldn't ask for credentialed CORS
+    // (the API's CORS policy doesn't grant it, and doesn't need to).
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/chat`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      .withUrl(`${API_BASE_URL}/hubs/chat`, {
+        accessTokenFactory: () => getAccessToken() ?? "",
+        withCredentials: false,
+      })
       .withAutomaticReconnect()
       .build();
 

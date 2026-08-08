@@ -2,7 +2,8 @@
  * Typed fetch wrapper for the Consumer API.
  * Base URL comes from NEXT_PUBLIC_API_URL (see .env.example).
  */
-import { clearSession, getAccessToken } from "./auth";
+import { clearSession, getAccessToken, getRefreshToken, storeSession } from "./auth";
+import type { LoginResponse } from "./types";
 
 /** Exported for the chat SignalR connection (ChatWidget), which talks to the same origin outside of `apiFetch`. */
 export const API_BASE_URL =
@@ -75,9 +76,44 @@ export interface ApiFetchOptions extends RequestInit {
   authenticated?: boolean;
 }
 
+/**
+ * Exchanges the stored refresh token for a new access/refresh pair.
+ *
+ * Module-level promise so a burst of concurrent 401s (several queries firing
+ * at once when the access token expires mid-session) triggers exactly one
+ * refresh call instead of one per request; every caller awaits the same
+ * in-flight promise, then it's cleared so the next expiry starts a fresh one.
+ */
+let refreshPromise: Promise<boolean> | null = null;
+
+function refreshAccessToken(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) return false;
+      try {
+        const response = await fetch(`${API_BASE_URL}${API_V1}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!response.ok) return false;
+        storeSession((await response.json()) as LoginResponse);
+        return true;
+      } catch {
+        return false;
+      }
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 export async function apiFetch<T>(
   path: string,
   init?: ApiFetchOptions,
+  isRetry = false,
 ): Promise<T> {
   const { authenticated, ...requestInit } = init ?? {};
 
@@ -100,6 +136,18 @@ export async function apiFetch<T>(
   });
 
   if (!response.ok) {
+    // A 401 on an authenticated call usually just means the short-lived
+    // access token expired mid-session - silently refresh it and retry the
+    // request once before treating this as a real auth failure. Only
+    // authenticated calls attempt this (login/refresh itself never sets
+    // `authenticated`, so it can't recurse into itself).
+    if (authenticated && response.status === 401 && !isRetry) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return apiFetch<T>(path, init, true);
+      }
+    }
+
     let problem: ProblemDetails | null = null;
     try {
       problem = (await response.json()) as ProblemDetails;
@@ -107,9 +155,9 @@ export async function apiFetch<T>(
       // Non-JSON error body; keep problem null.
     }
 
-    // A 401 on an authenticated call means the token the caller had is no
-    // longer valid (expired, revoked, or the account was deactivated after
-    // login) - clear it so every mounted guard (RequireAuth) reacts to the
+    // A 401 on an authenticated call (after the refresh attempt above has
+    // already failed or been skipped) means the session truly can't continue
+    // - clear it so every mounted guard (RequireAuth) reacts to the
     // auth-changed event and sends the customer back to /login. An
     // unauthenticated call rejecting with 401 must NOT clear anything - there
     // is nothing to clear, and this is the expected "invalid credentials"
