@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -13,7 +13,9 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, EmptyState, PageHeading, Skeleton, Tabs } from "@/components/ui";
 import { isBookingTrackable } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import type { BookingListItem, BookingStatusBucket } from "@/lib/types";
+import type { BookingListResponse, BookingStatusBucket } from "@/lib/types";
+
+const PAGE_SIZE = 20;
 
 const TABS: readonly { value: BookingStatusBucket; label: string }[] = [
   { value: "Upcoming", label: "Upcoming" },
@@ -59,11 +61,19 @@ export default function BookingsPage() {
 function BookingsScreen() {
   const [bucket, setBucket] = useState<BookingStatusBucket>("Upcoming");
 
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ["bookings", bucket],
-    queryFn: () =>
-      apiFetch<BookingListItem[]>(`${API_V1}/bookings?bucket=${bucket}`, { authenticated: true }),
+    queryFn: ({ pageParam }) =>
+      apiFetch<BookingListResponse>(
+        `${API_V1}/bookings?bucket=${bucket}&page=${pageParam}&pageSize=${PAGE_SIZE}`,
+        { authenticated: true },
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.page * lastPage.pageSize < lastPage.totalCount ? lastPage.page + 1 : undefined,
   });
+
+  const bookings = query.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
@@ -99,7 +109,7 @@ function BookingsScreen() {
         >
           {describeError(query.error)}
         </Alert>
-      ) : query.data.length === 0 ? (
+      ) : bookings.length === 0 ? (
         <EmptyState
           title={EMPTY_COPY[bucket].title}
           description={EMPTY_COPY[bucket].description}
@@ -114,7 +124,7 @@ function BookingsScreen() {
         />
       ) : (
         <Reveal as="ul" className="flex flex-col gap-3">
-          {query.data.map((booking) => (
+          {bookings.map((booking) => (
             <RevealItem key={booking.id}>
               {/* relative wrapper, not the row link itself: the Track pill
                   below is a sibling <Link> stacked on top via absolute
@@ -168,6 +178,18 @@ function BookingsScreen() {
           ))}
         </Reveal>
       )}
+
+      {query.hasNextPage ? (
+        <div className="mt-6 flex justify-center">
+          <Button
+            variant="secondary"
+            loading={query.isFetchingNextPage}
+            onClick={() => query.fetchNextPage()}
+          >
+            Load more
+          </Button>
+        </div>
+      ) : null}
     </main>
   );
 }

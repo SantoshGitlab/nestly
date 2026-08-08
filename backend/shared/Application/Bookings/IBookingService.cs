@@ -23,7 +23,8 @@ public interface IBookingService
     /// </param>
     Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null);
 
-    Task<Result<IReadOnlyList<BookingListItemResponse>>> ListAsync(Guid customerId, BookingStatusBucket? bucket);
+    /// <summary>Paged, newest first (task 301-follow-up), same page-1/size-20 defaults the admin booking search already uses, so a long-tenured customer's history no longer loads and renders as one unbounded page.</summary>
+    Task<Result<BookingListResponse>> ListAsync(Guid customerId, BookingStatusBucket? bucket, int page = 1, int pageSize = 20);
 
     Task<Result<BookingDetailResponse>> GetDetailAsync(Guid customerId, Guid bookingId);
 }

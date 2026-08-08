@@ -349,13 +349,46 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         var service = BuildService(readContext);
 
         var upcoming = await service.ListAsync(fixture.Customer.Id, BookingStatusBucket.Upcoming);
-        upcoming.Value.Should().ContainSingle();
+        upcoming.Value.Items.Should().ContainSingle();
+        upcoming.Value.TotalCount.Should().Be(1);
 
         var completed = await service.ListAsync(fixture.Customer.Id, BookingStatusBucket.Completed);
-        completed.Value.Should().BeEmpty();
+        completed.Value.Items.Should().BeEmpty();
+        completed.Value.TotalCount.Should().Be(0);
 
         var all = await service.ListAsync(fixture.Customer.Id, bucket: null);
-        all.Value.Should().ContainSingle();
+        all.Value.Items.Should().ContainSingle();
+    }
+
+    /// <summary>Task 301-follow-up: a customer with more bookings than fit on one page gets a page, not the whole history at once - and TotalCount still reflects the full match count so the frontend knows there is a next page.</summary>
+    [Fact]
+    public async Task ListAsync_pages_results_newest_first()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            using var createContext = _db.CreateContext();
+            var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            created.IsSuccess.Should().BeTrue();
+        }
+
+        using var readContext = _db.CreateContext();
+        var service = BuildService(readContext);
+
+        var firstPage = await service.ListAsync(fixture.Customer.Id, bucket: null, page: 1, pageSize: 2);
+        firstPage.Value.Items.Should().HaveCount(2);
+        firstPage.Value.TotalCount.Should().Be(3);
+
+        var secondPage = await service.ListAsync(fixture.Customer.Id, bucket: null, page: 2, pageSize: 2);
+        secondPage.Value.Items.Should().ContainSingle();
+        secondPage.Value.TotalCount.Should().Be(3);
+
+        firstPage.Value.Items.Select(i => i.Id).Should().NotIntersectWith(secondPage.Value.Items.Select(i => i.Id));
     }
 
     /// <summary>

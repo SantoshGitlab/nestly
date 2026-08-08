@@ -79,6 +79,22 @@ public class BookingRepository : IBookingRepository
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync();
 
+    public async Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListByCustomerPagedAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses, int page, int pageSize)
+    {
+        var query = FullyLoaded()
+            .AsNoTracking()
+            .Where(b => b.CustomerId == customerId && statuses.Contains(b.Status));
+
+        int totalCount = await query.CountAsync();
+
+        var rows = await query
+            .OrderByDescending(b => b.CreatedAtUtc)
+            .ApplyPaging(page, pageSize)
+            .ToListAsync();
+
+        return (rows, totalCount);
+    }
+
     /// <summary>
     /// Filterable admin search (SRS 12.11.1, task 115a). Count is taken on
     /// the un-included filter query, then the page is re-queried with

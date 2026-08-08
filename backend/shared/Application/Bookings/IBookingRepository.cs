@@ -20,6 +20,17 @@ public interface IBookingRepository
     /// <summary><paramref name="statuses"/> is the expansion of a <see cref="BookingStatusBucket"/> via <see cref="BookingStatusMapper.StatusesInBucket"/>.</summary>
     Task<IReadOnlyList<Booking>> ListByCustomerAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses);
 
+    /// <summary>
+    /// Paged counterpart to <see cref="ListByCustomerAsync"/>, newest first, for
+    /// the customer's own "My bookings" list (SRS 11.13, task 60b). A separate
+    /// method rather than an optional parameter on the unpaged one: the two
+    /// other callers of <see cref="ListByCustomerAsync"/> (Nestly Coins'
+    /// eligibility check, the admin customer-360 profile) both genuinely need
+    /// every booking, not a page of them, and must not silently start missing
+    /// rows if this gains a default page size later.
+    /// </summary>
+    Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListByCustomerPagedAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses, int page, int pageSize);
+
     /// <summary>Filterable, paginated admin search across every booking (SRS 12.11.1, task 115a).</summary>
     Task<BookingSearchResult> SearchAsync(BookingSearchFilter filter);
 

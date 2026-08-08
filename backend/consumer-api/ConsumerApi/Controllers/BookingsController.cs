@@ -72,13 +72,13 @@ public class BookingsController : ControllerBase
             : result.ToProblemResult();
     }
 
-    /// <summary>Lists the caller's bookings, optionally filtered to a status bucket (SRS 11.13, task 60b).</summary>
+    /// <summary>Lists the caller's bookings, optionally filtered to a status bucket, newest first (SRS 11.13, task 60b). Paged - <paramref name="page"/>/<paramref name="pageSize"/> default to 1/20, same as the admin booking search.</summary>
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyList<BookingListItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BookingListResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> List([FromQuery] BookingStatusBucket? bucket)
+    public async Task<IActionResult> List([FromQuery] BookingStatusBucket? bucket, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _bookingService.ListAsync(CurrentCustomerId(), bucket);
+        var result = await _bookingService.ListAsync(CurrentCustomerId(), bucket, page, pageSize);
         return Ok(result.Value);
     }
 

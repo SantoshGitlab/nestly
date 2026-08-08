@@ -435,6 +435,14 @@ export interface BookingListItem {
   createdAtUtc: string;
 }
 
+/** Mirrors Nestly.Application.Bookings.BookingListResponse - a page of the customer's own bookings, newest first. */
+export interface BookingListResponse {
+  items: BookingListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 /**
  * Live tracking response shapes (task 275/281). Mirror
  * Nestly.Application.Tracking.BookingTrackingContracts.cs field for field -

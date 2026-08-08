@@ -277,16 +277,18 @@ public class BookingService : IBookingService
         }
     }
 
-    public async Task<Result<IReadOnlyList<BookingListItemResponse>>> ListAsync(Guid customerId, BookingStatusBucket? bucket)
+    public async Task<Result<BookingListResponse>> ListAsync(Guid customerId, BookingStatusBucket? bucket, int page = 1, int pageSize = 20)
     {
         var statuses = bucket is null
             ? Enum.GetValues<BookingStatus>()
             : BookingStatusMapper.StatusesInBucket(bucket.Value);
 
-        var bookings = await _bookingRepository.ListByCustomerAsync(customerId, statuses);
+        (page, pageSize) = PagedQueryExtensions.Normalize(page, pageSize);
 
-        IReadOnlyList<BookingListItemResponse> response = bookings.Select(ToListItem).ToList();
-        return Result.Success(response);
+        var (bookings, totalCount) = await _bookingRepository.ListByCustomerPagedAsync(customerId, statuses, page, pageSize);
+
+        IReadOnlyList<BookingListItemResponse> items = bookings.Select(ToListItem).ToList();
+        return Result.Success(new BookingListResponse(items, totalCount, page, pageSize));
     }
 
     public async Task<Result<BookingDetailResponse>> GetDetailAsync(Guid customerId, Guid bookingId)

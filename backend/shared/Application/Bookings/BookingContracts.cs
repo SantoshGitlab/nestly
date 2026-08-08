@@ -195,3 +195,6 @@ public record BookingListItemResponse(
     BookingStatus Status,
     string StatusLabel,
     DateTime CreatedAtUtc);
+
+/// <summary>A page of the customer's own booking list, newest first, plus the total match count for that bucket - the same Items/TotalCount/Page/PageSize shape the admin booking search already uses.</summary>
+public record BookingListResponse(IReadOnlyList<BookingListItemResponse> Items, int TotalCount, int Page, int PageSize);
