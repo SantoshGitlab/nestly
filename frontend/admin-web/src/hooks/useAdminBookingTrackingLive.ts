@@ -29,7 +29,11 @@ export function useAdminBookingTrackingLive(bookingId: string, enabled: boolean)
     if (!enabled) return;
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/tracking`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      // withCredentials: false - see the chat hub connection in
+      // app/(admin)/chat/[threadId]/page.tsx for why: admin-api's CORS
+      // policy is credential-less by design (AddNestlyCors), so a
+      // credentialed XHR preflight is blocked before it can connect.
+      .withUrl(`${API_BASE_URL}/hubs/tracking`, { accessTokenFactory: () => getAccessToken() ?? "", withCredentials: false })
       .withAutomaticReconnect()
       .build();
 
