@@ -78,6 +78,26 @@ public class Booking : AggregateRoot<Guid>
 
     public decimal? SubscriptionDiscountAmountSnapshot { get; private set; }
 
+    /// <summary>
+    /// Task 296 (Phase 17): the <see cref="RecurringBookingPlan"/> that
+    /// generated this booking, or null for an ordinary one-off booking. This
+    /// is a REAL foreign key (see <c>BookingConfiguration</c>), unlike
+    /// <see cref="SourceAddressId"/>/<see cref="SlotWindowId"/>/<see cref="SubscriptionId"/>,
+    /// which are traceability-only precisely because the rows they point at
+    /// are mutable catalog/config that may be edited or deleted after the
+    /// snapshot was taken. A plan is different: it is never hard-deleted - it
+    /// is Cancelled or Completed and kept - so a Restrict FK here can never
+    /// block a legitimate operation, and it guarantees the join the admin
+    /// (task 299) and provider (task 300) read models make is never dangling.
+    ///
+    /// The column carries no snapshot of the plan's own fields (frequency,
+    /// day-of-week, ...) on purpose: a customer who changes their plan's
+    /// frequency expects the badge on their upcoming jobs to say the new
+    /// frequency, so those must be read live through this key rather than
+    /// frozen at generation time.
+    /// </summary>
+    public Guid? RecurringBookingPlanId { get; private set; }
+
     /// <summary>Task 241: the client-minted key from POST /bookings' idempotencyKey - see BookingService.CreateAsync. Null for callers that don't supply one (e.g. RecurringBookingSchedulerService), which simply get no dedup protection. BookingConfiguration puts a unique index on (CustomerId, IdempotencyKey); Postgres treats every NULL as distinct from every other, so only two of the same customer's rows sharing the same non-null key ever collide.</summary>
     public string? IdempotencyKey { get; private set; }
 
@@ -113,7 +133,8 @@ public class Booking : AggregateRoot<Guid>
         Guid? subscriptionId = null,
         bool subscriptionFreeVisitApplied = false,
         decimal? subscriptionDiscountAmount = null,
-        string? idempotencyKey = null)
+        string? idempotencyKey = null,
+        Guid? recurringBookingPlanId = null)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -163,6 +184,7 @@ public class Booking : AggregateRoot<Guid>
         SubscriptionDiscountAmountSnapshot = subscriptionDiscountAmount;
 
         IdempotencyKey = idempotencyKey;
+        RecurringBookingPlanId = recurringBookingPlanId;
 
         Status = BookingStatus.Initiated;
         CreatedAtUtc = DateTime.UtcNow;

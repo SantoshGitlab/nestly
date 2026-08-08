@@ -184,6 +184,13 @@ public class BookingRepository : IBookingRepository
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync();
 
+    public async Task<IReadOnlyList<Booking>> ListByRecurringPlanAsync(Guid recurringBookingPlanId) =>
+        await FullyLoaded()
+            .AsNoTracking()
+            .Where(b => b.RecurringBookingPlanId == recurringBookingPlanId)
+            .OrderByDescending(b => b.SlotDate)
+            .ToListAsync();
+
     public Task<int> CountCompletedByCustomerAsync(Guid customerId, Guid excludingBookingId) =>
         _context.Bookings.CountAsync(b =>
             b.CustomerId == customerId && b.Status == BookingStatus.Completed && b.Id != excludingBookingId);
