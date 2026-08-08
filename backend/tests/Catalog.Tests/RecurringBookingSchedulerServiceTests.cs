@@ -260,8 +260,22 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
             // Simulate a prior run that already recorded this date (e.g. a
             // Hangfire retry after a crash post-save) - the second sweep
             // below must not create a second occurrence or booking for it.
+            // The booking has to be a REAL row since task 296 made
+            // recurring_booking_occurrence.booking_id a foreign key; an
+            // invented Guid no longer stands in for one.
+            var priorBooking = new Booking(
+                Guid.NewGuid(), fixture.Customer.Id,
+                new CustomerSnapshot(fixture.Customer.Name, fixture.Customer.Mobile),
+                fixture.Address.Id,
+                new AddressSnapshot("Home", "12 MG Road", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Priya Nair", "9876543210"),
+                new SlotSnapshot(fixture.Window.Id, occurrenceDate, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+                new PriceSnapshot(500m, 1, 500m, 0m, 50m, 550m, 18m, 99m, 10m, 659m),
+                recurringBookingPlanId: plan.Id);
+            planContext.Bookings.Add(priorBooking);
+            await planContext.SaveChangesAsync();
+
             await new RecurringBookingOccurrenceRepository(planContext).AddAsync(
-                new RecurringBookingOccurrence(Guid.NewGuid(), plan.Id, occurrenceDate, RecurringBookingOccurrenceOutcome.Booked, Guid.NewGuid(), null));
+                new RecurringBookingOccurrence(Guid.NewGuid(), plan.Id, occurrenceDate, RecurringBookingOccurrenceOutcome.Booked, priorBooking.Id, null));
         }
 
         using var runContext = _db.CreateContext();

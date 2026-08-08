@@ -231,6 +231,139 @@ absolute: never log passwords, tokens, or PII.
 The table is append-only — the entity exposes no mutators. An audit trail that
 can be edited after the fact is not an audit trail.
 
+## RECURRING BOOKINGS
+
+Phase 17 (task 296) models a customer's standing instruction to repeat a
+booking on a schedule. The governing rule is that **a recurring booking is not
+a second kind of booking**: every occurrence a plan produces is an ordinary
+`booking` row, created through the same orchestration a customer's own "Book
+now" tap uses, carrying a foreign key back to the plan that produced it. There
+is no parallel booking model, no second copy of the pricing/serviceability
+rules, and nothing downstream (payments, refunds, assignment, tracking,
+reviews) needs to know a booking came from a plan in order to work.
+
+### `recurring_booking_plan`
+
+The schedule itself. Written by the customer (create/pause/resume/cancel),
+read by the generator. It holds no pricing, payment, or serviceability state.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` PK | |
+| `customer_id` | `uuid` NOT NULL | FK → `customer`, Restrict |
+| `service_id` | `uuid` NOT NULL | FK → `service`, Restrict. The category is reached through the service; it is not duplicated here |
+| `city_id` | `uuid` NOT NULL | FK → `city`, Restrict |
+| `locality_id` | `uuid` NOT NULL | FK → `locality`, Restrict |
+| `address_id` | `uuid` NOT NULL | FK → `customer_address`, Restrict |
+| `slot_window_id` | `uuid` NOT NULL | FK → `slot_window`, Restrict. This is the "preferred slot" — a slot window, not a raw wall-clock time |
+| `quantity` | `integer` NOT NULL | |
+| `frequency` | `varchar(20)` NOT NULL | `Weekly` / `Biweekly` / `Monthly` |
+| `recurrence_day_of_week` | `varchar(20)` NULL | Required for Weekly/Biweekly, must be null for Monthly |
+| `recurrence_day_of_month` | `integer` NULL | Required (1–31) for Monthly, must be null otherwise |
+| `start_date` | `date` NOT NULL | |
+| `end_date` | `date` NULL | |
+| `occurrence_count` | `integer` NULL | |
+| `completed_occurrence_count` | `integer` NOT NULL | Successfully booked occurrences only |
+| `next_occurrence_date` | `date` NOT NULL | The generator's cursor |
+| `status` | `varchar(20)` NOT NULL | `Active` / `Paused` / `Cancelled` / `Completed` |
+| `created_at_utc` | `timestamptz` NOT NULL | |
+
+Indexes: `(status, next_occurrence_date)` — the exact filter the generator's
+due-set query uses — plus `customer_id` and the FK indexes.
+
+`recurring_booking_plan_addon` (`id`, `recurring_booking_plan_id`, `add_on_id`,
+`quantity`, Cascade) carries the add-on selections the plan repeats onto every
+occurrence.
+
+### `recurring_booking_occurrence`
+
+An append-only audit row recording what the generator did for **one scheduled
+date**, whatever the outcome. Same discipline as `booking_status_history` and
+`wallet_ledger_entry`: no mutators, never rewritten.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` PK | |
+| `recurring_booking_plan_id` | `uuid` NOT NULL | FK → `recurring_booking_plan`, Cascade |
+| `scheduled_date` | `date` NOT NULL | |
+| `outcome` | `varchar(30)` NOT NULL | `Booked` / `SkippedSlotUnavailable` / `SkippedOrchestrationRejected` |
+| `booking_id` | `uuid` NULL | FK → `booking`, Restrict. Set only when `outcome = Booked` |
+| `skip_reason` | `varchar(500)` NULL | Human-readable only — never a raw exception or stack trace |
+| `processed_at_utc` | `timestamptz` NOT NULL | |
+
+Indexes: `(recurring_booking_plan_id, scheduled_date)` UNIQUE — this is the
+generator's idempotency guard, so a Hangfire retry or an overlapping run
+cannot double-book a date — and `booking_id` UNIQUE, so one booking is claimed
+by at most one occurrence (Postgres treats every NULL as distinct, so the
+skipped rows are unconstrained).
+
+### Where the plan link lives, and why it lives in both places
+
+The link is expressed twice, deliberately. They answer different questions and
+neither replaces the other.
+
+- **`booking.recurring_booking_plan_id`** (nullable FK → `recurring_booking_plan`,
+  Restrict, indexed) is the forward link and the primary contract. It makes
+  *"is this job recurring, and on what frequency?"* answerable from a booking
+  row a list query already loaded — no join, no second query, no dependence on
+  the audit log. The admin plan view and the provider "recurring" badge both
+  read it. Putting the link **only** on the occurrence table would force every
+  provider/admin booking list to join through an audit table and then filter
+  out its skipped rows, on a hot read path, to answer a yes/no question.
+- **`recurring_booking_occurrence`** covers what the column structurally
+  cannot: the scheduled dates that produced **no booking at all**. A skipped
+  date has no `booking` row to hang off, so the "why did my plan not run on the
+  12th" answer, and the generator's idempotency guard, both have to live in
+  their own table.
+
+`booking.recurring_booking_plan_id` is a **real** foreign key, unlike
+`booking.source_address_id`, `booking.slot_window_id` and
+`booking.subscription_id`, which are traceability-only precisely because they
+point at mutable catalog/config rows that may be edited or deleted after the
+snapshot was taken. A plan is different: it is never hard-deleted — it is
+Cancelled or Completed and kept — so `Restrict` can never block a legitimate
+operation, and it guarantees the join is never dangling.
+
+The booking stores **no snapshot** of the plan's own fields (frequency,
+day-of-week, …). A customer who changes their plan's frequency expects the
+badge on their upcoming jobs to reflect the new frequency, so those are read
+live through the key rather than frozen at generation time. This is the one
+place a booking deliberately does *not* follow the snapshot convention, and it
+is safe because none of those fields participate in the price the booking is
+contractually bound to.
+
+### Termination and status semantics
+
+- A plan must be bounded by an end date, an occurrence count, or both — an
+  unbounded plan would schedule forever with nothing to ever complete it.
+- Whichever bound is reached first wins; the plan then moves to `Completed`.
+- `Completed` is distinct from `Cancelled`: "delivered everything it promised"
+  and "stopped early by a human" are different outcomes for reporting, even
+  though both are terminal for scheduling.
+- `Cancelled` is a one-way door — a cancelled plan can never be resumed
+  (create a new one instead), the same convention `BookingLifecycle` uses for
+  its own terminal states.
+- A skipped occurrence advances `next_occurrence_date` but does **not**
+  increment `completed_occurrence_count`. A supply-side miss is not charged
+  against the customer's occurrence budget, so the plan effectively extends by
+  one date rather than delivering one fewer visit than promised.
+- Monthly recurrence clamps to the actual month length per month (31 → 28/29
+  in February) without ratcheting the stored rule down: the requested day of
+  month remains the source of truth every month.
+
+### Enum storage
+
+`frequency`, `status` and `outcome` are persisted as **strings**
+(`HasConversion<string>()`), matching every other enum column in this schema —
+a `varchar` column is readable in a dump and survives a reordered enum.
+
+Over the wire is a different matter: the APIs serialize enums with the default
+`System.Text.Json` behaviour, i.e. as **ordinals**. The house rule from Phase
+16 therefore applies to all three: values may only ever be **appended**, never
+reordered and never inserted into the middle. `RecurringBookingPlanStatus`
+already shows the pattern — `Completed` sits after `Cancelled` because it was
+added later, not in its "natural" lifecycle position.
+
 ## SOFT DELETE
 
 Where business requirements require record retention:
