@@ -83,6 +83,7 @@ export function PromotionalPricesSection({ canWrite }: { canWrite: boolean }) {
         hideDensityToggle
         skeletonRows={4}
         minWidth="880px"
+        maxHeight="420px"
         togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
         toggleError={toggleMutation.error}
         onToggleActive={(promotion) => toggleMutation.mutate({ id: promotion.id, isActive: !promotion.isActive })}

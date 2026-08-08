@@ -277,6 +277,7 @@ export function WindowsSection({ canWrite }: { canWrite: boolean }) {
         }
         skeletonRows={5}
         minWidth="1000px"
+        maxHeight="420px"
         rowActions={
           canWrite
             ? (w) => (

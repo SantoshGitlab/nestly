@@ -120,6 +120,7 @@ export function CutoffsSection({ canWrite }: { canWrite: boolean }) {
         emptyDescription="Cities without a policy fall back to the platform defaults."
         skeletonRows={4}
         minWidth="620px"
+        maxHeight="420px"
       />
 
       {canWrite ? (

@@ -151,6 +151,7 @@ export function BlackoutsSection({ canWrite }: { canWrite: boolean }) {
         }
         skeletonRows={4}
         minWidth="820px"
+        maxHeight="420px"
         rowActions={
           canWrite
             ? (b) => (

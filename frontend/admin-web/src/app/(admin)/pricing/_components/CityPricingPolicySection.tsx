@@ -211,6 +211,7 @@ export function CityPricingPolicySection({ canWrite }: { canWrite: boolean }) {
         hideDensityToggle
         skeletonRows={4}
         minWidth="720px"
+        maxHeight="420px"
         rowActions={
           canWrite
             ? (policy) => (
