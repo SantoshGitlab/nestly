@@ -73,7 +73,16 @@ public class ReviewService : IReviewService
             ? booking.Items[0].ServiceId
             : throw new InvalidOperationException($"Booking {bookingId} has no items to resolve a service from.");
 
-        var review = new Review(Guid.NewGuid(), bookingId, customerId, serviceId, request.Rating, request.ReviewText, request.IssueTags);
+        // Task 293: WHO the review is about, captured at submission time from
+        // the booking's own assigned provider. Taken now rather than derived
+        // later precisely because a later reassignment would move the answer
+        // - the person the customer is rating is the one who was on the job
+        // when they rated it. Null (a Completed booking somehow carrying no
+        // provider) is left as null rather than guessed: an unattributed
+        // review counts towards nobody's rating, which is the correct outcome.
+        var review = new Review(
+            Guid.NewGuid(), bookingId, customerId, serviceId, booking.AssignedProviderId,
+            request.Rating, request.ReviewText, request.IssueTags);
 
         try
         {

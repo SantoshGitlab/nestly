@@ -2,6 +2,7 @@ using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.RecurringBookings;
 using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -16,19 +17,22 @@ public class ProviderJobService : IProviderJobService
     private readonly IBookingProviderAssignmentService _assignmentService;
     private readonly IBookingCompletionProofRepository _completionProofRepository;
     private readonly IBookingEtaService _etaService;
+    private readonly IRecurringBookingPlanRepository _recurringPlanRepository;
 
     public ProviderJobService(
         IBookingRepository bookingRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         IBookingProviderAssignmentService assignmentService,
         IBookingCompletionProofRepository completionProofRepository,
-        IBookingEtaService etaService)
+        IBookingEtaService etaService,
+        IRecurringBookingPlanRepository recurringPlanRepository)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _assignmentService = assignmentService;
         _completionProofRepository = completionProofRepository;
         _etaService = etaService;
+        _recurringPlanRepository = recurringPlanRepository;
     }
 
     public async Task<Result<ProviderJobSearchResponse>> ListAsync(Guid providerId, ProviderJobStatus? status, DateOnly? date)
@@ -41,6 +45,17 @@ public class ProviderJobService : IProviderJobService
         var bookingsById = (await _bookingRepository.ListSummariesByIdsAsync(
                 assignments.Select(a => a.BookingId).Distinct().ToList()))
             .ToDictionary(b => b.Id);
+
+        // Task 300: the cadence of every plan behind this page's jobs, in one
+        // more round trip rather than one per recurring row - the same batching
+        // task 255 applied to the bookings above. Read live through task 296's
+        // FK, never snapshotted onto the booking.
+        var frequencyByPlanId = await _recurringPlanRepository.ListFrequenciesByIdsAsync(
+            bookingsById.Values
+                .Select(b => b.RecurringBookingPlanId)
+                .OfType<Guid>()
+                .Distinct()
+                .ToList());
 
         var items = new List<ProviderJobSummaryResponse>();
         foreach (var assignment in assignments)
@@ -75,7 +90,16 @@ public class ProviderJobService : IProviderJobService
                 booking.SlotEndTimeSnapshot,
                 booking.TotalPayableSnapshot,
                 assignment.AssignedAt,
-                assignment.ResponseDeadline));
+                assignment.ResponseDeadline,
+                booking.RecurringBookingPlanId,
+                // Null when the plan row has since been deleted out from under
+                // the booking. That cannot happen today - BookingConfiguration
+                // puts a Restrict foreign key on the column - but a job that
+                // renders as an ordinary one-off is a strictly better failure
+                // than one that throws the whole list away.
+                booking.RecurringBookingPlanId is { } planId && frequencyByPlanId.TryGetValue(planId, out var frequency)
+                    ? frequency
+                    : null));
         }
 
         return new ProviderJobSearchResponse(items);

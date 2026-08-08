@@ -258,9 +258,20 @@ public static class DependencyInjection
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
 
+        // Task 294: how often the notification-intent sweep gives up, waits and
+        // batches. Not a secret and safe to leave unset - same reasoning as
+        // BookingExpiryOptions above. IOptionsMonitor, like
+        // FulfilmentNotificationOptions, so an operator can widen the retry
+        // bound during an incident without a restart.
+        services
+            .AddOptions<NotificationIntentOptions>()
+            .Bind(configuration.GetSection(NotificationIntentOptions.SectionName))
+            .ValidateDataAnnotations();
+
         services.AddSingleton<AuditableEntityInterceptor>();
         services.AddScoped<DomainEventDispatchInterceptor>();
         services.AddSingleton<NewOwnedChildEntityInterceptor>();
+        services.AddSingleton<NotificationIntentInterceptor>();
 
         services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
             options
@@ -268,6 +279,12 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .AddInterceptors(
                     serviceProvider.GetRequiredService<AuditableEntityInterceptor>(),
+                    // Task 294: writes the durable notification intents during
+                    // SavingChanges, so they commit atomically with the state
+                    // change. It has to be registered here, ahead of the
+                    // post-commit dispatcher below, because that dispatcher
+                    // drains the very domain events this one reads.
+                    serviceProvider.GetRequiredService<NotificationIntentInterceptor>(),
                     serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
                     serviceProvider.GetRequiredService<NewOwnedChildEntityInterceptor>()));
 
@@ -480,6 +497,10 @@ public static class DependencyInjection
         // rather than each candidate separately.
         services.AddScoped<IProviderTravelFeasibilityService, ProviderTravelFeasibilityService>();
         services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
+        // Task 297: the single "ranked candidates that pass the gate" walk,
+        // shared by the auto-assignment engine and the recurring generator so
+        // there is only ever one answer to "who can take this booking".
+        services.AddScoped<IEligibleProviderSearchService, EligibleProviderSearchService>();
         // Task 195: completion verification (photo + checklist proof gating
         // the InProgress -> Completed transition, task 196) - registered
         // here rather than beside IBookingRepository above since every
@@ -498,6 +519,9 @@ public static class DependencyInjection
         services.AddScoped<IProviderLocationPingRepository, ProviderLocationPingRepository>();
         services.AddScoped<IProviderManagementService, ProviderManagementService>();
         services.AddScoped<IProviderKycApprovalService, ProviderKycApprovalService>();
+        // Task 293: the same admin gate KYC documents go through, applied to
+        // provider-supplied profile photos.
+        services.AddScoped<IProviderPhotoModerationService, ProviderPhotoModerationService>();
 
         // Tasks 149a/149c: provider-api's own self-service views over the
         // same Assignment Bridge/Financial Domain entities as the admin
@@ -631,6 +655,13 @@ public static class DependencyInjection
         services.AddScoped<IRecurringBookingOccurrenceRepository, RecurringBookingOccurrenceRepository>();
         services.AddScoped<IRecurringBookingPlanService, RecurringBookingPlanService>();
         services.AddScoped<IRecurringBookingSchedulerService, RecurringBookingSchedulerService>();
+        // Task 297: who a plan's standing provider is, derived from the plan's
+        // own booking history (task 296's FK) rather than stored - read by
+        // both the generator and ProviderAutoAssignmentHandler.
+        services.AddScoped<IRecurringPlanProviderContinuityService, RecurringPlanProviderContinuityService>();
+        // Task 299: admin-side plan list/report. Read-only and DbContext-backed
+        // rather than repository-backed, same as ReportingQueryService.
+        services.AddScoped<IRecurringBookingPlanAdminService, RecurringBookingPlanAdminService>();
 
         services
             .AddOptions<CancellationPolicyOptions>()
@@ -718,6 +749,28 @@ public static class DependencyInjection
         services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         services.AddScoped<INotificationTemplateRenderer, NotificationTemplateRenderer>();
         services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+
+        // Task 294: durable notification intents. The coordinator is scoped
+        // rather than transient on purpose - it remembers which intent leases
+        // this scope already holds, which is what lets the sweep claim a row
+        // and then re-invoke the ordinary handler without the handler's own
+        // claim failing against the sweep's lease.
+        services.AddScoped<INotificationIntentRepository, NotificationIntentRepository>();
+        services.AddScoped<INotificationIntentCoordinator, NotificationIntentCoordinator>();
+        services.AddScoped<INotificationIntentSweepJob, NotificationIntentSweepJob>();
+
+        // The four handlers the intent guarantee covers, exposed to the sweep
+        // through INotificationTriggerHandler. MediatR's assembly scan already
+        // registers each of them as an INotificationHandler for the in-process
+        // path; these registrations are the retry path, and they address only
+        // the notification handlers so that nothing else subscribed to the
+        // same domain events (escrow, referrals, metrics, auto-assignment) is
+        // ever re-run by a sweep. All four, together, or the guarantee is a
+        // half-truth.
+        services.AddScoped<INotificationTriggerHandler, BookingNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, ChatNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, SupportTicketNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, SubscriptionNotificationTriggerHandler>();
 
         // Task 126a-d: admin CRUD, preview and change audit over the template
         // store above (SRS 12.17).

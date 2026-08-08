@@ -8,6 +8,17 @@ public record ReviewEligibilityResponse(bool IsEligible, string? IneligibilityRe
 /// <summary>Customer-submitted review (SRS 11.16.2).</summary>
 public record SubmitReviewRequest(int Rating, string? ReviewText, string? IssueTags);
 
+/// <summary>
+/// A provider's rating rolled up from the reviews actually written about
+/// them (task 293). Absent entirely - the aggregate returns null, not a
+/// zero-filled instance - when a provider has no visible provider-scoped
+/// review yet, so "new professional, no rating" and "rated 0" stay
+/// distinguishable all the way to the screen.
+/// </summary>
+/// <param name="AverageRating">Rounded to one decimal, which is the precision every surface displaying it renders ("4.8"); rounding once here stops two screens disagreeing over the same underlying rows.</param>
+/// <param name="ReviewCount">How many visible reviews the average is over - the honest denominator, so a single five-star job cannot be presented like a hundred of them.</param>
+public sealed record ProviderRatingSummary(Guid ProviderId, double AverageRating, int ReviewCount);
+
 /// <summary>A submitted review (SRS 17.1).</summary>
 public record ReviewResponse(
     Guid Id,

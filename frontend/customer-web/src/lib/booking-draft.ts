@@ -29,6 +29,22 @@ export interface BookingDraft {
   slotWindowId: string | null;
   /** Set once a booking has been created from this draft but not yet paid for. */
   pendingBookingId?: string | null;
+  /**
+   * The "repeat this booking" opt-in (task 298), carried for the same reason
+   * as everything above: a detour off the summary page must not quietly drop
+   * the customer's choice to make this a standing visit.
+   *
+   * `recurringPlanId` is set once the plan has actually been created, and is
+   * what stops a customer who presses Back from the payment screen and taps
+   * "Proceed to book" again from ending up with two identical standing plans —
+   * the booking itself is protected from that by its idempotency key, but the
+   * plan create has no such key server-side.
+   */
+  repeatEnabled?: boolean;
+  /** Mirrors `RecurringBookingRecurrenceFrequency`; stored as its ordinal, as the API takes it. */
+  repeatFrequency?: number | null;
+  repeatCount?: string | null;
+  recurringPlanId?: string | null;
 }
 
 function draftKey(serviceSlug: string): string {

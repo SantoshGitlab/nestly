@@ -68,6 +68,7 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

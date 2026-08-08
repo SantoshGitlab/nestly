@@ -13,7 +13,15 @@ public interface IBookingService
     /// gateway yet (Phase 4), so "created" and "awaiting payment" are the
     /// same moment for now.
     /// </summary>
-    Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request);
+    /// <param name="recurringBookingPlanId">
+    /// Task 297: set only by <c>IRecurringBookingSchedulerService</c> when it
+    /// materializes one occurrence of a plan, and stamped onto
+    /// <see cref="Booking.RecurringBookingPlanId"/> (task 296's FK). Optional
+    /// specifically so the generator stays on this one orchestration instead
+    /// of gaining its own creation path just to set one column - every other
+    /// caller (the customer's own "Book now") passes nothing and is unaffected.
+    /// </param>
+    Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null);
 
     Task<Result<IReadOnlyList<BookingListItemResponse>>> ListAsync(Guid customerId, BookingStatusBucket? bucket);
 

@@ -29,13 +29,17 @@ public class RecurringBookingOccurrence : Entity<Guid>
 
     public RecurringBookingOccurrenceOutcome Outcome { get; private set; }
 
-    /// <summary>Set only when <see cref="Outcome"/> is <see cref="RecurringBookingOccurrenceOutcome.Booked"/>.</summary>
+    /// <summary>Set exactly for the outcomes that materialized a booking - see <see cref="RecurringBookingOccurrenceOutcomeExtensions.CreatedBooking"/>.</summary>
     public Guid? BookingId { get; private set; }
 
     /// <summary>
     /// Human-readable reason for a skip - never the raw exception/stack trace
     /// (docs/CODING-STANDARDS.md: never expose internals), same discipline
-    /// <c>ExportJob.MarkFailed</c> already follows.
+    /// <c>ExportJob.MarkFailed</c> already follows. Task 297 also uses it to
+    /// record why a booked occurrence needed a substitute provider, or why
+    /// none could be found - the field is the occurrence's one free-text
+    /// "what happened here" slot and splitting it in two would leave every
+    /// reader having to check both.
     /// </summary>
     public string? SkipReason { get; private set; }
 
@@ -52,12 +56,12 @@ public class RecurringBookingOccurrence : Entity<Guid>
         string? skipReason)
         : base(id)
     {
-        if (outcome == RecurringBookingOccurrenceOutcome.Booked && bookingId is null)
+        if (outcome.CreatedBooking() && bookingId is null)
         {
             throw new ArgumentException("A booked occurrence must carry the booking id it created.", nameof(bookingId));
         }
 
-        if (outcome != RecurringBookingOccurrenceOutcome.Booked && bookingId is not null)
+        if (!outcome.CreatedBooking() && bookingId is not null)
         {
             throw new ArgumentException("Only a booked occurrence may carry a booking id.", nameof(bookingId));
         }

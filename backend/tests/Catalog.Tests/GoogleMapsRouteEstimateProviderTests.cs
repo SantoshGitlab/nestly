@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Text.Json.Nodes;
@@ -434,6 +435,80 @@ public sealed class GoogleMapsRouteEstimateProviderTests
         estimates[0].Should().Be(SandboxEstimateFor(FirstDestination, 0));
         estimates[1].Should().Be(new RouteEstimate(1, 6_200, 900, RouteEstimateSource.GoogleMaps),
             "one unroutable pair is not a reason to throw away the road data for its neighbours");
+    }
+
+    /// <summary>
+    /// The coverage gap task 291 was filed for, found while verifying task
+    /// 286: deleting <c>TryReadLeg</c>'s <c>element.Status?.Code is not (null
+    /// or 0)</c> guard broke no test at all.
+    ///
+    /// Every element-status case above omits the <c>duration</c>, so the
+    /// duration parse refuses those elements one step later and the status
+    /// guard is never the reason they degrade. The only shape that actually
+    /// reaches the guard is an element that is fully formed in every OTHER
+    /// respect - <c>ROUTE_EXISTS</c>, a readable duration, a distance - and
+    /// still carries a failed per-element <c>google.rpc.Status</c>. That is a
+    /// real Routes API response: the request as a whole succeeded, and this
+    /// one origin-destination pair did not.
+    ///
+    /// Without the guard the numbers on such an element are read as a
+    /// measured route, and a booking is then ranked, ETA'd and travel-checked
+    /// against a distance Google explicitly refused to stand behind.
+    /// </summary>
+    [Theory]
+    // google.rpc.Code values a failed element realistically carries.
+    [InlineData(3)]   // INVALID_ARGUMENT
+    [InlineData(4)]   // DEADLINE_EXCEEDED
+    [InlineData(8)]   // RESOURCE_EXHAUSTED
+    [InlineData(14)]  // UNAVAILABLE
+    // Not a google.rpc.Code this build knows. Anything that is not 0 is not OK.
+    [InlineData(9999)]
+    [InlineData(-1)]
+    public async Task EstimateAsync_refuses_a_fully_formed_element_that_carries_a_failed_status(int statusCode)
+    {
+        var cache = new InMemoryCacheService();
+        var harness = Build(
+            StubHttpMessageHandler.RespondingWithJson(Matrix(
+                """{"originIndex":0,"destinationIndex":0,"distanceMeters":4100,"duration":"600s","condition":"ROUTE_EXISTS","status":{"code":CODE,"message":"element failed"}}"""
+                    .Replace("CODE", statusCode.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal),
+                RouteExists(1, 6_200, "900s"))),
+            cache: cache);
+
+        var estimates = await harness.Provider.EstimateAsync(Origin, [FirstDestination, SecondDestination]);
+
+        estimates.Should().HaveCount(2);
+        estimates[0].Should().Be(
+            SandboxEstimateFor(FirstDestination, 0),
+            "a failed google.rpc.Status is Google saying it could not route this pair - the numbers beside it are not a measurement");
+        estimates[0].Source.Should().Be(RouteEstimateSource.Sandbox);
+        estimates[0].DurationSeconds.Should().NotBe(600, "600s is the refused element's own claim, not an answer");
+
+        estimates[1].Should().Be(
+            new RouteEstimate(1, 6_200, 900, RouteEstimateSource.GoogleMaps),
+            "one failed pair is not a reason to throw away the road data for its neighbours");
+
+        cache.Keys.Should().HaveCount(1, "only the leg Google actually stood behind may be cached - a refused pair must not be served from the cache for the whole TTL");
+    }
+
+    /// <summary>
+    /// The same defect at its most expensive. A failed element carrying
+    /// <c>"duration":"0s"</c> is not merely a wrong ETA: task 289's travel
+    /// check reads a zero-second leg as "no drive, so no handover buffer
+    /// either" and lets the candidate through, so an unguarded status failure
+    /// turns into a provider booked back-to-back across the city.
+    /// </summary>
+    [Fact]
+    public async Task EstimateAsync_does_not_read_a_failed_element_as_a_zero_length_leg()
+    {
+        var harness = Build(StubHttpMessageHandler.RespondingWithJson(
+            """[{"originIndex":0,"destinationIndex":0,"duration":"0s","condition":"ROUTE_EXISTS","status":{"code":3,"message":"invalid waypoint"}}]"""));
+
+        var estimates = await harness.Provider.EstimateAsync(Origin, [FirstDestination]);
+
+        estimates[0].Should().Be(
+            SandboxEstimateFor(FirstDestination, 0),
+            "'no route here' must not arrive downstream wearing the one shape that means 'no drive needed'");
+        estimates[0].DurationSeconds.Should().BeGreaterThan(0, "these two points are kilometres apart by any measure");
     }
 
     /// <summary>

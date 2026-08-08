@@ -61,7 +61,8 @@ public sealed class BookingTrackingQueryServiceTests : IClassFixture<TestDatabas
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
             new ProviderLocationPingRepository(context),
-            new BookingTrackingRepository(context));
+            new BookingTrackingRepository(context),
+            new ReviewRepository(context));
 
     /// <summary>A customer, and their booking walked up the lifecycle to <paramref name="status"/>.</summary>
     private static Booking SeedBooking(NestlyDbContext context, Guid customerId, BookingStatus status)

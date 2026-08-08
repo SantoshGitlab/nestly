@@ -143,6 +143,13 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         "*/5 * * * *");
 }
 
+// Task 294: delivers customer notifications whose in-process, post-commit
+// dispatch never completed. This is the "and a retry path that does not depend
+// on the in-process handler having run" half of the rule docs/ARCHITECTURE.md
+// sets out under "DOMAIN EVENT DISPATCH AND DELIVERY" - without it the durable
+// intent rows would accumulate and nothing would ever send them.
+app.ScheduleNotificationIntentSweep();
+
 app.MapControllers();
 
 // Task 190/193: the same ChatHub type consumer-api maps, at the same path -

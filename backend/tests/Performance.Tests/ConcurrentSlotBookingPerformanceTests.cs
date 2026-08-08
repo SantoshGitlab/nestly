@@ -79,6 +79,7 @@ public sealed class ConcurrentSlotBookingPerformanceTests : IClassFixture<PerfTe
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

@@ -537,6 +537,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity_snapshot");
 
+                    b.Property<Guid?>("RecurringBookingPlanId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recurring_booking_plan_id");
+
                     b.Property<DateOnly>("SlotDate")
                         .HasColumnType("date")
                         .HasColumnName("slot_date");
@@ -615,6 +619,9 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CreatedAtUtc")
                         .HasDatabaseName("ix_booking_created_at_utc");
+
+                    b.HasIndex("RecurringBookingPlanId")
+                        .HasDatabaseName("ix_booking_recurring_booking_plan_id");
 
                     b.HasIndex("CustomerId", "IdempotencyKey")
                         .IsUnique()
@@ -2121,7 +2128,7 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("CustomerId")
+                    b.Property<Guid?>("CustomerId")
                         .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
@@ -2134,6 +2141,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)")
                         .HasColumnName("platform");
+
+                    b.Property<Guid?>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
 
                     b.Property<DateTime>("RegisteredAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -2159,7 +2170,13 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasIndex("CustomerId", "IsActive")
                         .HasDatabaseName("ix_device_token_customer_id_is_active");
 
-                    b.ToTable("device_token", (string)null);
+                    b.HasIndex("ProviderId", "IsActive")
+                        .HasDatabaseName("ix_device_token_provider_id_is_active");
+
+                    b.ToTable("device_token", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_device_token_exactly_one_owner", "(\"customer_id\" IS NOT NULL AND \"provider_id\" IS NULL) OR (\"customer_id\" IS NULL AND \"provider_id\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Nestly.Domain.ExportJob", b =>
@@ -2445,6 +2462,97 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_notification_event_event_type_status");
 
                     b.ToTable("notification_event", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.NotificationIntent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DedupeKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("dedupe_key");
+
+                    b.Property<Guid>("DomainEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("domain_event_id");
+
+                    b.Property<string>("DomainEventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("domain_event_type");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTime?>("LastAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_at_utc");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTime?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("lease_owner");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payload_json");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("resolution");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_intent");
+
+                    b.HasIndex("DedupeKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notification_intent_dedupe_key");
+
+                    b.HasIndex("DomainEventId")
+                        .HasDatabaseName("ix_notification_intent_domain_event_id");
+
+                    b.HasIndex("Status", "CreatedAtUtc")
+                        .HasDatabaseName("ix_notification_intent_status_created_at_utc");
+
+                    b.ToTable("notification_intent", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.NotificationTemplate", b =>
@@ -2851,6 +2959,29 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("phone");
 
+                    b.Property<DateTime?>("PhotoModeratedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("photo_moderated_at_utc");
+
+                    b.Property<Guid?>("PhotoModeratedByAdminUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("photo_moderated_by_admin_user_id");
+
+                    b.Property<string>("PhotoModerationNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("photo_moderation_note");
+
+                    b.Property<string>("PhotoModerationStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("photo_moderation_status");
+
+                    b.Property<string>("PhotoUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("photo_url");
+
                     b.Property<string>("ProviderType")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2873,6 +3004,9 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasIndex("Phone")
                         .IsUnique()
                         .HasDatabaseName("ix_provider_phone");
+
+                    b.HasIndex("PhotoModerationStatus")
+                        .HasDatabaseName("ix_provider_photo_moderation_status");
 
                     b.ToTable("provider", (string)null);
                 });
@@ -3553,6 +3687,10 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_recurring_booking_occurrence");
 
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_recurring_booking_occurrence_booking_id");
+
                     b.HasIndex("RecurringBookingPlanId", "ScheduledDate")
                         .IsUnique()
                         .HasDatabaseName("ix_recurring_booking_occurrence_recurring_booking_plan_id_sche");
@@ -4073,6 +4211,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("moderator_note");
 
+                    b.Property<Guid?>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
                     b.Property<int>("Rating")
                         .HasColumnType("integer")
                         .HasColumnName("rating");
@@ -4104,6 +4246,9 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("ServiceId")
                         .HasDatabaseName("ix_review_service_id");
+
+                    b.HasIndex("ProviderId", "Status")
+                        .HasDatabaseName("ix_review_provider_id_status");
 
                     b.HasIndex("Status", "IsFlagged")
                         .HasDatabaseName("ix_review_status_is_flagged");
@@ -5125,6 +5270,12 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_booking_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.RecurringBookingPlan", null)
+                        .WithMany()
+                        .HasForeignKey("RecurringBookingPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_booking_recurring_booking_plans_recurring_booking_plan_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.BookingAddOnItem", b =>
@@ -5334,8 +5485,13 @@ namespace Nestly.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_device_token_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.Provider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_device_token_providers_provider_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.Locality", b =>
@@ -5570,6 +5726,12 @@ namespace Nestly.Infrastructure.Migrations
 
             modelBuilder.Entity("Nestly.Domain.RecurringBookingOccurrence", b =>
                 {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_recurring_booking_occurrence_booking_booking_id");
+
                     b.HasOne("Nestly.Domain.RecurringBookingPlan", null)
                         .WithMany()
                         .HasForeignKey("RecurringBookingPlanId")
@@ -5665,6 +5827,12 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_review_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.Provider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_review_provider_provider_id");
 
                     b.HasOne("Nestly.Domain.Service", null)
                         .WithMany()

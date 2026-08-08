@@ -1,6 +1,7 @@
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
+using Nestly.Application.Reviews;
 using Nestly.Application.Subscriptions;
 using Nestly.Domain;
 
@@ -106,11 +107,12 @@ public record BookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatu
 /// provider's id, phone, email or status: this rides on a general booking
 /// read, and a general read is the wrong place to widen PII exposure.
 ///
-/// <paramref name="PhotoUrl"/> and <paramref name="Rating"/> are nullable
-/// because no column backs either today (see <see cref="From"/>); the fields
-/// exist now so the shape does not change under the frontends when the data
-/// arrives, and a null renders as the placeholder avatar / hidden rating a
-/// live tracking screen already needs for a brand-new provider.
+/// <paramref name="PhotoUrl"/> and <paramref name="Rating"/> are both real
+/// values since task 293, and both stay nullable because both are genuinely
+/// absent for ordinary reasons (see <see cref="From"/>). The shape is
+/// unchanged from the one task 275 fixed, so nothing moved under the
+/// frontends: they already render a null photo as the placeholder avatar and
+/// a null rating as no stars.
 /// </summary>
 public record BookingProviderSummary(string DisplayName, string? PhotoUrl, double? Rating)
 {
@@ -119,19 +121,31 @@ public record BookingProviderSummary(string DisplayName, string? PhotoUrl, doubl
     /// and the live tracking response so the two can never disagree about
     /// who the provider is.
     ///
-    /// PhotoUrl and Rating are hardcoded null, in one place, on purpose:
-    /// <see cref="Domain.Provider"/> has no photo column, and
-    /// <see cref="Domain.Review"/> is scoped to a service, not a provider
-    /// (no ProviderId on it, no per-provider aggregate on IReviewRepository),
-    /// so there is no honest value to return. Deriving a "provider rating"
-    /// from the service reviews left on their bookings would put a number a
-    /// customer reads as being about this person on top of data that is not -
-    /// a product decision and a schema change, not something to infer inside
-    /// a response mapper. Left null rather than faked, and left visible here
-    /// rather than dropped from the contract.
+    /// Task 293 closed the two gaps that used to force both optional fields
+    /// to a hardcoded null here:
+    ///
+    /// <list type="bullet">
+    /// <item><see cref="Domain.Provider"/> now carries a photo, and this
+    /// reads <see cref="Domain.Provider.PublicPhotoUrl"/> rather than the raw
+    /// column - a photo awaiting moderation or already rejected must not
+    /// reach a customer's screen, and that gate lives on the entity so no
+    /// mapper can forget it.</item>
+    /// <item><see cref="Domain.Review"/> is now provider-scoped, so the
+    /// rating passed in is computed over reviews written about THIS person
+    /// (<c>IReviewRepository.GetProviderRatingAsync</c>) rather than inferred
+    /// from the services they happened to work on. The caller supplies it
+    /// instead of this mapper fetching it, because a mapper that queries is a
+    /// mapper that queries once per row.</item>
+    /// </list>
+    ///
+    /// Still null in the honest cases, and callers must keep rendering them:
+    /// a provider who has not set a photo, one whose photo has not been
+    /// approved yet, and one with no visible reviews yet - which is every
+    /// brand-new professional, and must read as "no rating" rather than a bad
+    /// one.
     /// </summary>
-    public static BookingProviderSummary From(Provider provider) =>
-        new(provider.DisplayName, null, null);
+    public static BookingProviderSummary From(Provider provider, ProviderRatingSummary? rating) =>
+        new(provider.DisplayName, provider.PublicPhotoUrl, rating?.AverageRating);
 }
 
 /// <summary>

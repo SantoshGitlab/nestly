@@ -404,6 +404,25 @@ export interface BookingDetail {
   finalPayable: number;
   /** Null until a provider is assigned; then tracks the live assignment row (task 208). */
   providerAssignmentStatus: BookingProviderAssignmentStatus | null;
+  /**
+   * Who is coming (task 275), populated with real data since task 293.
+   * Appears and disappears with `providerAssignmentStatus` - both are driven
+   * by the same live assignment, so a professional taken off the job stops
+   * showing here immediately.
+   */
+  provider: BookingProviderSummary | null;
+}
+
+/**
+ * The assigned professional's public identity (task 275/293). `photoUrl` is
+ * null until they have set a photo AND an admin has approved it; `rating` is
+ * null until they have visible reviews - which is every new professional, and
+ * must read as "no rating" rather than a bad one.
+ */
+export interface BookingProviderSummary {
+  displayName: string;
+  photoUrl: string | null;
+  rating: number | null;
 }
 
 export interface BookingListItem {

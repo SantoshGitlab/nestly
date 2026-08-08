@@ -32,6 +32,7 @@ import { describeError } from "@/lib/api";
 import {
   activateProvider,
   approveKycDocument,
+  approveProviderPhoto,
   createPayoutBatch,
   getProviderDetail,
   getProviderEarnings,
@@ -40,6 +41,7 @@ import {
   recordBackgroundCheck,
   recordEarningAdjustment,
   rejectKycDocument,
+  rejectProviderPhoto,
   searchPayouts,
   suspendProvider,
   updateProvider,
@@ -53,6 +55,7 @@ import {
   ProviderKycVerificationStatus,
   ProviderOnboardingStatus,
   ProviderPayoutStatus,
+  ProviderPhotoModerationStatus,
   ProviderStatus,
 } from "@/lib/providers-types";
 import type { BadgeTone } from "@/components/ui";
@@ -92,6 +95,18 @@ const KYC_STATUS_TONES: Record<ProviderKycVerificationStatus, BadgeTone> = {
   [ProviderKycVerificationStatus.Pending]: "warning",
   [ProviderKycVerificationStatus.Approved]: "success",
   [ProviderKycVerificationStatus.Rejected]: "danger",
+};
+
+const PHOTO_STATUS_LABELS: Record<ProviderPhotoModerationStatus, string> = {
+  [ProviderPhotoModerationStatus.Pending]: "Pending review",
+  [ProviderPhotoModerationStatus.Approved]: "Live to customers",
+  [ProviderPhotoModerationStatus.Rejected]: "Rejected",
+};
+
+const PHOTO_STATUS_TONES: Record<ProviderPhotoModerationStatus, BadgeTone> = {
+  [ProviderPhotoModerationStatus.Pending]: "warning",
+  [ProviderPhotoModerationStatus.Approved]: "success",
+  [ProviderPhotoModerationStatus.Rejected]: "danger",
 };
 
 const BACKGROUND_CHECK_STATUS_LABELS: Record<ProviderBackgroundCheckStatus, string> = {
@@ -168,6 +183,9 @@ export default function ProviderDetailPage() {
   const [rejectReasonByDoc, setRejectReasonByDoc] = useState<Record<string, string>>({});
   const [pendingKycRejection, setPendingKycRejection] = useState<{ id: string; label: string } | null>(null);
 
+  const [photoRejectReason, setPhotoRejectReason] = useState("");
+  const [isConfirmingPhotoRejection, setIsConfirmingPhotoRejection] = useState(false);
+
   const [bgStatus, setBgStatus] = useState(String(ProviderBackgroundCheckStatus.Passed));
   const [bgNotes, setBgNotes] = useState("");
 
@@ -238,6 +256,22 @@ export default function ProviderDetailPage() {
   const approveKycMutation = useMutation({
     mutationFn: (documentId: string) => approveKycDocument(documentId),
     onSuccess: () => onSuccess("KYC document approved."),
+    onError,
+  });
+
+  const approvePhotoMutation = useMutation({
+    mutationFn: () => approveProviderPhoto(providerId),
+    onSuccess: () => onSuccess("Photo approved - customers can now see it."),
+    onError,
+  });
+
+  const rejectPhotoMutation = useMutation({
+    mutationFn: (reason: string) => rejectProviderPhoto(providerId, { reason }),
+    onSuccess: () => {
+      setIsConfirmingPhotoRejection(false);
+      setPhotoRejectReason("");
+      onSuccess("Photo rejected.");
+    },
     onError,
   });
 
@@ -403,6 +437,74 @@ export default function ProviderDetailPage() {
             ) : null}
           </div>
         ) : null}
+      </Card>
+
+      <Card
+        title="Profile photo"
+        description="Customers see this on their booking and live-tracking screens - only once it is approved (task 293)"
+      >
+        {provider.photo.photoUrl === null ? (
+          <EmptyState
+            title="No photo submitted yet"
+            description="The provider sets this from the provider app. Until then customers see a placeholder avatar."
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              {/* next/image needs the host in next.config's allowlist and a
+                  provider-supplied URL can point anywhere, so a plain img is
+                  the only workable element here. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={provider.photo.photoUrl}
+                alt={`Submitted profile photo for ${provider.displayName}`}
+                className="h-24 w-24 shrink-0 rounded-full border border-line object-cover"
+              />
+              <div className="min-w-0">
+                {provider.photo.moderationStatus !== null ? (
+                  <Badge tone={PHOTO_STATUS_TONES[provider.photo.moderationStatus]}>
+                    {PHOTO_STATUS_LABELS[provider.photo.moderationStatus]}
+                  </Badge>
+                ) : null}
+                {provider.photo.moderatedAtUtc ? (
+                  <p className="mt-1.5 text-xs text-fg-subtle">
+                    Reviewed {formatDateTime(provider.photo.moderatedAtUtc)}
+                  </p>
+                ) : null}
+                {provider.photo.moderationNote ? (
+                  <p className="mt-1 text-xs text-fg-muted">{provider.photo.moderationNote}</p>
+                ) : null}
+                <p className="mt-1 break-all text-xs text-fg-subtle">{provider.photo.photoUrl}</p>
+              </div>
+            </div>
+
+            {canWriteProvider && provider.photo.moderationStatus === ProviderPhotoModerationStatus.Pending ? (
+              <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end">
+                <Button
+                  variant="secondary"
+                  loading={approvePhotoMutation.isPending}
+                  onClick={() => approvePhotoMutation.mutate()}
+                >
+                  Approve
+                </Button>
+                <div className="flex-1">
+                  <Field
+                    label="Rejection reason"
+                    value={photoRejectReason}
+                    onChange={(e) => setPhotoRejectReason(e.target.value)}
+                  />
+                </div>
+                <Button
+                  variant="danger"
+                  disabled={!photoRejectReason.trim()}
+                  onClick={() => setIsConfirmingPhotoRejection(true)}
+                >
+                  Reject
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </Card>
 
       <Card title="KYC documents" description="Approve or reject each submitted document (task 150b)">
@@ -751,6 +853,23 @@ export default function ProviderDetailPage() {
             <span className="font-medium text-fg">{rejectReasonByDoc[pendingKycRejection.id] ?? ""}</span>
           </p>
         ) : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={isConfirmingPhotoRejection}
+        title="Reject this profile photo?"
+        description="Customers keep seeing the placeholder avatar until the provider submits a new one."
+        confirmLabel="Reject photo"
+        cancelLabel="Keep pending"
+        loading={rejectPhotoMutation.isPending}
+        error={rejectPhotoMutation.isError ? describeError(rejectPhotoMutation.error) : null}
+        onCancel={() => setIsConfirmingPhotoRejection(false)}
+        onConfirm={() => rejectPhotoMutation.mutate(photoRejectReason.trim())}
+      >
+        <p className="text-sm text-fg-muted">
+          Reason shown to the provider —{" "}
+          <span className="font-medium text-fg">{photoRejectReason}</span>
+        </p>
       </ConfirmDialog>
 
       <ConfirmDialog

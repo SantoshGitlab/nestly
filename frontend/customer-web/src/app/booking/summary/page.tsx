@@ -11,10 +11,13 @@ import {
   BookingProgress,
   PriceBreakdownList,
   PriceBreakdownSkeleton,
+  RECURRING_FREQUENCY_OPTIONS,
   STICKY_BAR_SPACER,
   ScreenSkeleton,
   StickyActionBar,
+  formatCalendarDate,
   inr,
+  recurringFrequencyLabel,
 } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SlotPicker } from "@/components/SlotPicker";
@@ -22,7 +25,9 @@ import {
   Alert,
   Button,
   Card,
+  CheckboxField,
   EmptyState,
+  Field,
   PageHeading,
   Skeleton,
   cx,
@@ -30,11 +35,14 @@ import {
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, ApiError, apiFetch, describeError, errorCode } from "@/lib/api";
 import { type BookingDraft, readDraft, writeDraft } from "@/lib/booking-draft";
-import { todayIsoDate } from "@/lib/date";
+import { addRecurrenceInterval, todayIsoDate } from "@/lib/date";
+import { RecurringBookingRecurrenceFrequency } from "@/lib/types";
 import type {
   BookingSummary,
   BookingSummaryRequestBody,
+  CreateRecurringBookingPlanRequestBody,
   CustomerAddress,
+  RecurringBookingPlanResponse,
   ServiceDetail,
   SlotRevalidation,
 } from "@/lib/types";
@@ -86,6 +94,29 @@ function BookingSummaryScreen() {
   const [selectedSlotWindowId, setSelectedSlotWindowId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  /**
+   * "Repeat this booking" opt-in (task 298).
+   *
+   * The frequency picker lives on the booking flow itself rather than only on
+   * the standalone /recurring-bookings/new form, because the moment a customer
+   * is willing to commit to a standing visit is the moment they are already
+   * booking one — sending them off to re-pick the same service, address and
+   * slot on a second screen loses almost all of them.
+   *
+   * The booking being placed here is the plan's first visit and is *not* part
+   * of the plan; the plan starts one full interval later (see
+   * `recurringPlanStartDate`). `recurringPlanId` is set once the plan exists,
+   * which both switches this card to a confirmation and stops a second plan
+   * being created if the customer comes back and proceeds again.
+   */
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [repeatFrequency, setRepeatFrequency] = useState<RecurringBookingRecurrenceFrequency>(
+    RecurringBookingRecurrenceFrequency.Weekly,
+  );
+  const [repeatCount, setRepeatCount] = useState("4");
+  const [recurringPlanId, setRecurringPlanId] = useState<string | null>(null);
+  const [recurringPlanError, setRecurringPlanError] = useState<string | null>(null);
 
   /**
    * A booking created from this draft that has not been paid for yet.
@@ -204,6 +235,12 @@ function BookingSummaryScreen() {
       setSelectedDate(draft.date);
       setSelectedSlotWindowId(draft.slotWindowId);
       setPendingBookingId(draft.pendingBookingId ?? null);
+      setRepeatEnabled(draft.repeatEnabled ?? false);
+      if (draft.repeatFrequency !== null && draft.repeatFrequency !== undefined) {
+        setRepeatFrequency(draft.repeatFrequency as RecurringBookingRecurrenceFrequency);
+      }
+      if (draft.repeatCount) setRepeatCount(draft.repeatCount);
+      setRecurringPlanId(draft.recurringPlanId ?? null);
     }
     setHasRestoredDraft(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,6 +270,10 @@ function BookingSummaryScreen() {
     date: selectedDate,
     slotWindowId: selectedSlotWindowId,
     pendingBookingId,
+    repeatEnabled,
+    repeatFrequency,
+    repeatCount,
+    recurringPlanId,
   };
 
   // Persist on every change so a detour (most commonly "+ Add a new address"
@@ -247,6 +288,10 @@ function BookingSummaryScreen() {
       date: selectedDate,
       slotWindowId: selectedSlotWindowId,
       pendingBookingId,
+      repeatEnabled,
+      repeatFrequency,
+      repeatCount,
+      recurringPlanId,
     });
   }, [
     serviceSlug,
@@ -257,6 +302,10 @@ function BookingSummaryScreen() {
     selectedDate,
     selectedSlotWindowId,
     pendingBookingId,
+    repeatEnabled,
+    repeatFrequency,
+    repeatCount,
+    recurringPlanId,
   ]);
 
   const toggleAddOn = (id: string) => {
@@ -289,6 +338,53 @@ function BookingSummaryScreen() {
         couponCode: appliedCouponCode,
       }
     : null;
+
+  /**
+   * When the plan's first visit falls — one full interval after the booking
+   * being placed here, so the plan never duplicates it. Shown to the customer
+   * before they commit, because "repeat every month" is ambiguous about
+   * whether the next visit is in a month or on the 1st.
+   */
+  const recurringPlanStartDate = addRecurrenceInterval(selectedDate, repeatFrequency);
+
+  const repeatCountValue = Number(repeatCount.trim());
+  const isRepeatCountValid =
+    repeatCount.trim() !== "" && Number.isInteger(repeatCountValue) && repeatCountValue > 0;
+
+  /**
+   * The plan to create alongside the booking, or null if the booking request
+   * isn't complete enough yet. Deliberately built from the same `request` the
+   * booking is priced and created from, so the plan can never describe a
+   * different service, address or slot than the booking it repeats.
+   */
+  const buildRecurringPlanBody = (
+    bookingRequest: BookingSummaryRequestBody,
+  ): CreateRecurringBookingPlanRequestBody => {
+    const isMonthly = repeatFrequency === RecurringBookingRecurrenceFrequency.Monthly;
+    const anchor = new Date(`${recurringPlanStartDate}T00:00:00`);
+
+    return {
+      serviceId: bookingRequest.serviceId,
+      cityId: bookingRequest.cityId,
+      addressId: bookingRequest.addressId,
+      localityId: bookingRequest.localityId,
+      slotWindowId: bookingRequest.slotWindowId,
+      quantity: bookingRequest.quantity,
+      frequency: repeatFrequency,
+      recurrenceDayOfWeek: isMonthly ? null : anchor.getDay(),
+      recurrenceDayOfMonth: isMonthly ? anchor.getDate() : null,
+      startDate: recurringPlanStartDate,
+      // Bounded by a visit count rather than an end date: "four more cleans"
+      // is how customers describe this, and the plan aggregate requires one or
+      // the other. The standalone /recurring-bookings/new form still offers an
+      // end date for anyone who wants it.
+      endDate: null,
+      occurrenceCount: repeatCountValue,
+      // No couponCode: a coupon is a one-time redemption and is deliberately
+      // absent from CreateRecurringBookingPlanRequest - see its doc comment.
+      addOns: bookingRequest.addOns,
+    };
+  };
 
   const summaryQuery = useQuery({
     queryKey: ["booking-summary", request],
@@ -359,6 +455,13 @@ function BookingSummaryScreen() {
     if (!request || !service) return;
     // Synchronous re-entry guard - see `inFlight` above.
     if (inFlight.current) return;
+
+    setRecurringPlanError(null);
+    if (repeatEnabled && !recurringPlanId && !isRepeatCountValid) {
+      setRecurringPlanError("Tell us how many repeat visits you'd like — at least one.");
+      return;
+    }
+
     inFlight.current = true;
 
     setSubmitError(null);
@@ -402,6 +505,42 @@ function BookingSummaryScreen() {
       // booking/success).
       writeDraft(service.slug, { ...draftState, pendingBookingId: booking.id });
       setPendingBookingId(booking.id);
+
+      /**
+       * The standing plan, if the customer opted in above. Created after the
+       * booking rather than before it, because the booking is the primary
+       * intent and an orphaned plan for a booking that never happened is worse
+       * than a booking with no plan.
+       *
+       * A failure here deliberately stops the journey on this page rather than
+       * carrying on to payment: the booking is safe (it exists, and the
+       * "waiting for payment" banner above offers it straight back), while the
+       * repeat schedule is the part the customer would otherwise never learn
+       * had silently not happened. Proceeding again replays the same
+       * idempotency key, so the retry re-attempts the plan without creating a
+       * second booking.
+       */
+      if (repeatEnabled && !recurringPlanId) {
+        try {
+          const plan = await apiFetch<RecurringBookingPlanResponse>(
+            `${API_V1}/recurring-booking-plans`,
+            {
+              method: "POST",
+              authenticated: true,
+              body: JSON.stringify(buildRecurringPlanBody(request)),
+            },
+          );
+          setRecurringPlanId(plan.id);
+          writeDraft(service.slug, {
+            ...draftState,
+            pendingBookingId: booking.id,
+            recurringPlanId: plan.id,
+          });
+        } catch (err) {
+          setRecurringPlanError(describeError(err));
+          return;
+        }
+      }
 
       navigated.current = true;
       router.push(`/booking/payment/${booking.id}?serviceSlug=${service.slug}`);
@@ -689,6 +828,105 @@ function BookingSummaryScreen() {
           )}
         </Card>
 
+        {/* "Repeat this booking" opt-in (task 298). Sits directly under the
+            slot it repeats, so the frequency and the day it lands on are read
+            together. */}
+        <Card
+          title="Repeat this booking"
+          description="Make it a standing visit and we'll book each one for you."
+        >
+          <div className="flex flex-col gap-4">
+          {recurringPlanId ? (
+            <Alert tone="success" title="Repeat schedule set up">
+              We&apos;ll book {service.name} {recurringFrequencyLabel(repeatFrequency).toLowerCase()}{" "}
+              from <span className="nums">{formatCalendarDate(recurringPlanStartDate)}</span>.{" "}
+              <Link
+                href="/recurring-bookings"
+                className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+              >
+                Manage it here
+              </Link>
+              .
+            </Alert>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <CheckboxField
+                label="Repeat this booking"
+                description="The booking you're placing now stays exactly as it is — repeats are added on top, starting one interval later."
+                checked={repeatEnabled}
+                onChange={setRepeatEnabled}
+              />
+
+              {repeatEnabled ? (
+                <div className="flex flex-col gap-4 border-t border-line pt-4">
+                  <div
+                    role="radiogroup"
+                    aria-label="Repeat frequency"
+                    className="flex flex-wrap gap-2"
+                  >
+                    {RECURRING_FREQUENCY_OPTIONS.map((option) => {
+                      const isSelected = repeatFrequency === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          onClick={() => setRepeatFrequency(option.value)}
+                          className={cx(
+                            "rounded-xl border px-3.5 py-2 text-sm font-medium transition duration-fast ease-out",
+                            isSelected
+                              ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                              : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <Field
+                    id="repeat-count"
+                    label="Number of repeat visits"
+                    type="number"
+                    min={1}
+                    className="max-w-[10rem]"
+                    value={repeatCount}
+                    onChange={(e) => setRepeatCount(e.target.value)}
+                    hint="Not counting the booking you're placing now."
+                  />
+
+                  <p className="text-xs leading-relaxed text-fg-subtle">
+                    First repeat visit:{" "}
+                    <span className="nums font-medium text-fg-muted">
+                      {formatCalendarDate(recurringPlanStartDate)}
+                    </span>
+                    , in the same time window. Each visit is booked and paid for on its own — pause
+                    or cancel the schedule any time from{" "}
+                    <Link
+                      href="/recurring-bookings"
+                      className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                    >
+                      Recurring bookings
+                    </Link>
+                    .
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {recurringPlanError ? (
+            <Alert tone="warning" title="Your booking is placed — the repeat schedule isn't">
+              {recurringPlanError} Your booking is safe; press &ldquo;Proceed to book&rdquo; again to
+              retry the schedule without creating a second booking, or continue to payment and set
+              the schedule up later.
+            </Alert>
+          ) : null}
+          </div>
+        </Card>
+
         {/* Coupon (task 62d, 77; SRS 11.10.3). */}
         <Card title="Coupon" description="Have a code? Apply it before you pay.">
           <div className="flex flex-col gap-3">
@@ -806,15 +1044,20 @@ function BookingSummaryScreen() {
 
         </StickyActionBar>
 
-        {/* Entry point into task 187's recurring-plan setup flow - same
-            service, no booking placed yet. A styled Link rather than
+        {/* Task 187's standalone recurring-plan form. Now the *secondary* way
+            in: the ordinary case is the "Repeat this booking" opt-in above,
+            which keeps the customer in one flow, and this covers the case that
+            opt-in deliberately doesn't - a schedule with no booking today, or
+            one bounded by an end date rather than a visit count. Reworded from
+            "Set up as recurring instead" so the two aren't read as rival ways
+            to do the same thing. A styled Link rather than
             <Link><Button/></Link>: a button inside an anchor is invalid HTML
             and gives assistive tech two nested controls for one action. */}
         <Link
           href={`/recurring-bookings/new?serviceSlug=${service.slug}`}
           className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
         >
-          Set up as recurring instead
+          Schedule for later without booking now
         </Link>
       </aside>
     </main>

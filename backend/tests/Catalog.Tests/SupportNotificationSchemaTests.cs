@@ -52,7 +52,7 @@ public sealed class SupportNotificationSchemaTests : IClassFixture<TestDatabase>
             seed = SeedCustomerAndBooking(context);
         }
 
-        var review = new Review(Guid.NewGuid(), seed.booking.Id, seed.customer.Id, seed.service.Id, 5, "Great service!");
+        var review = new Review(Guid.NewGuid(), seed.booking.Id, seed.customer.Id, seed.service.Id, providerId: null, 5, "Great service!");
         using (var context = _db.CreateContext())
         {
             await new ReviewRepository(context).AddAsync(review);
@@ -66,7 +66,7 @@ public sealed class SupportNotificationSchemaTests : IClassFixture<TestDatabase>
             loaded.Status.Should().Be(ReviewStatus.Visible);
         }
 
-        var duplicate = new Review(Guid.NewGuid(), seed.booking.Id, seed.customer.Id, seed.service.Id, 1, "Second attempt");
+        var duplicate = new Review(Guid.NewGuid(), seed.booking.Id, seed.customer.Id, seed.service.Id, providerId: null, 1, "Second attempt");
         using var duplicateContext = _db.CreateContext();
         var act = async () => await new ReviewRepository(duplicateContext).AddAsync(duplicate);
 
@@ -76,7 +76,7 @@ public sealed class SupportNotificationSchemaTests : IClassFixture<TestDatabase>
     [Fact]
     public void Review_rejects_a_rating_outside_1_to_5()
     {
-        var act = () => new Review(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 6, null);
+        var act = () => new Review(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), providerId: null, 6, null);
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 

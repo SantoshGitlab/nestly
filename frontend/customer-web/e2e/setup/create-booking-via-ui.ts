@@ -3,12 +3,29 @@ import { expect } from "@playwright/test";
 import type { CatalogFixture } from "./seed-catalog";
 
 /**
+ * The "repeat this booking" opt-in on the summary page (task 298), when the
+ * caller wants the booking to also set up a standing plan. `frequency` is the
+ * picker button's visible label.
+ */
+export interface RepeatOptIn {
+  frequency: "Every week" | "Every 2 weeks" | "Every month";
+  visits: number;
+}
+
+/** Which day of the date strip this helper books - see the comment on the click below. */
+export const BOOKED_DATE_OFFSET_DAYS = 2;
+
+/**
  * Drives the real booking summary -> payment -> success flow (covers 140b)
  * and returns the resulting booking id, so 140c/140d can start from a
  * genuinely-created Confirmed booking instead of re-deriving one from
  * scratch or reaching into the database.
  */
-export async function createBookingViaUi(page: Page, fixture: CatalogFixture): Promise<string> {
+export async function createBookingViaUi(
+  page: Page,
+  fixture: CatalogFixture,
+  repeat?: RepeatOptIn,
+): Promise<string> {
   await page.goto(`/booking/summary?serviceSlug=${fixture.serviceSlug}`);
 
   await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
@@ -33,13 +50,24 @@ export async function createBookingViaUi(page: Page, fixture: CatalogFixture): P
   // out keeps every booking this helper creates comfortably inside every
   // policy window at any hour.
   const dateStrip = page.locator("h3", { hasText: "Date" }).locator("xpath=following-sibling::div[1]//button");
-  await expect(dateStrip.nth(2)).toBeVisible({ timeout: 15_000 });
-  await dateStrip.nth(2).click();
+  await expect(dateStrip.nth(BOOKED_DATE_OFFSET_DAYS)).toBeVisible({ timeout: 15_000 });
+  await dateStrip.nth(BOOKED_DATE_OFFSET_DAYS).click();
 
   const slotButton = page.getByRole("button", { name: /E2E Anytime/ });
   await expect(slotButton).toBeVisible({ timeout: 15_000 });
   await slotButton.click();
   await expect(slotButton).toHaveAttribute("aria-pressed", "true");
+
+  if (repeat) {
+    await page.getByRole("checkbox", { name: "Repeat this booking" }).check();
+    const frequencyButton = page.getByRole("radio", { name: repeat.frequency });
+    await expect(frequencyButton).toBeVisible({ timeout: 15_000 });
+    await frequencyButton.click();
+    await expect(frequencyButton).toHaveAttribute("aria-checked", "true");
+
+    const visitsField = page.getByLabel("Number of repeat visits");
+    await visitsField.fill(String(repeat.visits));
+  }
 
   const proceedButton = page.getByRole("button", { name: "Proceed to book" });
   await expect(proceedButton).toBeEnabled({ timeout: 15_000 });

@@ -52,7 +52,7 @@ public sealed class ReviewModerationServiceTests : IClassFixture<TestDatabase>
         context.Add(booking);
         context.SaveChanges();
 
-        review = new Review(Guid.NewGuid(), booking.Id, customer.Id, service.Id, rating, reviewText);
+        review = new Review(Guid.NewGuid(), booking.Id, customer.Id, service.Id, providerId: null, rating, reviewText);
         typeof(Review).GetProperty(nameof(Review.CreatedAtUtc))!.SetValue(review, createdAtUtc);
         context.Add(review);
         context.SaveChanges();

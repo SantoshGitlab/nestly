@@ -7,6 +7,7 @@ import {
   BookingProviderAssignmentStatus,
   BookingStatus,
   RecurringBookingPlanStatus,
+  RecurringBookingRecurrenceFrequency,
   SupportTicketStatus,
 } from "@/lib/types";
 import type { BookingStatusTimelineEntry, PriceBreakdown } from "@/lib/types";
@@ -203,6 +204,37 @@ export function recurringPlanStatusTone(status: RecurringBookingPlanStatus): Bad
       return "neutral";
   }
 }
+
+/**
+ * How a recurrence frequency reads to a customer.
+ *
+ * One definition rather than three: the recurring-plan set-up form, the manage
+ * list and the booking summary's "repeat this booking" opt-in (task 298) all
+ * name the same three frequencies, and three private copies of these strings
+ * had already started drifting ("Every 2 weeks" vs "Fortnightly").
+ */
+export function recurringFrequencyLabel(frequency: RecurringBookingRecurrenceFrequency): string {
+  switch (frequency) {
+    case RecurringBookingRecurrenceFrequency.Weekly:
+      return "Every week";
+    case RecurringBookingRecurrenceFrequency.Biweekly:
+      return "Every 2 weeks";
+    case RecurringBookingRecurrenceFrequency.Monthly:
+      return "Every month";
+    default:
+      return "Unknown";
+  }
+}
+
+/** Picker options, in the enum's own order. */
+export const RECURRING_FREQUENCY_OPTIONS: {
+  value: RecurringBookingRecurrenceFrequency;
+  label: string;
+}[] = [
+  RecurringBookingRecurrenceFrequency.Weekly,
+  RecurringBookingRecurrenceFrequency.Biweekly,
+  RecurringBookingRecurrenceFrequency.Monthly,
+].map((value) => ({ value, label: recurringFrequencyLabel(value) }));
 
 export function supportStatusTone(status: SupportTicketStatus): BadgeTone {
   switch (status) {

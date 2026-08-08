@@ -8,6 +8,7 @@ import type {
   ServiceArea,
   SubmitKycDocumentRequest,
   UpdateProfileRequest,
+  UpdateProviderPhotoRequest,
   UpdateServiceAreasRequest,
   UpdateSkillsRequest,
   ProviderSkill,
@@ -21,6 +22,14 @@ export const getProfile = () =>
 
 export const updateProfile = (request: UpdateProfileRequest) =>
   apiFetch<ProviderProfile>(PROFILE_BASE, {
+    method: "PUT",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+/** Sets or clears the profile photo. The response carries the new moderation state. */
+export const updateProfilePhoto = (request: UpdateProviderPhotoRequest) =>
+  apiFetch<ProviderProfile>(`${PROFILE_BASE}/photo`, {
     method: "PUT",
     authenticated: true,
     body: JSON.stringify(request),

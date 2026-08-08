@@ -42,6 +42,23 @@ public class RecurringBookingPlanRepository : IRecurringBookingPlanRepository
             .OrderByDescending(p => p.CreatedAtUtc)
             .ToListAsync();
 
+    public async Task<IReadOnlyDictionary<Guid, RecurringBookingRecurrenceFrequency>> ListFrequenciesByIdsAsync(
+        IReadOnlyCollection<Guid> planIds)
+    {
+        if (planIds.Count == 0)
+        {
+            return new Dictionary<Guid, RecurringBookingRecurrenceFrequency>();
+        }
+
+        // Two columns, one round trip, no add-ons - see the interface's doc
+        // comment on why this is not GetByIdAsync in a loop.
+        return await _context.RecurringBookingPlans
+            .AsNoTracking()
+            .Where(p => planIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Frequency })
+            .ToDictionaryAsync(p => p.Id, p => p.Frequency);
+    }
+
     public async Task<IReadOnlyList<RecurringBookingPlan>> ListDueAsync(DateOnly onOrBefore) =>
         await _context.RecurringBookingPlans
             .Include(p => p.AddOns)

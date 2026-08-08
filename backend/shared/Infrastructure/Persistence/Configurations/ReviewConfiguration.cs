@@ -30,6 +30,16 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
             .HasForeignKey(x => x.ServiceId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Task 293. Nullable on purpose and permanently - see Review.ProviderId.
+        // Restrict, like every other cross-aggregate reference on this entity:
+        // deleting a provider must not silently delete the reviews written
+        // about them.
+        builder.Property(x => x.ProviderId);
+        builder.HasOne<Provider>()
+            .WithMany()
+            .HasForeignKey(x => x.ProviderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(x => x.Rating).IsRequired();
         builder.Property(x => x.ReviewText).HasMaxLength(2000);
         builder.Property(x => x.IssueTags).HasMaxLength(500);
@@ -43,6 +53,11 @@ public class ReviewConfiguration : IEntityTypeConfiguration<Review>
         // One primary review per booking (SRS 11.16.3).
         builder.HasIndex(x => x.BookingId).IsUnique();
         builder.HasIndex(x => x.ServiceId);
+
+        // Task 293: the per-provider rating aggregate's exact filter -
+        // (provider, visible-only). It runs on the booking detail and the
+        // live tracking screen, which are polled, so it must not be a scan.
+        builder.HasIndex(x => new { x.ProviderId, x.Status });
 
         // The admin moderation screen (task 122) filters on status and the
         // flagged marker together (e.g. "hidden and flagged").

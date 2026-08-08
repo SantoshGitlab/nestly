@@ -43,6 +43,7 @@ export enum NotificationEventType {
   ProviderArrived = 19,
   JobStarted = 20,
   JobCompleted = 21,
+  ProviderChanged = 22,
 }
 
 /** Mirrors Nestly.Domain.NotificationChannel's declaration order exactly. */
@@ -75,6 +76,7 @@ export const NOTIFICATION_EVENT_TYPE_LABELS: Record<NotificationEventType, strin
   [NotificationEventType.ProviderArrived]: "Professional arrived",
   [NotificationEventType.JobStarted]: "Job started",
   [NotificationEventType.JobCompleted]: "Job completed",
+  [NotificationEventType.ProviderChanged]: "Professional changed",
 };
 
 export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {

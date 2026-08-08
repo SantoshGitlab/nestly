@@ -74,6 +74,7 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

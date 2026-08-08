@@ -2,6 +2,7 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
+using Nestly.Application.Reviews;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
@@ -31,6 +32,10 @@ public class BookingService : IBookingService
     // (PROVIDER.md scope boundary), so the one place that needs to name the
     // provider resolves it through the repository instead.
     private readonly IProviderRepository _providerRepository;
+    // Task 293: the per-provider rating aggregate behind the same summary.
+    // Read-only, and only for the assigned provider - this service does not
+    // otherwise know about reviews.
+    private readonly IReviewRepository _reviewRepository;
     private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
     // Same reasoning as RefundService: the slot-capacity reservation, coupon
     // reservation, subscription free-visit consumption and the booking write
@@ -53,6 +58,7 @@ public class BookingService : IBookingService
         IMetricsService metricsService,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderRepository providerRepository,
+        IReviewRepository reviewRepository,
         ICustomerSubscriptionRepository customerSubscriptionRepository,
         NestlyDbContext context)
     {
@@ -64,11 +70,12 @@ public class BookingService : IBookingService
         _metricsService = metricsService;
         _assignmentRepository = assignmentRepository;
         _providerRepository = providerRepository;
+        _reviewRepository = reviewRepository;
         _customerSubscriptionRepository = customerSubscriptionRepository;
         _context = context;
     }
 
-    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
+    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null)
     {
         // Task 241: checked before anything else reserves - a retried
         // request carrying the same key must not take a second slot seat,
@@ -205,7 +212,14 @@ public class BookingService : IBookingService
                 summary.SubscriptionBenefit?.SubscriptionId,
                 summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
                 summary.SubscriptionBenefit?.DiscountAmount,
-                string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey);
+                string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey,
+                // Task 297: the occurrence's link back to the plan that
+                // generated it. Set here rather than by the scheduler
+                // afterwards so it is part of the same insert - a booking that
+                // exists without its plan id, even briefly, is one the admin
+                // (task 299) and provider (task 300) views would show as a
+                // one-off.
+                recurringBookingPlanId);
 
             // Add-on line items come from the price breakdown, not summary.AddOns:
             // the breakdown already carries each selection's quantity and
@@ -304,6 +318,8 @@ public class BookingService : IBookingService
     /// customer must stop seeing a provider the moment they are off the job.
     /// One extra read by primary key, and only when a provider is actually
     /// assigned - an unassigned booking's detail costs exactly what it did.
+    /// Task 293 adds a second read, the rating aggregate, under the same
+    /// condition and for the same reason.
     /// </summary>
     private async Task<BookingProviderSummary?> ProviderSummaryFor(BookingProviderAssignment? assignment)
     {
@@ -313,7 +329,13 @@ public class BookingService : IBookingService
         }
 
         var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-        return provider is null ? null : BookingProviderSummary.From(provider);
+        if (provider is null)
+        {
+            return null;
+        }
+
+        var rating = await _reviewRepository.GetProviderRatingAsync(provider.Id);
+        return BookingProviderSummary.From(provider, rating);
     }
 
     private static BookingDetailResponse ToDetailResponse(

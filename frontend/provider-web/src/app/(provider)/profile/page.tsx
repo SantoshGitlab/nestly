@@ -2,6 +2,7 @@
 
 import { PageHeading } from "@/components/ui";
 import { KycSection } from "./_components/KycSection";
+import { PhotoSection } from "./_components/PhotoSection";
 import { ProfileDetailsSection } from "./_components/ProfileDetailsSection";
 import { ServiceAreasSection } from "./_components/ServiceAreasSection";
 import { SkillsSection } from "./_components/SkillsSection";
@@ -9,7 +10,7 @@ import { SkillsSection } from "./_components/SkillsSection";
 /**
  * Provider profile/onboarding (docs/PROVIDER.md's Identity and Capability &
  * Coverage domains), ordered the way onboarding actually runs: who you are,
- * prove it, where you work, what you do.
+ * how you look to a customer, prove it, where you work, what you do.
  *
  * Each section owns its own query, mutation and three states, so one failing
  * lookup never blanks out the rest of the screen.
@@ -22,6 +23,7 @@ export default function ProfilePage() {
         subtitle="Your identity, verification status, coverage and skills."
       />
       <ProfileDetailsSection />
+      <PhotoSection />
       <KycSection />
       <ServiceAreasSection />
       <SkillsSection />
