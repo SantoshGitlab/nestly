@@ -63,11 +63,22 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
     /// Restricting to recognized names in SQL, before EF converts anything, keeps one stale row
     /// from being a single point of failure for the whole notification pipeline.
     /// </summary>
+    /// <remarks>
+    /// This was raw SQL using PostgreSQL's <c>= ANY(array)</c> until 2026-08-08. <c>ANY</c> is
+    /// provider-specific, so the SQLite-backed test suite (docs/TESTING.md) failed outright on
+    /// "no such function: ANY" - which made every caller of this repository untestable, the
+    /// notification pipeline included. <c>Contains</c> over the enum's own values expresses the
+    /// same filter in LINQ: EF applies this property's string value converter
+    /// (<c>NotificationTemplateConfiguration</c>) to each element and emits a standard
+    /// <c>event_type IN (...)</c> that both providers run identically. It still filters in SQL,
+    /// before EF materializes - which is the whole point - and needs no raw SQL to do it.
+    /// </remarks>
     private IQueryable<NotificationTemplate> KnownEventTypeOnly()
     {
-        var validNames = Enum.GetNames<NotificationEventType>();
+        var validEventTypes = Enum.GetValues<NotificationEventType>();
+
         return _context.Set<NotificationTemplate>()
-            .FromSqlInterpolated($"SELECT * FROM notification_template WHERE event_type = ANY({validNames})");
+            .Where(t => validEventTypes.Contains(t.EventType));
     }
 
     public async Task AddAsync(NotificationTemplate template, CancellationToken cancellationToken = default)
