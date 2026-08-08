@@ -95,13 +95,15 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
             new RefundTransactionRepository(context),
             new ProviderRepository(context),
             BuildDispatchService(context),
+            TestServices.IntentCoordinator(context),
             fulfilmentOptions ?? TestServices.FulfilmentNotifications(),
             NullLogger<BookingNotificationTriggerHandler>.Instance);
 
     private static SupportTicketNotificationTriggerHandler BuildTicketHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(
             new CustomerRepository(context), new SupportTicketRepository(context), new DeviceTokenRepository(context),
-            BuildDispatchService(context), NullLogger<SupportTicketNotificationTriggerHandler>.Instance);
+            BuildDispatchService(context), TestServices.IntentCoordinator(context),
+            NullLogger<SupportTicketNotificationTriggerHandler>.Instance);
 
     private static NotificationDispatchService BuildDispatchService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(

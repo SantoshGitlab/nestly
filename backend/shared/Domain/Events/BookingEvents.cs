@@ -63,7 +63,16 @@ public sealed record BookingProviderChangedEvent(
 // see DomainEventDispatchInterceptor and the "DOMAIN EVENT DISPATCH AND
 // DELIVERY" section of docs/ARCHITECTURE.md. A dropped tracking broadcast is
 // acceptable (REST re-read is the source of truth); a dropped notification is
-// not, so no notification trigger may hang off these events alone.
+// not, so no notification trigger may hang off these events *alone*.
+//
+// Task 294 is what makes that condition satisfiable rather than a prohibition:
+// an event listed in NotificationIntentPlanner gets a durable notification
+// intent written inside the transaction that raised it, plus a sweep that
+// re-runs the handler. ProviderAssignmentAcceptedEvent is in that registry,
+// which is why ProviderAssigned is allowed to trigger from it. The other four
+// events here are not, and a notification trigger must not be added to one
+// without adding it to the planner in the same change - otherwise the trigger
+// is back to at-most-once with nothing saying so.
 
 /// <summary>
 /// The provider accepted an outstanding assignment (task 272) - raised by

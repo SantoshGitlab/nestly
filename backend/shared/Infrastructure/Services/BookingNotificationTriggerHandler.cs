@@ -7,6 +7,7 @@ using Nestly.Application.Cancellations;
 using Nestly.Application.Notifications;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
+using Nestly.BuildingBlocks.Primitives;
 using Nestly.BuildingBlocks.Privacy;
 using Nestly.Domain;
 using Nestly.Domain.Events;
@@ -85,27 +86,41 @@ namespace Nestly.Infrastructure.Services;
 /// ProviderChanged always sits, explaining the swap.
 /// </para>
 /// <para>
-/// <b>DURABILITY - read this before relying on any of these notifications.</b>
-/// They are at-most-once, best-effort, and not retried. Dispatch is
-/// in-process MediatR, published post-commit by
-/// <c>DomainEventDispatchInterceptor</c> with no outbox, no queue and no
-/// dead-letter (docs/ARCHITECTURE.md, "DOMAIN EVENT DISPATCH AND DELIVERY").
-/// This handler then re-reads booking, customer, provider, device tokens and
-/// payment/cancellation/refund rows *after* the transaction committed; any of
-/// those reads can throw, and the process dying anywhere between the commit
-/// and the send loses the notification permanently with nothing left behind to
-/// retry from. The transition itself is already durable; the telling of it is
-/// not. Task 276 deliberately did not fix this - a durable intent record
-/// written in the same transaction as the status change, plus a sweep over
-/// unsent records, is the fix that section prescribes for this handler and its
-/// three siblings together, and it is a new row's worth of work rather than a
-/// side effect of adding triggers.
+/// <b>DURABILITY (task 294) - these notifications survive this handler.</b>
+/// Dispatch is still in-process MediatR published post-commit by
+/// <c>DomainEventDispatchInterceptor</c>, and this handler still re-reads
+/// booking, customer, provider, device tokens and payment/cancellation/refund
+/// rows *after* the transaction committed - any of which can throw. What
+/// changed is that it is no longer the only path. Before the transition
+/// committed, <c>NotificationIntentInterceptor</c> wrote one durable
+/// <see cref="NotificationIntent"/> row per message this event owes, inside
+/// the same <c>SaveChanges</c>, so the obligation is as durable as the status
+/// change that created it. Every dispatch below goes through
+/// <see cref="INotificationIntentCoordinator"/>, which claims the intent
+/// before sending and marks it delivered after; anything this handler fails to
+/// send, or dies before sending, is picked up by
+/// <c>NotificationIntentSweepJob</c> and re-run through
+/// <see cref="INotificationTriggerHandler.HandleAsync"/> - the same code,
+/// against the same rehydrated event. Delivery is at-least-once within the
+/// retry bound and deduplicated by the intent's key; see
+/// docs/ARCHITECTURE.md, "DOMAIN EVENT DISPATCH AND DELIVERY", for exactly
+/// what that does and does not promise.
+/// </para>
+/// <para>
+/// The corollary for anyone editing this class: <b>every path out of a
+/// dispatch decision must resolve its intent</b>. Sending resolves it;
+/// deciding not to send (muted, booking gone) must call
+/// <c>SkipAsync</c>, or the sweep will keep offering a message this handler
+/// has already deliberately declined until it is abandoned. And the set of
+/// messages an event owes lives in <c>NotificationIntentPlanner</c>, not here,
+/// because the intent writer and this handler have to agree on it exactly.
 /// </para>
 /// </summary>
 public sealed class BookingNotificationTriggerHandler :
     INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>,
     INotificationHandler<DomainEventNotification<ProviderAssignmentAcceptedEvent>>,
-    INotificationHandler<DomainEventNotification<BookingProviderChangedEvent>>
+    INotificationHandler<DomainEventNotification<BookingProviderChangedEvent>>,
+    INotificationTriggerHandler
 {
     /// <summary>Stand-in for a provider whose row cannot be resolved - see <see cref="AddProviderVariablesAsync"/>.</summary>
     private const string UnknownProviderName = "Your professional";
@@ -116,6 +131,7 @@ public sealed class BookingNotificationTriggerHandler :
     private readonly IRefundTransactionRepository _refundRepository;
     private readonly IProviderRepository _providerRepository;
     private readonly INotificationDispatchService _notificationDispatchService;
+    private readonly INotificationIntentCoordinator _intentCoordinator;
     private readonly IOptionsMonitor<FulfilmentNotificationOptions> _fulfilmentOptions;
     private readonly ILogger<BookingNotificationTriggerHandler> _logger;
 
@@ -126,6 +142,7 @@ public sealed class BookingNotificationTriggerHandler :
         IRefundTransactionRepository refundRepository,
         IProviderRepository providerRepository,
         INotificationDispatchService notificationDispatchService,
+        INotificationIntentCoordinator intentCoordinator,
         IOptionsMonitor<FulfilmentNotificationOptions> fulfilmentOptions,
         ILogger<BookingNotificationTriggerHandler> logger)
     {
@@ -135,53 +152,70 @@ public sealed class BookingNotificationTriggerHandler :
         _refundRepository = refundRepository;
         _providerRepository = providerRepository;
         _notificationDispatchService = notificationDispatchService;
+        _intentCoordinator = intentCoordinator;
         _fulfilmentOptions = fulfilmentOptions;
         _logger = logger;
     }
 
-    public async Task Handle(DomainEventNotification<BookingStatusChangedEvent> notification, CancellationToken cancellationToken)
+    /// <summary>Task 294: the three event types this handler owns, so the intent sweep can route a rehydrated event back to exactly it.</summary>
+    public bool CanHandle(Type domainEventType) =>
+        domainEventType == typeof(BookingStatusChangedEvent) ||
+        domainEventType == typeof(ProviderAssignmentAcceptedEvent) ||
+        domainEventType == typeof(BookingProviderChangedEvent);
+
+    /// <inheritdoc />
+    public Task HandleAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default) => domainEvent switch
     {
-        var domainEvent = notification.DomainEvent;
+        BookingStatusChangedEvent statusChanged => HandleAsync(statusChanged, cancellationToken),
+        ProviderAssignmentAcceptedEvent accepted => HandleAsync(accepted, cancellationToken),
+        BookingProviderChangedEvent providerChanged => HandleAsync(providerChanged, cancellationToken),
+        _ => Task.CompletedTask
+    };
 
-        // Not every transition has a notification - Initiated/PaymentPending/
-        // AwaitingFulfilment/RefundPending are all silent, and deliberately
-        // so: none of them is a fact a customer can act on, and
-        // AwaitingFulfilment is reached both from Confirmed and from a
-        // provider rejecting a job, where "your booking is waiting again" is
-        // noise the customer cannot do anything about.
-        var eventTypes = domainEvent.ToStatus switch
+    public Task Handle(DomainEventNotification<BookingStatusChangedEvent> notification, CancellationToken cancellationToken) =>
+        HandleAsync(notification.DomainEvent, cancellationToken);
+
+    private async Task HandleAsync(BookingStatusChangedEvent domainEvent, CancellationToken cancellationToken)
+    {
+        // Which messages this transition owes lives in
+        // NotificationIntentPlanner (task 294), because the durable intent
+        // rows were written from that same function inside the transaction
+        // that raised this event. A copy of the switch here that drifted by
+        // one status would either strand rows nothing resolves or send
+        // messages nothing recorded, and neither shows up as a failing test.
+        var eventTypes = NotificationIntentPlanner.EventTypesFor(domainEvent.ToStatus);
+
+        if (eventTypes.Count == 0)
         {
-            BookingStatus.Confirmed => [NotificationEventType.BookingConfirmed, NotificationEventType.PaymentSuccess],
-            BookingStatus.PaymentFailed => [NotificationEventType.PaymentFailed],
-            BookingStatus.CancelledByCustomer or BookingStatus.CancelledByAdmin => [NotificationEventType.BookingCancelled],
-            BookingStatus.Rescheduled => [NotificationEventType.BookingRescheduled],
-            BookingStatus.Refunded => [NotificationEventType.RefundProcessed],
-            BookingStatus.Expired => [NotificationEventType.BookingExpired],
-
-            // Task 276: the fulfilment half. One event type per transition -
-            // unlike Confirmed, none of these doubles up.
-            //
-            // Assigned is deliberately absent (task 295): reaching it means an
-            // offer was made, not that anybody accepted it, and the two are
-            // not the same fact. ProviderAssigned is dispatched from
-            // ProviderAssignmentAcceptedEvent below instead.
-            BookingStatus.ProviderEnRoute => [NotificationEventType.ProviderEnRoute],
-            BookingStatus.ProviderArrived => [NotificationEventType.ProviderArrived],
-            BookingStatus.InProgress => [NotificationEventType.JobStarted],
-            BookingStatus.Completed => [NotificationEventType.JobCompleted],
-
-            _ => Array.Empty<NotificationEventType>()
-        };
+            return;
+        }
 
         // Task 276: ops mute, applied before any repository read so a muted
         // event costs nothing at all. Only the fulfilment events can be muted;
         // FulfilmentNotificationOptions.IsEnabled returns true for everything
         // else, so the money-and-cancellation notifications above are
         // unreachable from configuration.
+        //
+        // The mute is applied here rather than at planning time on purpose: it
+        // is an incident-response knob that can flip between the commit and
+        // the sweep, so the answer has to be re-asked at delivery. A muted
+        // message resolves its intent as Skipped, leaving an honest record
+        // that it was owed and deliberately withheld.
         var options = _fulfilmentOptions.CurrentValue;
-        eventTypes = eventTypes.Where(options.IsEnabled).ToArray();
+        var enabled = new List<NotificationEventType>(eventTypes.Count);
+        foreach (var eventType in eventTypes)
+        {
+            if (options.IsEnabled(eventType))
+            {
+                enabled.Add(eventType);
+            }
+            else
+            {
+                await _intentCoordinator.SkipAsync(domainEvent, eventType, "Muted by FulfilmentNotificationOptions.", cancellationToken);
+            }
+        }
 
-        if (eventTypes.Length == 0)
+        if (enabled.Count == 0)
         {
             return;
         }
@@ -190,15 +224,35 @@ public sealed class BookingNotificationTriggerHandler :
         if (booking is null)
         {
             _logger.LogWarning("Booking {BookingId} not found while dispatching notifications for {ToStatus}.", domainEvent.BookingId, domainEvent.ToStatus);
+            await SkipAllAsync(domainEvent, enabled, "Booking no longer exists.", cancellationToken);
             return;
         }
 
         var recipient = await ResolveCustomerRecipientAsync(booking, cancellationToken);
 
+        foreach (var eventType in enabled)
+        {
+            await _intentCoordinator.DeliverAsync(
+                domainEvent,
+                eventType,
+                async ct =>
+                {
+                    var variables = await BuildVariablesAsync(eventType, booking, ct);
+                    await _notificationDispatchService.DispatchAsync(booking.CustomerId, eventType, recipient, variables, bookingId: booking.Id, cancellationToken: ct);
+                },
+                cancellationToken);
+        }
+    }
+
+    private async Task SkipAllAsync(
+        IDomainEvent domainEvent,
+        IReadOnlyList<NotificationEventType> eventTypes,
+        string reason,
+        CancellationToken cancellationToken)
+    {
         foreach (var eventType in eventTypes)
         {
-            var variables = await BuildVariablesAsync(eventType, booking, cancellationToken);
-            await _notificationDispatchService.DispatchAsync(booking.CustomerId, eventType, recipient, variables, bookingId: booking.Id, cancellationToken: cancellationToken);
+            await _intentCoordinator.SkipAsync(domainEvent, eventType, reason, cancellationToken);
         }
     }
 
@@ -214,17 +268,17 @@ public sealed class BookingNotificationTriggerHandler :
     /// booking re-offered after a rejection produces one acceptance event for
     /// whichever provider finally takes it, and none for those who did not.
     /// </remarks>
-    public Task Handle(DomainEventNotification<ProviderAssignmentAcceptedEvent> notification, CancellationToken cancellationToken)
-    {
-        var domainEvent = notification.DomainEvent;
+    public Task Handle(DomainEventNotification<ProviderAssignmentAcceptedEvent> notification, CancellationToken cancellationToken) =>
+        HandleAsync(notification.DomainEvent, cancellationToken);
 
-        return DispatchProviderNotificationAsync(
+    private Task HandleAsync(ProviderAssignmentAcceptedEvent domainEvent, CancellationToken cancellationToken) =>
+        DispatchProviderNotificationAsync(
+            domainEvent,
             domainEvent.BookingId,
             NotificationEventType.ProviderAssigned,
             providerId: domainEvent.ProviderId,
             previousProviderId: null,
             cancellationToken);
-    }
 
     /// <summary>
     /// Task 295: an accepted professional was swapped for another one. The
@@ -241,16 +295,21 @@ public sealed class BookingNotificationTriggerHandler :
     /// in the domain because it is a rule about what we tell people, not about
     /// what happened.
     /// </remarks>
-    public Task Handle(DomainEventNotification<BookingProviderChangedEvent> notification, CancellationToken cancellationToken)
-    {
-        var domainEvent = notification.DomainEvent;
+    public Task Handle(DomainEventNotification<BookingProviderChangedEvent> notification, CancellationToken cancellationToken) =>
+        HandleAsync(notification.DomainEvent, cancellationToken);
 
+    private Task HandleAsync(BookingProviderChangedEvent domainEvent, CancellationToken cancellationToken)
+    {
         if (!domainEvent.PreviousAssignmentAccepted)
         {
+            // NotificationIntentPlanner applies the same rule, so no intent
+            // row was ever written for this event - there is nothing to
+            // resolve and nothing for the sweep to find.
             return Task.CompletedTask;
         }
 
         return DispatchProviderNotificationAsync(
+            domainEvent,
             domainEvent.BookingId,
             NotificationEventType.ProviderChanged,
             providerId: domainEvent.NewProviderId,
@@ -268,6 +327,7 @@ public sealed class BookingNotificationTriggerHandler :
     /// next candidate by the time a ProviderChanged is handled.
     /// </summary>
     private async Task DispatchProviderNotificationAsync(
+        IDomainEvent domainEvent,
         Guid bookingId,
         NotificationEventType eventType,
         Guid providerId,
@@ -276,6 +336,7 @@ public sealed class BookingNotificationTriggerHandler :
     {
         if (!_fulfilmentOptions.CurrentValue.IsEnabled(eventType))
         {
+            await _intentCoordinator.SkipAsync(domainEvent, eventType, "Muted by FulfilmentNotificationOptions.", cancellationToken);
             return;
         }
 
@@ -283,24 +344,32 @@ public sealed class BookingNotificationTriggerHandler :
         if (booking is null)
         {
             _logger.LogWarning("Booking {BookingId} not found while dispatching a {EventType} notification.", bookingId, eventType);
+            await _intentCoordinator.SkipAsync(domainEvent, eventType, "Booking no longer exists.", cancellationToken);
             return;
         }
 
         var recipient = await ResolveCustomerRecipientAsync(booking, cancellationToken);
 
-        var variables = BuildBaseVariables(booking);
-        await AddProviderVariablesAsync(variables, booking.Id, providerId);
+        await _intentCoordinator.DeliverAsync(
+            domainEvent,
+            eventType,
+            async ct =>
+            {
+                var variables = BuildBaseVariables(booking);
+                await AddProviderVariablesAsync(variables, booking.Id, providerId);
 
-        if (previousProviderId is { } previous)
-        {
-            var previousProvider = await _providerRepository.GetByIdAsync(previous);
-            variables["PreviousProviderName"] = string.IsNullOrWhiteSpace(previousProvider?.DisplayName)
-                ? UnknownProviderName
-                : previousProvider.DisplayName;
-        }
+                if (previousProviderId is { } previous)
+                {
+                    var previousProvider = await _providerRepository.GetByIdAsync(previous);
+                    variables["PreviousProviderName"] = string.IsNullOrWhiteSpace(previousProvider?.DisplayName)
+                        ? UnknownProviderName
+                        : previousProvider.DisplayName;
+                }
 
-        await _notificationDispatchService.DispatchAsync(
-            booking.CustomerId, eventType, recipient, variables, bookingId: booking.Id, cancellationToken: cancellationToken);
+                await _notificationDispatchService.DispatchAsync(
+                    booking.CustomerId, eventType, recipient, variables, bookingId: booking.Id, cancellationToken: ct);
+            },
+            cancellationToken);
     }
 
     /// <summary>

@@ -267,7 +267,7 @@ point is a follow-up once real hosting/subdomain decisions in DEVOPS.md are
 made and a proper redirect can be set up at the infrastructure layer instead
 of in application code.
 
-## DOMAIN EVENT DISPATCH AND DELIVERY (task 272, resolved 2026-08-07)
+## DOMAIN EVENT DISPATCH AND DELIVERY (task 272, resolved 2026-08-07; durability closed by task 294, 2026-08-08)
 
 Phase 16's order tracking adds a family of domain events
 (`ProviderAssignmentAcceptedEvent`, `ProviderEnRouteEvent`,
@@ -328,56 +328,84 @@ Hence the rule:
 > The post-commit handler may remain as the fast path; it must not be the
 > only path.
 
-**Known violation, deliberately not fixed here:**
-`BookingNotificationTriggerHandler` (`backend/shared/Infrastructure/Services/BookingNotificationTriggerHandler.cs`)
-is exactly the shape the rule forbids. It is an
-`INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>`
-that, post-commit, re-reads the booking, customer, payment/cancellation/refund
-and device tokens from repositories and then calls
+**The violation was real, and tasks 276 and 295 each widened it.**
+`BookingNotificationTriggerHandler` was exactly the shape the rule forbids: a
+post-commit `INotificationHandler` that re-read the booking, customer,
+provider, device tokens and payment/cancellation/refund rows and then called
 `INotificationDispatchService`. `DispatchAsync` itself is careful — it never
-throws for an individual channel's send failure — but the four repository
-reads ahead of it can, and a process death anywhere in that window loses the
-booking-confirmed, payment-failed, cancelled, rescheduled, refunded and
-expired notifications for that save with nothing left behind to retry from.
-`ChatNotificationTriggerHandler`, `SupportTicketNotificationTriggerHandler`
-and `SubscriptionNotificationTriggerHandler` share the shape.
-
-**Task 276 did not fix it, and said so.** That task added the fulfilment-half
-triggers (ProviderAssigned/ProviderEnRoute/ProviderArrived/JobStarted/
-JobCompleted) to `BookingNotificationTriggerHandler`, and they carry exactly
-the same guarantee as the six that were already there: **at-most-once,
-best-effort, never retried.** The handler also gained a fifth post-commit
-repository read (the provider, for the name the templates render), so the
-window in which a throw or a process death silently loses a notification is
-marginally wider than before, not narrower.
-
-**Task 295 did not fix it either, and widened the same window again.** That
-task moved ProviderAssigned off the offer-time status transition and onto
-`ProviderAssignmentAcceptedEvent`, and added a ProviderChanged trigger on
-`BookingProviderChangedEvent` — so `BookingNotificationTriggerHandler` is now
-an `INotificationHandler` for three event types rather than one. All three
-arrive by the same post-commit, in-process, no-outbox route and carry the same
-at-most-once guarantee. Worth stating plainly for the two new ones, because
-their content makes losing them worse than average: "your professional has
-changed" is the message whose loss leaves a customer expecting the wrong person
-at their door, and it is the *only* signal that swap produces.
-
-This was a deliberate scope call rather than an oversight. The durable-intent
-record and its sweep is a schema change, a write inside every notification-
-warranting transaction, a background job and a delivery-idempotency rule — and
-it has to be applied to `BookingNotificationTriggerHandler`,
+throws for an individual channel's send failure — but the repository reads
+ahead of it can, and a process death anywhere in that window lost the
+notification with nothing left behind to retry from. Task 276 added five
+fulfilment triggers and a fifth repository read on the same footing; task 295
+moved ProviderAssigned onto `ProviderAssignmentAcceptedEvent` and added
+ProviderChanged, taking that handler to three event types. Both said so at the
+time rather than implying a guarantee they did not provide.
 `ChatNotificationTriggerHandler`, `SupportTicketNotificationTriggerHandler` and
-`SubscriptionNotificationTriggerHandler` together, since a rule half the
-handlers follow is not a rule. Bundling that into a task whose brief was
-"wire up five triggers" would have meant reviewing the two changes as one.
+`SubscriptionNotificationTriggerHandler` shared the shape.
 
-**Recommended as its own row.** Until it exists, the honest statement to make
-about any notification in this system — the five new ones included — is that
-the state change is durable and the telling of it is not. Nothing else in the
-system will notice or resend a notification that was lost between the commit
-and the send. Anywhere that guarantee is not good enough (a payment failure a
-customer must act on, say) the correct answer is that row, not another
-handler.
+### Task 294: what is guaranteed now
+
+The durable-intent record and its sweep exist, and they cover **all four**
+handlers — the rule is not one that half the handlers follow.
+
+How it works:
+
+1. `NotificationIntentInterceptor` (a `SaveChangesInterceptor`, running on
+   **`SavingChanges`** — pre-commit, unlike its post-commit sibling
+   `DomainEventDispatchInterceptor`) reads the domain events on tracked
+   aggregate roots and, for each message they owe, adds a `notification_intent`
+   row to the *same* `SaveChanges`. The intent therefore commits — or rolls
+   back — atomically with the state change that warrants it. Which messages an
+   event owes is decided by `NotificationIntentPlanner`, a pure function that
+   both the interceptor and the handlers use, so the writer and the sender
+   cannot drift apart.
+2. Post-commit dispatch is unchanged and remains the fast path. Every dispatch
+   in the four handlers is now wrapped in `INotificationIntentCoordinator`,
+   which claims the intent with a single conditional `UPDATE` before sending
+   and marks it delivered after.
+3. `NotificationIntentSweepJob` — a Hangfire recurring job, every two minutes,
+   registered from admin-api like the other sweeps — picks up intents that are
+   still pending past a grace period, claims them, rehydrates the serialized
+   domain event and re-runs **the same handler** through
+   `INotificationTriggerHandler`. It addresses the notification handlers
+   directly rather than re-publishing through MediatR, because re-publishing a
+   `BookingStatusChangedEvent` would also re-run escrow release, referral
+   qualification, metrics and auto-assignment, none of which is idempotent.
+
+**The guarantee, stated exactly:**
+
+> A notification whose intent was committed is delivered **at least once**,
+> across process restarts and across app instances, up to a bounded number of
+> attempts (`NotificationIntentOptions.MaxAttempts`, default 5 — the in-process
+> attempt is the first). Deduplication is by a deterministic key,
+> `{domainEventId}:{notificationEventType}`, unique in the database, so the
+> sweep can never re-send what the in-process path already delivered.
+
+**What is still not guaranteed, and should not be claimed:**
+
+- **Not exactly-once.** The claim is taken before the send, and the intent is
+  marked delivered after it. A process death in between leaves the row claimed
+  but pending, and the sweep re-sends it once the lease expires. A duplicate
+  SMS is the failure mode this design deliberately chooses over silence.
+- **Not unbounded retry.** After `MaxAttempts` the intent moves to the terminal
+  `Abandoned` state and is never retried again. That state means a customer was
+  owed a message and will not get it; it is logged at error level and is the
+  thing to alert on.
+- **Not a guarantee for events raised on plain `Entity<TId>`.** The intent
+  writer sweeps `ChangeTracker.Entries<AggregateRoot<Guid>>()`, exactly as the
+  dispatcher does, so an event raised on a non-aggregate is still invisible to
+  both. Anything that starts raising events must be an aggregate root.
+- **Not a general outbox.** Only the eight domain events in
+  `NotificationIntentPlanner`'s registry produce intents. A notification
+  dispatched from a path the planner does not know about — `Welcome` at
+  registration, the referral and recurring-booking notifications, OTP — still
+  has no durable record and is still at-most-once. The coordinator fails open
+  and logs a warning when it is asked to deliver a message with no intent
+  behind it, so this shows up rather than passing silently, but it is not
+  fixed. Extending the guarantee to those paths means adding them to the
+  planner and routing their sender through the coordinator.
+- **Not durability for tracking broadcasts.** Unchanged and deliberate: a lost
+  `ProviderLocationUpdated` frame is still acceptable, for the reasons above.
 
 ## DOMAIN DESIGN PRINCIPLES
 

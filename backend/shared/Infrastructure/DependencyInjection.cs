@@ -258,9 +258,20 @@ public static class DependencyInjection
             throw new InvalidOperationException(
                 $"Connection string '{DatabaseConnectionName}' is not configured.");
 
+        // Task 294: how often the notification-intent sweep gives up, waits and
+        // batches. Not a secret and safe to leave unset - same reasoning as
+        // BookingExpiryOptions above. IOptionsMonitor, like
+        // FulfilmentNotificationOptions, so an operator can widen the retry
+        // bound during an incident without a restart.
+        services
+            .AddOptions<NotificationIntentOptions>()
+            .Bind(configuration.GetSection(NotificationIntentOptions.SectionName))
+            .ValidateDataAnnotations();
+
         services.AddSingleton<AuditableEntityInterceptor>();
         services.AddScoped<DomainEventDispatchInterceptor>();
         services.AddSingleton<NewOwnedChildEntityInterceptor>();
+        services.AddSingleton<NotificationIntentInterceptor>();
 
         services.AddDbContext<NestlyDbContext>((serviceProvider, options) =>
             options
@@ -268,6 +279,12 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention()
                 .AddInterceptors(
                     serviceProvider.GetRequiredService<AuditableEntityInterceptor>(),
+                    // Task 294: writes the durable notification intents during
+                    // SavingChanges, so they commit atomically with the state
+                    // change. It has to be registered here, ahead of the
+                    // post-commit dispatcher below, because that dispatcher
+                    // drains the very domain events this one reads.
+                    serviceProvider.GetRequiredService<NotificationIntentInterceptor>(),
                     serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
                     serviceProvider.GetRequiredService<NewOwnedChildEntityInterceptor>()));
 
@@ -721,6 +738,28 @@ public static class DependencyInjection
         services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         services.AddScoped<INotificationTemplateRenderer, NotificationTemplateRenderer>();
         services.AddScoped<INotificationDispatchService, NotificationDispatchService>();
+
+        // Task 294: durable notification intents. The coordinator is scoped
+        // rather than transient on purpose - it remembers which intent leases
+        // this scope already holds, which is what lets the sweep claim a row
+        // and then re-invoke the ordinary handler without the handler's own
+        // claim failing against the sweep's lease.
+        services.AddScoped<INotificationIntentRepository, NotificationIntentRepository>();
+        services.AddScoped<INotificationIntentCoordinator, NotificationIntentCoordinator>();
+        services.AddScoped<INotificationIntentSweepJob, NotificationIntentSweepJob>();
+
+        // The four handlers the intent guarantee covers, exposed to the sweep
+        // through INotificationTriggerHandler. MediatR's assembly scan already
+        // registers each of them as an INotificationHandler for the in-process
+        // path; these registrations are the retry path, and they address only
+        // the notification handlers so that nothing else subscribed to the
+        // same domain events (escrow, referrals, metrics, auto-assignment) is
+        // ever re-run by a sweep. All four, together, or the guarantee is a
+        // half-truth.
+        services.AddScoped<INotificationTriggerHandler, BookingNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, ChatNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, SupportTicketNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, SubscriptionNotificationTriggerHandler>();
 
         // Task 126a-d: admin CRUD, preview and change audit over the template
         // store above (SRS 12.17).
