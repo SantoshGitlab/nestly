@@ -452,7 +452,7 @@ public sealed class ProviderScopedReviewBackfillTests : IClassFixture<TestDataba
 
             if (reassigned)
             {
-                firstAssignment.MarkReassigned();
+                firstAssignment.MarkReassigned(secondProvider.Id);
                 context.Add(firstAssignment);
                 var secondAssignment = new BookingProviderAssignment(
                     Guid.NewGuid(), booking.Id, secondProvider.Id, BookingAssignedByType.System, null, null);

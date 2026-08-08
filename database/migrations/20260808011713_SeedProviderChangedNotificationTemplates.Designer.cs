@@ -540,6 +540,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity_snapshot");
 
+                    b.Property<Guid?>("RecurringBookingPlanId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recurring_booking_plan_id");
+
                     b.Property<DateOnly>("SlotDate")
                         .HasColumnType("date")
                         .HasColumnName("slot_date");
@@ -618,6 +622,9 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CreatedAtUtc")
                         .HasDatabaseName("ix_booking_created_at_utc");
+
+                    b.HasIndex("RecurringBookingPlanId")
+                        .HasDatabaseName("ix_booking_recurring_booking_plan_id");
 
                     b.HasIndex("CustomerId", "IdempotencyKey")
                         .IsUnique()
@@ -3566,6 +3573,10 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_recurring_booking_occurrence");
 
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_recurring_booking_occurrence_booking_id");
+
                     b.HasIndex("RecurringBookingPlanId", "ScheduledDate")
                         .IsUnique()
                         .HasDatabaseName("ix_recurring_booking_occurrence_recurring_booking_plan_id_sche");
@@ -5138,6 +5149,12 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_booking_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.RecurringBookingPlan", null)
+                        .WithMany()
+                        .HasForeignKey("RecurringBookingPlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_booking_recurring_booking_plans_recurring_booking_plan_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.BookingAddOnItem", b =>
@@ -5588,6 +5605,12 @@ namespace Nestly.Infrastructure.Migrations
 
             modelBuilder.Entity("Nestly.Domain.RecurringBookingOccurrence", b =>
                 {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_recurring_booking_occurrence_booking_booking_id");
+
                     b.HasOne("Nestly.Domain.RecurringBookingPlan", null)
                         .WithMany()
                         .HasForeignKey("RecurringBookingPlanId")
