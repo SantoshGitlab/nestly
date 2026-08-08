@@ -464,8 +464,10 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         return await new NotificationEventRepository(readContext).ListByCustomerAsync(customerId);
     }
 
+    // Assigned is absent from every theory below since task 295: reaching it
+    // is an offer, not an acceptance, and it now dispatches nothing at all.
+    // The acceptance-driven ProviderAssigned has its own section further down.
     [Theory]
-    [InlineData(BookingStatus.Assigned, NotificationEventType.ProviderAssigned)]
     [InlineData(BookingStatus.ProviderEnRoute, NotificationEventType.ProviderEnRoute)]
     [InlineData(BookingStatus.ProviderArrived, NotificationEventType.ProviderArrived)]
     [InlineData(BookingStatus.InProgress, NotificationEventType.JobStarted)]
@@ -511,7 +513,6 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
     }
 
     [Theory]
-    [InlineData(BookingStatus.Assigned, NotificationEventType.ProviderAssigned)]
     [InlineData(BookingStatus.ProviderEnRoute, NotificationEventType.ProviderEnRoute)]
     [InlineData(BookingStatus.ProviderArrived, NotificationEventType.ProviderArrived)]
     [InlineData(BookingStatus.InProgress, NotificationEventType.JobStarted)]
@@ -526,12 +527,11 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
     }
 
     [Theory]
-    [InlineData(BookingStatus.Assigned, NotificationEventType.ProviderAssigned)]
     [InlineData(BookingStatus.ProviderEnRoute, NotificationEventType.ProviderEnRoute)]
     [InlineData(BookingStatus.ProviderArrived, NotificationEventType.ProviderArrived)]
     [InlineData(BookingStatus.InProgress, NotificationEventType.JobStarted)]
     [InlineData(BookingStatus.Completed, NotificationEventType.JobCompleted)]
-    public async Task Muting_the_other_four_fulfilment_events_leaves_this_one_alone(BookingStatus target, NotificationEventType expected)
+    public async Task Muting_the_other_fulfilment_events_leaves_this_one_alone(BookingStatus target, NotificationEventType expected)
     {
         var (customerId, bookingId, from, _, _) = await SeedFulfilmentBookingAsync(target);
 
@@ -550,7 +550,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
     public async Task Muting_every_fulfilment_event_does_not_mute_the_cancellation_notification()
     {
         var (customerId, bookingId, _, _, _) = await SeedFulfilmentBookingAsync(BookingStatus.Assigned);
-        var allMuted = TestServices.FulfilmentNotifications(false, false, false, false, false);
+        var allMuted = TestServices.FulfilmentNotifications(false, false, false, false, false, false);
 
         var notifications = await HandleAndReadAsync(
             customerId, bookingId, BookingStatus.Assigned, BookingStatus.CancelledByCustomer, allMuted);
@@ -582,7 +582,8 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
             providerEnRoute: eventType != NotificationEventType.ProviderEnRoute,
             providerArrived: eventType != NotificationEventType.ProviderArrived,
             jobStarted: eventType != NotificationEventType.JobStarted,
-            jobCompleted: eventType != NotificationEventType.JobCompleted);
+            jobCompleted: eventType != NotificationEventType.JobCompleted,
+            providerChanged: eventType != NotificationEventType.ProviderChanged);
 
     private static IOptionsMonitor<FulfilmentNotificationOptions> MuteAllExcept(NotificationEventType eventType) =>
         TestServices.FulfilmentNotifications(
@@ -590,7 +591,216 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
             providerEnRoute: eventType == NotificationEventType.ProviderEnRoute,
             providerArrived: eventType == NotificationEventType.ProviderArrived,
             jobStarted: eventType == NotificationEventType.JobStarted,
-            jobCompleted: eventType == NotificationEventType.JobCompleted);
+            jobCompleted: eventType == NotificationEventType.JobCompleted,
+            providerChanged: eventType == NotificationEventType.ProviderChanged);
+
+    // --- Task 295: who is coming, and when the customer is told ---
+    //
+    // The rule these pin: ProviderAssigned fires on acceptance and nowhere
+    // else, and a change of an *accepted* professional gets its own template
+    // rather than a second ProviderAssigned. Same two-channels-per-dispatch
+    // arithmetic as the task 276 block above - two rows means "once".
+
+    /// <summary>
+    /// Defect (a). AwaitingFulfilment -&gt; Assigned is where
+    /// <c>BookingProviderAssignmentService.AssignAsync</c> records an *offer*.
+    /// Telling the customer "Rajesh is coming" here is a guess about what
+    /// Rajesh will say.
+    /// </summary>
+    [Fact]
+    public async Task An_offer_alone_tells_the_customer_nothing()
+    {
+        var (customerId, bookingId, from, _, _) = await SeedFulfilmentBookingAsync(BookingStatus.Assigned);
+        from.Should().Be(BookingStatus.AwaitingFulfilment, "the offer-time transition is the one under test");
+
+        var notifications = await HandleAndReadAsync(customerId, bookingId, from, BookingStatus.Assigned);
+
+        notifications.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Acceptance_dispatches_exactly_one_ProviderAssigned_naming_the_accepting_provider()
+    {
+        var seed = await SeedBookingWithTwoProvidersAsync();
+
+        var notifications = await HandleAcceptanceAsync(seed, seed.FirstProviderId);
+
+        notifications.Where(n => n.EventType == NotificationEventType.ProviderAssigned)
+            .Should().HaveCount(2, "one per channel - SMS and email - and no more");
+        notifications.Should().OnlyContain(n => n.EventType == NotificationEventType.ProviderAssigned);
+        notifications.Should().OnlyContain(n => n.PayloadJson!.Contains(seed.FirstProviderName));
+        notifications.Should().OnlyContain(n => n.Status == NotificationDeliveryStatus.Sent);
+    }
+
+    /// <summary>
+    /// The contradictory pair defect (a) produced: offer to one provider,
+    /// rejection, offer to another, and the customer used to be told twice
+    /// that two different people were coming. Only the acceptance speaks now,
+    /// so the whole sequence yields one name - the right one.
+    /// </summary>
+    [Fact]
+    public async Task An_offer_rejected_and_re_offered_never_names_two_professionals()
+    {
+        var seed = await SeedBookingWithTwoProvidersAsync();
+
+        await HandleAndReadAsync(seed.CustomerId, seed.BookingId, BookingStatus.AwaitingFulfilment, BookingStatus.Assigned);
+        await HandleAndReadAsync(seed.CustomerId, seed.BookingId, BookingStatus.Assigned, BookingStatus.AwaitingFulfilment);
+        await HandleAndReadAsync(seed.CustomerId, seed.BookingId, BookingStatus.AwaitingFulfilment, BookingStatus.Assigned);
+        await SetAssignedProviderAsync(seed.BookingId, seed.SecondProviderId);
+
+        var notifications = await HandleAcceptanceAsync(seed, seed.SecondProviderId);
+
+        notifications.Where(n => n.EventType == NotificationEventType.ProviderAssigned)
+            .Should().HaveCount(2, "the two offers and the rejection say nothing; only the acceptance does");
+        notifications.Should().OnlyContain(n => n.PayloadJson!.Contains(seed.SecondProviderName));
+        notifications.Should().NotContain(n => n.PayloadJson!.Contains(seed.FirstProviderName));
+    }
+
+    /// <summary>
+    /// Defect (b). The swap moves no booking status, so nothing in the
+    /// <c>BookingStatusChangedEvent</c> stream could carry it - the customer
+    /// used to be told nothing and would greet the wrong person at the door.
+    /// </summary>
+    [Fact]
+    public async Task Replacing_an_accepted_professional_sends_the_distinct_ProviderChanged_notification()
+    {
+        var seed = await SeedBookingWithTwoProvidersAsync();
+        await HandleAcceptanceAsync(seed, seed.FirstProviderId);
+        await SetAssignedProviderAsync(seed.BookingId, seed.SecondProviderId);
+
+        var notifications = await HandleProviderChangedAsync(seed, previousAccepted: true);
+
+        notifications.Where(n => n.EventType == NotificationEventType.ProviderChanged)
+            .Should().HaveCount(2, "one per channel - SMS and email - and no more");
+        notifications.Where(n => n.EventType == NotificationEventType.ProviderAssigned)
+            .Should().HaveCount(2, "only the original acceptance - a change must never re-send ProviderAssigned");
+        notifications.Where(n => n.EventType == NotificationEventType.ProviderChanged)
+            .Should().OnlyContain(n => n.PayloadJson!.Contains(seed.FirstProviderName), "the message corrects the name the customer already has");
+        notifications.Should().OnlyContain(n => n.Status == NotificationDeliveryStatus.Sent);
+    }
+
+    /// <summary>
+    /// The other half of the acceptance-only rule: an offer nobody accepted
+    /// was never announced, so replacing it is not a change the customer can
+    /// have noticed. Telling them their professional changed would name
+    /// somebody they never heard of.
+    /// </summary>
+    [Fact]
+    public async Task Replacing_an_offer_that_was_never_accepted_stays_silent()
+    {
+        var seed = await SeedBookingWithTwoProvidersAsync();
+
+        var notifications = await HandleProviderChangedAsync(seed, previousAccepted: false);
+
+        notifications.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Muting_ProviderAssigned_suppresses_the_acceptance_notification()
+    {
+        var seed = await SeedBookingWithTwoProvidersAsync();
+
+        var notifications = await HandleAcceptanceAsync(seed, seed.FirstProviderId, MuteOnly(NotificationEventType.ProviderAssigned));
+
+        notifications.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Muting_ProviderChanged_suppresses_the_change_notification()
+    {
+        var seed = await SeedBookingWithTwoProvidersAsync();
+
+        var notifications = await HandleProviderChangedAsync(seed, previousAccepted: true, MuteOnly(NotificationEventType.ProviderChanged));
+
+        notifications.Should().BeEmpty();
+    }
+
+    private sealed record TwoProviderSeed(
+        Guid CustomerId, Guid BookingId, Guid FirstProviderId, string FirstProviderName, Guid SecondProviderId, string SecondProviderName);
+
+    /// <summary>
+    /// A booking walked to Assigned with the first provider in the display
+    /// field - the state an offer leaves behind - plus a second provider for
+    /// the rejection/reassignment cases. Distinct display names, because every
+    /// assertion here is about which of the two the customer was told.
+    /// </summary>
+    private async Task<TwoProviderSeed> SeedBookingWithTwoProvidersAsync()
+    {
+        using var context = _db.CreateContext();
+
+        var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active, $"asha-{Guid.NewGuid():N}@example.com");
+        var first = NewProvider("Rajesh Nair");
+        var second = NewProvider("Meera Iyer");
+        var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 999m);
+        var booking = new Booking(
+            Guid.NewGuid(), customer.Id, new CustomerSnapshot(customer.Name, customer.Mobile), null,
+            new AddressSnapshot("Home", "221B", null, null, "560001", "Bengaluru", "Karnataka", 12.9m, 77.5m, "Asha Rao", "9876543210"),
+            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+            new PriceSnapshot(999m, 1, 999m, 0, 0, 999m, 0, 0, 0, 999m));
+        booking.AddItem(Guid.NewGuid(), service.Id, service.Name, service.Slug, 999m, 1);
+        booking.TransitionTo(BookingStatus.PaymentPending);
+        booking.TransitionTo(BookingStatus.Confirmed);
+        booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+        booking.TransitionTo(BookingStatus.Assigned);
+        booking.AssignProvider(first.Id);
+
+        context.AddRange(customer, first, second, category, service, booking);
+        await context.SaveChangesAsync();
+
+        return new TwoProviderSeed(customer.Id, booking.Id, first.Id, first.DisplayName, second.Id, second.DisplayName);
+    }
+
+    private static Provider NewProvider(string displayName) =>
+        new(Guid.NewGuid(), displayName, displayName, ProviderType.Individual, "+9198765" + Interlocked.Increment(ref _providerPhoneSequence).ToString("D5"));
+
+    /// <summary>Moves the denormalized display field on, exactly as <c>AssignAsync</c> does when it supersedes an assignment.</summary>
+    private async Task SetAssignedProviderAsync(Guid bookingId, Guid providerId)
+    {
+        using var context = _db.CreateContext();
+        var repository = new BookingRepository(context);
+        var booking = await repository.GetByIdAsync(bookingId);
+        booking!.AssignProvider(providerId);
+        await repository.UpdateAsync(booking);
+    }
+
+    /// <summary>
+    /// Drives the handler with the acceptance event
+    /// <c>BookingProviderAssignment.Accept</c> raises. No assignment row is
+    /// needed: the handler takes the provider from the event rather than
+    /// re-reading the row, which is what makes it correct for a booking whose
+    /// display field has already moved to the next candidate.
+    /// </summary>
+    private async Task<IReadOnlyList<NotificationEvent>> HandleAcceptanceAsync(
+        TwoProviderSeed seed, Guid acceptingProviderId, IOptionsMonitor<FulfilmentNotificationOptions>? fulfilmentOptions = null)
+    {
+        using (var handlerContext = _db.CreateContext())
+        {
+            await BuildBookingHandler(handlerContext, fulfilmentOptions).Handle(
+                new DomainEventNotification<ProviderAssignmentAcceptedEvent>(
+                    new ProviderAssignmentAcceptedEvent(Guid.NewGuid(), seed.BookingId, acceptingProviderId, DateTime.UtcNow)),
+                CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        return await new NotificationEventRepository(readContext).ListByCustomerAsync(seed.CustomerId);
+    }
+
+    private async Task<IReadOnlyList<NotificationEvent>> HandleProviderChangedAsync(
+        TwoProviderSeed seed, bool previousAccepted, IOptionsMonitor<FulfilmentNotificationOptions>? fulfilmentOptions = null)
+    {
+        using (var handlerContext = _db.CreateContext())
+        {
+            await BuildBookingHandler(handlerContext, fulfilmentOptions).Handle(
+                new DomainEventNotification<BookingProviderChangedEvent>(
+                    new BookingProviderChangedEvent(
+                        seed.BookingId, Guid.NewGuid(), seed.FirstProviderId, seed.SecondProviderId, previousAccepted)),
+                CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        return await new NotificationEventRepository(readContext).ListByCustomerAsync(seed.CustomerId);
+    }
 
     [Fact]
     public async Task A_transition_with_no_configured_trigger_dispatches_nothing()

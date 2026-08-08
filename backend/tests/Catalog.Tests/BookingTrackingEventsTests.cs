@@ -87,10 +87,16 @@ public sealed class BookingTrackingEventsTests
     }
 
     /// <summary>
-    /// The other three responses stay silent. Accept is the only one that means
-    /// "this job is now trackable"; a rejected, superseded or withdrawn
-    /// assignment must not put a customer on a tracking screen.
+    /// The other three responses raise no acceptance event. Accept is the only
+    /// one that means "this job is now trackable"; a rejected, superseded or
+    /// withdrawn assignment must not put a customer on a tracking screen.
     /// </summary>
+    /// <remarks>
+    /// Superseding does raise an event of its own since task 295
+    /// (<c>BookingProviderChangedEvent</c> - covered in
+    /// <c>ProviderReassignmentNotificationTests</c>), which is why this case
+    /// asserts on the acceptance event's absence rather than on an empty list.
+    /// </remarks>
     [Fact]
     public void Rejecting_superseding_or_withdrawing_an_assignment_raises_no_acceptance_event()
     {
@@ -98,13 +104,13 @@ public sealed class BookingTrackingEventsTests
         rejected.Reject("Too far.");
 
         var reassigned = NewAssignment(Guid.NewGuid(), Guid.NewGuid());
-        reassigned.MarkReassigned();
+        reassigned.MarkReassigned(Guid.NewGuid());
 
         var withdrawn = NewAssignment(Guid.NewGuid(), Guid.NewGuid());
         withdrawn.Withdraw();
 
         rejected.DomainEvents.Should().BeEmpty();
-        reassigned.DomainEvents.Should().BeEmpty();
+        reassigned.DomainEvents.OfType<ProviderAssignmentAcceptedEvent>().Should().BeEmpty();
         withdrawn.DomainEvents.Should().BeEmpty();
     }
 

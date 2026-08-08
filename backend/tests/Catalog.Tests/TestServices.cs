@@ -78,13 +78,15 @@ internal static class TestServices
         bool providerEnRoute = true,
         bool providerArrived = true,
         bool jobStarted = true,
-        bool jobCompleted = true) =>
+        bool jobCompleted = true,
+        bool providerChanged = true) =>
         Monitor(new FulfilmentNotificationOptions
         {
             ProviderAssignedEnabled = providerAssigned,
             ProviderEnRouteEnabled = providerEnRoute,
             ProviderArrivedEnabled = providerArrived,
             JobStartedEnabled = jobStarted,
-            JobCompletedEnabled = jobCompleted
+            JobCompletedEnabled = jobCompleted,
+            ProviderChangedEnabled = providerChanged
         });
 }

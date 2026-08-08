@@ -351,6 +351,17 @@ repository read (the provider, for the name the templates render), so the
 window in which a throw or a process death silently loses a notification is
 marginally wider than before, not narrower.
 
+**Task 295 did not fix it either, and widened the same window again.** That
+task moved ProviderAssigned off the offer-time status transition and onto
+`ProviderAssignmentAcceptedEvent`, and added a ProviderChanged trigger on
+`BookingProviderChangedEvent` — so `BookingNotificationTriggerHandler` is now
+an `INotificationHandler` for three event types rather than one. All three
+arrive by the same post-commit, in-process, no-outbox route and carry the same
+at-most-once guarantee. Worth stating plainly for the two new ones, because
+their content makes losing them worse than average: "your professional has
+changed" is the message whose loss leaves a customer expecting the wrong person
+at their door, and it is the *only* signal that swap produces.
+
 This was a deliberate scope call rather than an oversight. The durable-intent
 record and its sweep is a schema change, a write inside every notification-
 warranting transaction, a background job and a delivery-idempotency rule — and
