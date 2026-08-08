@@ -659,6 +659,9 @@ public static class DependencyInjection
         // own booking history (task 296's FK) rather than stored - read by
         // both the generator and ProviderAutoAssignmentHandler.
         services.AddScoped<IRecurringPlanProviderContinuityService, RecurringPlanProviderContinuityService>();
+        // Task 299: admin-side plan list/report. Read-only and DbContext-backed
+        // rather than repository-backed, same as ReportingQueryService.
+        services.AddScoped<IRecurringBookingPlanAdminService, RecurringBookingPlanAdminService>();
 
         services
             .AddOptions<CancellationPolicyOptions>()

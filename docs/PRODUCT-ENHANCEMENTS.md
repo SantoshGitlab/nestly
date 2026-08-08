@@ -95,6 +95,26 @@ asking.
 Create/pause/cancel a recurring plan; list upcoming occurrences
 (`consumer-api`).
 
+`admin-api` adds a read-only view (`#299`): `GET /admin/recurring-plans`
+(filterable list) and `GET /admin/recurring-plans/report`
+(active/paused/cancelled/completed plan counts, the active-plan cadence mix,
+and upcoming occurrence volume over a horizon). Both are gated behind the
+**existing `bookings.read`** permission — no `RecurringPlans.View` module was
+added. A plan is a standing instruction to create bookings, every row these
+endpoints report on is a plan or a booking carrying that plan's id, and an
+admin holding `bookings.read` can already open each of those bookings
+individually and see strictly more. See `RecurringPlansController`'s doc
+comment for the full reasoning.
+
+There is deliberately **no admin pause/resume/cancel** of someone else's plan:
+an admin who needs to stop the work a plan generates cancels the individual
+bookings through the existing booking-management surface, which already
+audits.
+
+### RBAC additions
+
+None. See above.
+
 ---
 
 ## 3. IN-APP CHAT
