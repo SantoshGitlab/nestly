@@ -70,6 +70,7 @@ public sealed class BookingMetricsTests : IClassFixture<TestDatabase>
             metricsService,
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             context);
     }

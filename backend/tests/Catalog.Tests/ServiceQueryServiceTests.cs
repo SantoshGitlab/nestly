@@ -218,7 +218,7 @@ public sealed class ServiceQueryServiceTests : IClassFixture<TestDatabase>
             new PriceSnapshot(999m, 1, 999m, 0m, 0m, 999m, 0m, 0m, 0m, 999m));
         booking.AddItem(Guid.NewGuid(), serviceId, "Service", "service-slug", 999m, 1);
 
-        var review = new Review(Guid.NewGuid(), booking.Id, customer.Id, serviceId, rating, reviewText);
+        var review = new Review(Guid.NewGuid(), booking.Id, customer.Id, serviceId, providerId: null, rating, reviewText);
         typeof(Review).GetProperty(nameof(Review.CreatedAtUtc))!.SetValue(review, createdAtUtc);
 
         context.Add(customer);

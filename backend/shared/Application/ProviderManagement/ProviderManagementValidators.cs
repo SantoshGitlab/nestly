@@ -58,6 +58,15 @@ public class RejectProviderKycDocumentRequestValidator : AbstractValidator<Rejec
     }
 }
 
+/// <summary>Task 293. Same shape as the KYC rejection above, and required for the same reason: a rejection the provider cannot act on is just a disappearance.</summary>
+public class RejectProviderPhotoRequestValidator : AbstractValidator<RejectProviderPhotoRequest>
+{
+    public RejectProviderPhotoRequestValidator()
+    {
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+    }
+}
+
 public class RecordBackgroundCheckRequestValidator : AbstractValidator<RecordBackgroundCheckRequest>
 {
     public RecordBackgroundCheckRequestValidator()

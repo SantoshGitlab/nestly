@@ -46,6 +46,20 @@ public enum ProviderOnboardingStatus
 }
 
 /// <summary>
+/// Review outcome of a provider-supplied profile photo (task 293). Mirrors
+/// <see cref="ProviderKycVerificationStatus"/> deliberately: a photo is
+/// user-supplied content that customers see, so it goes through the same
+/// pending/approved/rejected gate this codebase already applies to every
+/// other file a provider hands us.
+/// </summary>
+public enum ProviderPhotoModerationStatus
+{
+    Pending,
+    Approved,
+    Rejected
+}
+
+/// <summary>
 /// A service provider who fulfils bookings (PROVIDER.md "Provider" module).
 /// Deliberately independent of <see cref="Customer"/> — same shape
 /// (identity + status) for a different actor, not a specialization of it,
@@ -85,6 +99,47 @@ public class Provider : Entity<Guid>
     /// profile edit, which says nothing about the location.
     /// </summary>
     public DateTime? LocationUpdatedAtUtc { get; private set; }
+
+    /// <summary>
+    /// Task 293: the provider's profile photo, as a reference (storage
+    /// key/URL) to an already-hosted image - the same reference-only
+    /// convention <see cref="ProviderKycDocument.FileRef"/>, <c>CmsMedia.Url</c>
+    /// and <c>BookingCompletionProof</c>'s photo refs already use. This
+    /// solution has no blob-storage abstraction and this column does not
+    /// introduce one.
+    ///
+    /// Null until the provider sets one. Never read directly by a
+    /// customer-facing mapper - see <see cref="PublicPhotoUrl"/>.
+    /// </summary>
+    public string? PhotoUrl { get; private set; }
+
+    /// <summary>
+    /// Null exactly when <see cref="PhotoUrl"/> is (same both-or-neither
+    /// discipline as the location pair above): a moderation verdict for a
+    /// photo that does not exist is worse than no verdict. Otherwise it is
+    /// the current review state of the photo actually stored.
+    /// </summary>
+    public ProviderPhotoModerationStatus? PhotoModerationStatus { get; private set; }
+
+    /// <summary>Admin who last approved or rejected the photo - traceability only, not a foreign key (same rationale as <see cref="Review.ModeratedByAdminUserId"/>).</summary>
+    public Guid? PhotoModeratedByAdminUserId { get; private set; }
+
+    public DateTime? PhotoModeratedAtUtc { get; private set; }
+
+    /// <summary>The moderator's reason for the most recent verdict, shown back to the provider so a rejection is actionable rather than silent.</summary>
+    public string? PhotoModerationNote { get; private set; }
+
+    /// <summary>
+    /// The moderation gate, expressed once. Every customer-facing surface
+    /// (<c>BookingProviderSummary</c>, <c>TrackedProviderSummary</c>) reads
+    /// this and never <see cref="PhotoUrl"/>, so a photo that is still
+    /// Pending or was Rejected cannot reach a customer's screen through some
+    /// mapper that forgot to check the status. Deliberately a property on the
+    /// entity rather than a filter each caller applies: a gate re-implemented
+    /// per call site is a gate that will eventually be missed.
+    /// </summary>
+    public string? PublicPhotoUrl =>
+        PhotoModerationStatus == ProviderPhotoModerationStatus.Approved ? PhotoUrl : null;
 
     protected Provider() { }
 
@@ -171,6 +226,75 @@ public class Provider : Entity<Guid>
         LocationUpdatedAtUtc = latitude.HasValue ? observedAtUtc ?? DateTime.UtcNow : null;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Task 293: the provider sets or replaces their own profile photo.
+    /// Always lands in <see cref="ProviderPhotoModerationStatus.Pending"/> -
+    /// including a replacement of an already-approved photo, because
+    /// otherwise swapping the image after approval would be a way to publish
+    /// an unreviewed one under an old verdict. The previous verdict and note
+    /// are cleared for the same reason: they described a different image.
+    /// </summary>
+    /// <param name="photoUrl">
+    /// A reference to an already-hosted image. Rejected unless it is an
+    /// absolute http/https URL: this value is rendered straight into an
+    /// <c>img src</c> on a customer's screen, and a <c>javascript:</c> or
+    /// <c>data:</c> reference there is script execution, not a picture. The
+    /// check is here rather than only in the request validator so no future
+    /// caller (an admin tool, a seed, a background import) can bypass it.
+    /// </param>
+    public void SubmitPhoto(string photoUrl)
+    {
+        if (!IsSafeImageReference(photoUrl))
+        {
+            throw new ArgumentException("A photo must be an absolute http or https URL.", nameof(photoUrl));
+        }
+
+        PhotoUrl = photoUrl.Trim();
+        PhotoModerationStatus = ProviderPhotoModerationStatus.Pending;
+        PhotoModeratedByAdminUserId = null;
+        PhotoModeratedAtUtc = null;
+        PhotoModerationNote = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Clears the photo and its whole moderation record together, keeping the null-exactly-when invariant on <see cref="PhotoModerationStatus"/>.</summary>
+    public void RemovePhoto()
+    {
+        PhotoUrl = null;
+        PhotoModerationStatus = null;
+        PhotoModeratedByAdminUserId = null;
+        PhotoModeratedAtUtc = null;
+        PhotoModerationNote = null;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Admin approves the current photo (task 293) - the only transition that makes it visible to customers, via <see cref="PublicPhotoUrl"/>.</summary>
+    public void ApprovePhoto(Guid moderatorAdminUserId, string? note = null) =>
+        ApplyPhotoVerdict(ProviderPhotoModerationStatus.Approved, moderatorAdminUserId, note);
+
+    /// <summary>Admin rejects the current photo. The image itself is kept, not wiped - the provider needs to see what was rejected, and the audit trail needs it to still exist.</summary>
+    public void RejectPhoto(Guid moderatorAdminUserId, string? note = null) =>
+        ApplyPhotoVerdict(ProviderPhotoModerationStatus.Rejected, moderatorAdminUserId, note);
+
+    private void ApplyPhotoVerdict(ProviderPhotoModerationStatus status, Guid moderatorAdminUserId, string? note)
+    {
+        if (PhotoUrl is null)
+        {
+            throw new InvalidOperationException("This provider has no photo to moderate.");
+        }
+
+        PhotoModerationStatus = status;
+        PhotoModeratedByAdminUserId = moderatorAdminUserId;
+        PhotoModeratedAtUtc = DateTime.UtcNow;
+        PhotoModerationNote = note;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static bool IsSafeImageReference(string photoUrl) =>
+        !string.IsNullOrWhiteSpace(photoUrl)
+        && Uri.TryCreate(photoUrl.Trim(), UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     /// <summary>Applied only after an OTP proved control of the new number (mirrors <c>Customer.ChangeMobile</c>).</summary>
     public void ChangePhone(string newPhone)

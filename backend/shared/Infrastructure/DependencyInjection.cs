@@ -498,6 +498,9 @@ public static class DependencyInjection
         services.AddScoped<IProviderLocationPingRepository, ProviderLocationPingRepository>();
         services.AddScoped<IProviderManagementService, ProviderManagementService>();
         services.AddScoped<IProviderKycApprovalService, ProviderKycApprovalService>();
+        // Task 293: the same admin gate KYC documents go through, applied to
+        // provider-supplied profile photos.
+        services.AddScoped<IProviderPhotoModerationService, ProviderPhotoModerationService>();
 
         // Tasks 149a/149c: provider-api's own self-service views over the
         // same Assignment Bridge/Financial Domain entities as the admin

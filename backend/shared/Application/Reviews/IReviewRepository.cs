@@ -10,6 +10,19 @@ public interface IReviewRepository
 
     Task<IReadOnlyList<Review>> ListByServiceAsync(Guid serviceId);
 
+    /// <summary>
+    /// Task 293: the per-provider rating aggregate the service-scoped reads
+    /// above could never answer. Null when the provider has no visible
+    /// provider-scoped review, which is not the same as a rating of zero.
+    ///
+    /// Aggregated in the database rather than by loading the rows: a
+    /// long-tenured provider accumulates thousands of reviews and the only
+    /// thing the callers want is two numbers. Counts visible reviews only -
+    /// a hidden review is hidden from the rating too, or moderation would be
+    /// cosmetic.
+    /// </summary>
+    Task<ProviderRatingSummary?> GetProviderRatingAsync(Guid providerId, CancellationToken cancellationToken = default);
+
     /// <summary>The bare review entity for a moderation action (task 122) - no joined display fields, just the aggregate to mutate.</summary>
     Task<Review?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 

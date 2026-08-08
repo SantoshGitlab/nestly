@@ -2,6 +2,7 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
+using Nestly.Application.Reviews;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
@@ -31,6 +32,10 @@ public class BookingService : IBookingService
     // (PROVIDER.md scope boundary), so the one place that needs to name the
     // provider resolves it through the repository instead.
     private readonly IProviderRepository _providerRepository;
+    // Task 293: the per-provider rating aggregate behind the same summary.
+    // Read-only, and only for the assigned provider - this service does not
+    // otherwise know about reviews.
+    private readonly IReviewRepository _reviewRepository;
     private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
     // Same reasoning as RefundService: the slot-capacity reservation, coupon
     // reservation, subscription free-visit consumption and the booking write
@@ -53,6 +58,7 @@ public class BookingService : IBookingService
         IMetricsService metricsService,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderRepository providerRepository,
+        IReviewRepository reviewRepository,
         ICustomerSubscriptionRepository customerSubscriptionRepository,
         NestlyDbContext context)
     {
@@ -64,6 +70,7 @@ public class BookingService : IBookingService
         _metricsService = metricsService;
         _assignmentRepository = assignmentRepository;
         _providerRepository = providerRepository;
+        _reviewRepository = reviewRepository;
         _customerSubscriptionRepository = customerSubscriptionRepository;
         _context = context;
     }
@@ -304,6 +311,8 @@ public class BookingService : IBookingService
     /// customer must stop seeing a provider the moment they are off the job.
     /// One extra read by primary key, and only when a provider is actually
     /// assigned - an unassigned booking's detail costs exactly what it did.
+    /// Task 293 adds a second read, the rating aggregate, under the same
+    /// condition and for the same reason.
     /// </summary>
     private async Task<BookingProviderSummary?> ProviderSummaryFor(BookingProviderAssignment? assignment)
     {
@@ -313,7 +322,13 @@ public class BookingService : IBookingService
         }
 
         var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-        return provider is null ? null : BookingProviderSummary.From(provider);
+        if (provider is null)
+        {
+            return null;
+        }
+
+        var rating = await _reviewRepository.GetProviderRatingAsync(provider.Id);
+        return BookingProviderSummary.From(provider, rating);
     }
 
     private static BookingDetailResponse ToDetailResponse(

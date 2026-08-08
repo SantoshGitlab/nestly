@@ -73,7 +73,8 @@ public class BookingTrackingEndToEndWalkTests : IDisposable
         new BookingProviderAssignmentRepository(context),
         new ProviderRepository(context),
         new ProviderLocationPingRepository(context),
-        new BookingTrackingRepository(context));
+        new BookingTrackingRepository(context),
+        new ReviewRepository(context));
 
     private async Task<Guid> SeedAwaitingFulfilmentBookingAsync(NestlyDbContext context)
     {

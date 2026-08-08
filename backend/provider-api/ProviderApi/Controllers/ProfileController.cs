@@ -27,6 +27,7 @@ public class ProfileController : ControllerBase
     private readonly IProviderProfileService _profileService;
     private readonly IProviderKycService _kycService;
     private readonly IValidator<UpdateProviderProfileRequest> _updateProfileValidator;
+    private readonly IValidator<UpdateProviderPhotoRequest> _updatePhotoValidator;
     private readonly IValidator<SubmitProviderKycDocumentRequest> _kycDocumentValidator;
     private readonly IValidator<UpdateProviderServiceAreasRequest> _serviceAreasValidator;
     private readonly IValidator<UpdateProviderSkillsRequest> _skillsValidator;
@@ -35,6 +36,7 @@ public class ProfileController : ControllerBase
         IProviderProfileService profileService,
         IProviderKycService kycService,
         IValidator<UpdateProviderProfileRequest> updateProfileValidator,
+        IValidator<UpdateProviderPhotoRequest> updatePhotoValidator,
         IValidator<SubmitProviderKycDocumentRequest> kycDocumentValidator,
         IValidator<UpdateProviderServiceAreasRequest> serviceAreasValidator,
         IValidator<UpdateProviderSkillsRequest> skillsValidator)
@@ -42,6 +44,7 @@ public class ProfileController : ControllerBase
         _profileService = profileService;
         _kycService = kycService;
         _updateProfileValidator = updateProfileValidator;
+        _updatePhotoValidator = updatePhotoValidator;
         _kycDocumentValidator = kycDocumentValidator;
         _serviceAreasValidator = serviceAreasValidator;
         _skillsValidator = skillsValidator;
@@ -71,6 +74,29 @@ public class ProfileController : ControllerBase
         }
 
         var result = await _profileService.UpdateAsync(CurrentProviderId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Set or clear the profile photo (task 293). <c>PhotoUrl</c> is a
+    /// reference to an already-hosted image (storage key/URL), not a binary
+    /// upload - the same convention <see cref="SubmitKycDocument"/> uses.
+    /// A new photo always re-enters admin moderation; customers see it only
+    /// once it is approved.
+    /// </summary>
+    [HttpPut("photo")]
+    [ProducesResponseType(typeof(ProviderProfileResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdatePhoto([FromBody] UpdateProviderPhotoRequest request)
+    {
+        var validation = await _updatePhotoValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _profileService.UpdatePhotoAsync(CurrentProviderId(), request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

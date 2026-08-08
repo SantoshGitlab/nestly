@@ -15,6 +15,13 @@ public interface IProviderProfileService
 
     Task<Result<ProviderProfileResponse>> UpdateAsync(Guid providerId, UpdateProviderProfileRequest request);
 
+    /// <summary>
+    /// Sets or clears the provider's profile photo (task 293). Setting one
+    /// always puts it back into moderation - customers only ever see an
+    /// approved photo (<see cref="Nestly.Domain.Provider.PublicPhotoUrl"/>).
+    /// </summary>
+    Task<Result<ProviderProfileResponse>> UpdatePhotoAsync(Guid providerId, UpdateProviderPhotoRequest request);
+
     Task<IReadOnlyList<ProviderServiceAreaResponse>> GetServiceAreasAsync(Guid providerId);
 
     Task<Result<IReadOnlyList<ProviderServiceAreaResponse>>> UpdateServiceAreasAsync(Guid providerId, UpdateProviderServiceAreasRequest request);

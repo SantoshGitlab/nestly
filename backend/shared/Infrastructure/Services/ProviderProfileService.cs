@@ -55,6 +55,30 @@ public class ProviderProfileService : IProviderProfileService
         return Result.Success(ToResponse(provider));
     }
 
+    /// <inheritdoc/>
+    public async Task<Result<ProviderProfileResponse>> UpdatePhotoAsync(Guid providerId, UpdateProviderPhotoRequest request)
+    {
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        if (provider is null)
+        {
+            return Result.Failure<ProviderProfileResponse>(
+                Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PhotoUrl))
+        {
+            provider.RemovePhoto();
+        }
+        else
+        {
+            provider.SubmitPhoto(request.PhotoUrl);
+        }
+
+        await _providerRepository.UpdateAsync(provider);
+
+        return Result.Success(ToResponse(provider));
+    }
+
     public async Task<IReadOnlyList<ProviderServiceAreaResponse>> GetServiceAreasAsync(Guid providerId)
     {
         var areas = await _serviceAreaRepository.GetByProviderAsync(providerId);
@@ -103,7 +127,11 @@ public class ProviderProfileService : IProviderProfileService
 
     private static ProviderProfileResponse ToResponse(Provider provider) => new(
         provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
-        provider.Status.ToString(), provider.OnboardingStatus.ToString());
+        provider.Status.ToString(), provider.OnboardingStatus.ToString(),
+        // Deliberately the raw PhotoUrl, not PublicPhotoUrl - see the
+        // response's own doc comment: this is the only surface where the
+        // provider needs to see their own not-yet-approved photo.
+        provider.PhotoUrl, provider.PhotoModerationStatus?.ToString(), provider.PhotoModerationNote);
 
     private static ProviderServiceAreaResponse ToResponse(ProviderServiceArea area) => new(
         area.Id, area.ProviderId, area.CityId, area.ZoneId, area.PincodeId, area.IsActive);

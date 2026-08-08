@@ -40,6 +40,9 @@ export type ProviderOnboardingStatus =
   | "Completed";
 
 /** The provider profile shape returned by both GET and PUT /profile. */
+/** provider.photo_moderation_status - null exactly when `photoUrl` is. */
+export type ProviderPhotoModerationStatus = "Pending" | "Approved" | "Rejected";
+
 export interface ProviderProfile {
   id: string;
   legalName: string;
@@ -48,6 +51,16 @@ export interface ProviderProfile {
   email: string | null;
   status: ProviderStatus;
   onboardingStatus: ProviderOnboardingStatus;
+  /**
+   * The provider's OWN view of their photo, so it is present whatever the
+   * moderation state. Customers see it only once it is Approved - the API
+   * gates that separately (Provider.PublicPhotoUrl), so this screen showing a
+   * pending photo is correct rather than a leak.
+   */
+  photoUrl: string | null;
+  photoModerationStatus: ProviderPhotoModerationStatus | null;
+  /** Why a photo was rejected. Without it a rejection is a silent dead end. */
+  photoModerationNote: string | null;
 }
 
 // ---- Auth requests (POST /auth/...) ----

@@ -364,6 +364,118 @@ reordered and never inserted into the middle. `RecurringBookingPlanStatus`
 already shows the pattern — `Completed` sits after `Cancelled` because it was
 added later, not in its "natural" lifecycle position.
 
+## PROVIDER PHOTO AND PROVIDER-SCOPED REVIEWS
+
+Task 293 closes the two gaps that made `BookingProviderSummary.PhotoUrl` and
+`.Rating` structurally always-null: there was no photo column anywhere on
+`provider`, and `review` was scoped to a **service**, not to a person. The
+governing rule is that **a customer must never be shown a number or an image
+that is not actually about the professional at their door** — which is why
+both halves are schema changes rather than something derived in a response
+mapper.
+
+### `provider` — the photo columns
+
+A photo is a *reference* to an already-hosted image, exactly like
+`provider_kyc_document.file_ref`, `cms_media.url` and the completion-proof
+photo refs. This schema still has no blob storage and these columns do not
+introduce one.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `photo_url` | `varchar(2000)` NULL | Absolute http/https URL only — enforced in `Provider.SubmitPhoto`, not just in the request validator, because the value is rendered into an `img src` and a `javascript:`/`data:` reference there is script execution |
+| `photo_moderation_status` | `varchar(20)` NULL | `Pending` / `Approved` / `Rejected`. **Null exactly when `photo_url` is** — same both-or-neither discipline as `latitude`/`longitude`/`location_updated_at_utc` on this table |
+| `photo_moderated_by_admin_user_id` | `uuid` NULL | Traceability only, deliberately not a FK — same rationale as `review.moderated_by_admin_user_id` |
+| `photo_moderated_at_utc` | `timestamptz` NULL | |
+| `photo_moderation_note` | `varchar(1000)` NULL | The rejection reason, shown back to the provider so a rejection is actionable rather than a silent disappearance |
+
+Index: `photo_moderation_status`, which is the admin moderation queue's only
+filter and would otherwise scan the whole `provider` table on every load of
+that screen.
+
+**Moderation is the house standard here, not an extra.** Every other class of
+user-supplied content in this schema goes through an admin verdict before it
+counts — `provider_kyc_document.verification_status`, `review.status`/
+`is_flagged` — so a photo does too. The gate is expressed **once**, as
+`Provider.PublicPhotoUrl` (`photo_url` if and only if the status is
+`Approved`), and every customer-facing mapper reads that rather than the raw
+column. A gate re-implemented per call site is a gate that will eventually be
+missed. Replacing an already-approved photo returns it to `Pending` and clears
+the previous verdict: otherwise swapping the image after approval would be a
+way to publish an unreviewed one under someone else's sign-off.
+
+### `review.provider_id` — and why it is nullable forever
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `provider_id` | `uuid` **NULL** | FK → `provider`, `Restrict`. Deleting a provider must not delete the reviews written about them |
+
+Index: `(provider_id, status)` — the exact filter the per-provider aggregate
+uses (`IReviewRepository.GetProviderRatingAsync`), which runs on the booking
+detail and the polled live-tracking read, so it must not be a scan. The
+aggregate counts **`Visible` reviews only**: a hidden review is hidden from
+the rating too, or moderation would be cosmetic. A provider with no visible
+reviews has **no rating at all** rather than a rating of zero — "new
+professional" and "badly rated" must stay distinguishable all the way to the
+screen.
+
+Going forward the column is populated at submission time from the booking's
+own `assigned_provider_id` (`ReviewService`): the person being rated is the
+one who was on the job when the customer rated them, so capturing it then is
+what stops a later reassignment moving the answer.
+
+**The column cannot be `NOT NULL`, and this is a permanent property, not a
+migration convenience.** Two populations legitimately resolve to no provider:
+
+1. Historic reviews on bookings that were **reassigned** — see below.
+2. Any review on a booking that completed without a provider recorded at all.
+
+A null means *not attributable*. Such a review counts towards nobody's rating.
+
+### The backfill's reassignment rule
+
+`booking.assigned_provider_id` names whoever is on the booking **now**, which
+on a reassigned booking may be someone who never did the work. Backfilling
+straight from it would put a one-star review on the wrong professional — the
+single worst outcome this feature can produce.
+
+So the backfill (`AddProviderPhotoAndProviderScopedReviews.BackfillSql`)
+attributes a review **only when the booking's assignment history names exactly
+one provider**:
+
+```sql
+AND NOT EXISTS (
+    SELECT 1 FROM booking_provider_assignment AS a
+    WHERE a.booking_id = b.id AND a.provider_id <> b.assigned_provider_id
+)
+```
+
+Any booking that ever involved a second provider leaves its review's
+`provider_id` NULL. That covers every reassignment shape — a rejected offer,
+an admin swap mid-job, a withdrawal followed by a new assignment — without
+having to interpret assignment statuses, because none of those shapes lets us
+prove who was standing in the customer's home when the review was written.
+**Prefer null over a wrong attribution** is the rule; the loss is a slightly
+thinner rating history, and the alternative is blaming the wrong person.
+
+The statement is idempotent (`AND r.provider_id IS NULL`), so a replayed
+migration cannot reattribute a review that has since been corrected by hand.
+It is also exposed as a constant rather than inlined, so
+`ProviderScopedReviewBackfillTests` executes **that exact string** against a
+seeded database — unlike `AddProviderNoDoubleBooking`'s exclusion constraint,
+which no test can reach. A rule about who gets blamed for a bad review
+deserves coverage rather than a hand-check.
+
+### What deliberately was **not** built
+
+No `provider_rating_summary` rollup table. The aggregate is two numbers over
+an indexed `(provider_id, status)` lookup, read once per booking detail and
+once per tracking snapshot, and only when a provider is actually assigned. A
+denormalised rollup would add a second source of truth that moderation
+actions, review edits and backfills would all have to keep in step, to save a
+query that is already cheap. Revisit only with a measurement showing this
+lookup is hot.
+
 ## SOFT DELETE
 
 Where business requirements require record retention:

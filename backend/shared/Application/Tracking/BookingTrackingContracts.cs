@@ -1,4 +1,5 @@
 using Nestly.Application.Bookings;
+using Nestly.Application.Reviews;
 using Nestly.BuildingBlocks.Privacy;
 using Nestly.Domain;
 
@@ -27,9 +28,9 @@ namespace Nestly.Application.Tracking;
 /// </summary>
 public sealed record TrackedProviderSummary(string DisplayName, string? PhotoUrl, double? Rating, string? MaskedPhone)
 {
-    public static TrackedProviderSummary From(Provider provider)
+    public static TrackedProviderSummary From(Provider provider, ProviderRatingSummary? rating)
     {
-        var identity = BookingProviderSummary.From(provider);
+        var identity = BookingProviderSummary.From(provider, rating);
         return new TrackedProviderSummary(
             identity.DisplayName,
             identity.PhotoUrl,

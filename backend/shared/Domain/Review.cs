@@ -14,6 +14,24 @@ public class Review : Entity<Guid>
     public Guid BookingId { get; private set; }
     public Guid CustomerId { get; private set; }
     public Guid ServiceId { get; private set; }
+
+    /// <summary>
+    /// Task 293: WHO the review is about, not just what was bought. A review
+    /// used to name only its service, which made "this professional is rated
+    /// 4.8" uncomputable - the product decision recorded there is that
+    /// reviews are provider-scoped from now on.
+    ///
+    /// Nullable, and it has to stay nullable. Two populations resolve to no
+    /// provider and neither is an error: historic reviews backfilled from a
+    /// booking that was reassigned between providers (attributing those to
+    /// whoever happens to hold <c>booking.assigned_provider_id</c> today
+    /// would put a bad review on a professional who did not do the job - see
+    /// the backfill migration), and any future review on a booking that
+    /// somehow completed without a provider on it. A null here means "not
+    /// attributable", and such a review counts towards no one's rating.
+    /// </summary>
+    public Guid? ProviderId { get; private set; }
+
     public int Rating { get; private set; }
     public string? ReviewText { get; private set; }
 
@@ -37,7 +55,7 @@ public class Review : Entity<Guid>
 
     protected Review() { }
 
-    public Review(Guid id, Guid bookingId, Guid customerId, Guid serviceId, int rating, string? reviewText, string? issueTags = null)
+    public Review(Guid id, Guid bookingId, Guid customerId, Guid serviceId, Guid? providerId, int rating, string? reviewText, string? issueTags = null)
         : base(id)
     {
         if (rating is < 1 or > 5)
@@ -48,6 +66,7 @@ public class Review : Entity<Guid>
         BookingId = bookingId;
         CustomerId = customerId;
         ServiceId = serviceId;
+        ProviderId = providerId;
         Rating = rating;
         ReviewText = reviewText;
         IssueTags = issueTags;
