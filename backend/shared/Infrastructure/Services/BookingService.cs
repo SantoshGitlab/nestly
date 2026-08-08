@@ -75,7 +75,7 @@ public class BookingService : IBookingService
         _context = context;
     }
 
-    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
+    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null)
     {
         // Task 241: checked before anything else reserves - a retried
         // request carrying the same key must not take a second slot seat,
@@ -212,7 +212,14 @@ public class BookingService : IBookingService
                 summary.SubscriptionBenefit?.SubscriptionId,
                 summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
                 summary.SubscriptionBenefit?.DiscountAmount,
-                string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey);
+                string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey,
+                // Task 297: the occurrence's link back to the plan that
+                // generated it. Set here rather than by the scheduler
+                // afterwards so it is part of the same insert - a booking that
+                // exists without its plan id, even briefly, is one the admin
+                // (task 299) and provider (task 300) views would show as a
+                // one-off.
+                recurringBookingPlanId);
 
             // Add-on line items come from the price breakdown, not summary.AddOns:
             // the breakdown already carries each selection's quantity and

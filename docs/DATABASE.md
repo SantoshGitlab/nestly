@@ -286,9 +286,9 @@ date**, whatever the outcome. Same discipline as `booking_status_history` and
 | `id` | `uuid` PK | |
 | `recurring_booking_plan_id` | `uuid` NOT NULL | FK → `recurring_booking_plan`, Cascade |
 | `scheduled_date` | `date` NOT NULL | |
-| `outcome` | `varchar(30)` NOT NULL | `Booked` / `SkippedSlotUnavailable` / `SkippedOrchestrationRejected` |
-| `booking_id` | `uuid` NULL | FK → `booking`, Restrict. Set only when `outcome = Booked` |
-| `skip_reason` | `varchar(500)` NULL | Human-readable only — never a raw exception or stack trace |
+| `outcome` | `varchar(30)` NOT NULL | `Booked` / `SkippedSlotUnavailable` / `SkippedOrchestrationRejected` / `BookedProviderReassigned` / `BookedProviderUnavailable` |
+| `booking_id` | `uuid` NULL | FK → `booking`, Restrict. Set for every `Booked*` outcome, null for every `Skipped*` one |
+| `skip_reason` | `varchar(500)` NULL | Human-readable only — never a raw exception or stack trace. Also carries a `Booked*` occurrence's provider note (task 297) |
 | `processed_at_utc` | `timestamptz` NOT NULL | |
 
 Indexes: `(recurring_booking_plan_id, scheduled_date)` UNIQUE — this is the
@@ -296,6 +296,33 @@ generator's idempotency guard, so a Hangfire retry or an overlapping run
 cannot double-book a date — and `booking_id` UNIQUE, so one booking is claimed
 by at most one occurrence (Postgres treats every NULL as distinct, so the
 skipped rows are unconstrained).
+
+**The three booked outcomes (task 297).** `outcome` answers "did the visit
+happen" and, separately, "who is going to do it". A recurring plan is a
+standing relationship, so the generator asks whether the professional who
+served the plan's last occurrence can serve this date — derived from the
+plan's own booking history through `booking.recurring_booking_plan_id`, never
+stored on the plan, because a stored preferred-provider column would drift the
+moment that provider is suspended, rejects a job, or is reassigned away.
+
+- `Booked` — no standing provider yet, or they can serve the date.
+- `BookedProviderReassigned` — they cannot, but somebody else can. The visit
+  is booked and handed to the existing reassignment flow; the swap itself is
+  made by `ProviderAutoAssignmentHandler` when the booking reaches
+  `AwaitingFulfilment`, which raises `BookingProviderChangedEvent` and tells
+  the customer their professional changed.
+- `BookedProviderUnavailable` — nobody is eligible. Still booked, recorded
+  with its reason and logged as a warning, and left in the manual admin
+  assignment queue. Deliberately not a skip: the generator runs
+  `RecurringBookingOptions.LeadTimeDays` ahead of the date precisely so a
+  supply problem surfaces early, and supply that is short today may not be
+  short on the day — throwing the customer's slot away over a forecast would
+  be the worse error. A date that genuinely cannot be booked at all never
+  reaches this point, because the orchestration refuses to create the booking
+  and the occurrence lands on a `Skipped*` outcome instead.
+
+No schema change was needed for any of this: `outcome` is a `varchar(30)`
+with no CHECK constraint, and both new names fit.
 
 ### Where the plan link lives, and why it lives in both places
 

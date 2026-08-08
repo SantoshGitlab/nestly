@@ -497,6 +497,10 @@ public static class DependencyInjection
         // rather than each candidate separately.
         services.AddScoped<IProviderTravelFeasibilityService, ProviderTravelFeasibilityService>();
         services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
+        // Task 297: the single "ranked candidates that pass the gate" walk,
+        // shared by the auto-assignment engine and the recurring generator so
+        // there is only ever one answer to "who can take this booking".
+        services.AddScoped<IEligibleProviderSearchService, EligibleProviderSearchService>();
         // Task 195: completion verification (photo + checklist proof gating
         // the InProgress -> Completed transition, task 196) - registered
         // here rather than beside IBookingRepository above since every
@@ -651,6 +655,10 @@ public static class DependencyInjection
         services.AddScoped<IRecurringBookingOccurrenceRepository, RecurringBookingOccurrenceRepository>();
         services.AddScoped<IRecurringBookingPlanService, RecurringBookingPlanService>();
         services.AddScoped<IRecurringBookingSchedulerService, RecurringBookingSchedulerService>();
+        // Task 297: who a plan's standing provider is, derived from the plan's
+        // own booking history (task 296's FK) rather than stored - read by
+        // both the generator and ProviderAutoAssignmentHandler.
+        services.AddScoped<IRecurringPlanProviderContinuityService, RecurringPlanProviderContinuityService>();
 
         services
             .AddOptions<CancellationPolicyOptions>()

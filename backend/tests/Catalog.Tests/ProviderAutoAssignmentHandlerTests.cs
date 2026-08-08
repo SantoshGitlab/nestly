@@ -77,23 +77,29 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
     // behaviour these tests were written against. Task 267's reordering is
     // covered in ProviderMatchingServiceRouteRankingTests.
     private static ProviderAutoAssignmentHandler BuildHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context, int retryAttempts = 3, bool enabled = true) => new(
-        new ProviderMatchingService(
-            new BookingRepository(context),
-            context,
-            new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
-            Options.Create(new AutoAssignmentOptions())),
-        new ProviderAssignmentEligibilityService(
-            new BookingRepository(context),
-            new ProviderAvailabilityWindowRepository(context),
-            new ProviderBlackoutDateRepository(context),
-            new ProviderCapacityRepository(context),
-            new ProviderScheduleConflictService(context),
-            TravelFeasibilityFactory.Sandbox(context),
-            context),
+        new EligibleProviderSearchService(
+            new ProviderMatchingService(
+                new BookingRepository(context),
+                context,
+                new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
+                Options.Create(new AutoAssignmentOptions())),
+            BuildEligibilityService(context)),
+        BuildEligibilityService(context),
         new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context),
         new BookingProviderAssignmentRepository(context),
+        new BookingRepository(context),
+        new RecurringPlanProviderContinuityService(new BookingRepository(context)),
         Options.Create(new AutoAssignmentOptions { RetryAttempts = retryAttempts, Enabled = enabled }),
         NullLogger<ProviderAutoAssignmentHandler>.Instance);
+
+    private static ProviderAssignmentEligibilityService BuildEligibilityService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
+        new BookingRepository(context),
+        new ProviderAvailabilityWindowRepository(context),
+        new ProviderBlackoutDateRepository(context),
+        new ProviderCapacityRepository(context),
+        new ProviderScheduleConflictService(context),
+        TravelFeasibilityFactory.Sandbox(context),
+        context);
 
     private static DomainEventNotification<BookingStatusChangedEvent> AwaitingFulfilmentEvent(Guid bookingId) =>
         new(new BookingStatusChangedEvent(bookingId, BookingStatus.Confirmed, BookingStatus.AwaitingFulfilment));
