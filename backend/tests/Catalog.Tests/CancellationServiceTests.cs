@@ -358,7 +358,8 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 assignmentRepository, new ProviderScheduleConflictService(readContext), readContext),
             new BookingCompletionProofRepository(readContext),
             new NoOpBookingEtaService(),
-            new RecurringBookingPlanRepository(readContext));
+            new RecurringBookingPlanRepository(readContext),
+            new NoOpFileStorageService());
         var jobDetail = await jobService.GetDetailAsync(providerId, fixture.BookingId);
         jobDetail.IsSuccess.Should().BeTrue();
         jobDetail.Value.Status.Should().Be(Nestly.Application.ProviderJobs.ProviderJobStatus.Withdrawn);

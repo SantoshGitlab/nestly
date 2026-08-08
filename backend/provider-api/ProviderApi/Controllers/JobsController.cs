@@ -2,6 +2,7 @@ using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.Bookings;
@@ -204,6 +205,63 @@ public class JobsController : ControllerBase
 
         return result.Value is null ? NoContent() : Ok(result.Value);
     }
+
+    /// <summary>
+    /// Uploads one camera/gallery photo for job-completion evidence and
+    /// returns a ref to feed into <see cref="SubmitCompletionVerification"/>'s
+    /// <c>photoRefs</c>. Validated here rather than via a FluentValidation
+    /// record validator since the payload is a multipart file, not JSON:
+    /// content-type is checked against an image allowlist and size is capped
+    /// before anything is read into memory or written to disk - both real
+    /// trust-boundary checks (SRS "never trust client data"), not just
+    /// yak-shaving, since a client can lie about either.
+    /// </summary>
+    [HttpPost("{bookingId:guid}/completion-photos")]
+    [ProducesResponseType(typeof(UploadCompletionPhotoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [RequestSizeLimit(MaxCompletionPhotoBytes)]
+    public async Task<IActionResult> UploadCompletionPhoto(Guid bookingId, IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Problem("A photo file is required.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (file.Length > MaxCompletionPhotoBytes)
+        {
+            return Problem($"Photos must be {MaxCompletionPhotoBytes / (1024 * 1024)}MB or smaller.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (!AllowedPhotoContentTypes.Contains(file.ContentType))
+        {
+            return Problem("Only JPEG, PNG, or WebP photos are accepted.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        await using var stream = file.OpenReadStream();
+        var result = await _jobService.UploadCompletionPhotoAsync(CurrentProviderId(), bookingId, stream, file.FileName, file.ContentType);
+        if (result.IsFailure)
+        {
+            return result.ToProblemResult();
+        }
+
+        // The service returns a ref relative to this API's own origin
+        // (IFileStorageService doesn't know about HTTP); resolved to an
+        // absolute URL here so it's directly usable as an <img src> by
+        // provider-web today and, per BookingCompletionProofResponse's doc
+        // comment, by admin-web/customer-web once they render it too.
+        var absoluteRef = $"{Request.Scheme}://{Request.Host}{result.Value.PhotoRef}";
+        return Ok(new UploadCompletionPhotoResponse(absoluteRef));
+    }
+
+    private const long MaxCompletionPhotoBytes = 8 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedPhotoContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    };
 
     /// <summary>
     /// Report the provider's current position for a job in flight (task 269).

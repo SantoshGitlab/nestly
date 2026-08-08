@@ -168,6 +168,11 @@ export interface BookingCompletionProofResponse {
   submittedAtUtc: string;
 }
 
+/** Mirrors Nestly.Application.ProviderJobs.UploadCompletionPhotoResponse - the just-uploaded photo's ref, already an absolute URL. */
+export interface UploadCompletionPhotoResponse {
+  photoRef: string;
+}
+
 /**
  * Mirrors Nestly.Application.ProviderJobs.RecordProviderLocationRequest/
  * Response (ProviderLocationContracts.cs) - task 282's client for task 269's

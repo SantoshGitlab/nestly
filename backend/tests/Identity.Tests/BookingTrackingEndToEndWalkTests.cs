@@ -58,7 +58,7 @@ public class BookingTrackingEndToEndWalkTests : IDisposable
         CreateAssignmentService(context),
         new BookingCompletionProofRepository(context),
         etaService,
-        new RecurringBookingPlanRepository(context));
+        new RecurringBookingPlanRepository(context), new NoOpFileStorageService());
 
     private static ProviderLocationIngestService CreateIngestService(
         NestlyDbContext context, IBookingEtaService etaService) => new(

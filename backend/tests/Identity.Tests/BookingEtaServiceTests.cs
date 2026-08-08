@@ -83,7 +83,7 @@ public class BookingEtaServiceTests : IDisposable
         CreateAssignmentService(context),
         new BookingCompletionProofRepository(context),
         etaService,
-        new RecurringBookingPlanRepository(context));
+        new RecurringBookingPlanRepository(context), new NoOpFileStorageService());
 
     private static ProviderLocationIngestService CreateIngestService(
         NestlyDbContext context,

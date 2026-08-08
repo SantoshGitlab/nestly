@@ -154,6 +154,24 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
+
+// Serves completion-verification photos LocalDiskFileStorageService writes
+// (job-completion camera upload). Read-only static serving, no
+// authentication - the refs themselves are unguessable (GUID filenames),
+// matching every other "reference-only" evidence field's existing
+// unauthenticated-by-URL assumption (e.g. KYC document refs) rather than
+// inventing a new access-control model just for this one asset type.
+{
+    var fileStorageOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FileStorageOptions>>().Value;
+    var uploadsDirectory = Path.Combine(app.Environment.ContentRootPath, fileStorageOptions.UploadsPath);
+    Directory.CreateDirectory(uploadsDirectory);
+    app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsDirectory),
+        RequestPath = fileStorageOptions.RequestPath,
+    });
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

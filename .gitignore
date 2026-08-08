@@ -4,6 +4,9 @@
 bin/
 obj/
 
+# Runtime-uploaded files (LocalDiskFileStorageService) - local/dev only, never committed
+App_Data/
+
 # Visual Studio
 .vs/
 *.user

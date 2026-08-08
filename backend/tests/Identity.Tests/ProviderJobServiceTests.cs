@@ -44,7 +44,7 @@ public class ProviderJobServiceTests : IDisposable
         CreateAssignmentService(context),
         new BookingCompletionProofRepository(context),
         new NoOpBookingEtaService(),
-        new RecurringBookingPlanRepository(context));
+        new RecurringBookingPlanRepository(context), new NoOpFileStorageService());
 
     private BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),

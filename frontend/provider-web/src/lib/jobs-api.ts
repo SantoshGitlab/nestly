@@ -4,7 +4,7 @@
  * is kept as a defensive check for a 501 in case an older deployment still
  * has the stub.
  */
-import { API_V1, apiFetch } from "./api";
+import { API_V1, apiFetch, apiUpload } from "./api";
 import type {
   BookingCompletionProofResponse,
   JobDetail,
@@ -15,6 +15,7 @@ import type {
   RecordProviderLocationResponse,
   SubmitCompletionProofRequest,
   SubmitCompletionVerificationRequest,
+  UploadCompletionPhotoResponse,
 } from "./jobs-types";
 
 const JOBS_BASE = `${API_V1}/jobs`;
@@ -72,6 +73,19 @@ export const getCompletionVerification = (jobId: string) =>
   apiFetch<BookingCompletionProofResponse | undefined>(`${JOBS_BASE}/${jobId}/completion-verification`, {
     authenticated: true,
   });
+
+/**
+ * Uploads one camera/gallery photo for completion verification and returns
+ * its ref (an absolute URL) - feed the result straight into
+ * `submitCompletionVerification`'s `photoRefs`.
+ */
+export const uploadCompletionPhoto = (jobId: string, file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<UploadCompletionPhotoResponse>(`${JOBS_BASE}/${jobId}/completion-photos`, formData, {
+    authenticated: true,
+  });
+};
 
 /**
  * One location fix (task 269/282). The server throttles independently of

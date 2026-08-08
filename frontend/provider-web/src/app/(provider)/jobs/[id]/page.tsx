@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
@@ -17,12 +17,12 @@ import {
   PageHeading,
   Skeleton,
   SkeletonText,
-  Textarea,
+  Spinner,
   useToast,
 } from "@/components/ui";
 import { useJobStatusLive } from "@/hooks/useJobStatusLive";
 import { isLocationShareable, useLocationSharing } from "@/hooks/useLocationSharing";
-import { isNotImplemented } from "@/lib/api";
+import { describeError, isNotImplemented } from "@/lib/api";
 import { formatDateTime, formatInr, formatIsoDate, formatTime } from "@/lib/format";
 import {
   acceptJob,
@@ -35,6 +35,7 @@ import {
   startJob,
   submitCompletionProof,
   submitCompletionVerification,
+  uploadCompletionPhoto,
 } from "@/lib/jobs-api";
 import { JobStatus, jobStatusLabel } from "@/lib/jobs-types";
 import { JobStatusBadge } from "../_components/JobStatusBadge";
@@ -662,6 +663,20 @@ function JobDetailSkeleton({ backLink }: { backLink: ReactNode }) {
 }
 
 /**
+ * One photo in flight through `CompletionVerificationCard`'s upload flow.
+ * `previewUrl` (an object URL over the local file) renders instantly so the
+ * provider sees their photo before the network round trip finishes; `ref`
+ * only exists once the server has actually stored it and is what gets
+ * submitted - an in-flight or failed upload can never be silently included.
+ */
+interface CompletionPhoto {
+  localId: string;
+  previewUrl: string;
+  status: "uploading" | "done";
+  ref: string | null;
+}
+
+/**
  * Photos + checklist evidence required before `completeJob` succeeds
  * (tasks 195-197) - distinct from the single legacy proof-ref field above.
  * Resubmitting replaces the previous evidence (same behavior as the backend).
@@ -678,18 +693,47 @@ function CompletionVerificationCard({
   onSubmitted: () => void;
 }) {
   const toast = useToast();
-  const [photoRefsText, setPhotoRefsText] = useState("");
+  const [photos, setPhotos] = useState<CompletionPhoto[]>([]);
   const [checklist, setChecklist] = useState<CompletionChecklistAnswer[]>([
     { item: "", completed: false, notes: null },
   ]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploading = photos.some((p) => p.status === "uploading");
+  const readyRefs = photos.filter((p) => p.status === "done").map((p) => p.ref!);
+
+  async function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+
+    for (const file of Array.from(fileList)) {
+      const localId = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
+      setPhotos((prev) => [...prev, { localId, previewUrl, status: "uploading", ref: null }]);
+
+      try {
+        const { photoRef } = await uploadCompletionPhoto(jobId, file);
+        setPhotos((prev) =>
+          prev.map((p) => (p.localId === localId ? { ...p, status: "done", ref: photoRef } : p)),
+        );
+      } catch (err) {
+        setPhotos((prev) => prev.filter((p) => p.localId !== localId));
+        toast("error", describeError(err));
+      }
+    }
+  }
+
+  function removePhoto(localId: string) {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.localId === localId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.localId !== localId);
+    });
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
       submitCompletionVerification(jobId, {
-        photoRefs: photoRefsText
-          .split("\n")
-          .map((r) => r.trim())
-          .filter((r) => r.length > 0),
+        photoRefs: readyRefs,
         checklistAnswers: checklist.filter((a) => a.item.trim() !== ""),
       }),
     onSuccess: () => {
@@ -758,14 +802,77 @@ function CompletionVerificationCard({
         }}
         className="flex flex-col gap-5"
       >
-        <Textarea
-          label="Photo references (one per line)"
-          hint="Paste a link per line — there is no file upload on the platform yet."
-          rows={3}
-          value={photoRefsText}
-          onChange={(e) => setPhotoRefsText(e.target.value)}
-          placeholder="https://…"
-        />
+        <div className="flex flex-col gap-2.5">
+          <span className="text-sm font-medium text-fg">Photos</span>
+
+          {/* `capture="environment"` opens the rear camera directly on a
+              phone browser instead of the generic file picker; desktop
+              browsers that have no camera concept just fall back to a file
+              picker, so this never blocks a non-mobile provider. `multiple`
+              lets one tap add several shots in one go. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            multiple
+            hidden
+            onChange={(e) => {
+              void handleFilesSelected(e.target.files);
+              e.target.value = "";
+            }}
+          />
+
+          {photos.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {photos.map((photo) => (
+                <div
+                  key={photo.localId}
+                  className="relative aspect-square overflow-hidden rounded-xl border border-line bg-surface-2"
+                >
+                  <img
+                    src={photo.previewUrl}
+                    alt="Completion evidence"
+                    className="h-full w-full object-cover"
+                  />
+                  {photo.status === "uploading" ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-surface/70">
+                      <Spinner />
+                    </div>
+                  ) : (
+                    <div className="absolute right-1 top-1">
+                      <IconButton
+                        label="Remove photo"
+                        onClick={() => removePhoto(photo.localId)}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          className="h-4 w-4"
+                          aria-hidden
+                        >
+                          <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                      </IconButton>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-fit"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Take or choose photo
+          </Button>
+        </div>
 
         <div className="flex flex-col gap-2.5">
           <span className="text-sm font-medium text-fg">Checklist</span>
@@ -829,7 +936,7 @@ function CompletionVerificationCard({
           size="lg"
           fullWidth
           loading={mutation.isPending}
-          disabled={photoRefsText.trim() === ""}
+          disabled={readyRefs.length === 0 || uploading}
         >
           {existing ? "Resubmit verification" : "Submit verification"}
         </Button>

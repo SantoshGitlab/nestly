@@ -121,3 +121,12 @@ public sealed record RejectJobRequest(string? Reason);
 
 /// <summary>Attach completion evidence to an accepted job (task 149a "upload completion proof"). <c>ProofRef</c> is a reference to an already-uploaded file (storage key/URL), matching how KYC documents are submitted.</summary>
 public sealed record UploadJobCompletionProofRequest(string ProofRef);
+
+/// <summary>
+/// A camera/gallery photo the provider captured on-site for completion
+/// verification, just uploaded and now servable at <see cref="PhotoRef"/> -
+/// the client feeds this ref straight into <see cref="Nestly.Application.Bookings.SubmitCompletionProofRequest.PhotoRefs"/>,
+/// the same reference-only convention every other photo/document field in
+/// this codebase already uses.
+/// </summary>
+public sealed record UploadCompletionPhotoResponse(string PhotoRef);

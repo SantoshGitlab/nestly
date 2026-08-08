@@ -3,6 +3,7 @@ using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.RecurringBookings;
+using Nestly.Application.Storage;
 using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -18,6 +19,7 @@ public class ProviderJobService : IProviderJobService
     private readonly IBookingCompletionProofRepository _completionProofRepository;
     private readonly IBookingEtaService _etaService;
     private readonly IRecurringBookingPlanRepository _recurringPlanRepository;
+    private readonly IFileStorageService _fileStorageService;
 
     public ProviderJobService(
         IBookingRepository bookingRepository,
@@ -25,7 +27,8 @@ public class ProviderJobService : IProviderJobService
         IBookingProviderAssignmentService assignmentService,
         IBookingCompletionProofRepository completionProofRepository,
         IBookingEtaService etaService,
-        IRecurringBookingPlanRepository recurringPlanRepository)
+        IRecurringBookingPlanRepository recurringPlanRepository,
+        IFileStorageService fileStorageService)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
@@ -33,6 +36,7 @@ public class ProviderJobService : IProviderJobService
         _completionProofRepository = completionProofRepository;
         _etaService = etaService;
         _recurringPlanRepository = recurringPlanRepository;
+        _fileStorageService = fileStorageService;
     }
 
     public async Task<Result<ProviderJobSearchResponse>> ListAsync(Guid providerId, ProviderJobStatus? status, DateOnly? date)
@@ -334,6 +338,18 @@ public class ProviderJobService : IProviderJobService
         await _assignmentRepository.UpdateAsync(assignment);
 
         return ToDetailResponse(assignment, booking);
+    }
+
+    public async Task<Result<UploadCompletionPhotoResponse>> UploadCompletionPhotoAsync(Guid providerId, Guid bookingId, Stream content, string fileNameHint, string contentType)
+    {
+        var resolved = await ResolveAcceptedAsync(providerId, bookingId);
+        if (resolved is null)
+        {
+            return NotFoundError();
+        }
+
+        var photoRef = await _fileStorageService.SaveAsync(content, fileNameHint, contentType);
+        return new UploadCompletionPhotoResponse(photoRef);
     }
 
     public async Task<Result<BookingCompletionProofResponse>> SubmitCompletionProofAsync(Guid providerId, Guid bookingId, SubmitCompletionProofRequest request)
