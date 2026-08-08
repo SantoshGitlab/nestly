@@ -157,7 +157,7 @@ export default function ProviderRegisterPage() {
               inputMode="tel"
               autoComplete="tel"
               autoFocus
-              placeholder="e.g. 9876543210"
+              placeholder="+919876543210"
               error={mobileForm.formState.errors.mobile?.message}
               {...mobileForm.register("mobile")}
             />
