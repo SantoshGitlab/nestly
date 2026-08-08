@@ -42,6 +42,10 @@ export default function EditServiceAddOnPage() {
 
   const form = useForm<AddOnFormValues>({
     resolver: zodResolver(addOnSchema),
+    defaultValues: {
+      isQuantityAllowed: false,
+      isMandatory: false,
+    },
     values: addOnQuery.data
       ? {
           serviceId: addOnQuery.data.serviceId,

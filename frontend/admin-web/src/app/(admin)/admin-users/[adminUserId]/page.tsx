@@ -53,7 +53,9 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 export default function AdminUserDetailPage() {
   const { adminUserId } = useParams<{ adminUserId: string }>();
   const claims = useAdminClaims();
-  const canWrite = canWriteModule(claims, "admin-users");
+  // AdminModules has no separate "admin-users" module - it rides on
+  // "settings" (see NAV_MODULES' admin-users entry and page.tsx above).
+  const canWrite = canWriteModule(claims, "settings");
   const currentAdminUserId = claims?.subject ?? null;
   const queryClient = useQueryClient();
   const pushToast = useToast();

@@ -36,8 +36,14 @@ export function useBookingTracking(bookingId: string | undefined) {
   useEffect(() => {
     if (!bookingId) return;
 
+    // withCredentials: false - auth rides the query-string token (see
+    // accessTokenFactory), not cookies, matching ChatWidget's connection so
+    // the negotiate request doesn't need credentialed CORS the API doesn't grant.
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/tracking`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      .withUrl(`${API_BASE_URL}/hubs/tracking`, {
+        accessTokenFactory: () => getAccessToken() ?? "",
+        withCredentials: false,
+      })
       .withAutomaticReconnect()
       .build();
 
@@ -90,7 +96,10 @@ export function useLiveBookingTracking(bookingId: string | undefined) {
     if (!bookingId) return;
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/tracking`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      .withUrl(`${API_BASE_URL}/hubs/tracking`, {
+        accessTokenFactory: () => getAccessToken() ?? "",
+        withCredentials: false,
+      })
       .withAutomaticReconnect()
       .build();
 

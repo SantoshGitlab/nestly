@@ -85,6 +85,15 @@ export default function EditServicePage() {
 
   const form = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceSchema),
+    defaultValues: {
+      isTaxApplicable: false,
+      isAddOnAllowed: false,
+      isQuantityAllowed: false,
+      isInspectionBased: false,
+      isSlotRequired: false,
+      isAddressRequired: false,
+      isCustomerNoteAllowed: false,
+    },
     values: serviceQuery.data
       ? {
           categoryId: serviceQuery.data.categoryId,

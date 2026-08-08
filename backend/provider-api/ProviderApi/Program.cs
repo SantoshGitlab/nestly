@@ -3,7 +3,9 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
+using Nestly.Application.ProviderIdentity;
 using Nestly.BuildingBlocks.Middleware;
+using Nestly.BuildingBlocks.Results;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Realtime;
@@ -81,6 +83,64 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    // Dev-only test-auth backdoor for QA/browser-automation (see
+    // docs/DEVOPS.md "Dev-only provider test login"): mints a real session
+    // for the seeded E2E Test Provider without going through OTP, so tools
+    // that cannot type an OTP (or humans running local smoke tests) can still
+    // exercise the authenticated provider-web surface.
+    //
+    // Belt-and-suspenders gating, in order:
+    //   1. This whole route only exists on the map when IsDevelopment() is
+    //      true — evaluated once at startup, not per-request. In any other
+    //      environment app.MapPost below never runs, so the route 404s.
+    //   2. Even within Development, the caller must present the
+    //      X-Dev-Auth-Key header matching DevAuth:Key from configuration.
+    //      That key lives only in appsettings.Development.json — it is never
+    //      defined in appsettings.json or appsettings.Production.json, so a
+    //      misconfigured non-Development environment has no key to match
+    //      against even if it somehow reached this code.
+    // This is wholly additive: it does not modify AuthController's real
+    // login/otp/verify endpoint or ProviderLoginService.LoginWithOtpAsync in
+    // any way — it only calls the same session-issuing helper they use.
+    app.MapPost("/api/v1/auth/dev/login-as-provider", async (
+        HttpRequest httpRequest,
+        DevProviderLoginRequest? request,
+        IProviderLoginService loginService,
+        IConfiguration configuration,
+        ILogger<Program> logger) =>
+    {
+        var expectedKey = configuration["DevAuth:Key"];
+        var providedKey = httpRequest.Headers["X-Dev-Auth-Key"].ToString();
+
+        if (string.IsNullOrEmpty(expectedKey) || !string.Equals(providedKey, expectedKey, StringComparison.Ordinal))
+        {
+            return Results.Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(request?.Mobile))
+        {
+            return Results.BadRequest(new { detail = "Mobile is required." });
+        }
+
+        logger.LogWarning(
+            "SECURITY: dev-only auth bypass used (provider-api /auth/dev/login-as-provider) for mobile {Mobile}",
+            request.Mobile);
+
+        var result = await loginService.DevLoginAsync(request.Mobile);
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        int statusCode = result.Error.Type switch
+        {
+            ErrorType.NotFound => StatusCodes.Status404NotFound,
+            ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+            _ => StatusCodes.Status400BadRequest
+        };
+        return Results.Problem(detail: result.Error.Message, statusCode: statusCode, title: result.Error.Code);
+    });
 }
 
 // NESTLY-012: HSTS tells the browser to only ever use HTTPS for this host
@@ -118,3 +178,6 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check 
 app.MapPrometheusScrapingEndpoint("/metrics");
 
 app.Run();
+
+/// <summary>Request body for the dev-only login-as-provider endpoint above.</summary>
+public record DevProviderLoginRequest(string? Mobile);
