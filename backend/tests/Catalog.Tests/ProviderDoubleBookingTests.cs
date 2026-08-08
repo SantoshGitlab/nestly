@@ -182,7 +182,7 @@ public sealed class ProviderDoubleBookingTests : IClassFixture<TestDatabase>
                 assignment.Reject("Not available.");
                 break;
             case BookingProviderAssignmentStatus.Reassigned:
-                assignment.MarkReassigned();
+                assignment.MarkReassigned(Guid.NewGuid());
                 break;
             case BookingProviderAssignmentStatus.Withdrawn:
                 assignment.Withdraw();

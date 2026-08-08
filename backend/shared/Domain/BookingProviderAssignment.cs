@@ -140,16 +140,44 @@ public class BookingProviderAssignment : AggregateRoot<Guid>
         Notes = reason;
     }
 
-    /// <summary>Marks this row superseded because a newer assignment was created for the same booking before this one was responded to (task 147/159).</summary>
-    public void MarkReassigned()
+    /// <summary>
+    /// Marks this row superseded because a newer assignment was created for the
+    /// same booking before this one was responded to (task 147/159).
+    ///
+    /// <para>
+    /// Raises <see cref="BookingProviderChangedEvent"/> (task 295) whenever the
+    /// replacement is a *different* provider. This is the only place in the
+    /// system where one live assignment is replaced by another, and - unlike
+    /// every other fulfilment-half change - it need not move the booking's
+    /// status at all: replacing the provider on an already-Assigned booking
+    /// leaves it Assigned, so <c>BookingStatusChangedEvent</c> is silent and
+    /// nothing downstream could see the swap. The event carries whether this
+    /// row had been <see cref="BookingProviderAssignmentStatus.Accepted"/>,
+    /// since <see cref="Status"/> is overwritten on the next line and the
+    /// notification path's rule depends on it.
+    /// </para>
+    /// </summary>
+    /// <param name="supersededByProviderId">
+    /// The provider taking this assignment's place. Re-offering the same
+    /// booking to the same provider raises nothing - the customer's answer to
+    /// "who is coming?" has not changed.
+    /// </param>
+    public void MarkReassigned(Guid supersededByProviderId)
     {
         if (Status is not (BookingProviderAssignmentStatus.Assigned or BookingProviderAssignmentStatus.Accepted))
         {
             throw new InvalidOperationException($"Cannot mark a {Status} assignment as reassigned.");
         }
 
+        bool wasAccepted = Status == BookingProviderAssignmentStatus.Accepted;
+
         Status = BookingProviderAssignmentStatus.Reassigned;
         RespondedAt = DateTime.UtcNow;
+
+        if (supersededByProviderId != ProviderId)
+        {
+            RaiseDomainEvent(new BookingProviderChangedEvent(BookingId, Id, ProviderId, supersededByProviderId, wasAccepted));
+        }
     }
 
     /// <summary>Marks this still-live assignment withdrawn because its booking was cancelled (task 208, <c>CancellationService</c>) - so a provider's job list stops showing a cancelled booking as an active job.</summary>

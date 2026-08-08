@@ -32,19 +32,19 @@ namespace Nestly.Infrastructure.Services;
 /// dispatched from that single ToStatus == Confirmed branch.
 ///
 /// <para>
-/// <b>Task 276 - the fulfilment half.</b> Assigned/ProviderEnRoute/
-/// ProviderArrived/InProgress/Completed used to map to nothing, so the entire
-/// second half of a booking was silent. All five now dispatch, and all five
-/// are triggered from <see cref="BookingStatusChangedEvent"/> rather than from
-/// task 272's <c>ProviderEnRouteEvent</c>/<c>ProviderArrivedEvent</c>/
-/// <c>ProviderAssignmentAcceptedEvent</c>. Reasons, in order of weight:
+/// <b>Task 276 - the fulfilment half.</b> ProviderEnRoute/ProviderArrived/
+/// InProgress/Completed used to map to nothing, so the entire second half of a
+/// booking was silent. All four now dispatch from
+/// <see cref="BookingStatusChangedEvent"/> rather than from task 272's
+/// <c>ProviderEnRouteEvent</c>/<c>ProviderArrivedEvent</c>. Reasons, in order
+/// of weight:
 /// </para>
 /// <list type="number">
-/// <item>Every one of the five is a single <see cref="Booking.TransitionTo"/>
+/// <item>Every one of the four is a single <see cref="Booking.TransitionTo"/>
 /// call, which raises exactly one <see cref="BookingStatusChangedEvent"/> - so
 /// "exactly once per transition" is a property of the event stream, not
 /// something this handler has to enforce.</item>
-/// <item>The tracking events cover only two of the five, so mixing sources
+/// <item>The tracking events cover only two of the four, so mixing sources
 /// would mean two handlers, two sets of repository reads and two places to
 /// forget a new state.</item>
 /// <item>Booking.TransitionTo raises the tracking event <i>in addition to</i>
@@ -52,16 +52,37 @@ namespace Nestly.Infrastructure.Services;
 /// Subscribing to both would send "on the way" twice.</item>
 /// </list>
 /// <para>
-/// <b>What ProviderAssigned actually means.</b> It fires on
-/// AwaitingFulfilment -&gt; Assigned, which
-/// <c>BookingProviderAssignmentService.AssignAsync</c> performs when the offer
-/// is made, not when the provider accepts it. Two consequences worth knowing
-/// before changing this: a provider who then rejects sends the booking back to
-/// AwaitingFulfilment, and the next assignment fires a second ProviderAssigned
-/// naming somebody else; and a *re*assignment while the booking is already
-/// Assigned performs no transition at all, so the customer is never told the
-/// name changed. Acceptance-time semantics are <c>ProviderAssignmentAcceptedEvent</c>'s
-/// to give and would be a separate row, not a tweak here.
+/// <b>Task 295 - who is coming, and when the customer is told.</b> The fifth
+/// of task 276's triggers, ProviderAssigned, is the exception to the paragraph
+/// above: it does <i>not</i> hang off a status transition, because the
+/// transition it used to hang off (AwaitingFulfilment -&gt; Assigned) happens
+/// when <c>BookingProviderAssignmentService.AssignAsync</c> makes the *offer*,
+/// before the provider has answered. The product rule is now:
+/// </para>
+/// <list type="bullet">
+/// <item><b>Notify on acceptance only.</b> ProviderAssigned fires on
+/// <see cref="ProviderAssignmentAcceptedEvent"/> (task 272), so a name is
+/// announced only once its owner has committed to the job. A provider who
+/// rejects, and the next candidate, and the next, cost the customer nothing;
+/// they hear one name, once, and it is the right one. The price is that they
+/// wait longer to learn who is coming - accepted deliberately, since a wrong
+/// name is worse than a late one.</item>
+/// <item><b>A change of professional is never silent</b>, and never re-sends
+/// ProviderAssigned - that template reads as a first assignment.
+/// <see cref="BookingProviderChangedEvent"/> (raised by
+/// <c>BookingProviderAssignment.MarkReassigned</c>, which is reached whether
+/// or not the booking's status moves) dispatches the distinct
+/// <see cref="NotificationEventType.ProviderChanged"/> template. It sends only
+/// when the superseded assignment had been <i>accepted</i>: an offer that was
+/// never accepted was never announced, so there is no name in the customer's
+/// head to correct.</item>
+/// </list>
+/// <para>
+/// Consequence worth stating, because it is the point of the rule: no sequence
+/// of offers, rejections and reassignments can produce two messages naming
+/// different professionals as "assigned". The only messages that can name a
+/// provider as assigned are acceptances, and between two acceptances a
+/// ProviderChanged always sits, explaining the swap.
 /// </para>
 /// <para>
 /// <b>DURABILITY - read this before relying on any of these notifications.</b>
@@ -81,8 +102,14 @@ namespace Nestly.Infrastructure.Services;
 /// side effect of adding triggers.
 /// </para>
 /// </summary>
-public sealed class BookingNotificationTriggerHandler : INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>
+public sealed class BookingNotificationTriggerHandler :
+    INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>,
+    INotificationHandler<DomainEventNotification<ProviderAssignmentAcceptedEvent>>,
+    INotificationHandler<DomainEventNotification<BookingProviderChangedEvent>>
 {
+    /// <summary>Stand-in for a provider whose row cannot be resolved - see <see cref="AddProviderVariablesAsync"/>.</summary>
+    private const string UnknownProviderName = "Your professional";
+
     private readonly IBookingRepository _bookingRepository;
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly ICancellationRepository _cancellationRepository;
@@ -133,7 +160,11 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
 
             // Task 276: the fulfilment half. One event type per transition -
             // unlike Confirmed, none of these doubles up.
-            BookingStatus.Assigned => [NotificationEventType.ProviderAssigned],
+            //
+            // Assigned is deliberately absent (task 295): reaching it means an
+            // offer was made, not that anybody accepted it, and the two are
+            // not the same fact. ProviderAssigned is dispatched from
+            // ProviderAssignmentAcceptedEvent below instead.
             BookingStatus.ProviderEnRoute => [NotificationEventType.ProviderEnRoute],
             BookingStatus.ProviderArrived => [NotificationEventType.ProviderArrived],
             BookingStatus.InProgress => [NotificationEventType.JobStarted],
@@ -143,10 +174,10 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
         };
 
         // Task 276: ops mute, applied before any repository read so a muted
-        // event costs nothing at all. Only the five fulfilment events can be
-        // muted; FulfilmentNotificationOptions.IsEnabled returns true for
-        // everything else, so the money-and-cancellation notifications above
-        // are unreachable from configuration.
+        // event costs nothing at all. Only the fulfilment events can be muted;
+        // FulfilmentNotificationOptions.IsEnabled returns true for everything
+        // else, so the money-and-cancellation notifications above are
+        // unreachable from configuration.
         var options = _fulfilmentOptions.CurrentValue;
         eventTypes = eventTypes.Where(options.IsEnabled).ToArray();
 
@@ -162,18 +193,7 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
             return;
         }
 
-        // Task 277: the customer/device-token lookups this used to do inline
-        // now live in INotificationDispatchService.ResolveRecipientAsync, which
-        // is the same call the provider side needs. Behaviour is unchanged -
-        // the ?? below reproduces the old `customer?.Mobile ??
-        // booking.CustomerMobileSnapshot` exactly, including the case where a
-        // customer row exists with a blank mobile (blank wins, snapshot is only
-        // a fallback for a missing customer). The snapshot fallback stays here
-        // rather than moving into the resolver because it is booking data; the
-        // resolver only knows principals.
-        var recipient = await _notificationDispatchService.ResolveRecipientAsync(
-            DeviceTokenOwner.ForCustomer(booking.CustomerId), cancellationToken);
-        recipient = recipient with { Mobile = recipient.Mobile ?? booking.CustomerMobileSnapshot };
+        var recipient = await ResolveCustomerRecipientAsync(booking, cancellationToken);
 
         foreach (var eventType in eventTypes)
         {
@@ -182,17 +202,139 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
         }
     }
 
+    /// <summary>
+    /// Task 295: the acceptance-time half of "who is coming". This, not the
+    /// AwaitingFulfilment -&gt; Assigned transition, is where the customer is
+    /// told a name - see the class doc comment for the rule and its price.
+    /// </summary>
+    /// <remarks>
+    /// Exactly once per accepted job without this handler having to check
+    /// anything: <c>BookingProviderAssignment.Accept</c> throws unless the row
+    /// is still outstanding, so a second Accept raises no second event. A
+    /// booking re-offered after a rejection produces one acceptance event for
+    /// whichever provider finally takes it, and none for those who did not.
+    /// </remarks>
+    public Task Handle(DomainEventNotification<ProviderAssignmentAcceptedEvent> notification, CancellationToken cancellationToken)
+    {
+        var domainEvent = notification.DomainEvent;
+
+        return DispatchProviderNotificationAsync(
+            domainEvent.BookingId,
+            NotificationEventType.ProviderAssigned,
+            providerId: domainEvent.ProviderId,
+            previousProviderId: null,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Task 295: an accepted professional was swapped for another one. The
+    /// defect this closes is that the swap moves no booking status - an
+    /// already-Assigned booking is still Assigned afterwards - so nothing in
+    /// the <see cref="BookingStatusChangedEvent"/> stream ever mentioned it and
+    /// the customer would have met a stranger at the door.
+    /// </summary>
+    /// <remarks>
+    /// Silent when the superseded assignment had not been accepted: under the
+    /// acceptance-only rule that offer was never announced, so there is no
+    /// expectation to correct and "your professional has changed" would name
+    /// somebody the customer never heard of. The check lives here rather than
+    /// in the domain because it is a rule about what we tell people, not about
+    /// what happened.
+    /// </remarks>
+    public Task Handle(DomainEventNotification<BookingProviderChangedEvent> notification, CancellationToken cancellationToken)
+    {
+        var domainEvent = notification.DomainEvent;
+
+        if (!domainEvent.PreviousAssignmentAccepted)
+        {
+            return Task.CompletedTask;
+        }
+
+        return DispatchProviderNotificationAsync(
+            domainEvent.BookingId,
+            NotificationEventType.ProviderChanged,
+            providerId: domainEvent.NewProviderId,
+            previousProviderId: domainEvent.PreviousProviderId,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The shared body of the two assignment-driven triggers. Same shape as
+    /// the status-driven <see cref="Handle(DomainEventNotification{BookingStatusChangedEvent}, CancellationToken)"/>
+    /// above - mute first, then booking, then recipient, then dispatch - but
+    /// takes the provider from the event rather than from
+    /// <see cref="Booking.AssignedProviderId"/>: both events name the provider
+    /// they are about, and the denormalized field has already moved on to the
+    /// next candidate by the time a ProviderChanged is handled.
+    /// </summary>
+    private async Task DispatchProviderNotificationAsync(
+        Guid bookingId,
+        NotificationEventType eventType,
+        Guid providerId,
+        Guid? previousProviderId,
+        CancellationToken cancellationToken)
+    {
+        if (!_fulfilmentOptions.CurrentValue.IsEnabled(eventType))
+        {
+            return;
+        }
+
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            _logger.LogWarning("Booking {BookingId} not found while dispatching a {EventType} notification.", bookingId, eventType);
+            return;
+        }
+
+        var recipient = await ResolveCustomerRecipientAsync(booking, cancellationToken);
+
+        var variables = BuildBaseVariables(booking);
+        await AddProviderVariablesAsync(variables, booking.Id, providerId);
+
+        if (previousProviderId is { } previous)
+        {
+            var previousProvider = await _providerRepository.GetByIdAsync(previous);
+            variables["PreviousProviderName"] = string.IsNullOrWhiteSpace(previousProvider?.DisplayName)
+                ? UnknownProviderName
+                : previousProvider.DisplayName;
+        }
+
+        await _notificationDispatchService.DispatchAsync(
+            booking.CustomerId, eventType, recipient, variables, bookingId: booking.Id, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Task 277: the customer/device-token lookups this used to do inline now
+    /// live in INotificationDispatchService.ResolveRecipientAsync, which is the
+    /// same call the provider side needs. Behaviour is unchanged - the ?? below
+    /// reproduces the old <c>customer?.Mobile ?? booking.CustomerMobileSnapshot</c>
+    /// exactly, including the case where a customer row exists with a blank
+    /// mobile (blank wins, snapshot is only a fallback for a missing customer).
+    /// The snapshot fallback stays here rather than moving into the resolver
+    /// because it is booking data; the resolver only knows principals.
+    /// </summary>
+    private async Task<NotificationRecipient> ResolveCustomerRecipientAsync(Booking booking, CancellationToken cancellationToken)
+    {
+        var recipient = await _notificationDispatchService.ResolveRecipientAsync(
+            DeviceTokenOwner.ForCustomer(booking.CustomerId), cancellationToken);
+
+        return recipient with { Mobile = recipient.Mobile ?? booking.CustomerMobileSnapshot };
+    }
+
+    /// <summary>The variables every booking template can rely on, whichever event brought it here.</summary>
+    private static Dictionary<string, string> BuildBaseVariables(Booking booking) => new()
+    {
+        ["CustomerName"] = booking.CustomerNameSnapshot,
+        ["BookingId"] = booking.Id.ToString(),
+        ["ServiceName"] = booking.Items.Count > 0 ? booking.Items[0].NameSnapshot : string.Empty,
+        ["SlotDate"] = booking.SlotDate.ToString("yyyy-MM-dd"),
+        ["SlotWindow"] = booking.SlotWindowNameSnapshot,
+        ["TotalPayable"] = booking.TotalPayableSnapshot.ToString("0.00")
+    };
+
     private async Task<Dictionary<string, string>> BuildVariablesAsync(NotificationEventType eventType, Booking booking, CancellationToken cancellationToken)
     {
-        var variables = new Dictionary<string, string>
-        {
-            ["CustomerName"] = booking.CustomerNameSnapshot,
-            ["BookingId"] = booking.Id.ToString(),
-            ["ServiceName"] = booking.Items.Count > 0 ? booking.Items[0].NameSnapshot : string.Empty,
-            ["SlotDate"] = booking.SlotDate.ToString("yyyy-MM-dd"),
-            ["SlotWindow"] = booking.SlotWindowNameSnapshot,
-            ["TotalPayable"] = booking.TotalPayableSnapshot.ToString("0.00")
-        };
+        var variables = BuildBaseVariables(booking);
 
         switch (eventType)
         {
@@ -220,14 +362,16 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
             }
 
             // Task 276: the fulfilment events are the only ones that name the
-            // provider.
-            case NotificationEventType.ProviderAssigned:
+            // provider. ProviderAssigned and ProviderChanged are the two that
+            // never arrive here - they come from the assignment events, which
+            // carry the provider they are about (see
+            // DispatchProviderNotificationAsync).
             case NotificationEventType.ProviderEnRoute:
             case NotificationEventType.ProviderArrived:
             case NotificationEventType.JobStarted:
             case NotificationEventType.JobCompleted:
             {
-                await AddProviderVariablesAsync(variables, booking);
+                await AddProviderVariablesAsync(variables, booking.Id, booking.AssignedProviderId);
                 break;
             }
         }
@@ -259,18 +403,25 @@ public sealed class BookingNotificationTriggerHandler : INotificationHandler<Dom
     /// repository read - see the class doc comment on durability.
     /// </para>
     /// </summary>
-    private async Task AddProviderVariablesAsync(Dictionary<string, string> variables, Booking booking)
+    /// <param name="providerId">
+    /// The provider this particular message is about. The status-driven
+    /// triggers pass <see cref="Booking.AssignedProviderId"/>; the two
+    /// assignment-driven ones (task 295) pass the id off their own event,
+    /// which is authoritative for them - a ProviderChanged is handled after
+    /// the denormalized field has already moved to the incoming provider, and
+    /// an acceptance names the accepting provider rather than whoever the
+    /// field happens to hold.
+    /// </param>
+    private async Task AddProviderVariablesAsync(Dictionary<string, string> variables, Guid bookingId, Guid? providerId)
     {
-        const string UnknownProviderName = "Your professional";
-
-        var provider = booking.AssignedProviderId is { } providerId
-            ? await _providerRepository.GetByIdAsync(providerId)
+        var provider = providerId is { } id
+            ? await _providerRepository.GetByIdAsync(id)
             : null;
 
         if (provider is null)
         {
             _logger.LogWarning(
-                "Booking {BookingId} reached a fulfilment status with no resolvable assigned provider - notifying with a generic name.", booking.Id);
+                "Booking {BookingId} reached a fulfilment status with no resolvable assigned provider - notifying with a generic name.", bookingId);
         }
 
         variables["ProviderName"] = string.IsNullOrWhiteSpace(provider?.DisplayName) ? UnknownProviderName : provider.DisplayName;

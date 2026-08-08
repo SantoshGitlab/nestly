@@ -133,7 +133,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             var currentAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
             if (currentAssignment is not null)
             {
-                currentAssignment.MarkReassigned();
+                currentAssignment.MarkReassigned(providerId);
                 await _assignmentRepository.UpdateAsync(currentAssignment);
             }
 
@@ -141,6 +141,14 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
                 Guid.NewGuid(), bookingId, providerId, assignedByType, adminUserId, responseDeadline);
             await _assignmentRepository.AddAsync(assignment);
 
+            // A booking that is already Assigned stays Assigned - swapping the
+            // provider is not a lifecycle transition. That used to make the
+            // swap invisible to everything downstream (task 295): no
+            // BookingStatusChangedEvent meant no notification, so a customer
+            // who had been told who was coming was never told it had changed.
+            // The signal now comes from MarkReassigned's
+            // BookingProviderChangedEvent above, which fires on both branches
+            // of this if and does not depend on a status change.
             if (booking.Status == BookingStatus.AwaitingFulfilment)
             {
                 booking.TransitionTo(BookingStatus.Assigned, reason);

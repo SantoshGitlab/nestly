@@ -62,7 +62,7 @@ public enum NotificationEventType
     // already-deployed admin client's template rows. Same reasoning, and the
     // same hazard, as BookingStatus and ProviderJobStatus.
 
-    /// <summary>A provider was assigned to the booking (AwaitingFulfilment -> Assigned). This is the moment the *offer* is made, not the moment the provider accepts it - see <c>BookingNotificationTriggerHandler</c>'s doc comment for why, and for what a rejection then re-assignment looks like to the customer.</summary>
+    /// <summary>A provider accepted the job and is confirmed to the customer. Fires on <c>ProviderAssignmentAcceptedEvent</c>, not on the AwaitingFulfilment -> Assigned transition (task 295): that transition happens when the *offer* is made, and a provider who then rejects would have had their name announced for a job they never took. See <c>BookingNotificationTriggerHandler</c>'s doc comment for the full rule.</summary>
     ProviderAssigned,
 
     /// <summary>The assigned provider set off for the address (-> <see cref="BookingStatus.ProviderEnRoute"/>). A mute candidate: chatty by nature, and the live tracking screen already says the same thing.</summary>
@@ -75,5 +75,17 @@ public enum NotificationEventType
     JobStarted,
 
     /// <summary>The provider marked the job finished (-> <see cref="BookingStatus.Completed"/>).</summary>
-    JobCompleted
+    JobCompleted,
+
+    /// <summary>
+    /// The professional the customer was told about has been taken off the job
+    /// and someone else is being lined up (task 295) - fires on
+    /// <c>BookingProviderChangedEvent</c>. Deliberately its own event type
+    /// rather than a second <see cref="ProviderAssigned"/>: that template reads
+    /// as a first assignment, and a customer who already has a name in mind
+    /// needs to be told it is no longer valid, not handed a second one with no
+    /// explanation. Only ever sent when the outgoing provider had accepted, so
+    /// it never refers to a name the customer never heard.
+    /// </summary>
+    ProviderChanged
 }

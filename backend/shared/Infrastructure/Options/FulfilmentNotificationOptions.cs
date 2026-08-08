@@ -14,7 +14,7 @@ namespace Nestly.Infrastructure.Options;
 /// when they want to deviate.
 /// </summary>
 /// <remarks>
-/// <b>Five named booleans, not a Dictionary&lt;NotificationEventType, bool&gt;.</b>
+/// <b>Named booleans, not a Dictionary&lt;NotificationEventType, bool&gt;.</b>
 /// A dictionary would let a config edit silence <c>PaymentFailed</c> or
 /// <c>BookingCancelled</c> too, and those are the notifications a customer is
 /// most harmed by never receiving. The mute knob exists for the two chatty
@@ -38,8 +38,11 @@ public class FulfilmentNotificationOptions
 {
     public const string SectionName = "FulfilmentNotifications";
 
-    /// <summary>Send <see cref="NotificationEventType.ProviderAssigned"/> on AwaitingFulfilment -&gt; Assigned.</summary>
+    /// <summary>Send <see cref="NotificationEventType.ProviderAssigned"/> when a provider accepts the job (task 295 moved this off the offer-time transition).</summary>
     public bool ProviderAssignedEnabled { get; set; } = true;
+
+    /// <summary>Send <see cref="NotificationEventType.ProviderChanged"/> when an accepted professional is replaced by another (task 295). Rare by nature, and the one fulfilment notification a customer is most harmed by missing - muting it means they meet a stranger at the door - so ops should think twice, but the knob is here for consistency with its five siblings.</summary>
+    public bool ProviderChangedEnabled { get; set; } = true;
 
     /// <summary>Send <see cref="NotificationEventType.ProviderEnRoute"/> on entry to ProviderEnRoute. The likeliest mute candidate - the live tracking screen already shows this.</summary>
     public bool ProviderEnRouteEnabled { get; set; } = true;
@@ -62,6 +65,7 @@ public class FulfilmentNotificationOptions
     public bool IsEnabled(NotificationEventType eventType) => eventType switch
     {
         NotificationEventType.ProviderAssigned => ProviderAssignedEnabled,
+        NotificationEventType.ProviderChanged => ProviderChangedEnabled,
         NotificationEventType.ProviderEnRoute => ProviderEnRouteEnabled,
         NotificationEventType.ProviderArrived => ProviderArrivedEnabled,
         NotificationEventType.JobStarted => JobStartedEnabled,
