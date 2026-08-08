@@ -106,6 +106,16 @@ admin holding `bookings.read` can already open each of those bookings
 individually and see strictly more. See `RecurringPlansController`'s doc
 comment for the full reasoning.
 
+`provider-api` adds **no endpoint at all** (`#300`). The existing job list
+(`GET /jobs`) simply carries two more fields per row —
+`recurringBookingPlanId` and `recurringFrequency`, both null for a one-off —
+so `provider-web` can badge a standing customer's visit and show its cadence.
+The cadence is read live through `booking.recurring_booking_plan_id` rather
+than snapshotted onto the booking, so a customer who changes their plan does
+not leave already-generated jobs advertising the old rhythm. Only the cadence
+is exposed: how many visits remain on the customer's plan, and when it ends,
+are the customer's business.
+
 There is deliberately **no admin pause/resume/cancel** of someone else's plan:
 an admin who needs to stop the work a plan generates cancels the individual
 bookings through the existing booking-management surface, which already
