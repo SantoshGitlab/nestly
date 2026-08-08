@@ -23,7 +23,7 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
 
     public async Task<IReadOnlyList<NotificationTemplate>> ListAsync(NotificationChannel? channel, NotificationEventType? eventType, bool? isActive, CancellationToken cancellationToken = default)
     {
-        var query = _context.Set<NotificationTemplate>().AsQueryable();
+        var query = KnownEventTypeOnly();
 
         if (channel.HasValue)
         {
@@ -47,9 +47,28 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
     }
 
     public async Task<IReadOnlyList<NotificationTemplate>> ListActiveAsync(CancellationToken cancellationToken = default) =>
-        await _context.Set<NotificationTemplate>()
+        await KnownEventTypeOnly()
             .Where(t => t.IsActive)
             .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// <see cref="NotificationEventType"/> is stored as its string name (see that type's
+    /// "APPENDED, NEVER INSERTED" remark on why it can't be an int) - a value the enum no
+    /// longer defines, left behind by a renamed member or hand-inserted test data, makes EF's
+    /// string-to-enum converter throw the instant it materializes that row. Unfiltered, that
+    /// takes down every caller of this repository - which includes every notification dispatch
+    /// in the app (<c>NotificationTemplateRenderer.GetActiveTemplatesAsync</c> calls
+    /// <see cref="ListActiveAsync"/> for every event) and the admin template screen itself
+    /// (<c>ListAsync</c>), so an operator couldn't even see the offending row to fix it.
+    /// Restricting to recognized names in SQL, before EF converts anything, keeps one stale row
+    /// from being a single point of failure for the whole notification pipeline.
+    /// </summary>
+    private IQueryable<NotificationTemplate> KnownEventTypeOnly()
+    {
+        var validNames = Enum.GetNames<NotificationEventType>();
+        return _context.Set<NotificationTemplate>()
+            .FromSqlInterpolated($"SELECT * FROM notification_template WHERE event_type = ANY({validNames})");
+    }
 
     public async Task AddAsync(NotificationTemplate template, CancellationToken cancellationToken = default)
     {
