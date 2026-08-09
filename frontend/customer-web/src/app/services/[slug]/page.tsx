@@ -10,6 +10,7 @@ import { ServiceFaqs } from "@/components/ServiceFaqs";
 import { Alert, Button, Skeleton } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { getServiceVisual } from "@/lib/serviceVisuals";
 import type { ServiceDetail } from "@/lib/types";
 
 /**
@@ -71,7 +72,9 @@ export default function ServiceDetailPage() {
         </ol>
       </nav>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_20rem]">
+      <ServiceHero name={service.name} />
+
+      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-8">
           <div>
             <h1 className="text-display-sm font-semibold text-fg">{service.name}</h1>
@@ -136,6 +139,22 @@ export default function ServiceDetailPage() {
   );
 }
 
+/** Icon-on-gradient hero (see src/lib/serviceVisuals.tsx) so the detail page isn't a wall of text either. */
+function ServiceHero({ name }: { name: string }) {
+  const { icon: Icon, gradient } = getServiceVisual(name);
+
+  return (
+    <div
+      aria-hidden
+      className={`flex h-36 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} text-white/90 shadow-sm sm:h-44`}
+    >
+      <span className="scale-[2]">
+        <Icon />
+      </span>
+    </div>
+  );
+}
+
 function InclusionList({
   headingId,
   title,
@@ -190,7 +209,8 @@ function ServiceDetailSkeleton() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <Skeleton className="h-4 w-72" />
-      <div className="mt-5 grid gap-8 md:grid-cols-[1fr_20rem]">
+      <Skeleton className="mt-5 h-36 rounded-2xl sm:h-44" />
+      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
         <div className="flex flex-col gap-6">
           <Skeleton className="h-9 w-3/4" />
           <div className="flex flex-col gap-2">
