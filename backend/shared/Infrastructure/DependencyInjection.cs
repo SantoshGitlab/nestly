@@ -345,6 +345,7 @@ public static class DependencyInjection
         services.AddScoped<IChatMessageRepository, ChatMessageRepository>();
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IAdminChatService, AdminChatService>();
+        services.AddScoped<IProviderChatService, ProviderChatService>();
         services.AddSingleton<IChatPresenceTracker, ChatPresenceTracker>();
 
         // Task 273: the tracking hub's access rule. Scoped, like the

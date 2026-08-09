@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { ChatPanel } from "@/components/ChatPanel";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
   Alert,
@@ -408,6 +409,16 @@ export default function JobDetailPage() {
             </span>
           </div>
         </Card>
+
+        {/* Available while this provider is the booking's live assignment
+            (Assigned or Accepted) - exactly the window ChatController's
+            ownership check allows. Hidden once the assignment is no longer
+            live (Rejected/Reassigned/Withdrawn), where the thread would 404. */}
+        {job.status !== JobStatus.Rejected &&
+        job.status !== JobStatus.Reassigned &&
+        job.status !== JobStatus.Withdrawn ? (
+          <ChatPanel bookingId={job.bookingId} />
+        ) : null}
 
         {isLocationShareable(job.status) ? (
           <LocationSharingCard status={locationSharingStatus} />
