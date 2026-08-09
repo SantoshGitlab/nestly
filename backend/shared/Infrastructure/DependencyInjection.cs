@@ -11,6 +11,7 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Abstractions.Time;
+using Nestly.Application.AdminRoleManagement;
 using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
 using Nestly.Application.Chat;
@@ -594,6 +595,12 @@ public static class DependencyInjection
         // admin's account.
         services.AddScoped<IAdminRoleRepository, AdminRoleRepository>();
         services.AddScoped<IAdminUserManagementService, AdminUserManagementService>();
+
+        // Task 313: role CRUD and permission-matrix editing (SRS 12.2.2,
+        // 12.2.3) - makes AdminRole/RolePermissionMapping genuinely writable
+        // at runtime instead of AdminPermissionCatalog's compile-time-only
+        // grants. Same "settings.write" gate as the registration above.
+        services.AddScoped<IAdminRoleManagementService, AdminRoleManagementService>();
 
         // Tasks 131a-131h: admin-configurable settings/feature-flag store
         // (SRS 12.19). Gated behind "settings.read"/"settings.write" (already
