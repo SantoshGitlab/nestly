@@ -43,4 +43,14 @@ public interface IPaymentTransactionRepository
 
     /// <summary>Reconciliation support (SRS 14.3, task 71) - every transaction record, newest first.</summary>
     Task<IReadOnlyList<PaymentTransaction>> ListAsync(DateTime? fromUtc, DateTime? toUtc, PaymentTransactionStatus? status);
+
+    /// <summary>
+    /// Paginated variant of <see cref="ListAsync"/> for the admin payment
+    /// transaction view (SRS 12.13.1, task 311) - same filters, plus an
+    /// exact <paramref name="bookingId"/> match, and a total count for
+    /// paging. Mirrors <c>IProviderPayoutRepository.SearchAsync</c>'s
+    /// (Rows, TotalCount) shape.
+    /// </summary>
+    Task<(IReadOnlyList<PaymentTransaction> Rows, int TotalCount)> SearchAsync(
+        Guid? bookingId, PaymentTransactionStatus? status, DateTime? fromUtc, DateTime? toUtc, int page, int pageSize);
 }

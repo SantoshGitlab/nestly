@@ -617,6 +617,12 @@ public static class DependencyInjection
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
         services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         services.AddScoped<IPaymentService, PaymentService>();
+
+        // Admin payment transaction view (SRS 12.13.1, task 311) - read side
+        // only, registered here (rather than near IRefundTransactionRepository
+        // below) because it depends on IPaymentTransactionRepository above and
+        // that dependency is what it primarily reads.
+        services.AddScoped<IAdminPaymentQueryService, AdminPaymentQueryService>();
         services.AddScoped<ICouponRepository, CouponRepository>();
         services.AddScoped<ICouponRedemptionRepository, CouponRedemptionRepository>();
         services.AddScoped<ICouponService, CouponService>();
