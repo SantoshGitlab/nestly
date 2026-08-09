@@ -7,6 +7,7 @@ using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
+using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Infrastructure.Options;
 
@@ -28,6 +29,7 @@ public class BookingSummaryService : IBookingSummaryService
     private readonly IPriceCalculationService _priceCalculationService;
     private readonly ICouponService _couponService;
     private readonly ISubscriptionBenefitService _subscriptionBenefitService;
+    private readonly IWalletService _walletService;
     private readonly IServiceabilityRepository _serviceabilityRepository;
     private readonly BookingOptions _bookingOptions;
 
@@ -39,6 +41,7 @@ public class BookingSummaryService : IBookingSummaryService
         IPriceCalculationService priceCalculationService,
         ICouponService couponService,
         ISubscriptionBenefitService subscriptionBenefitService,
+        IWalletService walletService,
         IServiceabilityRepository serviceabilityRepository,
         IOptions<BookingOptions> bookingOptions)
     {
@@ -51,6 +54,7 @@ public class BookingSummaryService : IBookingSummaryService
         _priceCalculationService = priceCalculationService;
         _couponService = couponService;
         _subscriptionBenefitService = subscriptionBenefitService;
+        _walletService = walletService;
     }
 
     public async Task<Result<BookingSummaryResponse>> GetSummaryAsync(Guid customerId, BookingSummaryRequest request)
@@ -180,6 +184,22 @@ public class BookingSummaryService : IBookingSummaryService
             }
         }
 
+        // Task 310 (SRS 11.7.2): wallet is applied last, against whatever is
+        // still payable after coupon/subscription - unlike those two, it
+        // stacks with either. The balance itself is always surfaced (the
+        // customer must see it before deciding to use it); the applied
+        // amount is only non-zero when the caller opted in, and is capped at
+        // both the available balance and what remains payable so the
+        // customer's wallet can never be drawn down further than the
+        // booking actually costs.
+        decimal walletBalance = (await _walletService.GetBalanceAsync(customerId)).Value.Balance;
+        decimal walletApplied = 0m;
+        if (request.ApplyWalletCredit)
+        {
+            walletApplied = Math.Min(walletBalance, finalPayable);
+            finalPayable = Math.Max(0, finalPayable - walletApplied);
+        }
+
         var response = new BookingSummaryResponse(
             new BookingServiceSummary(service.Id, service.Name, service.Slug),
             addOnSummaries,
@@ -193,7 +213,8 @@ public class BookingSummaryService : IBookingSummaryService
             service.ReschedulePolicy,
             coupon,
             finalPayable,
-            subscriptionBenefit);
+            subscriptionBenefit,
+            new WalletCreditSummaryResponse(walletBalance, walletApplied));
 
         return Result.Success(response);
     }

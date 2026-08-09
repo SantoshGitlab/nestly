@@ -154,6 +154,28 @@ public class RefundService : IRefundService
             if (alreadyRefunded + amount >= payment.Amount)
             {
                 booking.TransitionTo(BookingStatus.Refunded, "Refund completed.");
+
+                // Task 310: a booking that consumed wallet balance at
+                // checkout gets it back once the payment side is fully
+                // settled - the customer never received the service that
+                // balance was spent on. Deliberately different from how a
+                // Coupon's redemption is treated: RedemptionCount is never
+                // decremented on any refund (see CouponService), since a
+                // coupon spends the merchant's inventory of a promotional
+                // offer, not the customer's own money - clawing it back has
+                // no customer-facing harm to undo. Wallet credit is real
+                // money the customer will otherwise simply never see again,
+                // so it gets the explicit reversal a coupon doesn't need.
+                // Scoped to a FULL settlement only (this branch) - a partial
+                // refund leaves the booking's wallet spend exactly where a
+                // coupon's discount is left on the same partial refund: not
+                // prorated back.
+                if (booking.WalletCreditAppliedSnapshot is > 0)
+                {
+                    await _walletService.CreditAsync(
+                        booking.CustomerId, booking.WalletCreditAppliedSnapshot.Value, WalletSourceType.BookingWalletCreditReversal,
+                        booking.Id, "Wallet credit reversed - booking fully refunded");
+                }
             }
 
             await _refundRepository.AddAsync(refund);

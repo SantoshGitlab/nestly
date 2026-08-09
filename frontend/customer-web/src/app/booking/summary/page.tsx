@@ -169,6 +169,13 @@ function BookingSummaryScreen() {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
+  // Wallet credit (task 310, SRS 11.7.2). A toggle, not a typed-in amount -
+  // see BookingSummaryRequestBody.applyWalletCredit's doc comment. Off by
+  // default: the /wallet page used to promise this happened automatically,
+  // which was never true - now that it's real, it's an opt-in the customer
+  // sees and can change their mind about, not a silent default.
+  const [applyWalletCredit, setApplyWalletCredit] = useState(false);
+
   const serviceQuery = useQuery({
     queryKey: ["service", serviceSlug],
     queryFn: () => apiFetch<ServiceDetail>(`${API_V1}/services/${serviceSlug}`),
@@ -336,6 +343,10 @@ function BookingSummaryScreen() {
         // creation call all honour it consistently, instead of it being a
         // display-only side channel that gets dropped at checkout time.
         couponCode: appliedCouponCode,
+        // Same reasoning as the coupon above: on the shared request so the
+        // preview and the actual POST /bookings call always agree on
+        // whether wallet credit applies.
+        applyWalletCredit,
       }
     : null;
 
@@ -602,7 +613,11 @@ function BookingSummaryScreen() {
   }
 
   const summary = summaryQuery.data;
-  const payable = summary ? (summary.coupon ? summary.finalPayable : summary.price.totalPayable) : null;
+  // finalPayable already folds in every discount that applies (coupon,
+  // subscription benefit, wallet credit - task 310) - it equals
+  // price.totalPayable whenever none of them do, so there's no need to
+  // special-case "no coupon" here the way this used to.
+  const payable = summary ? summary.finalPayable : null;
 
   // Carries this exact review page as the return trip for the "add a new
   // address" detour below - see the newAddressId effect above and
@@ -970,6 +985,24 @@ function BookingSummaryScreen() {
             {couponError ? <Alert tone="error">{couponError}</Alert> : null}
           </div>
         </Card>
+
+        {/* Wallet credit (task 310, SRS 11.7.2). Only shown once the summary
+            has actually loaded and there is a balance to offer - a customer
+            with nothing in their wallet has nothing to decide here. */}
+        {summary && summary.wallet.balance > 0 ? (
+          <Card title="Wallet credit" description="Use your Nestly wallet balance towards this booking.">
+            <CheckboxField
+              label={`Use my wallet balance (${inr(summary.wallet.balance)} available)`}
+              description={
+                applyWalletCredit && summary.wallet.appliedAmount > 0
+                  ? `${inr(summary.wallet.appliedAmount)} will be applied towards this booking.`
+                  : "Applied after any coupon or subscription discount, up to what's still payable."
+              }
+              checked={applyWalletCredit}
+              onChange={setApplyWalletCredit}
+            />
+          </Card>
+        ) : null}
       </div>
 
       <aside className="flex flex-col gap-4 md:sticky md:top-20 md:col-start-2 md:row-start-1 md:self-start">
@@ -1090,9 +1123,10 @@ function QuantityButton({
 
 /**
  * Price breakdown (task 62e) + policy summary (task 62f, SRS 11.7.2), with
- * the coupon discount and recomputed final payable folded in (task 77) - the
- * discount line and the total both visibly change whenever a coupon is
- * applied or removed, satisfying SRS 11.10.3's "recompute" requirement.
+ * the coupon discount, wallet credit (task 310) and recomputed final payable
+ * folded in (task 77) - the discount lines and the total all visibly change
+ * whenever a coupon or wallet credit is applied or removed, satisfying SRS
+ * 11.10.3's "recompute" requirement.
  */
 function BookingSummaryCard({ summary }: { summary: BookingSummary }) {
   return (
@@ -1105,7 +1139,8 @@ function BookingSummaryCard({ summary }: { summary: BookingSummary }) {
               ? { code: summary.coupon.code, amount: summary.coupon.discountAmount }
               : null
           }
-          total={summary.coupon ? summary.finalPayable : summary.price.totalPayable}
+          walletCreditApplied={summary.wallet.appliedAmount}
+          total={summary.finalPayable}
         />
 
         {summary.coupon ? (

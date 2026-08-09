@@ -387,11 +387,14 @@ export function PriceLine({
 export function PriceBreakdownList({
   breakdown,
   discount,
+  walletCreditApplied,
   total,
   totalLabel = "Total payable",
 }: {
   breakdown: PriceBreakdown;
   discount?: { code: string | null; amount: number } | null;
+  /** Wallet balance applied at checkout (SRS 11.7.2, task 310) - its own line, separate from `discount`, since it stacks with a coupon rather than replacing it. */
+  walletCreditApplied?: number | null;
   total: number;
   totalLabel?: string;
 }) {
@@ -427,6 +430,14 @@ export function PriceBreakdownList({
         <PriceLine
           label={discount.code ? `Coupon (${discount.code})` : "Discount"}
           value={`−${inr(discount.amount)}`}
+          tone="discount"
+        />
+      ) : null}
+
+      {walletCreditApplied && walletCreditApplied > 0 ? (
+        <PriceLine
+          label="Wallet credit used"
+          value={`−${inr(walletCreditApplied)}`}
           tone="discount"
         />
       ) : null}

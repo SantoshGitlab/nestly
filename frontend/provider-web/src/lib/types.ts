@@ -61,6 +61,13 @@ export interface ProviderProfile {
   photoModerationStatus: ProviderPhotoModerationStatus | null;
   /** Why a photo was rejected. Without it a rejection is a silent dead end. */
   photoModerationNote: string | null;
+  /**
+   * Task 309. Both null together when the provider has no visible reviews
+   * yet - a distinct state from a rating of zero, so render "not yet rated,"
+   * not "0.0 stars."
+   */
+  averageRating: number | null;
+  reviewCount: number | null;
 }
 
 // ---- Auth requests (POST /auth/...) ----

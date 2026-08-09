@@ -33,7 +33,15 @@ public record ProviderProfileResponse(
     string OnboardingStatus,
     string? PhotoUrl,
     string? PhotoModerationStatus,
-    string? PhotoModerationNote);
+    string? PhotoModerationNote,
+    // Task 309: the provider's own rating (task 293's provider-scoped
+    // aggregate, IReviewRepository.GetProviderRatingAsync - computed from
+    // visible reviews, not a rollup table, per PROVIDER.md OPEN DECISIONS
+    // #4). Both null together when the provider has no visible reviews yet -
+    // that is a distinct state from a rating of zero, so the portal must
+    // render "not yet rated," not "0.0 stars."
+    double? AverageRating,
+    int? ReviewCount);
 
 public record UpdateProviderProfileRequest(string LegalName, string DisplayName, string? Email);
 

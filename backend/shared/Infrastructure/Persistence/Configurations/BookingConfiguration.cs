@@ -59,6 +59,7 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
 
         builder.Property(x => x.CouponCodeSnapshot).HasMaxLength(50);
         builder.Property(x => x.CouponDiscountAmountSnapshot).HasPrecision(12, 2);
+        builder.Property(x => x.WalletCreditAppliedSnapshot).HasPrecision(12, 2);
 
         // Task 179: traceability only, not a foreign key - see SubscriptionId's doc comment.
         builder.Property(x => x.SubscriptionId);

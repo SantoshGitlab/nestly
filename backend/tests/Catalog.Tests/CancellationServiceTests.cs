@@ -49,6 +49,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new CityPricingPolicyRepository(context)),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         TestServices.BookingOptions());
 
@@ -70,6 +71,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new ProviderRepository(context),
             new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
             context);
     }
 
