@@ -42,6 +42,7 @@ public class ProvidersController : ControllerBase
     private readonly IValidator<RejectProviderPhotoRequest> _rejectPhotoValidator;
     private readonly IValidator<RecordBackgroundCheckRequest> _backgroundCheckValidator;
     private readonly IValidator<RecordProviderEarningAdjustmentRequest> _earningAdjustmentValidator;
+    private readonly IValidator<SetProviderCapacityRequest> _setCapacityValidator;
 
     public ProvidersController(
         IProviderManagementService providerManagementService,
@@ -55,7 +56,8 @@ public class ProvidersController : ControllerBase
         IValidator<RejectProviderKycDocumentRequest> rejectKycValidator,
         IValidator<RejectProviderPhotoRequest> rejectPhotoValidator,
         IValidator<RecordBackgroundCheckRequest> backgroundCheckValidator,
-        IValidator<RecordProviderEarningAdjustmentRequest> earningAdjustmentValidator)
+        IValidator<RecordProviderEarningAdjustmentRequest> earningAdjustmentValidator,
+        IValidator<SetProviderCapacityRequest> setCapacityValidator)
     {
         _providerManagementService = providerManagementService;
         _kycApprovalService = kycApprovalService;
@@ -69,6 +71,7 @@ public class ProvidersController : ControllerBase
         _rejectPhotoValidator = rejectPhotoValidator;
         _backgroundCheckValidator = backgroundCheckValidator;
         _earningAdjustmentValidator = earningAdjustmentValidator;
+        _setCapacityValidator = setCapacityValidator;
     }
 
     // ---- CRUD (task 150a) ----
@@ -281,6 +284,45 @@ public class ProvidersController : ControllerBase
     public async Task<IActionResult> Activate(Guid providerId)
     {
         var result = await _kycApprovalService.ActivateAsync(providerId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    // ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----
+
+    /// <summary>
+    /// A provider's dispatch capacity limits (task 245/308). Hard-enforced by
+    /// the automatic-assignment engine; still only an advisory load signal
+    /// on manual admin assignment (PROVIDER.md OPEN DECISIONS - AUTOMATIC
+    /// ASSIGNMENT #2). Unlimited (both null) until an admin sets one below.
+    /// </summary>
+    [HttpGet("{providerId:guid}/capacity")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(ProviderCapacityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCapacity(Guid providerId)
+    {
+        var result = await _providerManagementService.GetCapacityAsync(providerId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Sets (or clears, via null) a provider's <c>MaxJobsPerDay</c>/<c>MaxJobsPerSlot</c>
+    /// (task 308). Full-overwrite, same PUT-style convention as <see cref="Update"/>.
+    /// </summary>
+    [HttpPut("{providerId:guid}/capacity")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(ProviderCapacityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetCapacity(Guid providerId, [FromBody] SetProviderCapacityRequest request)
+    {
+        var validation = await _setCapacityValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _providerManagementService.SetCapacityAsync(providerId, request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

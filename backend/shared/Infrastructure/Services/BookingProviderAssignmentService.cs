@@ -407,8 +407,9 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             .Where(c => providerIds.Contains(c.ProviderId))
             .ToDictionaryAsync(c => c.ProviderId, c => c.MaxJobsPerDay);
 
-        // Advisory load signal (ProviderCapacity's own doc comment: "an admin
-        // can consult them when hand-assigning a booking") - counts this
+        // Advisory load signal only (PROVIDER.md OPEN DECISIONS - AUTOMATIC
+        // ASSIGNMENT #2 - manual admin assignment does not hard-enforce
+        // ProviderCapacity, only the automatic engine does) - counts this
         // provider's other live jobs on the same slot date, not a hard filter.
         var jobsTodayByProvider = await _context.Set<Booking>()
             .Where(b => b.AssignedProviderId != null

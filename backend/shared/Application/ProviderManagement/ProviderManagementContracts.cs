@@ -119,6 +119,19 @@ public sealed record RejectProviderKycDocumentRequest(string Reason);
 
 public sealed record RecordBackgroundCheckRequest(ProviderBackgroundCheckStatus Status, string? Notes);
 
+// ---- Capacity limits (task 245 built enforcement, task 308 adds the write path) ----
+
+/// <summary>
+/// A provider's dispatch capacity limits. Null on either field means
+/// unlimited (mirrors <see cref="ProviderCapacity"/>'s own null-is-unlimited
+/// convention) - returned even when no <see cref="ProviderCapacity"/> row
+/// exists yet, so the admin screen always has something to render.
+/// </summary>
+public sealed record ProviderCapacityResponse(Guid ProviderId, int? MaxJobsPerDay, int? MaxJobsPerSlot);
+
+/// <summary>Full-overwrite set of a provider's capacity limits (PUT-style, same convention as <see cref="UpdateProviderRequest"/>). Null clears a limit back to unlimited.</summary>
+public sealed record SetProviderCapacityRequest(int? MaxJobsPerDay, int? MaxJobsPerSlot);
+
 // ---- Performance view (task 150c) ----
 
 /// <summary>

@@ -13,6 +13,7 @@ import type {
   CreateProviderPayoutRequest,
   CreateProviderRequest,
   EligibleProvider,
+  ProviderCapacity,
   ProviderDetail,
   ProviderEarningsSummary,
   ProviderKycDocument,
@@ -29,6 +30,7 @@ import type {
   RejectAssignmentRequest,
   RejectProviderKycDocumentRequest,
   RejectProviderPhotoRequest,
+  SetProviderCapacityRequest,
   SuspendProviderRequest,
   UpdateProviderPayoutStatusRequest,
   UpdateProviderRequest,
@@ -115,6 +117,18 @@ export const approveProviderPhoto = (providerId: string) =>
 export const rejectProviderPhoto = (providerId: string, request: RejectProviderPhotoRequest) =>
   apiFetch<ProviderPhoto>(`${PROVIDERS_BASE}/${providerId}/photo/reject`, {
     method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+// ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----
+
+export const getProviderCapacity = (providerId: string) =>
+  apiFetch<ProviderCapacity>(`${PROVIDERS_BASE}/${providerId}/capacity`, { authenticated: true });
+
+export const setProviderCapacity = (providerId: string, request: SetProviderCapacityRequest) =>
+  apiFetch<ProviderCapacity>(`${PROVIDERS_BASE}/${providerId}/capacity`, {
+    method: "PUT",
     authenticated: true,
     body: JSON.stringify(request),
   });
