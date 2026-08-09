@@ -9,7 +9,7 @@ import { z } from "zod";
 import { Alert, Button, Field, Select } from "@/components/ui";
 import { FormActions, FormGrid } from "@/components/data-table";
 import { describeError } from "@/lib/api";
-import { createCmsMedia, listBannerCategories, listBannerMedia } from "@/lib/cms-api";
+import { createCmsMedia, listBannerCategories, listBannerMedia, uploadCmsMedia } from "@/lib/cms-api";
 import { CmsPlacement, type BannerCreateRequest, type BannerResponse, type BannerUpdateRequest } from "@/lib/cms-types";
 import { PLACEMENT_OPTIONS, datetimeLocalToUtc, utcToDatetimeLocal } from "./cmsDisplay";
 
@@ -127,6 +127,17 @@ export function BannerForm({
     onError: (error) => setMediaError(describeError(error)),
   });
 
+  const uploadMediaMutation = useMutation({
+    mutationFn: (file: File) => uploadCmsMedia(file, newMediaAlt.trim() === "" ? null : newMediaAlt.trim()),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["cms", "banners", "media"] });
+      form.setValue("mediaId", created.id, { shouldValidate: true });
+      setNewMediaAlt("");
+      setMediaError(null);
+    },
+    onError: (error) => setMediaError(describeError(error)),
+  });
+
   /**
    * The category picker only exists for the CategoryPage placement, but the
    * field kept its value when the placement moved away — so switching a
@@ -238,6 +249,23 @@ export function BannerForm({
             Add to library
           </Button>
         </div>
+        <div className="flex items-center gap-2 text-xs text-fg-subtle">
+          <span className="h-px flex-1 bg-line" aria-hidden />
+          or
+          <span className="h-px flex-1 bg-line" aria-hidden />
+        </div>
+        <Field
+          label={uploadMediaMutation.isPending ? "Uploading…" : "Upload an image"}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={uploadMediaMutation.isPending}
+          hint="JPEG, PNG or WebP, up to 8MB. Uses the alt text above. Adds to the library and selects it."
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) uploadMediaMutation.mutate(file);
+            event.target.value = "";
+          }}
+        />
       </fieldset>
 
       <FormGrid columns={3}>

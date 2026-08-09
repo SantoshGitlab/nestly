@@ -164,3 +164,14 @@ export async function apiFetchBlob(path: string, init?: ApiFetchOptions): Promis
   const response = await performFetch(path, init, {});
   return response.blob();
 }
+
+/**
+ * POSTs a `FormData` body (task 314's CMS media upload) and parses a JSON
+ * response, mirroring `apiFetch` otherwise. No default Content-Type -
+ * `apiFetch`'s "application/json" would break a multipart request, which
+ * needs the browser to set its own boundary-carrying header.
+ */
+export async function apiFetchUpload<T>(path: string, formData: FormData, init?: Omit<ApiFetchOptions, "body">): Promise<T> {
+  const response = await performFetch(path, { ...init, method: "POST", body: formData }, {});
+  return (await response.json()) as T;
+}
