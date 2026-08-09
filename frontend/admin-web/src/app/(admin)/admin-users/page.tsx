@@ -160,7 +160,17 @@ export default function AdminUsersPage() {
       <PageHeading
         title="Admin users"
         subtitle="Back-office operator accounts: create, assign roles, activate/deactivate and reset passwords (SRS 12.2.1)."
-        actions={canWrite ? <Button onClick={() => setIsCreating(true)}>Create admin user</Button> : undefined}
+        actions={
+          <>
+            <Link
+              href="/admin-users/roles"
+              className="inline-flex h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-fg shadow-xs transition-colors duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+            >
+              Roles & permissions
+            </Link>
+            {canWrite ? <Button onClick={() => setIsCreating(true)}>Create admin user</Button> : null}
+          </>
+        }
       />
 
       <div className="flex flex-col gap-6">

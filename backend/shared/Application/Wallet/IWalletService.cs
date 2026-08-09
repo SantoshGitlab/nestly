@@ -4,11 +4,9 @@ using Nestly.Domain;
 namespace Nestly.Application.Wallet;
 
 /// <summary>
-/// Wallet balance and ledger (SRS 11.17, 14.5, tasks 74a-c). There is no
-/// wallet-at-checkout spend capability in this phase - only crediting (from
-/// refunds, task 75) and reading are wired up; SRS 14.5's "wallet usage
-/// should be reflected in booking price summary" is out of scope until a
-/// later phase actually lets a customer apply wallet balance to a booking.
+/// Wallet balance and ledger (SRS 11.17, 14.5, tasks 74a-c). <see cref="DebitAsync"/>
+/// is also how a customer's wallet balance is applied at checkout (SRS 11.7.2,
+/// task 310) - see <c>BookingService.CreateAsync</c> and <c>BookingSummaryService</c>.
 /// </summary>
 public interface IWalletService
 {

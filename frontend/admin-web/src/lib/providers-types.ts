@@ -206,6 +206,26 @@ export interface ProviderDetail {
   photo: ProviderPhoto;
 }
 
+// ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----
+
+/**
+ * A provider's dispatch capacity limits. Null on either field means
+ * unlimited. Hard-enforced by the automatic-assignment engine; still only an
+ * advisory load signal on manual admin assignment (PROVIDER.md OPEN
+ * DECISIONS - AUTOMATIC ASSIGNMENT #2).
+ */
+export interface ProviderCapacity {
+  providerId: string;
+  maxJobsPerDay: number | null;
+  maxJobsPerSlot: number | null;
+}
+
+/** Full-overwrite set of a provider's capacity limits. Null clears a limit back to unlimited. */
+export interface SetProviderCapacityRequest {
+  maxJobsPerDay: number | null;
+  maxJobsPerSlot: number | null;
+}
+
 // ---- KYC approval and background check / activation (task 150b, 160) ----
 
 export interface RejectProviderKycDocumentRequest {

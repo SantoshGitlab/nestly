@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { cx } from "@/components/ui";
 import { API_V1, apiFetch } from "@/lib/api";
 import { clearSession, getRefreshToken } from "@/lib/auth";
+import { revokeDeviceToken, takeDeviceTokenId } from "@/lib/device-tokens-api";
 import type { ProviderSessionClaims } from "@/lib/types";
 
 /** Top chrome bar for the authenticated provider shell. Mirrors admin-web's AdminHeader. */
@@ -34,6 +35,7 @@ export function ProviderHeader({ claims }: { claims: ProviderSessionClaims | nul
 
   const signOut = async () => {
     const refreshToken = getRefreshToken();
+    const deviceTokenId = takeDeviceTokenId();
 
     // Clear locally regardless of the server's answer: the provider asked to
     // be signed out, and a network failure must not leave the token behind.
@@ -43,6 +45,12 @@ export function ProviderHeader({ claims }: { claims: ProviderSessionClaims | nul
           method: "POST",
           body: JSON.stringify({ refreshToken }),
         });
+      }
+      // Best-effort, same as above: revoking this session's push
+      // registration matters (a signed-out device should stop receiving job
+      // offers) but must never block sign-out itself.
+      if (deviceTokenId) {
+        await revokeDeviceToken(deviceTokenId);
       }
     } catch {
       // Already-invalid tokens are a no-op server-side; nothing to report.

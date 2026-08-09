@@ -1,3 +1,5 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
@@ -5,6 +7,7 @@ using Nestly.Application.Coupons;
 using Nestly.Application.Reviews;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
+using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -37,6 +40,12 @@ public class BookingService : IBookingService
     // otherwise know about reviews.
     private readonly IReviewRepository _reviewRepository;
     private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
+    // Task 310: applying wallet credit at checkout goes through the same
+    // atomic DebitAsync the standalone wallet-spend paths use (NestlyCoinsService's
+    // clawback, RefundService's wallet payout) - see WalletService.DebitAsync's
+    // doc comment for how it detects and reuses this method's own ambient
+    // transaction instead of nesting one.
+    private readonly IWalletService _walletService;
     // Same reasoning as RefundService: the slot-capacity reservation, coupon
     // reservation, subscription free-visit consumption and the booking write
     // itself are each their own SaveChangesAsync against repositories that
@@ -60,6 +69,7 @@ public class BookingService : IBookingService
         IProviderRepository providerRepository,
         IReviewRepository reviewRepository,
         ICustomerSubscriptionRepository customerSubscriptionRepository,
+        IWalletService walletService,
         NestlyDbContext context)
     {
         _summaryService = summaryService;
@@ -72,6 +82,7 @@ public class BookingService : IBookingService
         _providerRepository = providerRepository;
         _reviewRepository = reviewRepository;
         _customerSubscriptionRepository = customerSubscriptionRepository;
+        _walletService = walletService;
         _context = context;
     }
 
@@ -125,14 +136,21 @@ public class BookingService : IBookingService
         var summary = summaryResult.Value;
 
         // Everything below writes: slot capacity, coupon usage, subscription
-        // free-visit credit, and the booking itself each go through their own
-        // SaveChangesAsync on this same scoped context. Without an explicit
-        // transaction, an exception partway through (e.g. the booking insert
-        // itself failing) would leave an earlier reservation - most
-        // dangerously the slot capacity, since nothing else ever frees it -
-        // committed with no booking to show for it. Same pattern as
-        // RefundService for the same reason.
-        await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+        // free-visit credit, wallet credit, and the booking itself each go
+        // through their own SaveChangesAsync on this same scoped context.
+        // Without an explicit transaction, an exception partway through (e.g.
+        // the booking insert itself failing) would leave an earlier
+        // reservation - most dangerously the slot capacity, since nothing
+        // else ever frees it - committed with no booking to show for it. Same
+        // pattern as RefundService for the same reason.
+        //
+        // Task 310: Serializable only when wallet credit is actually being
+        // applied - WalletService.DebitAsync's read-check-write needs that
+        // isolation level to catch two concurrent debits that would otherwise
+        // both read the same stale balance (see its doc comment); an ordinary
+        // booking that never touches the wallet ledger does not pay for it.
+        var isolationLevel = summary.Wallet.AppliedAmount > 0 ? IsolationLevel.Serializable : IsolationLevel.Unspecified;
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync(isolationLevel);
         try
         {
             // Reserve the slot's per-day capacity (SRS 12.10.1, task 135c)
@@ -192,8 +210,33 @@ public class BookingService : IBookingService
                 }
             }
 
+            // Task 310: applied last, after every other reservation above -
+            // matching the order the summary itself computed it in (against
+            // whatever remains payable once coupon/subscription have already
+            // been taken off). bookingId is minted here, ahead of the Booking
+            // constructor below, purely so the wallet ledger entry can carry
+            // a real SourceReferenceId rather than being written first and
+            // patched afterwards.
+            var bookingId = Guid.NewGuid();
+            if (summary.Wallet.AppliedAmount > 0)
+            {
+                var debitResult = await _walletService.DebitAsync(
+                    customerId, summary.Wallet.AppliedAmount, WalletSourceType.BookingWalletCredit, bookingId,
+                    "Wallet credit applied at checkout");
+                if (debitResult.IsFailure)
+                {
+                    // Lost the race against another concurrent spend of the
+                    // same balance (or it genuinely changed since the preview
+                    // was fetched) - same "stale preview, fail cleanly"
+                    // handling as a coupon or slot that went stale underneath
+                    // the customer.
+                    _metricsService.RecordBookingCreated(succeeded: false, debitResult.Error.Code);
+                    return debitResult.Error;
+                }
+            }
+
             var booking = new Booking(
-                Guid.NewGuid(),
+                bookingId,
                 customerId,
                 new CustomerSnapshot(customer.Name, customer.Mobile),
                 summary.Address.Id,
@@ -219,7 +262,8 @@ public class BookingService : IBookingService
                 // exists without its plan id, even briefly, is one the admin
                 // (task 299) and provider (task 300) views would show as a
                 // one-off.
-                recurringBookingPlanId);
+                recurringBookingPlanId,
+                summary.Wallet.AppliedAmount);
 
             // Add-on line items come from the price breakdown, not summary.AddOns:
             // the breakdown already carries each selection's quantity and
@@ -378,6 +422,7 @@ public class BookingService : IBookingService
             booking.CouponDiscountAmountSnapshot,
             booking.TotalPayableSnapshot,
             providerAssignmentStatus,
-            provider);
+            provider,
+            booking.WalletCreditAppliedSnapshot);
     }
 }

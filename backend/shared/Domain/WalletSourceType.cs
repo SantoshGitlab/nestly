@@ -29,5 +29,11 @@ public enum WalletSourceType
     NestlyCoinsReward,
 
     /// <summary>Debited to reverse a Nestly Coins reward when its crediting booking is cancelled/refunded within the program's ClawbackWindowDays (docs/NESTLY-COINS.md FRAUD/ABUSE PREVENTION, task 201) - distinct from the credit's own NestlyCoinsReward tag, mirroring ReferralCreditExpiry's separation from ReferralReward. SourceReferenceId is the same Booking's id.</summary>
-    NestlyCoinsClawback
+    NestlyCoinsClawback,
+
+    /// <summary>Debited when a customer applies wallet balance at checkout (SRS 11.7.2, task 310). SourceReferenceId is the Booking's id.</summary>
+    BookingWalletCredit,
+
+    /// <summary>Credited back when a booking that consumed wallet balance is fully refunded (task 310) - the wallet-side counterpart of the reversal RefundService already performs for the escrow hold. SourceReferenceId is the same Booking's id.</summary>
+    BookingWalletCreditReversal
 }

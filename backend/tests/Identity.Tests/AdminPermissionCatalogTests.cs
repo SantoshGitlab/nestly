@@ -107,4 +107,31 @@ public class AdminPermissionCatalogTests
         AdminRoleNames.Descriptions.Keys.Should().BeEquivalentTo(AdminRoleNames.All);
         AdminRoleNames.Descriptions.Values.Should().OnlyContain(d => !string.IsNullOrWhiteSpace(d));
     }
+
+    /// <summary>
+    /// The admin payment transaction view (SRS 12.13.1, task 311) is gated
+    /// behind AdminModules.Payments - Finance Admin (the reconciliation
+    /// role) can write it, Operations Admin (which already sees payments
+    /// incidentally via Bookings) can read it, and no other specialist role
+    /// gets either tier.
+    /// </summary>
+    [Fact]
+    public void Payments_module_is_granted_to_finance_and_operations_admin_only()
+    {
+        string readCode = AdminPermissionCatalog.BuildCode(AdminModules.Payments, AdminPermissionAction.Read);
+        string writeCode = AdminPermissionCatalog.BuildCode(AdminModules.Payments, AdminPermissionAction.Write);
+
+        AdminPermissionCatalog.RolePermissionCodes[AdminRoleNames.FinanceAdmin].Should().Contain(writeCode);
+        AdminPermissionCatalog.RolePermissionCodes[AdminRoleNames.OperationsAdmin].Should().Contain(readCode);
+        AdminPermissionCatalog.RolePermissionCodes[AdminRoleNames.OperationsAdmin].Should().NotContain(writeCode);
+
+        foreach (string role in new[]
+                 {
+                     AdminRoleNames.BookingAdmin, AdminRoleNames.SupportAdmin, AdminRoleNames.CatalogAdmin,
+                     AdminRoleNames.PricingAdmin, AdminRoleNames.MarketingAdmin
+                 })
+        {
+            AdminPermissionCatalog.RolePermissionCodes[role].Should().NotContain(readCode, $"{role} has no need for payment transaction visibility");
+        }
+    }
 }

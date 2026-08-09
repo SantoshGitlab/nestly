@@ -34,6 +34,7 @@ import {
   approveKycDocument,
   approveProviderPhoto,
   createPayoutBatch,
+  getProviderCapacity,
   getProviderDetail,
   getProviderEarnings,
   getProviderPerformance,
@@ -43,6 +44,7 @@ import {
   rejectKycDocument,
   rejectProviderPhoto,
   searchPayouts,
+  setProviderCapacity,
   suspendProvider,
   updateProvider,
   updatePayoutStatus,
@@ -59,7 +61,7 @@ import {
   ProviderStatus,
 } from "@/lib/providers-types";
 import type { BadgeTone } from "@/components/ui";
-import type { ProviderDetail } from "@/lib/providers-types";
+import type { ProviderCapacity, ProviderDetail } from "@/lib/providers-types";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
 const STATUS_LABELS: Record<ProviderStatus, string> = {
@@ -173,6 +175,10 @@ export default function ProviderDetailPage() {
     queryKey: ["admin-provider-payouts", providerId],
     queryFn: () => searchPayouts(providerId),
   });
+  const capacityQuery = useQuery({
+    queryKey: ["admin-provider-capacity", providerId],
+    queryFn: () => getProviderCapacity(providerId),
+  });
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -203,6 +209,7 @@ export default function ProviderDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["admin-provider-performance", providerId] });
     queryClient.invalidateQueries({ queryKey: ["admin-provider-earnings", providerId] });
     queryClient.invalidateQueries({ queryKey: ["admin-provider-payouts", providerId] });
+    queryClient.invalidateQueries({ queryKey: ["admin-provider-capacity", providerId] });
   };
 
   const onError = (err: unknown) => setActionError(describeError(err));
@@ -228,6 +235,13 @@ export default function ProviderDetailPage() {
         longitude: values.longitude,
       }),
     onSuccess: () => onSuccess("Profile updated."),
+    onError,
+  });
+
+  const capacityMutation = useMutation({
+    mutationFn: (values: { maxJobsPerDay: number | null; maxJobsPerSlot: number | null }) =>
+      setProviderCapacity(providerId, values),
+    onSuccess: () => onSuccess("Capacity limits updated."),
     onError,
   });
 
@@ -437,6 +451,29 @@ export default function ProviderDetailPage() {
             ) : null}
           </div>
         ) : null}
+      </Card>
+
+      <Card
+        title="Dispatch capacity"
+        description="Max jobs per day/slot (task 245, 308). Hard-enforced by automatic assignment; manual admin assignment only shows this as a load signal, not a block."
+      >
+        {capacityQuery.isPending ? (
+          <SkeletonText lines={2} />
+        ) : capacityQuery.isError ? (
+          <SectionError error={capacityQuery.error} onRetry={() => capacityQuery.refetch()} />
+        ) : canWriteProvider ? (
+          <CapacityEditor
+            key={providerId}
+            capacity={capacityQuery.data}
+            saving={capacityMutation.isPending}
+            onSave={(values) => capacityMutation.mutate(values)}
+          />
+        ) : (
+          <p className="text-sm text-fg-muted">
+            Max/day: <span className="text-fg">{capacityQuery.data.maxJobsPerDay ?? "Unlimited"}</span> · Max/slot:{" "}
+            <span className="text-fg">{capacityQuery.data.maxJobsPerSlot ?? "Unlimited"}</span>
+          </p>
+        )}
       </Card>
 
       <Card
@@ -886,6 +923,69 @@ export default function ProviderDetailPage() {
           payoutStatusMutation.mutate({ payoutId: pendingPayoutFailure, status: ProviderPayoutStatus.Failed });
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Dispatch capacity limits editor (task 308). Owns its own state, seeded
+ * from the loaded capacity, same reason as `ProfileEditor` below - blank
+ * means "unlimited" here (mirroring `ProviderCapacity`'s own null-is-
+ * unlimited convention), not "leave unchanged".
+ */
+function CapacityEditor({
+  capacity,
+  saving,
+  onSave,
+}: {
+  capacity: ProviderCapacity;
+  saving: boolean;
+  onSave: (values: { maxJobsPerDay: number | null; maxJobsPerSlot: number | null }) => void;
+}) {
+  const [maxJobsPerDay, setMaxJobsPerDay] = useState(capacity.maxJobsPerDay?.toString() ?? "");
+  const [maxJobsPerSlot, setMaxJobsPerSlot] = useState(capacity.maxJobsPerSlot?.toString() ?? "");
+
+  const invalid =
+    (maxJobsPerDay.trim() !== "" && Number(maxJobsPerDay) <= 0) ||
+    (maxJobsPerSlot.trim() !== "" && Number(maxJobsPerSlot) <= 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <FormGrid columns={2}>
+        <Field
+          label="Max jobs per day"
+          type="number"
+          min="1"
+          step="1"
+          hint="Leave blank for unlimited."
+          value={maxJobsPerDay}
+          onChange={(e) => setMaxJobsPerDay(e.target.value)}
+        />
+        <Field
+          label="Max jobs per slot"
+          type="number"
+          min="1"
+          step="1"
+          hint="Leave blank for unlimited."
+          value={maxJobsPerSlot}
+          onChange={(e) => setMaxJobsPerSlot(e.target.value)}
+        />
+      </FormGrid>
+      <FormActions align="start">
+        <Button
+          variant="secondary"
+          disabled={invalid}
+          loading={saving}
+          onClick={() =>
+            onSave({
+              maxJobsPerDay: maxJobsPerDay.trim() === "" ? null : Number(maxJobsPerDay),
+              maxJobsPerSlot: maxJobsPerSlot.trim() === "" ? null : Number(maxJobsPerSlot),
+            })
+          }
+        >
+          Save capacity
+        </Button>
+      </FormActions>
     </div>
   );
 }

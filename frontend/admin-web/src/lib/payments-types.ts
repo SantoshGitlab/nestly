@@ -1,0 +1,93 @@
+/**
+ * Types for the Admin API's payment transaction view (SRS 12.13.1, task
+ * 311): `PaymentsController` (admin-api). Mirrors
+ * `backend/shared/Application/Payments/AdminPaymentContracts.cs` field for
+ * field. No `JsonStringEnumConverter` is registered anywhere in this
+ * codebase, so `status` below serialises as its C# enum's ordinal - see
+ * `bookings-types.ts`'s identical caveat, whose `PaymentTransactionStatus`/
+ * `RefundMethod`/`RefundStatus`/`RefundType` enums this file reuses rather
+ * than re-declaring (they already mirror the same backend enums this
+ * surface reads).
+ */
+import { PaymentTransactionStatus, RefundMethod, RefundStatus, RefundType } from "./bookings-types";
+
+export { PaymentTransactionStatus, RefundMethod, RefundStatus, RefundType };
+
+/** Mirrors Nestly.Domain.PaymentAttemptStatus's declaration order exactly. */
+export enum PaymentAttemptStatus {
+  Created = 0,
+  Success = 1,
+  Failed = 2,
+}
+
+export interface AdminPaymentAttempt {
+  id: string;
+  attemptNumber: number;
+  gatewayOrderId: string;
+  gatewayPaymentRef: string | null;
+  status: PaymentAttemptStatus;
+  failureReason: string | null;
+  createdAtUtc: string;
+  completedAtUtc: string | null;
+}
+
+export interface AdminPaymentRefund {
+  id: string;
+  type: RefundType;
+  method: RefundMethod;
+  amount: number;
+  status: RefundStatus;
+  gatewayRefundRef: string | null;
+  reason: string;
+  createdAtUtc: string;
+  processedAtUtc: string | null;
+}
+
+// ---- List ----
+
+export interface AdminPaymentTransactionListItem {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  amount: number;
+  currency: string;
+  status: PaymentTransactionStatus;
+  latestGatewayOrderId: string | null;
+  latestGatewayPaymentRef: string | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+export interface PagedAdminPaymentTransactionResponse {
+  items: AdminPaymentTransactionListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Query parameters for the admin payment transaction search endpoint. All optional. */
+export interface AdminPaymentTransactionSearchParams {
+  bookingId?: string;
+  status?: PaymentTransactionStatus;
+  fromUtc?: string;
+  toUtc?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+// ---- Detail ----
+
+export interface AdminPaymentTransactionDetail {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  amount: number;
+  currency: string;
+  status: PaymentTransactionStatus;
+  attempts: AdminPaymentAttempt[];
+  refunds: AdminPaymentRefund[];
+  commissionRatePercentage: number | null;
+  commissionAmount: number | null;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}

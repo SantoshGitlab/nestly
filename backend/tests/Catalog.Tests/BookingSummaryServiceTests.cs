@@ -42,6 +42,7 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
             new BookingRepository(context),
             TimeProvider.System),
         new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+        new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         bookingOptions ?? TestServices.BookingOptions());
 
@@ -109,6 +110,51 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
         result.Value.Address.Id.Should().Be(fixture.Address.Id);
         result.Value.Slot.SlotWindowId.Should().Be(fixture.Window.Id);
         result.Value.Price.TotalPayable.Should().Be(650m);
+    }
+
+    /// <summary>Task 310 (SRS 11.7.2): the balance is surfaced whether or not the customer opted in, so the checkout screen can show it before they decide.</summary>
+    [Fact]
+    public async Task Wallet_balance_is_always_surfaced_even_when_not_applied()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            await new WalletService(new WalletLedgerRepository(context), context)
+                .CreditAsync(fixture.Customer.Id, 200m, WalletSourceType.PromotionalCredit, null, "Promo");
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetSummaryAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Wallet.Balance.Should().Be(200m);
+        result.Value.Wallet.AppliedAmount.Should().Be(0m, "opting in is required before any balance is drawn down");
+        result.Value.FinalPayable.Should().Be(result.Value.Price.TotalPayable);
+    }
+
+    /// <summary>Task 310: applied amount is capped at both the available balance and what remains payable - a customer can never draw down more than either.</summary>
+    [Fact]
+    public async Task ApplyWalletCredit_caps_the_applied_amount_at_the_lesser_of_balance_and_payable()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            // More than the 500 base price alone, so capping at the payable
+            // amount (not the larger balance) is what's actually exercised.
+            await new WalletService(new WalletLedgerRepository(context), context)
+                .CreditAsync(fixture.Customer.Id, 900m, WalletSourceType.PromotionalCredit, null, "Promo");
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetSummaryAsync(
+            fixture.Customer.Id, RequestFor(fixture) with { ApplyWalletCredit = true });
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Wallet.Balance.Should().Be(900m);
+        result.Value.Wallet.AppliedAmount.Should().Be(500m, "capped at the base price - the balance alone is not the ceiling");
+        result.Value.FinalPayable.Should().Be(0m);
     }
 
     [Fact]

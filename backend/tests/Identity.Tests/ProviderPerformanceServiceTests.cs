@@ -49,7 +49,8 @@ public class ProviderPerformanceServiceTests : IDisposable
         new ProviderBackgroundCheckRepository(context),
         new BookingRepository(context),
         new BookingProviderAssignmentRepository(context),
-        new ProviderEarningLedgerRepository(context));
+        new ProviderEarningLedgerRepository(context),
+        new ProviderCapacityRepository(context));
 
     private static BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);

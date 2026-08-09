@@ -63,6 +63,18 @@ public class Booking : AggregateRoot<Guid>
     public decimal? CouponDiscountAmountSnapshot { get; private set; }
 
     /// <summary>
+    /// Wallet balance applied at checkout (SRS 11.7.2, task 310), debited from
+    /// the customer's <see cref="WalletLedgerEntry"/> ledger in the same
+    /// transaction as this booking's insert - see <c>BookingService.CreateAsync</c>.
+    /// Null when no wallet credit was applied, same "null means not used"
+    /// convention as <see cref="CouponDiscountAmountSnapshot"/>. Stacks with a
+    /// coupon or subscription benefit (unlike those two, which are mutually
+    /// exclusive with each other) - wallet is applied last, against whatever
+    /// remains payable after any other discount.
+    /// </summary>
+    public decimal? WalletCreditAppliedSnapshot { get; private set; }
+
+    /// <summary>
     /// Traceability only, same convention as <see cref="SlotWindowId"/> - not
     /// a foreign key (PRODUCT-ENHANCEMENTS.md #1, task 179). Null when no
     /// active subscription benefit was applied at booking time. A coupon and
@@ -134,7 +146,8 @@ public class Booking : AggregateRoot<Guid>
         bool subscriptionFreeVisitApplied = false,
         decimal? subscriptionDiscountAmount = null,
         string? idempotencyKey = null,
-        Guid? recurringBookingPlanId = null)
+        Guid? recurringBookingPlanId = null,
+        decimal? walletCreditApplied = null)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -178,6 +191,7 @@ public class Booking : AggregateRoot<Guid>
 
         CouponCodeSnapshot = couponCode;
         CouponDiscountAmountSnapshot = couponDiscountAmount;
+        WalletCreditAppliedSnapshot = walletCreditApplied is > 0 ? walletCreditApplied : null;
 
         SubscriptionId = subscriptionId;
         SubscriptionFreeVisitApplied = subscriptionFreeVisitApplied;

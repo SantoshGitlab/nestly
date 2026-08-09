@@ -48,6 +48,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
                 new CityPricingPolicyRepository(context)),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         TestServices.BookingOptions());
 
@@ -69,6 +70,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
             new ProviderRepository(context),
             new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
             context);
     }
 
@@ -92,7 +94,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
-    private async Task<Fixture> SeedBookingAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal servicePrice = 1000m)
+    private async Task<Fixture> SeedBookingAsync(
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];
@@ -125,7 +128,15 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         context.SlotWindowRules.Add(rule);
         context.SaveChanges();
 
-        var request = new BookingSummaryRequest(service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, []);
+        if (walletCreditToApply > 0)
+        {
+            await new WalletService(new WalletLedgerRepository(context), context)
+                .CreditAsync(customer.Id, walletCreditToApply, WalletSourceType.PromotionalCredit, null, "Test wallet credit");
+        }
+
+        var request = new BookingSummaryRequest(
+            service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, [],
+            ApplyWalletCredit: walletCreditToApply > 0);
         var created = await BuildBookingService(context).CreateAsync(customer.Id, request);
         created.IsSuccess.Should().BeTrue();
 
@@ -133,12 +144,12 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
     }
 
     /// <summary>Drives a fresh booking through payment success and cancellation, leaving it eligible for refund (Confirmed -> CancelledByCustomer).</summary>
-    private async Task<Fixture> SeedCancelledPaidBookingAsync(IPaymentGateway gateway, decimal servicePrice = 1000m)
+    private async Task<Fixture> SeedCancelledPaidBookingAsync(IPaymentGateway gateway, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         Fixture fixture;
         using (var seedContext = _db.CreateContext())
         {
-            fixture = await SeedBookingAsync(seedContext, servicePrice);
+            fixture = await SeedBookingAsync(seedContext, servicePrice, walletCreditToApply);
         }
 
         string gatewayOrderId;
@@ -213,6 +224,46 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         using var readContext = _db.CreateContext();
         var balance = await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id);
         balance.Value.Balance.Should().Be(fixture.Total);
+    }
+
+    /// <summary>
+    /// Task 310: a booking that spent wallet balance at checkout gets it
+    /// back once the booking is FULLY refunded - the customer never received
+    /// the service that balance paid for. Deliberately different from a
+    /// Coupon's redemption, which is never reversed on any refund (see
+    /// CouponService - RedemptionCount has no decrement path anywhere) -
+    /// see RefundService's doc comment on this branch for why the two are
+    /// treated differently despite both being "checkout-time discounts".
+    /// </summary>
+    [Fact]
+    public async Task InitiateFullRefundAsync_reverses_the_wallet_credit_the_booking_applied_at_checkout()
+    {
+        var gateway = BuildGateway();
+        // 1000 total, 300 paid from wallet at checkout - the gateway payment
+        // (and therefore the refund) only ever covers the remaining 700.
+        var fixture = await SeedCancelledPaidBookingAsync(gateway, servicePrice: 1000m, walletCreditToApply: 300m);
+        fixture.Total.Should().Be(700m, "the booking's own snapshot must already be net of the wallet credit applied at checkout");
+
+        using (var preRefundContext = _db.CreateContext())
+        {
+            var balanceBeforeRefund = await new WalletService(new WalletLedgerRepository(preRefundContext), preRefundContext)
+                .GetBalanceAsync(fixture.Customer.Id);
+            balanceBeforeRefund.Value.Balance.Should().Be(0m, "checkout should have fully drawn down the 300 that was applied");
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildRefundService(context, gateway).InitiateFullRefundAsync(fixture.BookingId, "Customer cancellation");
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Amount.Should().Be(700m, "the refund itself only ever covers what the gateway was actually paid");
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+        booking!.Status.Should().Be(BookingStatus.Refunded);
+
+        var balanceAfterRefund = await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id);
+        balanceAfterRefund.Value.Balance.Should().Be(300m, "the wallet credit spent on this booking must be handed back once it's fully refunded");
     }
 
     [Fact]

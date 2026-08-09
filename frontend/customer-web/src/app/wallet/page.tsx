@@ -63,6 +63,10 @@ function sourceLabel(sourceType: WalletSourceType): string {
       return "Nestly Coins earned";
     case WalletSourceType.NestlyCoinsClawback:
       return "Nestly Coins clawed back";
+    case WalletSourceType.BookingWalletCredit:
+      return "Applied to booking";
+    case WalletSourceType.BookingWalletCreditReversal:
+      return "Wallet credit reversed - booking refunded";
     default:
       return "Wallet";
   }
@@ -155,7 +159,8 @@ function BalanceCard({
         {inr(query.data.balance)}
       </p>
       <p className="mt-1.5 text-sm leading-relaxed text-fg-muted">
-        Applied automatically at checkout, before any coupon.
+        Use it at checkout: turn on &ldquo;Use my wallet balance&rdquo; on your booking summary to
+        put it towards that booking, after any coupon or subscription discount.
       </p>
     </Card>
   );
@@ -207,7 +212,7 @@ function LedgerCard({
       <EmptyState
         icon={<WalletIcon />}
         title="No wallet activity yet"
-        description="Refunds, promotional credit and referral rewards all land here, and are applied to your next booking automatically."
+        description="Refunds, promotional credit and referral rewards all land here. Turn on &ldquo;Use my wallet balance&rdquo; on your next booking summary to put it towards that booking."
         action={
           <Link
             href="/categories"

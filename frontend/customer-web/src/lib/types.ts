@@ -270,6 +270,14 @@ export interface BookingSummaryRequestBody {
   couponCode?: string | null;
   /** Only meaningful on POST /bookings - ignored by the /bookings/summary preview. See BookingContracts.cs. */
   idempotencyKey?: string | null;
+  /**
+   * Task 310 (SRS 11.7.2). A boolean toggle, not a customer-typed amount - opting
+   * in applies as much of the wallet balance as the booking can absorb (see
+   * `BookingSummary.wallet.appliedAmount`), matching the "applied automatically"
+   * wording on the wallet page. Applied last, after any coupon/subscription
+   * discount, and stacks with either.
+   */
+  applyWalletCredit?: boolean;
 }
 
 export interface BookingServiceSummary {
@@ -309,7 +317,14 @@ export interface CouponSummary {
   discountAmount: number;
 }
 
-/** Booking summary/preview (SRS 11.7), with the coupon module wired in (task 77). */
+/** Mirrors the C# WalletCreditSummaryResponse record (WalletContracts.cs). Always present on a BookingSummary - balance is surfaced whether or not it's applied (task 310). */
+export interface WalletCreditSummary {
+  balance: number;
+  /** Zero unless the request opted in via applyWalletCredit - capped at both the balance and whatever remains payable. */
+  appliedAmount: number;
+}
+
+/** Booking summary/preview (SRS 11.7), with the coupon module wired in (task 77) and wallet credit (task 310). */
 export interface BookingSummary {
   service: BookingServiceSummary;
   addOns: ServiceAddOnSummary[];
@@ -319,7 +334,8 @@ export interface BookingSummary {
   cancellationPolicy: string | null;
   reschedulePolicy: string | null;
   coupon: CouponSummary | null;
-  /** price.totalPayable - coupon.discountAmount when a coupon is applied, else === price.totalPayable. */
+  wallet: WalletCreditSummary;
+  /** price.totalPayable, less coupon.discountAmount and wallet.appliedAmount when either applies. */
   finalPayable: number;
 }
 
@@ -400,6 +416,8 @@ export interface BookingDetail {
   createdAtUtc: string;
   couponCode: string | null;
   couponDiscountAmount: number | null;
+  /** Wallet balance applied at checkout (task 310). Null when none was applied. */
+  walletCreditApplied: number | null;
   /** Equals price.totalPayable on a persisted booking - both already reflect the discounted amount actually charged. */
   finalPayable: number;
   /** Null until a provider is assigned; then tracks the live assignment row (task 208). */
@@ -693,6 +711,10 @@ export enum WalletSourceType {
   ReferralCreditExpiry = 5,
   NestlyCoinsReward = 6,
   NestlyCoinsClawback = 7,
+  /** Debited when a customer applies wallet balance at checkout (task 310). */
+  BookingWalletCredit = 8,
+  /** Credited back when a booking that consumed wallet balance is fully refunded (task 310). */
+  BookingWalletCreditReversal = 9,
 }
 
 export interface WalletBalanceResponse {

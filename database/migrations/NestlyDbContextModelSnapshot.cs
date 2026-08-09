@@ -611,6 +611,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("visit_charge_snapshot");
 
+                    b.Property<decimal?>("WalletCreditAppliedSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("wallet_credit_applied_snapshot");
+
                     b.HasKey("Id")
                         .HasName("pk_booking");
 

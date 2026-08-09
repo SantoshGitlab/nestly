@@ -72,3 +72,12 @@ export const resetAdminUserPassword = (adminUserId: string) =>
     method: "POST",
     authenticated: true,
   });
+
+// Lives under AdminAuthController's own route, not AdminUsersController -
+// see AdminAuthController.Unlock (task 95d's unlock path), gated behind
+// "settings.write" the same as the rest of this file's mutations.
+export const unlockAdminUser = (adminUserId: string) =>
+  apiFetch<void>(`${API_V1}/admin/auth/unlock/${adminUserId}`, {
+    method: "POST",
+    authenticated: true,
+  });

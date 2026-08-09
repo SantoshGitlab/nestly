@@ -3,6 +3,7 @@ using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
 using Nestly.Application.Reviews;
 using Nestly.Application.Subscriptions;
+using Nestly.Application.Wallet;
 using Nestly.Domain;
 
 namespace Nestly.Application.Bookings;
@@ -35,6 +36,14 @@ namespace Nestly.Application.Bookings;
 /// omits it (e.g. RecurringBookingSchedulerService) simply gets no dedup
 /// protection, same as an ordinary create today.
 /// </param>
+/// <param name="ApplyWalletCredit">
+/// Task 310 (SRS 11.7.2). A boolean toggle rather than a customer-specified
+/// amount, matching the "applied automatically" promise the /wallet page
+/// already makes - opting in applies as much of the available balance as the
+/// booking can absorb (see <see cref="WalletCreditSummaryResponse.AppliedAmount"/>),
+/// never a partial amount the customer has to type in. Applied last, against
+/// whatever remains payable after any coupon/subscription discount.
+/// </param>
 public record BookingSummaryRequest(
     Guid ServiceId,
     Guid CityId,
@@ -45,7 +54,8 @@ public record BookingSummaryRequest(
     int Quantity,
     IReadOnlyList<AddOnSelection> AddOns,
     string? CouponCode = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    bool ApplyWalletCredit = false);
 
 public record BookingServiceSummary(Guid Id, string Name, string Slug);
 
@@ -66,9 +76,7 @@ public record BookingAddressSummary(
 public record BookingSlotSummary(Guid SlotWindowId, string Name, DateOnly Date, TimeSpan StartTime, TimeSpan EndTime);
 
 /// <summary>
-/// Booking summary data (SRS 11.7.2). Wallet credit is omitted - that module
-/// doesn't apply at checkout yet (Phase 4's wallet tasks cover the ledger
-/// and balance API only, not spending at checkout). <paramref name="Coupon"/>
+/// Booking summary data (SRS 11.7.2). <paramref name="Coupon"/>
 /// is null when no coupon was applied (or removed); when present,
 /// <paramref name="FinalPayable"/> is <c>Price.TotalPayable - Coupon.DiscountAmount</c>
 /// (SRS 14.1's formula subtracts the discount after tax/fees, not before) -
@@ -81,6 +89,11 @@ public record BookingSlotSummary(Guid SlotWindowId, string Name, DateOnly Date, 
 /// always takes precedence: <paramref name="SubscriptionBenefit"/> is only
 /// ever populated when <paramref name="Coupon"/> is null, so the two never
 /// stack on the same booking.
+///
+/// <paramref name="Wallet"/> (task 310) is always populated - its Balance is
+/// surfaced whether or not the customer opted in, and its AppliedAmount folds
+/// into <paramref name="FinalPayable"/> last, after both the coupon/subscription
+/// discount above: unlike those two, wallet credit stacks with either.
 /// </summary>
 public record BookingSummaryResponse(
     BookingServiceSummary Service,
@@ -92,7 +105,8 @@ public record BookingSummaryResponse(
     string? ReschedulePolicy,
     CouponSummaryResponse? Coupon,
     decimal FinalPayable,
-    SubscriptionBenefitSummary? SubscriptionBenefit = null);
+    SubscriptionBenefitSummary? SubscriptionBenefit,
+    WalletCreditSummaryResponse Wallet);
 
 /// <summary>
 /// One entry in a booking's status timeline (SRS 11.13, task 60c), mirroring
@@ -184,7 +198,10 @@ public record BookingDetailResponse(
     decimal? CouponDiscountAmount,
     decimal FinalPayable,
     BookingProviderAssignmentStatus? ProviderAssignmentStatus,
-    BookingProviderSummary? Provider);
+    BookingProviderSummary? Provider,
+    // Wallet balance applied at checkout (task 310), mirroring
+    // Domain.Booking.WalletCreditAppliedSnapshot. Null when none was applied.
+    decimal? WalletCreditApplied = null);
 
 /// <summary>A row in the booking list (SRS 11.13, task 60b) - a lighter shape than the detail, for a list screen.</summary>
 public record BookingListItemResponse(

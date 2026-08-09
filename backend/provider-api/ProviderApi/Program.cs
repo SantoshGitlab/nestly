@@ -178,6 +178,12 @@ app.UseRateLimiter();
 
 app.MapControllers();
 
+// Task 190/193: real-time chat transport for the provider reply view - see
+// ChatHub's doc comment for the JWT-over-query-string auth and cross-process
+// (Redis backplane) design, and ChatHub.CanProviderAccessAsync for the same
+// live-assignment ownership check every other provider job action uses.
+app.MapHub<ChatHub>(HubRoutes.ChatPath);
+
 // Task 273: live order tracking. provider-api mapped no hub at all before
 // this - the provider side of tracking is the half that produces the data
 // (location pings, en-route/arrived), so without this the provider app had

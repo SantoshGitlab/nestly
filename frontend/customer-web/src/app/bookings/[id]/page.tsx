@@ -152,6 +152,7 @@ function BookingDetailScreen() {
                 ? { code: booking.couponCode, amount: booking.couponDiscountAmount }
                 : null
             }
+            walletCreditApplied={booking.walletCreditApplied}
             total={booking.finalPayable}
             totalLabel="Amount paid"
           />
