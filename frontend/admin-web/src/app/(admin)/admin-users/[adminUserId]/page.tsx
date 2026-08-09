@@ -24,6 +24,7 @@ import {
   getAdminUser,
   listAdminRoles,
   resetAdminUserPassword,
+  unlockAdminUser,
   updateAdminUser,
 } from "@/lib/admin-users-api";
 import { AdminUserStatus } from "@/lib/admin-users-types";
@@ -133,6 +134,14 @@ export default function AdminUserDetailPage() {
     onSuccess: (response) => {
       setConfirmReset(false);
       setTemporaryPassword(response.temporaryPassword);
+    },
+  });
+
+  const unlockMutation = useMutation({
+    mutationFn: () => unlockAdminUser(adminUserId),
+    onSuccess: () => {
+      refreshAdminUser();
+      pushToast("success", "Account unlocked.");
     },
   });
 
@@ -302,8 +311,19 @@ export default function AdminUserDetailPage() {
             {resetPasswordMutation.isError && !confirmReset ? (
               <Alert>{describeError(resetPasswordMutation.error)}</Alert>
             ) : null}
+            {unlockMutation.isError ? <Alert>{describeError(unlockMutation.error)}</Alert> : null}
 
             <FormActions align="start">
+              {adminUser.isLockedOut ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={unlockMutation.isPending}
+                  onClick={() => unlockMutation.mutate()}
+                >
+                  Unlock account
+                </Button>
+              ) : null}
               {adminUser.status === AdminUserStatus.Active ? (
                 <Button
                   type="button"
