@@ -79,15 +79,25 @@ public class BookingRepository : IBookingRepository
             .OrderByDescending(b => b.CreatedAtUtc)
             .ToListAsync();
 
+    /// <summary>
+    /// Paged like <see cref="SearchAsync"/>: counts on the bare filter query, then
+    /// re-queries the page with only <c>Items</c> attached. <see cref="FullyLoaded"/>
+    /// also brings in Items.AddOns and StatusHistory, which a list row's
+    /// <c>ToListItem</c> mapping never reads - paging a query with two collection
+    /// Includes made every page load pull and multiply the full AddOns/StatusHistory
+    /// rows for each booking before EF could apply Skip/Take, which is what made this
+    /// endpoint slow.
+    /// </summary>
     public async Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListByCustomerPagedAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses, int page, int pageSize)
     {
-        var query = FullyLoaded()
+        var filtered = _context.Bookings
             .AsNoTracking()
             .Where(b => b.CustomerId == customerId && statuses.Contains(b.Status));
 
-        int totalCount = await query.CountAsync();
+        int totalCount = await filtered.CountAsync();
 
-        var rows = await query
+        var rows = await filtered
+            .Include(b => b.Items)
             .OrderByDescending(b => b.CreatedAtUtc)
             .ApplyPaging(page, pageSize)
             .ToListAsync();
