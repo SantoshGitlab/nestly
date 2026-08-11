@@ -8,11 +8,11 @@ import { Skeleton } from "@/components/ui";
  * don't match what replaces it causes a layout jump, which is worse than
  * showing nothing at all.
  */
-export function CategoryGridSkeleton({ count = 8 }: { count?: number }) {
+export function CategoryGridSkeleton({ count = 9 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: count }, (_, index) => (
-        <Skeleton key={index} className="h-[9.5rem] rounded-2xl" />
+        <Skeleton key={index} className="h-72 rounded-2xl" />
       ))}
     </div>
   );

@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
 import {
+  AddOnGroupSelector,
   BookingProgress,
   PriceBreakdownList,
   PriceBreakdownSkeleton,
@@ -15,6 +16,7 @@ import {
   STICKY_BAR_SPACER,
   ScreenSkeleton,
   StickyActionBar,
+  VariantPicker,
   formatCalendarDate,
   inr,
   recurringFrequencyLabel,
@@ -89,6 +91,7 @@ function BookingSummaryScreen() {
 
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set());
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(todayIsoDate);
   const [selectedSlotWindowId, setSelectedSlotWindowId] = useState<string | null>(null);
@@ -238,6 +241,7 @@ function BookingSummaryScreen() {
     if (draft) {
       setQuantity(draft.quantity);
       setSelectedAddOnIds(new Set(draft.addOnIds));
+      setSelectedVariantId(draft.serviceVariantId ?? null);
       setSelectedAddressId(draft.addressId);
       setSelectedDate(draft.date);
       setSelectedSlotWindowId(draft.slotWindowId);
@@ -252,6 +256,16 @@ function BookingSummaryScreen() {
     setHasRestoredDraft(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serviceSlug]);
+
+  // Once the draft has had its say, default to the service's first variant
+  // (Phase 3 catalog redesign) - a service with none leaves this null and
+  // books at its flat price, unchanged from before variants existed.
+  useEffect(() => {
+    if (!hasRestoredDraft || selectedVariantId !== null || !serviceQuery.data) return;
+    const firstVariant = serviceQuery.data.variants[0];
+    if (firstVariant) setSelectedVariantId(firstVariant.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRestoredDraft, serviceQuery.data]);
 
   // Resume from a "+ Add a new address" detour (see addNewAddressHref below):
   // addresses/new sends the customer back here with ?newAddressId=... so the
@@ -273,6 +287,7 @@ function BookingSummaryScreen() {
   const draftState: BookingDraft = {
     quantity,
     addOnIds: Array.from(selectedAddOnIds),
+    serviceVariantId: selectedVariantId,
     addressId: selectedAddressId,
     date: selectedDate,
     slotWindowId: selectedSlotWindowId,
@@ -291,6 +306,7 @@ function BookingSummaryScreen() {
     writeDraft(serviceSlug, {
       quantity,
       addOnIds: Array.from(selectedAddOnIds),
+      serviceVariantId: selectedVariantId,
       addressId: selectedAddressId,
       date: selectedDate,
       slotWindowId: selectedSlotWindowId,
@@ -305,6 +321,7 @@ function BookingSummaryScreen() {
     hasRestoredDraft,
     quantity,
     selectedAddOnIds,
+    selectedVariantId,
     selectedAddressId,
     selectedDate,
     selectedSlotWindowId,
@@ -347,6 +364,7 @@ function BookingSummaryScreen() {
         // preview and the actual POST /bookings call always agree on
         // whether wallet credit applies.
         applyWalletCredit,
+        serviceVariantId: selectedVariantId,
       }
     : null;
 
@@ -690,6 +708,22 @@ function BookingSummaryScreen() {
               </QuantityButton>
             </div>
           </div>
+
+          {service.variants.length > 0 ? (
+            <div className="mt-5 border-t border-line pt-4">
+              <VariantPicker
+                variants={service.variants}
+                selectedId={selectedVariantId}
+                onSelect={setSelectedVariantId}
+              />
+            </div>
+          ) : null}
+
+          {service.addOnGroups.map((group) => (
+            <div key={group.id} className="mt-5 border-t border-line pt-4">
+              <AddOnGroupSelector group={group} selectedIds={selectedAddOnIds} onToggle={toggleAddOn} />
+            </div>
+          ))}
 
           {service.addOns.length > 0 ? (
             <fieldset className="mt-5 border-t border-line pt-4">

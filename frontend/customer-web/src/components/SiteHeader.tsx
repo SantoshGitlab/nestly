@@ -79,7 +79,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur-md">
       <nav
         aria-label="Primary"
-        className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6"
+        className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:px-6"
       >
         <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Nestly home">
           <NestlyMark />

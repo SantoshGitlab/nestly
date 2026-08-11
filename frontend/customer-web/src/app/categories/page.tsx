@@ -16,7 +16,7 @@ export default function CategoriesPage() {
   const { city } = useSelectedCity();
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading
         title="All categories"
         subtitle="Browse every service we offer in your city."
@@ -78,7 +78,7 @@ function CategoryGrid({ cityId }: { cityId: string }) {
   }
 
   return (
-    <Reveal className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+    <Reveal className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {query.data.map((category) => (
         <motion.div key={category.id} variants={revealItem}>
           <CategoryTile category={category} />

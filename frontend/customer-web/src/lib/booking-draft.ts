@@ -45,6 +45,13 @@ export interface BookingDraft {
   repeatFrequency?: number | null;
   repeatCount?: string | null;
   recurringPlanId?: string | null;
+  /**
+   * Null for a service with no variants (Phase 3 catalog redesign). Part of
+   * the draft's content, not its key - switching variants on the same
+   * service page still resumes the same draft rather than forking a second
+   * sessionStorage entry.
+   */
+  serviceVariantId?: string | null;
 }
 
 function draftKey(serviceSlug: string): string {

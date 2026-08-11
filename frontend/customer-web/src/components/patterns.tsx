@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { Badge, Skeleton, cx } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
+import { SPRING } from "@/components/motion";
+import { motion } from "motion/react";
 import {
   BookingProviderAssignmentStatus,
   BookingStatus,
@@ -10,7 +12,12 @@ import {
   RecurringBookingRecurrenceFrequency,
   SupportTicketStatus,
 } from "@/lib/types";
-import type { BookingStatusTimelineEntry, PriceBreakdown } from "@/lib/types";
+import type {
+  BookingStatusTimelineEntry,
+  PriceBreakdown,
+  ServiceAddOnGroupSummary,
+  ServiceVariantSummary,
+} from "@/lib/types";
 
 /**
  * Screen-level patterns shared by the customer-web booking, post-booking and
@@ -465,6 +472,141 @@ export function PriceBreakdownSkeleton() {
         <Skeleton className="h-5 w-24" />
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Catalog selection (Phase 3 catalog redesign)                              */
+/* -------------------------------------------------------------------------- */
+
+/** Shared selected/idle treatment for a radio- or checkbox-backed option row, matching the address/add-on pickers already in the booking flow. */
+const OPTION_ROW = (checked: boolean) =>
+  cx(
+    "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm transition duration-fast ease-out",
+    checked
+      ? "border-brand-600/40 bg-brand-50 dark:bg-brand-500/10"
+      : "border-line hover:border-line-strong hover:bg-surface-2",
+  );
+
+/**
+ * Pick-one selector for a service's priced/timed variants (Phase 3 catalog
+ * redesign). Renders nothing when `variants` is empty — a service with no
+ * variants keeps booking at its flat price, unchanged.
+ */
+/**
+ * Pick-one selector for a service's priced/timed variants (Phase 3 catalog
+ * redesign, visual pass). Segmented pill buttons rather than a vertical
+ * radio list - real `<button>`s with `aria-pressed`, since this is a
+ * single-select toggle group rather than a form control needing native
+ * radio semantics. Wraps onto multiple rows for services with more than a
+ * handful of options (`flex-wrap`), so it never breaks on many variants.
+ */
+export function VariantPicker({
+  variants,
+  selectedId,
+  onSelect,
+}: {
+  variants: ServiceVariantSummary[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (variants.length === 0) return null;
+
+  return (
+    <div role="group" aria-label="Choose an option">
+      <p className="mb-2 text-sm font-medium text-fg">Choose an option</p>
+      <div className="flex flex-wrap gap-2">
+        {variants.map((variant) => {
+          const selected = selectedId === variant.id;
+          return (
+            <motion.button
+              key={variant.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(variant.id)}
+              whileTap={{ scale: 0.97 }}
+              transition={SPRING}
+              className={cx(
+                "flex flex-col items-start gap-0.5 rounded-xl border px-3.5 py-2 text-left text-sm transition duration-fast ease-out",
+                selected
+                  ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                  : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+              )}
+            >
+              <span className="font-medium">{variant.name}</span>
+              <span className={cx("nums text-xs", selected ? "text-fg-on-brand/85" : "text-fg-muted")}>
+                {variant.durationMinutes} min · {inr(variant.price)}
+              </span>
+            </motion.button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Selector for one add-on group (Phase 3 catalog redesign): radio behaviour
+ * for a pick-one group, checkbox behaviour (bounded by `maxSelect`, when set)
+ * for a pick-many group. `selectedIds` and `onToggle` operate on the full
+ * add-on id set shared across every group and the ungrouped list, same as
+ * the pre-Phase-3 flat checkbox list did.
+ */
+export function AddOnGroupSelector({
+  group,
+  selectedIds,
+  onToggle,
+}: {
+  group: ServiceAddOnGroupSummary;
+  selectedIds: Set<string>;
+  onToggle: (addOnId: string) => void;
+}) {
+  const isSingle = group.selectionType === "Single";
+  const selectedInGroup = group.addOns.filter((a) => selectedIds.has(a.id));
+  const atCap = group.maxSelect !== null && selectedInGroup.length >= group.maxSelect;
+
+  // A radio's onChange only fires for the newly-checked item, but onToggle
+  // is a plain per-id flip - so a pick-one group has to explicitly untoggle
+  // whichever sibling was previously selected in the same gesture.
+  const selectInSingleGroup = (addOnId: string) => {
+    for (const other of selectedInGroup) {
+      if (other.id !== addOnId) onToggle(other.id);
+    }
+    if (!selectedIds.has(addOnId)) onToggle(addOnId);
+  };
+
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1 text-sm font-medium text-fg">{group.name}</legend>
+      {group.addOns.map((addOn) => {
+        const checked = selectedIds.has(addOn.id);
+        const disabled = !isSingle && !checked && atCap;
+        return (
+          <motion.label
+            key={addOn.id}
+            className={cx(OPTION_ROW(checked), disabled && "cursor-not-allowed opacity-50")}
+            whileTap={disabled ? undefined : { scale: 0.98 }}
+            transition={SPRING}
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <input
+                type={isSingle ? "radio" : "checkbox"}
+                name={isSingle ? `addon-group-${group.id}` : undefined}
+                checked={checked}
+                disabled={disabled}
+                onChange={() => (isSingle ? selectInSingleGroup(addOn.id) : onToggle(addOn.id))}
+                className={cx(
+                  "h-4 w-4 shrink-0 cursor-pointer border-line-strong accent-brand-600",
+                  !isSingle && "rounded",
+                )}
+              />
+              <span className="truncate text-fg">{addOn.name}</span>
+            </span>
+            <span className="nums shrink-0 text-fg-muted">+{inr(addOn.price)}</span>
+          </motion.label>
+        );
+      })}
+    </fieldset>
   );
 }
 

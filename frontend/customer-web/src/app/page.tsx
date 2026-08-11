@@ -5,35 +5,59 @@ import { TrustMarkers } from "@/components/TrustMarkers";
 
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-14 px-4 py-8 sm:px-6 sm:py-12">
-      <HeroBanner />
+    <main className="flex w-full flex-col gap-14 pb-14 sm:pb-20">
+      <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 sm:pt-12">
+        <HeroBanner />
+      </div>
 
-      <section aria-labelledby="categories-heading" className="flex flex-col gap-6">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 id="categories-heading" className="text-xl font-semibold tracking-tight text-fg">
+      {/* Full-bleed banded section (Resido reference's "Featured Property For
+          Sale" pattern): a light brand-tinted band, centered heading/subtitle,
+          the category grid, and a centered pill CTA below it — breaks out of
+          the page's max-w wrapper on purpose, unlike every other section here. */}
+      <section aria-labelledby="categories-heading" className="bg-brand-50 py-14 dark:bg-brand-500/[0.06] sm:py-20">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-10 px-4 sm:px-6">
+          <div className="flex max-w-xl flex-col items-center gap-3 text-center">
+            <h2 id="categories-heading" className="text-display-sm font-bold tracking-tight text-fg">
               Popular categories
             </h2>
-            <p className="mt-1 text-sm text-fg-muted">
-              Everything your home needs, from one place.
+            <p className="text-[0.9375rem] leading-relaxed text-fg-muted text-pretty">
+              Everything your home needs, from one place — vetted professionals across every service.
             </p>
           </div>
+
+          <div className="w-full">
+            <CategoryTiles />
+          </div>
+
           <Link
             href="/categories"
-            className="shrink-0 text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-semibold text-fg shadow-xs transition-colors duration-fast ease-out hover:border-brand-600/40 hover:text-brand-600"
           >
-            Browse all
+            Browse all categories
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3.5 w-3.5"
+              aria-hidden
+            >
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
           </Link>
         </div>
-        <CategoryTiles />
       </section>
 
-      <section aria-labelledby="why-heading" className="flex flex-col gap-6">
-        <h2 id="why-heading" className="text-xl font-semibold tracking-tight text-fg">
-          Why book with Nestly
-        </h2>
-        <TrustMarkers />
-      </section>
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+        <section aria-labelledby="why-heading" className="flex flex-col gap-6">
+          <h2 id="why-heading" className="text-xl font-semibold tracking-tight text-fg">
+            Why book with Nestly
+          </h2>
+          <TrustMarkers />
+        </section>
+      </div>
     </main>
   );
 }
