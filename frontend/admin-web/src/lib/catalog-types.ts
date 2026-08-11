@@ -19,6 +19,8 @@ export interface CategoryResponse {
   sortOrder: number;
   seoTitle: string | null;
   seoMetaDescription: string | null;
+  /** Null for a top-level category (Phase 3 catalog redesign). */
+  parentCategoryId: string | null;
 }
 
 export interface CategoryCreateRequest {
@@ -30,6 +32,7 @@ export interface CategoryCreateRequest {
   sortOrder: number;
   seoTitle: string | null;
   seoMetaDescription: string | null;
+  parentCategoryId: string | null;
 }
 
 export type CategoryUpdateRequest = CategoryCreateRequest;
@@ -48,6 +51,8 @@ export interface ServiceAdminResponse {
   shortDescription: string | null;
   price: number;
   isActive: boolean;
+  /** Photo shown on customer-facing listing cards. Null renders a graphic fallback there. */
+  coverImageUrl: string | null;
   inclusions: string;
   exclusions: string;
   cancellationPolicy: string | null;
@@ -65,6 +70,8 @@ export interface ServiceAdminResponse {
   isSlotRequired: boolean;
   isAddressRequired: boolean;
   isCustomerNoteAllowed: boolean;
+  /** Null when the service renders directly under its category with no section header (the default). Appliance/Service Group catalog redesign. */
+  serviceGroupId: string | null;
 }
 
 export interface ServiceCreateRequest {
@@ -74,6 +81,7 @@ export interface ServiceCreateRequest {
   description: string;
   shortDescription: string | null;
   price: number;
+  coverImageUrl: string | null;
   inclusions: string;
   exclusions: string;
   cancellationPolicy: string | null;
@@ -90,6 +98,7 @@ export interface ServiceCreateRequest {
   isSlotRequired: boolean;
   isAddressRequired: boolean;
   isCustomerNoteAllowed: boolean;
+  serviceGroupId: string | null;
 }
 
 export type ServiceUpdateRequest = ServiceCreateRequest;
@@ -104,6 +113,29 @@ export interface ServiceMediaCreateRequest {
   url: string;
 }
 
+// ---- Service variants (SRS 12.6 extension, Phase 3 catalog redesign) ----
+
+export interface ServiceVariantAdminResponse {
+  id: string;
+  serviceId: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+  inclusionsOverride: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface ServiceVariantCreateRequest {
+  name: string;
+  price: number;
+  durationMinutes: number;
+  inclusionsOverride: string | null;
+  sortOrder: number;
+}
+
+export type ServiceVariantUpdateRequest = ServiceVariantCreateRequest;
+
 // ---- Add-ons (SRS 12.7) ----
 
 export interface ServiceAddOnAdminResponse {
@@ -117,6 +149,8 @@ export interface ServiceAddOnAdminResponse {
   sortOrder: number;
   isQuantityAllowed: boolean;
   isMandatory: boolean;
+  /** Null when ungrouped (today's default). Phase 3 catalog redesign. */
+  groupId: string | null;
 }
 
 export interface ServiceAddOnCreateRequest {
@@ -127,6 +161,56 @@ export interface ServiceAddOnCreateRequest {
   sortOrder: number;
   isQuantityAllowed: boolean;
   isMandatory: boolean;
+  groupId: string | null;
 }
 
 export type ServiceAddOnUpdateRequest = ServiceAddOnCreateRequest;
+
+// ---- Add-on groups (Phase 3 catalog redesign) ----
+
+export type AddOnGroupSelectionType = "Single" | "Multiple";
+
+export interface ServiceAddOnGroupAdminResponse {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  name: string;
+  selectionType: AddOnGroupSelectionType;
+  minSelect: number;
+  maxSelect: number | null;
+  sortOrder: number;
+}
+
+export interface ServiceAddOnGroupCreateRequest {
+  serviceId: string;
+  name: string;
+  selectionType: AddOnGroupSelectionType;
+  minSelect: number;
+  maxSelect: number | null;
+  sortOrder: number;
+}
+
+export type ServiceAddOnGroupUpdateRequest = ServiceAddOnGroupCreateRequest;
+
+// ---- Service groups (Appliance/Service Group catalog redesign) ----
+//
+// An optional section header for a subset of a category's services (e.g.
+// "Repair & gas refill" under "AC"). Distinct from an add-on group above:
+// this groups a category's bookable services, not one service's add-ons.
+
+export interface ServiceGroupAdminResponse {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface ServiceGroupCreateRequest {
+  categoryId: string;
+  name: string;
+  sortOrder: number;
+}
+
+export type ServiceGroupUpdateRequest = ServiceGroupCreateRequest;

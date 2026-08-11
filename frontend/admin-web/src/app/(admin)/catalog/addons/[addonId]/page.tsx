@@ -11,7 +11,7 @@ import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid } from "@/components/
 import { StatusBadge } from "@/components/entity-table";
 import { DetailError, DetailSkeleton } from "@/components/screen-states";
 import { describeError } from "@/lib/api";
-import { getServiceAddOn, listServices, setServiceAddOnActive, updateServiceAddOn } from "@/lib/catalog-api";
+import { getServiceAddOn, listAddOnGroups, listServices, setServiceAddOnActive, updateServiceAddOn } from "@/lib/catalog-api";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
@@ -23,6 +23,7 @@ const addOnSchema = z.object({
   sortOrder: z.number().int().min(0),
   isQuantityAllowed: z.boolean(),
   isMandatory: z.boolean(),
+  groupId: z.string().optional().or(z.literal("")),
 });
 type AddOnFormValues = z.infer<typeof addOnSchema>;
 
@@ -55,9 +56,18 @@ export default function EditServiceAddOnPage() {
           sortOrder: addOnQuery.data.sortOrder,
           isQuantityAllowed: addOnQuery.data.isQuantityAllowed,
           isMandatory: addOnQuery.data.isMandatory,
+          groupId: addOnQuery.data.groupId ?? "",
         }
       : undefined,
   });
+
+  const formServiceId = form.watch("serviceId");
+  const groupsQuery = useQuery({
+    queryKey: ["addon-groups", formServiceId],
+    queryFn: () => listAddOnGroups(formServiceId || undefined),
+    enabled: Boolean(formServiceId),
+  });
+  const groupOptions = (groupsQuery.data ?? []).map((g) => ({ value: g.id, label: g.name }));
 
   const updateMutation = useMutation({
     mutationFn: (values: AddOnFormValues) =>
@@ -69,6 +79,7 @@ export default function EditServiceAddOnPage() {
         sortOrder: values.sortOrder,
         isQuantityAllowed: values.isQuantityAllowed,
         isMandatory: values.isMandatory,
+        groupId: values.groupId || null,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-addons"] }),
   });
@@ -184,6 +195,15 @@ export default function EditServiceAddOnPage() {
               disabled={!canWrite}
             />
           </FormGrid>
+
+          <Select
+            label="Group"
+            hint="Optional — place this add-on under a pick-one/pick-many group (Phase 3)."
+            placeholder="Ungrouped"
+            options={groupOptions}
+            {...form.register("groupId")}
+            disabled={!canWrite}
+          />
 
           <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-medium text-fg">Add-on options</legend>

@@ -2,16 +2,25 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Badge, Button, Card, Field, PageHeading, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, Field, PageHeading, Select, Textarea } from "@/components/ui";
 import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid } from "@/components/data-table";
 import { StatusBadge } from "@/components/entity-table";
 import { DetailError, DetailSkeleton } from "@/components/screen-states";
 import { describeError } from "@/lib/api";
-import { getCategory, setCategoryActive, setCategoryFeatured, updateCategory } from "@/lib/catalog-api";
+import {
+  getCategory,
+  listCategories,
+  listCategoryChildren,
+  setCategoryActive,
+  setCategoryFeatured,
+  updateCategory,
+} from "@/lib/catalog-api";
+import type { CategoryResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
@@ -28,8 +37,31 @@ const categorySchema = z.object({
   sortOrder: z.number().int().min(0),
   seoTitle: z.string().max(200).optional().or(z.literal("")),
   seoMetaDescription: z.string().max(500).optional().or(z.literal("")),
+  parentCategoryId: z.string().optional().or(z.literal("")),
 });
 type CategoryFormValues = z.infer<typeof categorySchema>;
+
+/** Every category reachable by walking parentCategoryId from `rootId` (Phase 3 catalog redesign) - excluded from the parent picker so a category can't be assigned under its own descendant. */
+function descendantIds(rootId: string, categories: CategoryResponse[]): Set<string> {
+  const childrenByParent = new Map<string, CategoryResponse[]>();
+  for (const category of categories) {
+    if (!category.parentCategoryId) continue;
+    childrenByParent.set(category.parentCategoryId, [...(childrenByParent.get(category.parentCategoryId) ?? []), category]);
+  }
+
+  const result = new Set<string>();
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const child of childrenByParent.get(current) ?? []) {
+      if (!result.has(child.id)) {
+        result.add(child.id);
+        queue.push(child.id);
+      }
+    }
+  }
+  return result;
+}
 
 /** Edit screen for one category (SRS 12.5, task 104): every editable field, plus activation and featuring. */
 export default function EditCategoryPage() {
@@ -41,6 +73,17 @@ export default function EditCategoryPage() {
   const canWrite = canWriteModule(claims, "catalog");
 
   const categoryQuery = useQuery({ queryKey: ["categories", categoryId], queryFn: () => getCategory(categoryId) });
+  const allCategoriesQuery = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+  const childrenQuery = useQuery({
+    queryKey: ["categories", categoryId, "children"],
+    queryFn: () => listCategoryChildren(categoryId),
+  });
+
+  const excludedFromParentPicker = descendantIds(categoryId, allCategoriesQuery.data ?? []);
+  excludedFromParentPicker.add(categoryId);
+  const parentOptions = (allCategoriesQuery.data ?? [])
+    .filter((c) => !excludedFromParentPicker.has(c.id))
+    .map((c) => ({ value: c.id, label: c.name }));
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categorySchema),
@@ -54,6 +97,7 @@ export default function EditCategoryPage() {
           sortOrder: categoryQuery.data.sortOrder,
           seoTitle: categoryQuery.data.seoTitle ?? "",
           seoMetaDescription: categoryQuery.data.seoMetaDescription ?? "",
+          parentCategoryId: categoryQuery.data.parentCategoryId ?? "",
         }
       : undefined,
   });
@@ -69,6 +113,7 @@ export default function EditCategoryPage() {
         sortOrder: values.sortOrder,
         seoTitle: values.seoTitle || null,
         seoMetaDescription: values.seoMetaDescription || null,
+        parentCategoryId: values.parentCategoryId || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -199,6 +244,15 @@ export default function EditCategoryPage() {
             />
           </FormGrid>
 
+          <Select
+            label="Parent category"
+            hint="Leave unset for a top-level category, or choose one to nest this under a parent (Phase 3)."
+            placeholder="No parent (top-level)"
+            options={parentOptions}
+            {...form.register("parentCategoryId")}
+            disabled={!canWrite}
+          />
+
           <FormGrid columns={3}>
             <Field
               label="Sort order"
@@ -229,6 +283,25 @@ export default function EditCategoryPage() {
             </FormActions>
           ) : null}
         </form>
+      </Card>
+
+      <Card title="Subcategories" description="Created by picking this category as a parent when adding or editing a category.">
+        {childrenQuery.data && childrenQuery.data.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {childrenQuery.data.map((child) => (
+              <li key={child.id}>
+                <Link
+                  href={`/catalog/categories/${child.id}`}
+                  className="text-sm font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+                >
+                  {child.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-fg-muted">No subcategories yet.</p>
+        )}
       </Card>
 
       <ConfirmDialog

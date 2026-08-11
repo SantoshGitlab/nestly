@@ -12,17 +12,28 @@ import type {
   CategoryUpdateRequest,
   ServiceAddOnAdminResponse,
   ServiceAddOnCreateRequest,
+  ServiceAddOnGroupAdminResponse,
+  ServiceAddOnGroupCreateRequest,
+  ServiceAddOnGroupUpdateRequest,
   ServiceAddOnUpdateRequest,
   ServiceAdminResponse,
   ServiceCreateRequest,
+  ServiceGroupAdminResponse,
+  ServiceGroupCreateRequest,
+  ServiceGroupUpdateRequest,
   ServiceMediaCreateRequest,
   ServiceMediaResponse,
   ServiceUpdateRequest,
+  ServiceVariantAdminResponse,
+  ServiceVariantCreateRequest,
+  ServiceVariantUpdateRequest,
 } from "./catalog-types";
 
 const CATEGORIES_BASE = `${API_V1}/catalog/categories`;
 const SERVICES_BASE = `${API_V1}/catalog/services`;
 const ADDONS_BASE = `${API_V1}/catalog/addons`;
+const ADDON_GROUPS_BASE = `${API_V1}/catalog/addon-groups`;
+const SERVICE_GROUPS_BASE = `${API_V1}/catalog/service-groups`;
 
 function query(params: Record<string, string | undefined>): string {
   const entries = Object.entries(params).filter(([, value]) => value !== undefined);
@@ -63,6 +74,9 @@ export const setCategoryFeatured = (id: string, isFeatured: boolean) =>
     method: "POST",
     authenticated: true,
   });
+
+export const listCategoryChildren = (id: string) =>
+  apiFetch<CategoryResponse[]>(`${CATEGORIES_BASE}/${id}/children`, { authenticated: true });
 
 // ---- Services / packages ----
 
@@ -114,6 +128,37 @@ export const removeServiceMedia = (serviceId: string, mediaId: string) =>
     authenticated: true,
   });
 
+// ---- Service variants (Phase 3 catalog redesign) ----
+
+export const listServiceVariants = (serviceId: string) =>
+  apiFetch<ServiceVariantAdminResponse[]>(`${SERVICES_BASE}/${serviceId}/variants`, { authenticated: true });
+
+export const createServiceVariant = (serviceId: string, request: ServiceVariantCreateRequest) =>
+  apiFetch<ServiceVariantAdminResponse>(`${SERVICES_BASE}/${serviceId}/variants`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const updateServiceVariant = (serviceId: string, id: string, request: ServiceVariantUpdateRequest) =>
+  apiFetch<ServiceVariantAdminResponse>(`${SERVICES_BASE}/${serviceId}/variants/${id}`, {
+    method: "PUT",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const setServiceVariantActive = (serviceId: string, id: string, isActive: boolean) =>
+  apiFetch<void>(`${SERVICES_BASE}/${serviceId}/variants/${id}/${isActive ? "activate" : "deactivate"}`, {
+    method: "POST",
+    authenticated: true,
+  });
+
+export const deleteServiceVariant = (serviceId: string, id: string) =>
+  apiFetch<void>(`${SERVICES_BASE}/${serviceId}/variants/${id}`, {
+    method: "DELETE",
+    authenticated: true,
+  });
+
 // ---- Add-ons ----
 
 export const listServiceAddOns = (serviceId?: string) =>
@@ -139,5 +184,67 @@ export const updateServiceAddOn = (id: string, request: ServiceAddOnUpdateReques
 export const setServiceAddOnActive = (id: string, isActive: boolean) =>
   apiFetch<void>(`${ADDONS_BASE}/${id}/${isActive ? "activate" : "deactivate"}`, {
     method: "POST",
+    authenticated: true,
+  });
+
+// ---- Add-on groups (Phase 3 catalog redesign) ----
+
+export const listAddOnGroups = (serviceId?: string) =>
+  apiFetch<ServiceAddOnGroupAdminResponse[]>(`${ADDON_GROUPS_BASE}${query({ serviceId })}`, { authenticated: true });
+
+export const getAddOnGroup = (id: string) =>
+  apiFetch<ServiceAddOnGroupAdminResponse>(`${ADDON_GROUPS_BASE}/${id}`, { authenticated: true });
+
+export const createAddOnGroup = (request: ServiceAddOnGroupCreateRequest) =>
+  apiFetch<ServiceAddOnGroupAdminResponse>(ADDON_GROUPS_BASE, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const updateAddOnGroup = (id: string, request: ServiceAddOnGroupUpdateRequest) =>
+  apiFetch<ServiceAddOnGroupAdminResponse>(`${ADDON_GROUPS_BASE}/${id}`, {
+    method: "PUT",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const deleteAddOnGroup = (id: string) =>
+  apiFetch<void>(`${ADDON_GROUPS_BASE}/${id}`, {
+    method: "DELETE",
+    authenticated: true,
+  });
+
+// ---- Service groups (Appliance/Service Group catalog redesign) ----
+
+export const listServiceGroups = (categoryId?: string) =>
+  apiFetch<ServiceGroupAdminResponse[]>(`${SERVICE_GROUPS_BASE}${query({ categoryId })}`, { authenticated: true });
+
+export const getServiceGroup = (id: string) =>
+  apiFetch<ServiceGroupAdminResponse>(`${SERVICE_GROUPS_BASE}/${id}`, { authenticated: true });
+
+export const createServiceGroup = (request: ServiceGroupCreateRequest) =>
+  apiFetch<ServiceGroupAdminResponse>(SERVICE_GROUPS_BASE, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const updateServiceGroup = (id: string, request: ServiceGroupUpdateRequest) =>
+  apiFetch<ServiceGroupAdminResponse>(`${SERVICE_GROUPS_BASE}/${id}`, {
+    method: "PUT",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const setServiceGroupActive = (id: string, isActive: boolean) =>
+  apiFetch<void>(`${SERVICE_GROUPS_BASE}/${id}/${isActive ? "activate" : "deactivate"}`, {
+    method: "POST",
+    authenticated: true,
+  });
+
+export const deleteServiceGroup = (id: string) =>
+  apiFetch<void>(`${SERVICE_GROUPS_BASE}/${id}`, {
+    method: "DELETE",
     authenticated: true,
   });

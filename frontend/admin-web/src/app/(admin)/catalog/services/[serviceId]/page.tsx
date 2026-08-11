@@ -19,20 +19,27 @@ import {
   SkeletonText,
   Textarea,
 } from "@/components/ui";
-import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid } from "@/components/data-table";
+import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid, formatCurrency } from "@/components/data-table";
 import { StatusBadge } from "@/components/entity-table";
 import { DetailError, DetailSkeleton, SectionError } from "@/components/screen-states";
 import { describeError } from "@/lib/api";
 import {
   addServiceMedia,
+  createServiceVariant,
+  deleteServiceVariant,
   getService,
   listCategories,
+  listServiceGroups,
   listServiceMedia,
+  listServiceVariants,
   removeServiceMedia,
   setServiceActive,
   setServiceFeatured,
+  setServiceVariantActive,
   updateService,
+  updateServiceVariant,
 } from "@/lib/catalog-api";
+import type { ServiceVariantAdminResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
@@ -45,12 +52,14 @@ const serviceSchema = z.object({
   shortDescription: z.string().max(500).optional().or(z.literal("")),
   description: z.string().max(2000),
   price: z.number().positive("Price must be greater than 0"),
+  coverImageUrl: z.string().max(500).optional().or(z.literal("")),
   durationMinutes: z.number().int().positive("Duration must be greater than 0"),
   inclusions: z.string().max(4000),
   exclusions: z.string().max(4000),
   cancellationPolicy: z.string().max(2000).optional().or(z.literal("")),
   reschedulePolicy: z.string().max(2000).optional().or(z.literal("")),
   sortOrder: z.number().int().min(0),
+  serviceGroupId: z.string().optional().or(z.literal("")),
   seoTitle: z.string().max(200).optional().or(z.literal("")),
   seoMetaDescription: z.string().max(500).optional().or(z.literal("")),
   pricingType: z.enum(["Fixed", "Variable"]),
@@ -67,6 +76,16 @@ type ServiceFormValues = z.infer<typeof serviceSchema>;
 const mediaSchema = z.object({ url: z.string().min(1, "Image URL is required").max(1000) });
 type MediaFormValues = z.infer<typeof mediaSchema>;
 
+const variantSchema = z.object({
+  name: z.string().min(1, "Variant name is required").max(200),
+  price: z.number().positive("Price must be greater than 0"),
+  durationMinutes: z.number().int().positive("Duration must be greater than 0"),
+  inclusionsOverride: z.string().max(4000).optional().or(z.literal("")),
+  sortOrder: z.number().int().min(0),
+});
+type VariantFormValues = z.infer<typeof variantSchema>;
+const emptyVariantForm: VariantFormValues = { name: "", price: 0, durationMinutes: 60, inclusionsOverride: "", sortOrder: 0 };
+
 /** Edit screen for one service/package (SRS 12.6, task 106): every field, option flags, gallery media, activation and featuring. */
 export default function EditServicePage() {
   const { serviceId } = useParams<{ serviceId: string }>();
@@ -74,12 +93,14 @@ export default function EditServicePage() {
   const claims = useAdminClaims();
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [pendingMediaRemoval, setPendingMediaRemoval] = useState<{ id: string; url: string } | null>(null);
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
 
   const canWrite = canWriteModule(claims, "catalog");
 
   const serviceQuery = useQuery({ queryKey: ["services", serviceId], queryFn: () => getService(serviceId) });
   const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: listCategories });
   const mediaQuery = useQuery({ queryKey: ["service-media", serviceId], queryFn: () => listServiceMedia(serviceId) });
+  const variantsQuery = useQuery({ queryKey: ["service-variants", serviceId], queryFn: () => listServiceVariants(serviceId) });
 
   const categoryOptions = (categoriesQuery.data ?? []).map((c) => ({ value: c.id, label: c.name }));
 
@@ -102,12 +123,14 @@ export default function EditServicePage() {
           shortDescription: serviceQuery.data.shortDescription ?? "",
           description: serviceQuery.data.description,
           price: serviceQuery.data.price,
+          coverImageUrl: serviceQuery.data.coverImageUrl ?? "",
           durationMinutes: serviceQuery.data.durationMinutes,
           inclusions: serviceQuery.data.inclusions,
           exclusions: serviceQuery.data.exclusions,
           cancellationPolicy: serviceQuery.data.cancellationPolicy ?? "",
           reschedulePolicy: serviceQuery.data.reschedulePolicy ?? "",
           sortOrder: serviceQuery.data.sortOrder,
+          serviceGroupId: serviceQuery.data.serviceGroupId ?? "",
           seoTitle: serviceQuery.data.seoTitle ?? "",
           seoMetaDescription: serviceQuery.data.seoMetaDescription ?? "",
           pricingType: serviceQuery.data.pricingType,
@@ -122,6 +145,17 @@ export default function EditServicePage() {
       : undefined,
   });
 
+  const selectedCategoryId = form.watch("categoryId");
+  const serviceGroupsQuery = useQuery({
+    queryKey: ["service-groups", selectedCategoryId],
+    queryFn: () => listServiceGroups(selectedCategoryId),
+    enabled: !!selectedCategoryId,
+  });
+  const serviceGroupOptions = [
+    { value: "", label: "No group" },
+    ...(serviceGroupsQuery.data ?? []).map((g) => ({ value: g.id, label: g.name })),
+  ];
+
   const updateMutation = useMutation({
     mutationFn: (values: ServiceFormValues) =>
       updateService(serviceId, {
@@ -131,12 +165,14 @@ export default function EditServicePage() {
         description: values.description,
         shortDescription: values.shortDescription || null,
         price: values.price,
+        coverImageUrl: values.coverImageUrl || null,
         inclusions: values.inclusions,
         exclusions: values.exclusions,
         cancellationPolicy: values.cancellationPolicy || null,
         reschedulePolicy: values.reschedulePolicy || null,
         durationMinutes: values.durationMinutes,
         sortOrder: values.sortOrder,
+        serviceGroupId: values.serviceGroupId || null,
         seoTitle: values.seoTitle || null,
         seoMetaDescription: values.seoMetaDescription || null,
         pricingType: values.pricingType,
@@ -182,8 +218,60 @@ export default function EditServicePage() {
     },
   });
 
+  const variantForm = useForm<VariantFormValues>({ resolver: zodResolver(variantSchema), defaultValues: emptyVariantForm });
+
+  const createVariantMutation = useMutation({
+    mutationFn: (values: VariantFormValues) =>
+      createServiceVariant(serviceId, { ...values, inclusionsOverride: values.inclusionsOverride || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-variants", serviceId] });
+      variantForm.reset(emptyVariantForm);
+    },
+  });
+
+  const updateVariantMutation = useMutation({
+    mutationFn: ({ id, values }: { id: string; values: VariantFormValues }) =>
+      updateServiceVariant(serviceId, id, { ...values, inclusionsOverride: values.inclusionsOverride || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service-variants", serviceId] });
+      setEditingVariantId(null);
+      variantForm.reset(emptyVariantForm);
+    },
+  });
+
+  const toggleVariantActiveMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setServiceVariantActive(serviceId, id, isActive),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-variants", serviceId] }),
+  });
+
+  const deleteVariantMutation = useMutation({
+    mutationFn: (id: string) => deleteServiceVariant(serviceId, id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-variants", serviceId] }),
+  });
+
+  const startEditingVariant = (variant: ServiceVariantAdminResponse) => {
+    setEditingVariantId(variant.id);
+    variantForm.reset({
+      name: variant.name,
+      price: variant.price,
+      durationMinutes: variant.durationMinutes,
+      inclusionsOverride: variant.inclusionsOverride ?? "",
+      sortOrder: variant.sortOrder,
+    });
+  };
+
+  const cancelEditingVariant = () => {
+    setEditingVariantId(null);
+    variantForm.reset(emptyVariantForm);
+  };
+
   const onSubmit = form.handleSubmit((values) => updateMutation.mutate(values));
   const onAddMedia = mediaForm.handleSubmit((values) => addMediaMutation.mutate(values));
+  const onSubmitVariant = variantForm.handleSubmit((values) =>
+    editingVariantId
+      ? updateVariantMutation.mutate({ id: editingVariantId, values })
+      : createVariantMutation.mutate(values),
+  );
 
   const breadcrumbs = [
     { label: "Catalog", href: "/catalog" },
@@ -312,6 +400,13 @@ export default function EditServicePage() {
             {...form.register("shortDescription")}
             disabled={!canWrite}
           />
+          <Field
+            label="Cover image URL"
+            hint="Shown on customer-facing listing cards. Leave blank to use a graphic placeholder."
+            error={form.formState.errors.coverImageUrl?.message}
+            {...form.register("coverImageUrl")}
+            disabled={!canWrite}
+          />
           <Textarea
             label="Description"
             error={form.formState.errors.description?.message}
@@ -363,6 +458,14 @@ export default function EditServicePage() {
               disabled={!canWrite}
             />
           </FormGrid>
+
+          <Select
+            label="Service group"
+            hint="Optional section header shown on the customer-facing listing (e.g. &ldquo;Repair &amp; gas refill&rdquo;). Leave as No group to show this service directly under the category."
+            options={serviceGroupOptions}
+            {...form.register("serviceGroupId")}
+            disabled={!canWrite}
+          />
 
           <FormGrid>
             <Field label="SEO title" error={form.formState.errors.seoTitle?.message} {...form.register("seoTitle")} disabled={!canWrite} />
@@ -428,6 +531,136 @@ export default function EditServicePage() {
             </FormActions>
           ) : null}
         </form>
+      </Card>
+
+      <Card
+        title="Variants"
+        description="Priced/timed options a customer can pick between (Phase 3 catalog redesign). Leave empty to keep booking this service at its flat price above."
+      >
+        {variantsQuery.isPending ? (
+          <SkeletonText lines={3} />
+        ) : variantsQuery.error ? (
+          <SectionError error={variantsQuery.error} onRetry={() => variantsQuery.refetch()} />
+        ) : !variantsQuery.data || variantsQuery.data.length === 0 ? (
+          <EmptyState
+            title="No variants yet"
+            description={
+              canWrite
+                ? "This service books at its flat price above until a variant is added."
+                : "An admin with catalog write access can add one."
+            }
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {variantsQuery.data.map((variant) => (
+              <li
+                key={variant.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <span className="font-medium text-fg">{variant.name}</span>
+                  <span className="ml-2 text-fg-muted">
+                    {formatCurrency(variant.price)} · {variant.durationMinutes} min
+                  </span>
+                  {!variant.isActive ? (
+                    <Badge tone="neutral" className="ml-2">
+                      Inactive
+                    </Badge>
+                  ) : null}
+                </div>
+                {canWrite ? (
+                  <div className="flex shrink-0 gap-2">
+                    <Button type="button" size="sm" variant="secondary" onClick={() => startEditingVariant(variant)}>
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="subtle"
+                      loading={toggleVariantActiveMutation.isPending && toggleVariantActiveMutation.variables?.id === variant.id}
+                      onClick={() =>
+                        toggleVariantActiveMutation.mutate({ id: variant.id, isActive: !variant.isActive })
+                      }
+                    >
+                      {variant.isActive ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      loading={deleteVariantMutation.isPending && deleteVariantMutation.variables === variant.id}
+                      onClick={() => deleteVariantMutation.mutate(variant.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {canWrite ? (
+          <form onSubmit={onSubmitVariant} className="mt-5 flex flex-col gap-4 border-t border-line pt-5" noValidate>
+            {(editingVariantId ? updateVariantMutation.isError : createVariantMutation.isError) ? (
+              <Alert>{describeError(editingVariantId ? updateVariantMutation.error : createVariantMutation.error)}</Alert>
+            ) : null}
+            <p className="text-sm font-medium text-fg">{editingVariantId ? "Edit variant" : "Add variant"}</p>
+            <FormGrid columns={3}>
+              <Field
+                label="Name"
+                required
+                error={variantForm.formState.errors.name?.message}
+                {...variantForm.register("name")}
+              />
+              <Field
+                label="Price"
+                type="number"
+                step="0.01"
+                required
+                leading="₹"
+                error={variantForm.formState.errors.price?.message}
+                {...variantForm.register("price", { valueAsNumber: true })}
+              />
+              <Field
+                label="Duration (minutes)"
+                type="number"
+                required
+                error={variantForm.formState.errors.durationMinutes?.message}
+                {...variantForm.register("durationMinutes", { valueAsNumber: true })}
+              />
+            </FormGrid>
+            <FormGrid>
+              <Field
+                label="Inclusions override"
+                hint="Leave blank to use the service's own inclusions."
+                error={variantForm.formState.errors.inclusionsOverride?.message}
+                {...variantForm.register("inclusionsOverride")}
+              />
+              <Field
+                label="Sort order"
+                type="number"
+                error={variantForm.formState.errors.sortOrder?.message}
+                {...variantForm.register("sortOrder", { valueAsNumber: true })}
+              />
+            </FormGrid>
+            <FormActions>
+              {editingVariantId ? (
+                <Button type="button" variant="secondary" onClick={cancelEditingVariant}>
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                type="submit"
+                loading={
+                  variantForm.formState.isSubmitting || createVariantMutation.isPending || updateVariantMutation.isPending
+                }
+              >
+                {editingVariantId ? "Save variant" : "Add variant"}
+              </Button>
+            </FormActions>
+          </form>
+        ) : null}
       </Card>
 
       <Card title="Gallery" description="Images shown on the service detail page (SRS 12.6.2 &quot;Gallery images&quot;).">

@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, Field, PageHeading, Textarea } from "@/components/ui";
+import { Alert, Button, Card, Field, PageHeading, Select, Textarea } from "@/components/ui";
 import { FormActions, FormGrid } from "@/components/data-table";
 import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
@@ -28,8 +28,34 @@ const categorySchema = z.object({
   sortOrder: z.number().int().min(0),
   seoTitle: z.string().max(200).optional().or(z.literal("")),
   seoMetaDescription: z.string().max(500).optional().or(z.literal("")),
+  parentCategoryId: z.string().optional().or(z.literal("")),
 });
 type CategoryFormValues = z.infer<typeof categorySchema>;
+
+/**
+ * Flattens the category list into parent-then-children display order (Phase
+ * 3 catalog redesign) - top-level categories in their own sort order, each
+ * immediately followed by its own children. A plain indented list rather
+ * than a new tree component, matching DataTable's documented preference
+ * against expand-in-place rows.
+ */
+function toDisplayOrder(categories: CategoryResponse[]): { category: CategoryResponse; depth: number }[] {
+  const byParent = new Map<string | null, CategoryResponse[]>();
+  for (const category of categories) {
+    const key = category.parentCategoryId;
+    byParent.set(key, [...(byParent.get(key) ?? []), category]);
+  }
+
+  const result: { category: CategoryResponse; depth: number }[] = [];
+  const visit = (parentId: string | null, depth: number) => {
+    for (const category of byParent.get(parentId) ?? []) {
+      result.push({ category, depth });
+      visit(category.id, depth + 1);
+    }
+  };
+  visit(null, 0);
+  return result;
+}
 
 /**
  * Admin category management screen (SRS 12.5, tasks 103a-104): create
@@ -44,6 +70,10 @@ export default function CatalogCategoriesPage() {
   const canWrite = canWriteModule(claims, "catalog");
 
   const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+  const categories = categoriesQuery.data ?? [];
+  const displayOrder = toDisplayOrder(categories);
+  const depthById = new Map(displayOrder.map(({ category, depth }) => [category.id, depth]));
+  const parentOptions = categories.map((c) => ({ value: c.id, label: c.name }));
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categorySchema),
@@ -56,6 +86,7 @@ export default function CatalogCategoriesPage() {
       sortOrder: 0,
       seoTitle: "",
       seoMetaDescription: "",
+      parentCategoryId: "",
     },
   });
 
@@ -82,6 +113,7 @@ export default function CatalogCategoriesPage() {
       sortOrder: values.sortOrder,
       seoTitle: values.seoTitle || null,
       seoMetaDescription: values.seoMetaDescription || null,
+      parentCategoryId: values.parentCategoryId || null,
     }),
   );
 
@@ -94,8 +126,8 @@ export default function CatalogCategoriesPage() {
 
       <EntityTable<CategoryResponse>
         title="Categories"
-        description="Top-level catalog grouping shown to customers (SRS 12.5.1)."
-        items={categoriesQuery.data}
+        description="Top-level catalog grouping shown to customers (SRS 12.5.1). Subcategories are indented under their parent (Phase 3)."
+        items={displayOrder.map((d) => d.category)}
         isLoading={categoriesQuery.isPending}
         isFetching={categoriesQuery.isFetching}
         error={categoriesQuery.error}
@@ -116,7 +148,9 @@ export default function CatalogCategoriesPage() {
               <Link
                 href={`/catalog/categories/${category.id}`}
                 className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+                style={{ paddingLeft: `${(depthById.get(category.id) ?? 0) * 1.25}rem` }}
               >
+                {(depthById.get(category.id) ?? 0) > 0 ? "↳ " : null}
                 {category.name}
               </Link>
             ),
@@ -150,6 +184,13 @@ export default function CatalogCategoriesPage() {
                 {...form.register("slug")}
               />
             </FormGrid>
+            <Select
+              label="Parent category"
+              hint="Leave unset for a top-level category, or choose one to create a subcategory (Phase 3)."
+              placeholder="No parent (top-level)"
+              options={parentOptions}
+              {...form.register("parentCategoryId")}
+            />
             <Textarea label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
             <FormGrid>
               <Field label="Icon URL" error={form.formState.errors.iconUrl?.message} {...form.register("iconUrl")} />
