@@ -21,6 +21,8 @@ public class ServiceQueryService : IServiceQueryService
     private readonly IServiceAddOnRepository _addOnRepository;
     private readonly IServiceFaqRepository _faqRepository;
     private readonly IReviewRepository _reviewRepository;
+    private readonly IServiceVariantRepository _variantRepository;
+    private readonly IServiceAddOnGroupRepository _groupRepository;
     private readonly ICacheService _cache;
 
     public ServiceQueryService(
@@ -29,6 +31,8 @@ public class ServiceQueryService : IServiceQueryService
         IServiceAddOnRepository addOnRepository,
         IServiceFaqRepository faqRepository,
         IReviewRepository reviewRepository,
+        IServiceVariantRepository variantRepository,
+        IServiceAddOnGroupRepository groupRepository,
         ICacheService cache)
     {
         _categoryRepository = categoryRepository;
@@ -36,13 +40,15 @@ public class ServiceQueryService : IServiceQueryService
         _addOnRepository = addOnRepository;
         _faqRepository = faqRepository;
         _reviewRepository = reviewRepository;
+        _variantRepository = variantRepository;
+        _groupRepository = groupRepository;
         _cache = cache;
     }
 
     public async Task<Result<IReadOnlyList<ServiceListItemResponse>>> ListByCategoryAsync(Guid categoryId)
     {
         var category = await _categoryRepository.GetByIdAsync(categoryId);
-        if (category is null || !category.IsActive)
+        if (category is null || !await IsCategoryVisibleInHierarchyAsync(category))
         {
             return Error.NotFound("Catalog.CategoryNotFound", "The specified category does not exist.");
         }
@@ -69,6 +75,12 @@ public class ServiceQueryService : IServiceQueryService
             return Error.NotFound("Catalog.ServiceNotFound", "The specified service does not exist.");
         }
 
+        var owningCategory = await _categoryRepository.GetByIdAsync(service.CategoryId);
+        if (owningCategory is null || !await IsCategoryVisibleInHierarchyAsync(owningCategory))
+        {
+            return Error.NotFound("Catalog.ServiceNotFound", "The specified service does not exist.");
+        }
+
         var detail = await _cache.GetOrCreateAsync(
             CacheKeys.Service(service.Id),
             async _ =>
@@ -76,6 +88,22 @@ public class ServiceQueryService : IServiceQueryService
                 var category = await _categoryRepository.GetByIdAsync(service.CategoryId);
                 var addOns = await _addOnRepository.ListActiveByServiceAsync(service.Id);
                 var faqs = await _faqRepository.ListByServiceAsync(service.Id);
+                var variants = await _variantRepository.ListActiveByServiceIdsAsync([service.Id]);
+                var groups = await _groupRepository.ListByServiceIdsAsync([service.Id]);
+
+                // Phase 3 catalog redesign: split by GroupId rather than a
+                // second query - one add-on list already fetched above.
+                var ungroupedAddOns = addOns.Where(a => a.GroupId is null).ToList();
+                var addOnsByGroup = addOns.Where(a => a.GroupId is not null)
+                    .GroupBy(a => a.GroupId!.Value)
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<ServiceAddOn>)g.ToList());
+
+                var addOnGroupResponses = groups
+                    .Where(g => addOnsByGroup.ContainsKey(g.Id))
+                    .Select(g => new ServiceAddOnGroupSummaryResponse(
+                        g.Id, g.Name, g.SelectionType.ToString(), g.MinSelect, g.MaxSelect,
+                        addOnsByGroup[g.Id].Select(ToAddOnSummary).ToList()))
+                    .ToList();
 
                 return new ServiceDetailResponse(
                     service.Id,
@@ -90,8 +118,12 @@ public class ServiceQueryService : IServiceQueryService
                     service.CategoryId,
                     category?.Name ?? string.Empty,
                     category?.Slug ?? string.Empty,
-                    addOns.Select(ToAddOnSummary).ToList(),
-                    faqs.Select(ToFaqResponse).ToList());
+                    ungroupedAddOns.Select(ToAddOnSummary).ToList(),
+                    faqs.Select(ToFaqResponse).ToList(),
+                    variants.Select(ToVariantSummary).ToList(),
+                    addOnGroupResponses,
+                    service.CoverImageUrl,
+                    service.DurationMinutes);
             },
             DetailTtl);
 
@@ -127,12 +159,46 @@ public class ServiceQueryService : IServiceQueryService
             reviews.Take(RecentReviewCount).Select(ToReviewItem).ToList());
     }
 
+    /// <summary>
+    /// Whether <paramref name="category"/> and every one of its ancestor
+    /// categories are active (SRS 11.5.4, 12.5.3) - mirrors
+    /// <c>CategoryQueryService.IsVisibleInHierarchyAsync</c> so a service
+    /// under a sub-category whose parent has been deactivated is hidden
+    /// from customer-facing discovery even though the sub-category's and
+    /// the service's own active flags are unchanged. Bounded to 32 hops as
+    /// a defensive ceiling against malformed/cyclical parent data (a true
+    /// cycle is already rejected at write time by
+    /// <c>CategoryManagementService</c>).
+    /// </summary>
+    private async Task<bool> IsCategoryVisibleInHierarchyAsync(Category category)
+    {
+        Category? current = category;
+        for (var hop = 0; hop < 32 && current is not null; hop++)
+        {
+            if (!current.IsActive)
+            {
+                return false;
+            }
+
+            if (current.ParentCategoryId is null)
+            {
+                return true;
+            }
+
+            current = await _categoryRepository.GetByIdAsync(current.ParentCategoryId.Value);
+        }
+
+        return false;
+    }
+
     private static ServiceListItemResponse ToListItem(Service service) => new(
         service.Id,
         service.Name,
         service.Slug,
         service.Description,
-        service.Price);
+        service.Price,
+        service.CoverImageUrl,
+        service.DurationMinutes);
 
     private static ServiceAddOnSummaryResponse ToAddOnSummary(ServiceAddOn addOn) => new(
         addOn.Id,
@@ -141,6 +207,9 @@ public class ServiceQueryService : IServiceQueryService
         addOn.Price);
 
     private static ServiceFaqResponse ToFaqResponse(ServiceFaq faq) => new(faq.Id, faq.Question, faq.Answer);
+
+    private static ServiceVariantSummaryResponse ToVariantSummary(ServiceVariant variant) => new(
+        variant.Id, variant.Name, variant.Price, variant.DurationMinutes, variant.InclusionsOverride);
 
     private static ServiceReviewItemResponse ToReviewItem(Review review) => new(
         review.Id, review.Rating, review.ReviewText, review.CreatedAtUtc);

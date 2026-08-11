@@ -70,4 +70,42 @@ public sealed class CatalogDomainEventTests
             .Which.Should().BeOfType<ServiceAddOnCreatedEvent>()
             .Which.ServiceAddOnId.Should().Be(addOn.Id);
     }
+
+    [Fact]
+    public void Setting_a_categorys_parent_raises_CategoryParentChangedEvent_with_old_and_new_parent()
+    {
+        var category = new Category(Guid.NewGuid(), "Kitchen Cleaning", "kitchen-cleaning-" + Guid.NewGuid(), "desc");
+        var parentId = Guid.NewGuid();
+        category.ClearDomainEvents();
+
+        category.SetParent(parentId);
+
+        var raised = category.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<CategoryParentChangedEvent>().Subject;
+        raised.OldParentCategoryId.Should().BeNull();
+        raised.NewParentCategoryId.Should().Be(parentId);
+    }
+
+    [Fact]
+    public void Setting_a_categorys_parent_to_its_current_value_does_not_raise_an_event()
+    {
+        var parentId = Guid.NewGuid();
+        var category = new Category(Guid.NewGuid(), "Bathroom Cleaning", "bathroom-cleaning-" + Guid.NewGuid(), "desc");
+        category.SetParent(parentId);
+        category.ClearDomainEvents();
+
+        category.SetParent(parentId);
+
+        category.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_category_cannot_be_set_as_its_own_parent()
+    {
+        var category = new Category(Guid.NewGuid(), "Sofa Cleaning", "sofa-cleaning-" + Guid.NewGuid(), "desc");
+
+        var act = () => category.SetParent(category.Id);
+
+        act.Should().Throw<ArgumentException>();
+    }
 }

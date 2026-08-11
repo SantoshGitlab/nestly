@@ -52,11 +52,17 @@ public class ServiceRepository : IServiceRepository
     // listings, CatalogSearchService's search) - nothing downstream mutates
     // and saves these entities.
 
+    // Ordered by SortOrder then Name (fixed alongside the Service Group
+    // feature - previously Name-only, which ignored the admin-configurable
+    // SortOrder field entirely): a group's members and an appliance's
+    // ungrouped services both need a stable, admin-controlled order to
+    // render correctly, matching ListAllAsync's (admin) ordering below.
     public async Task<IReadOnlyList<Service>> ListActiveByCategoryAsync(Guid categoryId) =>
         await _context.Set<Service>()
             .AsNoTracking()
             .Where(s => s.CategoryId == categoryId && s.IsActive)
-            .OrderBy(s => s.Name)
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.Name)
             .ToListAsync();
 
     public Task<Service?> GetBySlugAsync(string slug) =>
@@ -95,4 +101,7 @@ public class ServiceRepository : IServiceRepository
 
     public async Task<IReadOnlyList<Service>> ListAllAsync() =>
         await _context.Set<Service>().OrderBy(s => s.Name).ToListAsync();
+
+    public Task<bool> ExistsByServiceGroupIdAsync(Guid serviceGroupId) =>
+        _context.Set<Service>().AnyAsync(s => s.ServiceGroupId == serviceGroupId);
 }

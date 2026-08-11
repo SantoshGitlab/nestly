@@ -48,6 +48,13 @@ public class CategoryManagementService : ICategoryManagementService
         category.SetSortOrder(request.SortOrder);
         category.SetSeo(request.SeoTitle, request.SeoMetaDescription);
 
+        var parentValidation = await ValidateParentAsync(category.Id, request.ParentCategoryId);
+        if (parentValidation.IsFailure)
+        {
+            return Result.Failure<CategoryResponse>(parentValidation.Error);
+        }
+        category.SetParent(request.ParentCategoryId);
+
         // Staged before AddAsync so its own SaveChangesAsync commits the
         // audit row in the same transaction as the new category (IAuditLogWriter's
         // documented contract) - staging it after would leave it flushed only
@@ -75,6 +82,12 @@ public class CategoryManagementService : ICategoryManagementService
 
         string oldValues = Serialize(category);
 
+        var parentValidation = await ValidateParentAsync(category.Id, request.ParentCategoryId);
+        if (parentValidation.IsFailure)
+        {
+            return Result.Failure<CategoryResponse>(parentValidation.Error);
+        }
+
         category.SetName(request.Name);
         category.SetSlug(request.Slug);
         category.SetDescription(request.Description);
@@ -82,6 +95,15 @@ public class CategoryManagementService : ICategoryManagementService
         category.SetBannerUrl(request.BannerUrl);
         category.SetSortOrder(request.SortOrder);
         category.SetSeo(request.SeoTitle, request.SeoMetaDescription);
+
+        try
+        {
+            category.SetParent(request.ParentCategoryId);
+        }
+        catch (ArgumentException ex)
+        {
+            return Result.Failure<CategoryResponse>(Error.Validation("Category.SelfParent", ex.Message));
+        }
 
         await _auditLogWriter.WriteAsync(new AuditEntry(
             "Category", category.Id.ToString(), "Updated", oldValues, Serialize(category)));
@@ -124,8 +146,50 @@ public class CategoryManagementService : ICategoryManagementService
         return Result.Success();
     }
 
+    public async Task<IReadOnlyList<CategoryResponse>> ListChildrenAsync(Guid parentCategoryId)
+    {
+        var children = await _categoryRepository.ListChildrenAsync(parentCategoryId);
+        return children.Select(ToResponse).ToList();
+    }
+
     private static Error NotFound() =>
         Error.NotFound("Category.NotFound", "The specified category does not exist.");
+
+    /// <summary>
+    /// Phase 3 catalog redesign: the proposed parent must exist and must not
+    /// be <paramref name="categoryId"/> itself or a descendant of it (which
+    /// would create a cycle in the tree). Bounded to a depth of 10 - there is
+    /// no legitimate catalog hierarchy anywhere near that deep, so a chain
+    /// that long is itself evidence of a data problem rather than a
+    /// tree worth continuing to walk.
+    /// </summary>
+    private async Task<Result> ValidateParentAsync(Guid categoryId, Guid? proposedParentId)
+    {
+        if (proposedParentId is null)
+        {
+            return Result.Success();
+        }
+
+        if (!await _categoryRepository.ExistsAsync(proposedParentId.Value))
+        {
+            return Result.Failure(Error.NotFound("Category.ParentNotFound", "The specified parent category does not exist."));
+        }
+
+        Guid? current = proposedParentId;
+        for (int depth = 0; current is not null && depth < 10; depth++)
+        {
+            if (current == categoryId)
+            {
+                return Result.Failure(Error.Validation(
+                    "Category.CircularParent", "This parent assignment would create a circular category tree."));
+            }
+
+            var parent = await _categoryRepository.GetByIdAsync(current.Value);
+            current = parent?.ParentCategoryId;
+        }
+
+        return Result.Success();
+    }
 
     private static string Serialize(Category category) => JsonSerializer.Serialize(ToResponse(category), JsonOptions);
 
@@ -140,5 +204,6 @@ public class CategoryManagementService : ICategoryManagementService
         category.IsFeatured,
         category.SortOrder,
         category.SeoTitle,
-        category.SeoMetaDescription);
+        category.SeoMetaDescription,
+        category.ParentCategoryId);
 }

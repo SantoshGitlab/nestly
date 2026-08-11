@@ -19,5 +19,17 @@ public class ServiceAddOnConfiguration : IEntityTypeConfiguration<ServiceAddOn>
         builder.Property(x => x.SortOrder).IsRequired();
         builder.Property(x => x.IsQuantityAllowed).IsRequired().HasDefaultValue(false);
         builder.Property(x => x.IsMandatory).IsRequired().HasDefaultValue(false);
+
+        // Phase 3 catalog redesign: SetNull (not Restrict/Cascade) so deleting
+        // a group ungroups its add-ons rather than orphaning or cascading -
+        // ServiceAddOnGroupManagementService additionally rejects deleting a
+        // group that still has add-ons, so this SetNull is a safety net, not
+        // the primary guard.
+        builder.Property(x => x.GroupId);
+        builder.HasIndex(x => x.GroupId);
+        builder.HasOne<ServiceAddOnGroup>()
+            .WithMany()
+            .HasForeignKey(x => x.GroupId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

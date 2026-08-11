@@ -24,6 +24,7 @@ public class BookingSummaryService : IBookingSummaryService
 {
     private readonly IServiceRepository _serviceRepository;
     private readonly IServiceAddOnRepository _addOnRepository;
+    private readonly IServiceGroupRepository _serviceGroupRepository;
     private readonly ICustomerAddressRepository _addressRepository;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IPriceCalculationService _priceCalculationService;
@@ -36,6 +37,7 @@ public class BookingSummaryService : IBookingSummaryService
     public BookingSummaryService(
         IServiceRepository serviceRepository,
         IServiceAddOnRepository addOnRepository,
+        IServiceGroupRepository serviceGroupRepository,
         ICustomerAddressRepository addressRepository,
         ISlotAvailabilityService slotAvailabilityService,
         IPriceCalculationService priceCalculationService,
@@ -49,6 +51,7 @@ public class BookingSummaryService : IBookingSummaryService
         _bookingOptions = bookingOptions.Value;
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
+        _serviceGroupRepository = serviceGroupRepository;
         _addressRepository = addressRepository;
         _slotAvailabilityService = slotAvailabilityService;
         _priceCalculationService = priceCalculationService;
@@ -139,7 +142,7 @@ public class BookingSummaryService : IBookingSummaryService
         }
 
         var priceResult = await _priceCalculationService.CalculateAsync(
-            new PriceCalculationRequest(request.ServiceId, request.CityId, request.Quantity, request.AddOns));
+            new PriceCalculationRequest(request.ServiceId, request.CityId, request.Quantity, request.AddOns, request.ServiceVariantId));
         if (priceResult.IsFailure)
         {
             return priceResult.Error;
@@ -200,8 +203,21 @@ public class BookingSummaryService : IBookingSummaryService
             finalPayable = Math.Max(0, finalPayable - walletApplied);
         }
 
+        // Appliance/Service Group catalog redesign: inherited from the
+        // service, never a customer selection - unlike the variant above,
+        // there's nothing to validate against the request, just a name to
+        // resolve for display/snapshot purposes.
+        string? serviceGroupName = null;
+        if (service.ServiceGroupId is Guid serviceGroupId)
+        {
+            serviceGroupName = (await _serviceGroupRepository.GetByIdAsync(serviceGroupId))?.Name;
+        }
+
         var response = new BookingSummaryResponse(
-            new BookingServiceSummary(service.Id, service.Name, service.Slug),
+            new BookingServiceSummary(
+                service.Id, service.Name, service.Slug,
+                priceResult.Value.SelectedVariantId, priceResult.Value.SelectedVariantName, priceResult.Value.SelectedVariantDurationMinutes,
+                service.ServiceGroupId, serviceGroupName),
             addOnSummaries,
             new BookingAddressSummary(
                 address.Id, address.Label, address.Line1, address.Line2, address.Landmark,

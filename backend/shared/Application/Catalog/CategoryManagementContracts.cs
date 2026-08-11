@@ -12,9 +12,10 @@ public sealed record CategoryResponse(
     bool IsFeatured,
     int SortOrder,
     string? SeoTitle,
-    string? SeoMetaDescription);
+    string? SeoMetaDescription,
+    Guid? ParentCategoryId = null);
 
-/// <summary>Admin create request for a category (SRS 12.5.1/12.5.2).</summary>
+/// <summary>Admin create request for a category (SRS 12.5.1/12.5.2). <see cref="ParentCategoryId"/> is null for a top-level category (Phase 3 catalog redesign).</summary>
 public sealed record CategoryCreateRequest(
     string Name,
     string Slug,
@@ -23,7 +24,8 @@ public sealed record CategoryCreateRequest(
     string? BannerUrl,
     int SortOrder,
     string? SeoTitle,
-    string? SeoMetaDescription);
+    string? SeoMetaDescription,
+    Guid? ParentCategoryId = null);
 
 /// <summary>
 /// Admin update request for a category. Covers every editable field (SRS
@@ -39,4 +41,5 @@ public sealed record CategoryUpdateRequest(
     string? BannerUrl,
     int SortOrder,
     string? SeoTitle,
-    string? SeoMetaDescription);
+    string? SeoMetaDescription,
+    Guid? ParentCategoryId = null);

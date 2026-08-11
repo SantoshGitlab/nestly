@@ -20,6 +20,7 @@ public sealed class ServiceAddOnManagementServiceTests : IClassFixture<TestDatab
         new(
             new ServiceAddOnRepository(context),
             new ServiceRepository(context),
+            new ServiceAddOnGroupRepository(context),
             new AuditLogWriter(context, new StubAuditContextProvider()));
 
     private static async Task<Service> SeedServiceAsync(NestlyDbContext context)
@@ -112,6 +113,67 @@ public sealed class ServiceAddOnManagementServiceTests : IClassFixture<TestDatab
 
         (await service.GetByIdAsync(created.Id)).Value.IsActive.Should().BeFalse();
         context.Set<AuditLog>().Should().Contain(a => a.EntityId == created.Id.ToString() && a.Action == "Deactivated");
+    }
+
+    [Fact]
+    public async Task Creating_an_addon_with_a_group_belonging_to_the_same_service_persists_the_group()
+    {
+        using var context = _db.CreateContext();
+        var svc = await SeedServiceAsync(context);
+        var groupRepository = new ServiceAddOnGroupRepository(context);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), svc.Id, "Detergent", AddOnGroupSelectionType.Single);
+        await groupRepository.AddAsync(group);
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(svc.Id) with { GroupId = group.Id };
+        var created = await service.CreateAsync(request);
+
+        created.IsSuccess.Should().BeTrue();
+        created.Value.GroupId.Should().Be(group.Id);
+    }
+
+    [Fact]
+    public async Task Creating_an_addon_with_a_group_belonging_to_a_different_service_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var svc1 = await SeedServiceAsync(context);
+        var svc2 = await SeedServiceAsync(context);
+        var groupRepository = new ServiceAddOnGroupRepository(context);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), svc2.Id, "Extras", AddOnGroupSelectionType.Multiple);
+        await groupRepository.AddAsync(group);
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(svc1.Id) with { GroupId = group.Id };
+        var result = await service.CreateAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ServiceAddOnGroup.ServiceMismatch");
+    }
+
+    [Fact]
+    public async Task Creating_an_addon_with_an_unknown_group_returns_not_found()
+    {
+        using var context = _db.CreateContext();
+        var svc = await SeedServiceAsync(context);
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(svc.Id) with { GroupId = Guid.NewGuid() };
+        var result = await service.CreateAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ServiceAddOnGroup.NotFound");
+    }
+
+    [Fact]
+    public async Task An_addon_created_without_a_group_stays_ungrouped()
+    {
+        using var context = _db.CreateContext();
+        var svc = await SeedServiceAsync(context);
+        var service = CreateService(context);
+
+        var created = await service.CreateAsync(ValidCreateRequest(svc.Id));
+
+        created.Value.GroupId.Should().BeNull();
     }
 
     private sealed class StubAuditContextProvider : IAuditContextProvider

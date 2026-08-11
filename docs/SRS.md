@@ -63,6 +63,8 @@ Home Services Marketplace Platform — Customer Web Platform + Admin Panel
 |---|---|---|
 | 1.0 | 09-Jul-2026 | Initial functional SRS baseline |
 | 2.0 | 09-Jul-2026 | Detailed implementation-oriented SRS with workflow, validation, RBAC, screen, API, and operational requirements |
+| 2.1 | 10-Aug-2026 | Added nested category/sub-category hierarchy, service variants, add-on groups, service cover image and customer-facing duration, Urban-Company-inspired discovery UX (as a UX reference only — no proprietary code, branding, or content copied), and the full end-to-end booking journey (Home → Category → Sub-Category → Service Listing → Service Selection → Service Details → Select/Add Service → Date & Time → Address → Review → Confirm Booking → Booking Confirmation) across the business domain model, customer/admin journeys, customer UI, admin panel, data model, API inventory, UI screen inventory, and validation sections |
+| 2.2 | 10-Aug-2026 | Added the Appliance tier (a category nested a third level deep, e.g. Category → Sub-Category → Appliance) and the optional Service Group section-header concept (e.g. "Super saver packages", "Repair & gas refill" under "AC"), with the header-only-when-populated display rule that also supports appliances with no groups at all (e.g. "Washing Machine") — across the hierarchy model, customer/admin journeys, customer UI, admin panel, data model, API inventory, UI screen inventory, validation, and acceptance criteria sections. Also corrected §12.7.3/§23.2's description of add-on-group deletion to match actual behavior (deletion is blocked while in use, not auto-ungrouped) — a genuine documentation/code conflict found during this update |
 
 ### 1.3 Intended Audience
 
@@ -245,9 +247,11 @@ The platform shall support:
 - Customer
 - Customer Address
 - City / Zone / Pincode / Locality
-- Category
+- Category (self-referencing; may be a top-level category or a sub-category nested under a parent category — see 8.3)
 - Service / Package
+- Service Variant / Option (a named, separately priced and timed variant of a service — see 8.3)
 - Add-on
+- Add-on Group (a named collection of add-ons under a service, with a single-select or multi-select rule — see 8.3)
 - Price Rule / Service Price
 - Slot / Slot Rule / Availability Rule
 - Booking
@@ -265,7 +269,34 @@ The platform shall support:
 
 ### 8.2 Transactional Principle
 
-All customer-facing bookings and financial records shall be stored with **snapshot integrity**. This means the booking must preserve the exact catalog, price, tax, slot, address, and discount context at the time of booking even if catalog data changes later.
+All customer-facing bookings and financial records shall be stored with **snapshot integrity**. This means the booking must preserve the exact catalog, price, tax, slot, address, and discount context at the time of booking even if catalog data changes later. This snapshot extends to any selected service variant and any selected add-on group membership at the time of booking (see 8.3 and 13).
+
+### 8.3 Service/Category Hierarchy Model
+
+The catalog is a nested hierarchy so that a customer's Browse-to-book path can move from a broad category down to a specific, individually priced unit of work:
+
+```
+Category (top-level, e.g. "AC & Appliance Repair")
+  └─ Sub-Category (a Category with a ParentCategoryId reference to its parent, e.g. "Large Appliances")
+       └─ Appliance (a further-nested Category, e.g. "AC" - see below)
+            ├─ Service Group (0..N, optional; e.g. "Repair & gas refill" - purely a display section header)
+            │     └─ Service / Package (0..N per group)
+            │          ├─ Service Variant / Option (0..N; e.g. "Basic" / "Deep")
+            │          └─ Add-on Group (0..N; e.g. "Extras") containing Add-ons (0..N each)
+            └─ Service / Package (0..N directly under the Appliance, when no Service Group is used)
+                 ├─ Service Variant / Option (0..N)
+                 └─ Add-on Group (0..N) containing Add-ons (0..N each)
+```
+
+Rules governing this hierarchy:
+
+- **Category nesting is a single self-referencing relationship** (`ParentCategoryId`), not a fixed-depth model. A category with no parent is a top-level category; a category with a parent is a sub-category of it. This same mechanism supports nesting a third level — an **Appliance** (e.g. "AC & Appliance Repair" → "Large Appliances" → "AC") is simply a category nested two levels deep; there is no separate "Appliance" entity or table. The data model does not hard-limit nesting depth, satisfying the requirement that the design remain extensible to deeper nesting without architectural rework. "Sub-Category" and "Appliance" are naming conventions for depth 1 and depth 2 of the same self-reference, chosen per branch of the tree by how the admin actually nests categories — the platform does not enforce or label a category's depth.
+- **Circular parentage is prohibited.** A category may not be set as its own ancestor, directly or transitively. The system shall reject any parent assignment that would create a cycle.
+- **A service belongs to exactly one category** (a top-level category, a sub-category, or an appliance-level category — whichever leaf of the tree it was created under). Re-parenting a service to a different category is an admin operation and does not alter historical bookings, which retain their own catalog snapshot (see 8.2, 13).
+- **A service variant represents a distinct sellable configuration of the same service** — it carries its own name, price, and duration, and may override the service's inclusions text. A service may have zero variants (in which case the service's own base price/duration apply directly) or multiple variants (in which case the customer must select exactly one before the item can be added to a booking).
+- **An add-on group is an organizational and rule-enforcing container for add-ons under a service.** Each group declares a selection type of `Single` (the customer may pick at most one add-on in the group) or `Multiple` (the customer may pick any number, optionally bounded by a minimum/maximum count). Add-ons may also exist outside any group ("ungrouped"), in which case each is independently optional exactly as in the pre-hierarchy model.
+- **A Service Group is an optional, purely visual section header for a subset of a category's services** — distinct from an add-on group above: a Service Group organizes a category's *bookable services* (e.g. "AC" → "Repair & gas refill" → "AC repair", "Gas refill & check-up"), not one service's add-ons. It is scoped to exactly one category, carries a name, a display order, and its own active/inactive flag. A service optionally references at most one Service Group belonging to the *same* category it belongs to; a service with no Service Group renders directly under its category with no header (Model B). Both models are valid within the same category at once: some of its services may be grouped while others are not. This is genuinely new, additive schema (`ServiceGroup` table, `Service.ServiceGroupId`) — it is not modeled as another level of Category nesting, since a Service Group has no services or sub-categories of its own tree beneath it, only a flat membership of services.
+- Deactivating a category, sub-category, appliance, service, variant, service group, or add-on/add-on group removes it from customer-facing discovery (see 11.5.4, 11.5.5) without deleting it or affecting bookings already placed against it. A service assigned to a Service Group that is later deactivated is hidden along with it (it is not promoted back to the ungrouped/ Model B display) until the group is reactivated or the service is reassigned.
 
 ## 9. END-TO-END CUSTOMER JOURNEY
 
@@ -273,9 +304,10 @@ All customer-facing bookings and financial records shall be stored with **snapsh
 
 1. Customer lands on website.
 1. Customer selects city / service location.
-1. Customer browses categories and services.
+1. Customer browses categories; if the selected category has sub-categories, the customer may narrow further by sub-category, and again by appliance where the sub-category itself nests further (e.g. Category → Sub-Category → Appliance), before reaching the service listing (see 11.5).
+1. Customer views the service listing for the selected node: where the appliance's services are organized into Service Groups, the customer sees them as labelled sections (e.g. "Super saver packages", "Repair & gas refill"); services with no group appear directly, with no section header (see 11.5.5).
 1. Customer opens service detail page.
-1. Customer selects package/add-ons.
+1. Customer selects a service variant/option if the service offers more than one, then selects package/add-ons (including any add-on-group selections, subject to each group's single/multiple selection rule).
 1. Customer selects address and slot.
 1. Customer logs in/registers if required.
 1. Customer reviews price breakdown and applies coupon if eligible.
@@ -285,6 +317,8 @@ All customer-facing bookings and financial records shall be stored with **snapsh
 1. Customer may cancel or reschedule subject to policy.
 1. After completion, customer can rate/review or raise support issues.
 
+The full journey is stated end-to-end as: **Home Page → Category → Sub-Category / Appliance (where applicable) → Service Listing (with Service Group sections, where configured) → Service Selection → Service Details → Select/Add Service (variant + add-ons) → Date & Time → Address → Review → Confirm Booking → Booking Confirmation.** This is the canonical sequence referenced throughout 11.x and 13; individual steps may be skipped only where the hierarchy or service genuinely has nothing to offer at that step (e.g. a category with no sub-categories, a sub-category with no further appliance nesting, or a service with no variants).
+
 ### 9.2 Customer Journey Variants
 
 - Guest browse → login only at checkout
@@ -293,16 +327,24 @@ All customer-facing bookings and financial records shall be stored with **snapsh
 - Booking created but payment pending (if business supports deferred confirmation)
 - Customer cancels and receives wallet or gateway refund
 - Customer reschedules to a future slot
+- Customer browses a category with no sub-categories and lands directly on its service listing (sub-category step is skipped, not blocked)
+- Customer opens a service with no configured variants and proceeds directly with the service's base price/duration (variant-selection step is skipped)
+- Customer browses an appliance whose services are organized into Service Groups (e.g. "AC" → "Super saver packages" / "Service" / "Repair & gas refill") and picks a specific service from within one section
+- Customer browses an appliance whose services carry no Service Group at all (e.g. "Washing Machine") and picks directly from a plain list with no section headers
 
 ## 10. END-TO-END ADMIN JOURNEY
 
 ### 10.1 Catalog and Service Operations
 
-1. Admin creates categories.
-1. Admin creates services/packages and add-ons.
+1. Admin creates categories, optionally nesting a category under an existing one to form a sub-category, and nesting again to form an appliance-level category (e.g. "AC & Appliance Repair" → "Large Appliances" → "AC").
+1. Admin optionally creates one or more Service Groups under an appliance-level category (e.g. "Super saver packages", "Service", "Repair & gas refill" under "AC") to organize the services that will go under it into labelled sections; an appliance whose services don't need sectioning (e.g. "Washing Machine") skips this step entirely.
+1. Admin creates services/packages within the appropriate category/sub-category/appliance, optionally assigning each to one of that same node's Service Groups (or leaving it ungrouped to display directly), and adds add-ons (optionally organized into add-on groups with a single/multiple selection rule).
+1. Admin optionally configures one or more service variants/options for a service (e.g. "Basic" vs. "Deep"), each with its own name, price, and duration.
 1. Admin configures pricing and serviceability.
 1. Admin configures slots and blackout dates.
-1. Services go live on customer website.
+1. Admin sets each category/sub-category/appliance/service group/service/variant/add-on's display order and active/visible status.
+1. Admin activates the service once configuration is complete; services go live on the customer website only once active (and, transitively, only while their parent category chain is also active, and — if assigned — their Service Group is also active — see 12.5, 12.6.5, 26.2).
+1. Admin can view the full category → sub-category → appliance → service group → service → variant hierarchy from the catalog management screens to confirm parent-child relationships before publishing.
 
 ### 10.2 Booking Operations
 
@@ -325,7 +367,7 @@ All customer-facing bookings and financial records shall be stored with **snapsh
 
 ### 11.1.1 Objective
 
-Provide a high-conversion landing experience where customers can quickly identify service categories, select their location, and start a booking journey.
+Provide a high-conversion landing experience where customers can quickly identify service categories, select their location, and start a booking journey. The layout and interaction pattern follow Urban Company's general home-screen conventions as a **UX reference only**: a search-first entry point, a scannable grid of category tiles as the primary navigation surface, and image-forward visual treatment throughout — not any of Urban Company's proprietary source code, branding, logos, copyrighted imagery, or exact wording (see 11.5).
 
 ### 11.1.2 Components
 
@@ -461,6 +503,10 @@ The system shall validate serviceability using one or more dimensions:
 
 ## 11.5 Category Discovery and Service Catalog
 
+This section governs the customer-facing discovery experience for the nested Category → Sub-Category → Appliance → (optional Service Group) → Service → Variant hierarchy described in 8.3. The entire hierarchy displayed here is admin-configured and API-driven (see 11.5.4); no category, sub-category, appliance, service group, or service name is hard-coded in the frontend.
+
+The discovery UX (card-driven browsing, an image-forward service card, a horizontally scrollable sub-category selector within a category page, price/duration shown up front, a clear CTA to view detail or select an option) follows Urban Company's general interaction pattern as a **UX reference only** — the layout conventions and information hierarchy, not any proprietary source code, branding, logos, copyrighted imagery, or exact text. All copy, iconography, and photography are Nestly's own or admin-supplied.
+
 ### 11.5.1 Category Listing Page
 
 Each category card may include:
@@ -471,13 +517,16 @@ Each category card may include:
 - Starting price if applicable
 - CTA to view services
 
+Top-level categories are shown as a grid on the home page and categories-index page (see 11.1). Categories are returned by the API in their configured display order (see 12.5.3) and only while active.
+
 ### 11.5.2 Category Detail Page
 
 Each category page shall support:
 
 - Category banner
 - Category title and description
-- Service list under the category
+- Sub-category selector, shown only when the category has one or more active sub-categories (see 11.5.4) — presented as a compact, horizontally scrollable strip of chips rather than a second full tile grid, so a customer can narrow the listing without leaving the page
+- Service list under the category (or, once a sub-category is selected, under that sub-category)
 - FAQs
 - Related services
 - Category-specific testimonials / reviews if configured
@@ -487,12 +536,31 @@ Each category page shall support:
 Each service/package card shall support:
 
 - Service name
+- Cover photo if the admin has configured one for the service; otherwise a graphic placeholder is shown in its place — the card layout never breaks or shows a broken image
 - Short description
 - Estimated duration
 - Base or starting price
 - Discount display if applicable
 - Rating summary if enabled
+- Add-on availability indicator (e.g. a count of available add-ons) if the service has any
 - Add / View Details CTA
+
+A service with one or more configured variants (see 8.3, 11.6) displays its lowest-priced variant's price as the card's "starting from" price; a service with no variants displays its own base price.
+
+### 11.5.4 Hierarchy-to-Customer Visibility Rules
+
+- A category, sub-category, appliance, service, service variant, service group, or add-on/add-on group is visible to customers only while it and every one of its ancestors (parent category chain, and — for a service — its owning category) are active. Deactivating any node in the hierarchy removes that node and everything beneath it from customer-facing discovery, without deleting data or affecting existing bookings (see 8.3).
+- The customer-facing hierarchy is served entirely from the catalog API (see 24.3); the frontend performs no local hard-coding of category, sub-category, appliance, service group, or service names, images, or ordering. Admin changes to the hierarchy (new categories/services/service groups, re-ordering, activation/deactivation, price or content edits) become visible to customers according to the platform's cache invalidation strategy — catalog reads are cached and are explicitly invalidated on the relevant write (create/update/activate/deactivate/re-parent), so changes are reflected without a fixed polling delay under normal operation.
+- Re-parenting a category (moving it under a different parent, or promoting a sub-category to top-level) takes effect for customer-facing discovery as soon as the change is saved, subject to the same cache invalidation.
+
+### 11.5.5 Service Group Section-Header Display Rule
+
+The service listing at an appliance (or any category level) applies one rule uniformly:
+
+- **If one or more active Service Groups exist for that category and have at least one active service assigned:** each such group renders as a labelled section — the group's name as a plain sub-heading, its member services in the standard service-card grid immediately beneath it (see 11.5.3) — in the group's configured display order.
+- **If a service has no Service Group** (the default): it renders in a plain, headerless grid, in the same visual style as every service before Service Groups existed.
+- **A Service Group with zero active services is never displayed** — the system must not render an empty section header. This is the rule that lets the same appliance-level listing correctly show "AC" (grouped into "Super saver packages" / "Service" / "Repair & gas refill") and "Washing Machine" (no groups at all, a plain list) side by side without either looking wrong: a category with no Service Groups renders pixel-identical to how every category rendered before this feature existed.
+- Where both grouped and ungrouped services exist under the same category, grouped sections are shown first (in their sort order), followed by the ungrouped services in one plain grid.
 
 ## 11.6 Service Detail Page
 
@@ -504,9 +572,10 @@ A service detail page shall include:
 - Detailed description
 - Inclusions
 - Exclusions
-- Add-ons available
-- Estimated duration
-- Pricing information
+- Service variant/option selector, shown only when the service has one or more active variants (see 8.3) — presented as a compact set of selectable segmented options (name, duration, and price per option), not a long-form list, so comparing options is a single glance. Selecting a variant updates the displayed price and duration and is required before the service can be added to a booking. A service with no configured variants has no selector and uses its own base price/duration directly.
+- Add-ons available, grouped under their configured add-on group (see 8.3) where a group exists, each group visually indicating whether it is single-select or multi-select; add-ons with no group are shown as an independent, ungrouped list of optional add-ons exactly as before this hierarchy was introduced
+- Estimated duration (reflecting the selected variant's duration if a variant is selected)
+- Pricing information (reflecting the selected variant's price plus selected add-ons)
 - FAQs
 - Terms / preparation notes
 - Cancellation/reschedule summary
@@ -521,6 +590,7 @@ Each service may define:
 - Is slot mandatory?
 - Is quantity allowed?
 - Are add-ons mandatory/optional?
+- Is a variant/option selection mandatory before add/checkout? (mandatory whenever the service has one or more configured variants; not applicable otherwise)
 - Is custom note allowed?
 - Are images/uploads allowed in future?
 
@@ -533,6 +603,8 @@ The system should support one of the following models, configurable by business:
 - Single service booking only
 - Multiple service booking within same category
 - Multiple service booking across categories (future optional)
+
+The platform's current implementation uses the **single service booking only** model: a customer selects one service (with, where applicable, one variant and any number of eligible add-ons/add-on-group selections) per booking flow, from Service Selection through Confirm Booking. Multi-service cart behavior remains a documented, business-configurable future option and is not a gap against this requirement.
 
 ### 11.7.2 Booking Summary Data
 
@@ -995,6 +1067,9 @@ Admin shall be able to:
 - Control display order
 - Upload category image/banner
 - Manage category description and SEO content
+- Nest a category under another category to form a sub-category, by assigning a parent category (see 12.5.3); leaving the parent unset keeps the category top-level
+- Re-parent an existing category (move it under a different parent, or promote a sub-category to top-level)
+- View the category's list of direct sub-categories from its own edit screen
 
 ### 12.5.2 Category Fields
 
@@ -1003,28 +1078,42 @@ Admin shall be able to:
 - Description
 - Icon/image
 - Banner image
+- Parent category (optional; unset for a top-level category, set for a sub-category — see 12.5.3)
 - Active flag
 - Featured flag
 - Sort order
 - SEO title/meta/description
 - Category-level FAQs (optional)
 
+### 12.5.3 Category Hierarchy Rules
+
+- The parent-category relationship is a single self-referencing reference on Category, not a fixed-depth model; the picker used to assign a parent excludes the category itself and all of its own descendants, so a category can never become an ancestor of itself.
+- The system shall reject any attempted parent assignment that would create a circular relationship (a category becoming its own ancestor, directly or transitively), returning a validation error to the admin (see 26.2).
+- Deactivating a category also removes its sub-categories and their services from customer-facing discovery for as long as the parent stays inactive (see 11.5.4), even if a sub-category's own active flag is set — but does not change the sub-category's own stored active flag, so reactivating the parent restores prior visibility without the admin having to re-activate every child individually.
+- Deleting a category that has sub-categories or services beneath it is not permitted; the admin must first re-parent or remove the dependents.
+
+### 12.5.4 Hierarchy View
+
+Admin shall be able to view the complete Category → Sub-Category → Appliance → Service Group → Service → Variant hierarchy to confirm parent-child relationships before publishing changes. In the current admin UI this is available as: the category list (showing indentation/ordering for sub-categories/appliances under their parent), each category's detail screen (showing its direct sub-categories), the Service Groups screen (filterable by category), and each service's detail screen (showing its own variants and add-on groups) — collectively covering the full hierarchy without requiring a separate consolidated screen.
+
 ## 12.6 Service / Package Management
 
 ### 12.6.1 Service CRUD
 
-Admin shall be able to create and manage services under a category.
+Admin shall be able to create and manage services under a category, sub-category, or appliance-level category (see 8.3, 12.5), optionally assigning each to one of that category's Service Groups (see 12.6.5).
 
 ### 12.6.2 Service Fields
 
 - Service name
-- Category
+- Category (or sub-category, or appliance-level category)
+- Service group (optional; see 12.6.5 — leaving this unset displays the service directly under its category with no section header, exactly as in the pre-Service-Group model)
 - Slug
 - Short description
 - Long description
 - Inclusions
 - Exclusions
-- Duration
+- Duration (exposed to customers as the service's estimated duration — see 11.5.3, 11.6.1)
+- Cover image (a single customer-facing photo shown on service listing/detail cards — see 11.5.3; distinct from the admin-only gallery images below, which are not currently rendered to customers)
 - Pricing type
 - Base price
 - Tax applicable flag
@@ -1049,6 +1138,28 @@ The system should support service-level configuration such as:
 - Address required flag
 - Customer note allowed flag
 
+### 12.6.4 Service Variant / Option Management
+
+Admin shall be able to configure one or more variants/options for a service (e.g. "Basic Bathroom Cleaning" / "Deep Bathroom Cleaning" under a "Bathroom Cleaning" service, per the example in 8.3), each independently:
+
+- Created, edited, activated/deactivated, and deleted from the service's own detail screen
+- Given a variant name, price, and duration, all independent of the parent service's own base price/duration
+- Given an optional inclusions-text override (falls back to the service's own inclusions when unset)
+- Assigned a display/sort order among the service's other variants
+
+A service with zero configured variants behaves exactly as a pre-hierarchy service (its own base price/duration apply directly, no selector is shown). A service with one or more active variants requires the customer to select exactly one before the item can be added to a booking (see 11.6.1, 13).
+
+### 12.6.5 Service Group Management
+
+Admin shall be able to create and manage Service Groups, each scoped to a single category, to organize that category's services into labelled sections (e.g. "Super saver packages", "Service", "Repair & gas refill" under "AC" — see 8.3, 11.5.5):
+
+- Create, edit, activate/deactivate, and delete a group from a dedicated Service Groups screen (filterable by category)
+- Set the group's category, name, and display/sort order
+- Assign/reassign individual services to the group from the service's own create/edit screen; a service may belong to at most one Service Group at a time, and only a group belonging to the *same category* as the service — assigning a group from a different category is rejected (see 26.2)
+- Deleting a group is rejected while it still has services assigned to it — the admin must first ungroup or reassign every member service (same convention as add-on group deletion, 12.7.3)
+- Deactivating a group hides it, and every service assigned to it, from customer-facing discovery without deleting the group or its services, and without affecting bookings already placed (see 11.5.4, 11.5.5)
+- A category is not required to use Service Groups at all: an appliance whose services need no sectioning (e.g. "Washing Machine") simply has zero groups, and its services render as a plain list — both models are equally valid and may coexist across different appliances in the same catalog
+
 ## 12.7 Add-On Management
 
 ### 12.7.1 Add-On CRUD
@@ -1061,10 +1172,22 @@ Admin shall be able to create add-ons and map them to services.
 - Description
 - Price
 - Service mapping
+- Add-on group mapping (optional; see 12.7.3 — leaving this unset keeps the add-on ungrouped, exactly as in the pre-hierarchy model)
 - Quantity allowed
 - Mandatory/optional
 - Active status
 - Sort order
+
+### 12.7.3 Add-On Group Management
+
+Admin shall be able to create and manage add-on groups, each scoped to a single service, to organize that service's add-ons and enforce a selection rule (see 8.3):
+
+- Create, edit, and delete a group from the service's own detail screen (or a dedicated add-on-groups screen)
+- Set the group's name and display/sort order
+- Set the group's selection type: `Single` (customer may select at most one add-on in the group) or `Multiple` (customer may select any number, optionally bounded by a configured minimum/maximum count)
+- Assign/reassign individual add-ons to the group; an add-on may belong to at most one group at a time
+- A group configured as `Single` cannot also declare a maximum-select value greater than 1 — the system rejects this combination as an invalid selection rule (see 26.2)
+- Deleting a group is rejected while it still has add-ons assigned to it — the admin must first ungroup or reassign every member add-on. This is a conscious safety choice: it forces an explicit decision about where each add-on goes rather than silently discarding the grouping.
 
 ## 12.8 Pricing Management
 
@@ -1612,23 +1735,30 @@ Expected master/configuration domains:
 
 ### 23.2 Catalog Domain
 
-- category
-- service
+- category (self-referencing via a nullable parent_category_id, forming the Category → Sub-Category → Appliance hierarchy — see 8.3; a circular reference is rejected at the application layer; "Appliance" is a naming convention for a category nested two levels deep, not a distinct table)
+- service (belongs to one category; carries a customer-facing cover_image_url and duration_minutes in addition to its existing pricing/description fields; optionally references a service_group)
+- service_group (a named, category-scoped section header for a subset of that category's services — 0..N per category; carries a sort order and its own active flag — see 8.3, 12.6.5)
+- service_variant (a named, independently priced and timed option of a service — 0..N per service; carries an optional inclusions-text override and a sort order)
 - service_addon
+- service_addon_group (a named, service-scoped grouping of add-ons with a single/multiple selection rule and optional min/max select bounds — 0..N per service)
 - service_media
 - service_faq
 - service_price
 - service_city_mapping / serviceability mapping
 
+Referential rules: `service.category_id` references `category`; `service_group.category_id` references `category`; `service.service_group_id` is a nullable reference to `service_group` (null means ungrouped, and must belong to the same category as the service); `service_variant.service_id` and `service_addon_group.service_id` both reference `service`; `service_addon.group_id` is a nullable reference to `service_addon_group` (null means ungrouped). Deleting a category or service with dependents beneath it is not permitted (see 12.5.3); deleting an add-on group or a service group is rejected while it still has member add-ons/services respectively (see 12.7.3, 12.6.5) — the underlying foreign key nulls the reference defensively if a row were ever removed by another path, but the application layer's own guard is the rule admins actually experience.
+
 ### 23.3 Booking Domain
 
 - booking
-- booking_item
-- booking_addon_item
+- booking_item (carries traceability-only snapshot fields for the selected service_variant_id, variant_name, and variant_duration_minutes at the time of booking, plus the service's service_group_id and group name at the time of booking — inherited from the service, never a customer selection — in addition to its existing service snapshot fields — see 8.2)
+- booking_addon_item (carries traceability-only snapshot fields for the selected add-on's group_id and group_name at the time of booking, in addition to its existing add-on snapshot fields — see 8.2)
 - booking_status_history
 - booking_reschedule_history
 - booking_cancellation
 - booking_note / admin note
+
+The variant and group snapshot fields on booking_item / booking_addon_item are denormalized traceability data, not live foreign keys: they preserve what the customer actually selected and its price/duration at booking time even if the source variant, add-on, or group is later edited, deactivated, or deleted (see 8.2, 13).
 
 ### 23.4 Financial Domain
 
@@ -1686,12 +1816,14 @@ This section is an API inventory, not the full API contract. Full request/respon
 ## 24.3 Catalog APIs
 
 - Get home page content
-- Get categories
-- Get category detail
+- Get categories (top-level)
+- Get category detail (includes its direct active sub-categories, its active Service Groups with their member services, and its ungrouped services — see 11.5.2, 11.5.4, 11.5.5)
+- Get sub-categories for a category (children endpoint)
 - Get services by category
-- Get service detail
+- Get service detail (includes the service's active variants and add-on groups, each group with its member add-ons and selection rule — see 11.6.1)
 - Search services/categories
 - Get FAQs/content blocks if separate
+- Calculate booking price (see 24.5) accepts an optional selected service variant id, in addition to the existing add-on selection, and returns the resolved variant name/price/duration in the price breakdown
 
 ## 24.4 Serviceability and Slot APIs
 
@@ -1739,9 +1871,13 @@ This section is an API inventory, not the full API contract. Full request/respon
 
 ## 24.10 Admin Catalog APIs
 
-- Category CRUD
-- Service CRUD
-- Add-on CRUD
+- Category CRUD (create/edit accept an optional parent category id to nest as a sub-category — see 12.5)
+- Get category's direct sub-categories (children endpoint)
+- Service CRUD (accepts cover image, duration, and an optional service group id alongside existing fields — see 12.6.2)
+- Service Variant CRUD (scoped to a service — see 12.6.4)
+- Service Group CRUD, plus activate/deactivate (scoped to a category, filterable by category — see 12.6.5)
+- Add-on CRUD (accepts an optional add-on group id — see 12.7.2)
+- Add-on Group CRUD (scoped to a service — see 12.7.3)
 - Pricing CRUD
 - Serviceability CRUD
 - Slot config CRUD
@@ -1777,8 +1913,8 @@ This section is an API inventory, not the full API contract. Full request/respon
 
 1. Home page
 1. Category listing page
-1. Category detail page
-1. Service detail page
+1. Category detail page (includes the sub-category/appliance chip selector where the category has children, and the service listing beneath it — grouped into Service Group sections where configured, plain where not — see 11.5.2, 11.5.5)
+1. Service detail page (includes the service variant/option selector where the service has variants, and add-on groups where configured — see 11.6.1)
 1. Login / registration / OTP screens
 1. Profile page
 1. Address list / add/edit address
@@ -1794,6 +1930,8 @@ This section is an API inventory, not the full API contract. Full request/respon
 1. Review submission page
 1. Support ticket page
 1. Static CMS pages
+
+These screens compose the canonical end-to-end booking journey (see 9.1): Home Page → Category Listing → Category Detail (→ Sub-Category, where applicable) → Service Listing → Service Detail (Service Selection: variant + add-ons) → Cart/Booking Summary → Slot Selection → Address → Checkout/Payment (Review → Confirm Booking) → Booking Success (Booking Confirmation).
 
 ### 25.1.1 Minimum Screen Requirements
 
@@ -1814,9 +1952,12 @@ Each screen specification in UI design should define:
 1. Admin login
 1. Dashboard
 1. Customer list / detail
-1. Category list / create / edit
-1. Service list / create / edit
-1. Add-on list / create / edit
+1. Category list / create / edit (create/edit includes assigning an optional parent category to nest as a sub-category or appliance; the list view reflects the parent-child hierarchy — see 12.5)
+1. Service list / create / edit (create/edit includes the service's cover image, duration, and an optional service-group assignment scoped to its category; the service's own detail screen additionally hosts its variant and add-on-group management — see 12.6)
+1. Service variant management (per-service, on the service detail screen — see 12.6.4)
+1. Service group list / create / edit, plus activate/deactivate (filterable by category — see 12.6.5)
+1. Add-on list / create / edit (create/edit includes assigning an optional add-on group — see 12.7.2)
+1. Add-on group list / create / edit (per-service — see 12.7.3)
 1. Pricing list / edit
 1. Serviceability configuration screens
 1. Slot configuration screens
@@ -1845,10 +1986,20 @@ Each screen specification in UI design should define:
 - Payment validation
 - Cancellation/reschedule eligibility validation
 - Review eligibility validation
+- Service variant selection validation: a service with one or more active variants requires exactly one selected before the item can be added to a booking; a service with no variants requires none
+- Add-on group selection validation: an add-on group with `Single` selection type rejects more than one selected add-on from that group; a `Multiple` group enforces any configured minimum/maximum select count
+- Inactive/unavailable catalog node handling: attempting to view or book a category, sub-category, appliance, service, variant, service group, or add-on that has since been deactivated or removed returns a clear not-available message rather than a generic error, and does not allow the booking to proceed with stale data
 
 ### 26.2 Admin Validation Categories
 
 - Category/service field validation
+- Category parent assignment validation: rejects self-parenting and any assignment that would create a circular category hierarchy (a category becoming its own ancestor), with a specific error identifying the conflict
+- Service variant field validation: name, price (non-negative), and duration (positive) required; a variant cannot be saved against a service that does not exist
+- Service group field validation: name and category required; a group cannot be saved against a category that does not exist
+- Service group cross-category validation: a service cannot be assigned to a service group that belongs to a different category than the service itself
+- Service group deletion validation: rejected while any service still references the group — the admin must ungroup or reassign them first
+- Add-on group selection-rule validation: rejects a `Single`-type group configured with a maximum-select value greater than 1; rejects a minimum-select value greater than the configured maximum
+- Add-on group cross-service validation: an add-on cannot be assigned to a group that belongs to a different service than the add-on itself
 - Pricing validation
 - Coupon rule validation
 - Refund validation
@@ -2091,8 +2242,13 @@ configured in any environment where that accuracy matters. See
 - Customer can register/login and manage profile.
 - Customer can add address and book only serviceable services.
 - Customer can browse category/service catalog and view pricing.
+- Customer can browse a category, optionally narrow to one of its sub-categories/appliances via the chip selector, and see only the services actually configured (and active) under that node — nothing hard-coded, all served from the catalog API (see 8.3, 11.5).
+- Where an appliance's services are organized into Service Groups (e.g. "AC" → "Super saver packages" / "Service" / "Repair & gas refill"), the customer sees each as a labelled section with its services beneath it; where an appliance's services carry no group (e.g. "Washing Machine"), the customer sees a plain list with no section header — the same category-detail screen renders both correctly with no code path change, and a group with zero active services is never shown as an empty header (see 11.5.5).
+- Where a service offers more than one variant/option, the customer must select exactly one before proceeding, and the price/duration shown update to match the selection; where a service has none, the base price/duration apply directly with no selector shown (see 11.6.1).
+- Where a service has add-ons organized into a group, the customer's selections within that group respect the group's single/multiple selection rule; ungrouped add-ons remain independently optional (see 8.3, 11.6.1).
+- Customer can complete the full journey Home Page → Category → Sub-Category / Appliance (where applicable) → Service Listing (with Service Group sections, where configured) → Service Selection → Service Details → Select/Add Service → Date & Time → Address → Review → Confirm Booking → Booking Confirmation without a dead end at any step (see 9.1).
 - Customer can select slot, apply coupon, pay, and create booking.
-- Customer can see booking history and booking detail.
+- Customer can see booking history and booking detail, and a past booking's detail correctly reflects the variant/add-on-group/service-group selections made at the time, even if the catalog has since changed (see 8.2, 23.3).
 - Customer can cancel/reschedule eligible bookings.
 - Customer can see refund outcome and raise support issues.
 - Customer can submit review after completion.
@@ -2100,6 +2256,11 @@ configured in any environment where that accuracy matters. See
 ### 33.2 Admin Acceptance
 
 - Admin can manage categories, services, pricing, serviceability, slots, coupons, and CMS.
+- Admin can create a category, nest a sub-category beneath it, create a service under the sub-category, configure its price/duration/cover image, add one or more variants and add-on groups, set display order and active status, and activate it — after which it becomes visible to customers per 11.5.4 (see 12.5-12.7).
+- Admin can reproduce the exact AC example end-to-end: create "AC & Appliance Repair" → "Large Appliances" → "AC" (three nested categories), create Service Groups "Super saver packages", "Service", and "Repair & gas refill" under "AC", and create services under each group (e.g. "Foam-jet service (2 ACs)" through "(5 ACs)" under "Super saver packages"; "AC repair" and "Gas refill & check-up" under "Repair & gas refill") — each group appears as its own labelled section on the customer-facing listing, in the configured order (see 8.3, 11.5.5, 12.6.5).
+- Admin can also reproduce the Washing Machine example: create "Washing Machine" under "Large Appliances" and add services directly to it with no Service Group — the customer-facing listing shows them in a plain list with no blank or unnecessary section header (see 11.5.5).
+- Admin cannot create a circular category hierarchy, an invalid add-on group selection rule, or assign a service to a Service Group from a different category; the system rejects each attempt with a specific validation message (see 26.2).
+- Admin can view the category/sub-category/appliance/service-group/service/variant hierarchy from the catalog management screens well enough to confirm parent-child relationships before publishing (see 12.5.4).
 - Admin can manage bookings end-to-end.
 - Admin can initiate refund, cancel/reschedule, and manage support tickets based on role.
 - Admin actions are permission-controlled and audited.

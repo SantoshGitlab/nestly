@@ -16,6 +16,9 @@ public class Category : AggregateRoot<Guid>
     public string? SeoTitle { get; private set; }
     public string? SeoMetaDescription { get; private set; }
 
+    /// <summary>Null for a top-level category. Set via <see cref="SetParent"/>, never in the constructor, so an existing category's tree position is always an explicit, event-raising change.</summary>
+    public Guid? ParentCategoryId { get; private set; }
+
     protected Category() { }
 
     public Category(Guid id, string name, string slug, string description) : base(id)
@@ -55,4 +58,27 @@ public class Category : AggregateRoot<Guid>
     }
     public void Feature() => IsFeatured = true;
     public void Unfeature() => IsFeatured = false;
+
+    /// <summary>
+    /// Sets or clears this category's parent (Phase 3 catalog redesign).
+    /// Only the immediate self-parent case is checked here; a deeper
+    /// transitive-ancestor cycle check needs repository access and lives in
+    /// CategoryManagementService.
+    /// </summary>
+    public void SetParent(Guid? parentCategoryId)
+    {
+        if (parentCategoryId == Id)
+        {
+            throw new ArgumentException("A category cannot be its own parent.", nameof(parentCategoryId));
+        }
+
+        if (parentCategoryId == ParentCategoryId)
+        {
+            return;
+        }
+
+        var oldParentCategoryId = ParentCategoryId;
+        ParentCategoryId = parentCategoryId;
+        RaiseDomainEvent(new CategoryParentChangedEvent(Id, oldParentCategoryId, parentCategoryId));
+    }
 }

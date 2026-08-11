@@ -6,6 +6,19 @@ namespace Nestly.Domain;
 public class Service : AggregateRoot<Guid>
 {
     public Guid CategoryId { get; private set; }
+
+    /// <summary>
+    /// Optional section header this service is displayed under within its
+    /// category (e.g. "Super saver packages"). Null means the service
+    /// renders directly under its category/appliance with no header
+    /// (Model B) - the default, and how every service behaved before this
+    /// field existed. Must belong to the same <see cref="CategoryId"/> as
+    /// this service; enforced by <c>ServiceManagementService</c>, not here,
+    /// since validating it requires a repository lookup this entity has no
+    /// access to.
+    /// </summary>
+    public Guid? ServiceGroupId { get; private set; }
+
     public string Name { get; private set; } = string.Empty;
 
     /// <summary>SEO-friendly identifier (SRS 12.6.2), globally unique like Category's.</summary>
@@ -16,6 +29,9 @@ public class Service : AggregateRoot<Guid>
 
     /// <summary>Short summary shown on listing/search cards (SRS 12.6.2), distinct from the long <see cref="Description"/>.</summary>
     public string? ShortDescription { get; private set; }
+
+    /// <summary>Photo shown on listing/search cards and the service detail page. Null renders a graphic fallback panel client-side rather than a broken image.</summary>
+    public string? CoverImageUrl { get; private set; }
 
     public decimal Price { get; private set; }
     public bool IsActive { get; private set; }
@@ -96,7 +112,9 @@ public class Service : AggregateRoot<Guid>
     public void SetSlug(string slug) => Slug = slug ?? throw new ArgumentNullException(nameof(slug));
     public void SetDescription(string d) => Description = d ?? string.Empty;
     public void SetShortDescription(string? shortDescription) => ShortDescription = shortDescription;
+    public void SetCoverImageUrl(string? coverImageUrl) => CoverImageUrl = coverImageUrl;
     public void SetCategoryId(Guid categoryId) => CategoryId = categoryId;
+    public void SetServiceGroupId(Guid? serviceGroupId) => ServiceGroupId = serviceGroupId;
 
     public void SetPrice(decimal price)
     {

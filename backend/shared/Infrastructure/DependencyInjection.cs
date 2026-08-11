@@ -376,6 +376,9 @@ public static class DependencyInjection
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IServiceRepository, ServiceRepository>();
         services.AddScoped<IServiceAddOnRepository, ServiceAddOnRepository>();
+        services.AddScoped<IServiceVariantRepository, ServiceVariantRepository>();
+        services.AddScoped<IServiceAddOnGroupRepository, ServiceAddOnGroupRepository>();
+        services.AddScoped<IServiceGroupRepository, ServiceGroupRepository>();
         services.AddScoped<IServiceFaqRepository, ServiceFaqRepository>();
         services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
         services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
@@ -432,6 +435,9 @@ public static class DependencyInjection
         services.AddScoped<IServiceMediaRepository, ServiceMediaRepository>();
         services.AddScoped<IServiceManagementService, ServiceManagementService>();
         services.AddScoped<IServiceAddOnManagementService, ServiceAddOnManagementService>();
+        services.AddScoped<IServiceVariantManagementService, ServiceVariantManagementService>();
+        services.AddScoped<IServiceAddOnGroupManagementService, ServiceAddOnGroupManagementService>();
+        services.AddScoped<IServiceGroupManagementService, ServiceGroupManagementService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services
             .AddOptions<BookingOptions>()

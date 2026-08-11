@@ -269,13 +269,40 @@ public class BookingService : IBookingService
             // the breakdown already carries each selection's quantity and
             // resolved unit price, exactly what the snapshot needs, whereas
             // summary.AddOns is a plain catalog projection for display.
-            var item = booking.AddItem(
-                Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
-                summary.Price.BasePrice, summary.Price.Quantity);
+            //
+            // Phase 3 catalog redesign: the variant/group overloads are used
+            // only when the summary actually carries a selection - a service
+            // with no variants and an add-on with no group produce exactly
+            // the same BookingItem/BookingAddOnItem rows as before this field
+            // existed.
+            var item = summary.Service.VariantId is Guid variantId
+                ? booking.AddItem(
+                    Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                    summary.Price.BasePrice, summary.Price.Quantity,
+                    variantId, summary.Service.VariantName, summary.Service.VariantDurationMinutes,
+                    summary.Service.GroupId, summary.Service.GroupName)
+                : summary.Service.GroupId is Guid serviceGroupId
+                    ? booking.AddItem(
+                        Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                        summary.Price.BasePrice, summary.Price.Quantity,
+                        null, null, null,
+                        serviceGroupId, summary.Service.GroupName)
+                    : booking.AddItem(
+                        Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                        summary.Price.BasePrice, summary.Price.Quantity);
 
             foreach (var addOnLine in summary.Price.AddOnLineItems)
             {
-                booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+                if (addOnLine.GroupId is Guid groupId)
+                {
+                    booking.AddAddOnToItem(
+                        item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity,
+                        groupId, addOnLine.GroupName);
+                }
+                else
+                {
+                    booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+                }
             }
 
             booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
@@ -398,7 +425,10 @@ public class BookingService : IBookingService
 
         return new BookingDetailResponse(
             booking.Id,
-            new BookingServiceSummary(item?.ServiceId ?? Guid.Empty, item?.NameSnapshot ?? string.Empty, item?.SlugSnapshot ?? string.Empty),
+            new BookingServiceSummary(
+                item?.ServiceId ?? Guid.Empty, item?.NameSnapshot ?? string.Empty, item?.SlugSnapshot ?? string.Empty,
+                item?.ServiceVariantId, item?.VariantNameSnapshot, item?.VariantDurationMinutesSnapshot,
+                item?.ServiceGroupId, item?.ServiceGroupNameSnapshot),
             addOns,
             new BookingAddressSummary(
                 booking.SourceAddressId ?? Guid.Empty, booking.AddressLabelSnapshot, booking.AddressLine1Snapshot,
@@ -408,9 +438,11 @@ public class BookingService : IBookingService
             new BookingSlotSummary(booking.SlotWindowId, booking.SlotWindowNameSnapshot, booking.SlotDate, booking.SlotStartTimeSnapshot, booking.SlotEndTimeSnapshot),
             new Application.Pricing.PriceBreakdownResponse(
                 booking.BasePriceSnapshot, booking.QuantitySnapshot, booking.BaseTotalSnapshot,
-                item?.AddOns.Select(a => new Application.Pricing.AddOnLineItem(a.ServiceAddOnId, a.NameSnapshot, a.UnitPriceSnapshot, a.Quantity, a.LineTotalSnapshot)).ToList() ?? [],
+                item?.AddOns.Select(a => new Application.Pricing.AddOnLineItem(
+                    a.ServiceAddOnId, a.NameSnapshot, a.UnitPriceSnapshot, a.Quantity, a.LineTotalSnapshot, a.AddOnGroupId, a.GroupNameSnapshot)).ToList() ?? [],
                 booking.AddOnTotalSnapshot, booking.VisitChargeSnapshot, booking.SubtotalSnapshot,
-                booking.TaxPercentageSnapshot, booking.TaxAmountSnapshot, booking.PlatformFeeSnapshot, booking.TotalPayableSnapshot),
+                booking.TaxPercentageSnapshot, booking.TaxAmountSnapshot, booking.PlatformFeeSnapshot, booking.TotalPayableSnapshot,
+                item?.ServiceVariantId, item?.VariantNameSnapshot, item?.VariantDurationMinutesSnapshot),
             booking.Status,
             BookingStatusMapper.LabelFor(booking.Status),
             booking.StatusHistory

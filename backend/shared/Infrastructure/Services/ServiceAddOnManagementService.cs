@@ -14,15 +14,18 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
 
     private readonly IServiceAddOnRepository _addOnRepository;
     private readonly IServiceRepository _serviceRepository;
+    private readonly IServiceAddOnGroupRepository _groupRepository;
     private readonly IAuditLogWriter _auditLogWriter;
 
     public ServiceAddOnManagementService(
         IServiceAddOnRepository addOnRepository,
         IServiceRepository serviceRepository,
+        IServiceAddOnGroupRepository groupRepository,
         IAuditLogWriter auditLogWriter)
     {
         _addOnRepository = addOnRepository;
         _serviceRepository = serviceRepository;
+        _groupRepository = groupRepository;
         _auditLogWriter = auditLogWriter;
     }
 
@@ -53,11 +56,18 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
             return Error.NotFound("Service.NotFound", "The specified service does not exist.");
         }
 
+        var groupValidation = await ValidateGroupAsync(request.GroupId, request.ServiceId);
+        if (groupValidation.IsFailure)
+        {
+            return Result.Failure<ServiceAddOnAdminResponse>(groupValidation.Error);
+        }
+
         var addOn = new ServiceAddOn(Guid.NewGuid(), request.ServiceId, request.Name, request.Price);
         addOn.SetDescription(request.Description);
         addOn.SetSortOrder(request.SortOrder);
         addOn.SetQuantityAllowed(request.IsQuantityAllowed);
         addOn.SetMandatory(request.IsMandatory);
+        addOn.SetGroupId(request.GroupId);
 
         // Staged before AddAsync so its own SaveChangesAsync commits the
         // audit row in the same transaction as the new add-on.
@@ -83,6 +93,12 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
             return Error.NotFound("Service.NotFound", "The specified service does not exist.");
         }
 
+        var groupValidation = await ValidateGroupAsync(request.GroupId, request.ServiceId);
+        if (groupValidation.IsFailure)
+        {
+            return Result.Failure<ServiceAddOnAdminResponse>(groupValidation.Error);
+        }
+
         var oldService = await _serviceRepository.GetByIdAsync(addOn.ServiceId);
         string oldValues = Serialize(addOn, oldService?.Name ?? string.Empty);
 
@@ -93,6 +109,7 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
         addOn.SetSortOrder(request.SortOrder);
         addOn.SetQuantityAllowed(request.IsQuantityAllowed);
         addOn.SetMandatory(request.IsMandatory);
+        addOn.SetGroupId(request.GroupId);
 
         await _auditLogWriter.WriteAsync(new AuditEntry(
             "ServiceAddOn", addOn.Id.ToString(), "Updated", oldValues, Serialize(addOn, service.Name)));
@@ -127,6 +144,29 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
     private static Result<ServiceAddOnAdminResponse> NotFound() =>
         Error.NotFound("ServiceAddOn.NotFound", "The specified add-on does not exist.");
 
+    /// <summary>Phase 3 catalog redesign: when a group is supplied, it must exist and belong to the same service the add-on is being mapped to.</summary>
+    private async Task<Result> ValidateGroupAsync(Guid? groupId, Guid serviceId)
+    {
+        if (groupId is null)
+        {
+            return Result.Success();
+        }
+
+        var group = await _groupRepository.GetByIdAsync(groupId.Value);
+        if (group is null)
+        {
+            return Result.Failure(Error.NotFound("ServiceAddOnGroup.NotFound", "The specified add-on group does not exist."));
+        }
+
+        if (group.ServiceId != serviceId)
+        {
+            return Result.Failure(Error.Validation(
+                "ServiceAddOnGroup.ServiceMismatch", "The specified add-on group belongs to a different service."));
+        }
+
+        return Result.Success();
+    }
+
     private static string Serialize(ServiceAddOn addOn, string serviceName) =>
         JsonSerializer.Serialize(ToResponse(addOn, serviceName), JsonOptions);
 
@@ -143,5 +183,6 @@ public class ServiceAddOnManagementService : IServiceAddOnManagementService
         addOn.IsActive,
         addOn.SortOrder,
         addOn.IsQuantityAllowed,
-        addOn.IsMandatory);
+        addOn.IsMandatory,
+        addOn.GroupId);
 }

@@ -18,7 +18,9 @@ public sealed class PriceCalculationServiceTests : IClassFixture<TestDatabase>
         new ServiceAddOnRepository(context),
         new ServiceabilityRepository(context),
         new ServiceCityPriceRepository(context),
-        new CityPricingPolicyRepository(context));
+        new CityPricingPolicyRepository(context),
+        new ServiceVariantRepository(context),
+        new ServiceAddOnGroupRepository(context));
 
     private (Category category, Service service, State state, City city) SeedServiceAndCity(Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal basePrice = 500m)
     {
@@ -198,5 +200,199 @@ public sealed class PriceCalculationServiceTests : IClassFixture<TestDatabase>
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Pricing.InvalidAddOn");
+    }
+
+    // ---- Phase 3 catalog redesign: variants + grouped add-ons ----
+
+    [Fact]
+    public async Task A_selected_variants_price_and_duration_win_over_the_services_flat_price()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var variant = new ServiceVariant(Guid.NewGuid(), service.Id, "Split AC", 799m, 90);
+        context.Add(variant);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(
+            new PriceCalculationRequest(service.Id, city.Id, 1, [], variant.Id));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BasePrice.Should().Be(799m);
+        result.Value.SelectedVariantId.Should().Be(variant.Id);
+        result.Value.SelectedVariantName.Should().Be("Split AC");
+        result.Value.SelectedVariantDurationMinutes.Should().Be(90);
+    }
+
+    [Fact]
+    public async Task A_city_price_override_is_ignored_when_a_variant_is_selected()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var variant = new ServiceVariant(Guid.NewGuid(), service.Id, "Split AC", 799m, 90);
+        context.Add(variant);
+        context.ServiceCityPrices.Add(new ServiceCityPrice(Guid.NewGuid(), service.Id, city.Id, 650m));
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(
+            new PriceCalculationRequest(service.Id, city.Id, 1, [], variant.Id));
+
+        result.Value.BasePrice.Should().Be(799m);
+    }
+
+    [Fact]
+    public async Task An_inactive_variant_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var variant = new ServiceVariant(Guid.NewGuid(), service.Id, "Split AC", 799m, 90);
+        variant.Deactivate();
+        context.Add(variant);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(
+            new PriceCalculationRequest(service.Id, city.Id, 1, [], variant.Id));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.VariantNotFound");
+    }
+
+    [Fact]
+    public async Task A_variant_belonging_to_a_different_service_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var (_, serviceOne, _, city) = SeedServiceAndCity(context, 500m);
+        var category2 = new Category(Guid.NewGuid(), "Repairs", "repairs-" + Guid.NewGuid(), "desc");
+        var serviceTwo = new Service(Guid.NewGuid(), category2.Id, "AC Repair", "ac-repair-" + Guid.NewGuid(), "desc", 400m);
+        var foreignVariant = new ServiceVariant(Guid.NewGuid(), serviceTwo.Id, "Window AC", 399m, 60);
+        context.Add(category2);
+        context.Add(serviceTwo);
+        context.Add(foreignVariant);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(
+            new PriceCalculationRequest(serviceOne.Id, city.Id, 1, [], foreignVariant.Id));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.VariantNotFound");
+    }
+
+    [Fact]
+    public async Task A_request_with_no_variant_id_behaves_identically_to_before_variants_existed()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var variant = new ServiceVariant(Guid.NewGuid(), service.Id, "Split AC", 799m, 90);
+        context.Add(variant);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(service.Id, city.Id, 2, []));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.BasePrice.Should().Be(500m);
+        result.Value.SelectedVariantId.Should().BeNull();
+        result.Value.SelectedVariantName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Selecting_two_addons_from_a_single_selection_group_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), service.Id, "Detergent", AddOnGroupSelectionType.Single);
+        var addOnA = new ServiceAddOn(Guid.NewGuid(), service.Id, "Powder", 50m);
+        addOnA.SetGroupId(group.Id);
+        var addOnB = new ServiceAddOn(Guid.NewGuid(), service.Id, "Liquid", 60m);
+        addOnB.SetGroupId(group.Id);
+        context.Add(group);
+        context.Add(addOnA);
+        context.Add(addOnB);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(
+            service.Id, city.Id, 1, [new AddOnSelection(addOnA.Id, 1), new AddOnSelection(addOnB.Id, 1)]));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.AddOnGroupSingleSelectionViolated");
+    }
+
+    [Fact]
+    public async Task Selecting_more_addons_than_a_groups_max_select_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), service.Id, "Extras", AddOnGroupSelectionType.Multiple);
+        group.SetSelectionRule(minSelect: 0, maxSelect: 1);
+        var addOnA = new ServiceAddOn(Guid.NewGuid(), service.Id, "A", 50m);
+        addOnA.SetGroupId(group.Id);
+        var addOnB = new ServiceAddOn(Guid.NewGuid(), service.Id, "B", 60m);
+        addOnB.SetGroupId(group.Id);
+        context.Add(group);
+        context.Add(addOnA);
+        context.Add(addOnB);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(
+            service.Id, city.Id, 1, [new AddOnSelection(addOnA.Id, 1), new AddOnSelection(addOnB.Id, 1)]));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.AddOnGroupMaxSelectExceeded");
+    }
+
+    [Fact]
+    public async Task Selecting_fewer_addons_than_a_groups_min_select_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), service.Id, "Required extras", AddOnGroupSelectionType.Multiple);
+        group.SetSelectionRule(minSelect: 2, maxSelect: null);
+        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "A", 50m);
+        addOn.SetGroupId(group.Id);
+        context.Add(group);
+        context.Add(addOn);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(
+            service.Id, city.Id, 1, [new AddOnSelection(addOn.Id, 1)]));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Pricing.AddOnGroupMinSelectNotMet");
+    }
+
+    [Fact]
+    public async Task A_valid_single_selection_from_a_group_is_priced_and_carries_the_group_name()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), service.Id, "Detergent", AddOnGroupSelectionType.Single);
+        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Powder", 50m);
+        addOn.SetGroupId(group.Id);
+        context.Add(group);
+        context.Add(addOn);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(
+            service.Id, city.Id, 1, [new AddOnSelection(addOn.Id, 1)]));
+
+        result.IsSuccess.Should().BeTrue();
+        var line = result.Value.AddOnLineItems.Should().ContainSingle().Subject;
+        line.GroupId.Should().Be(group.Id);
+        line.GroupName.Should().Be("Detergent");
+    }
+
+    [Fact]
+    public async Task An_ungrouped_addon_selection_carries_no_group_info_same_as_before_groups_existed()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Standalone", 50m);
+        context.Add(addOn);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(
+            service.Id, city.Id, 1, [new AddOnSelection(addOn.Id, 1)]));
+
+        var line = result.Value.AddOnLineItems.Should().ContainSingle().Subject;
+        line.GroupId.Should().BeNull();
+        line.GroupName.Should().BeNull();
     }
 }

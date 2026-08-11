@@ -645,9 +645,18 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AddOnGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("add_on_group_id");
+
                     b.Property<Guid>("BookingItemId")
                         .HasColumnType("uuid")
                         .HasColumnName("booking_item_id");
+
+                    b.Property<string>("GroupNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("group_name_snapshot");
 
                     b.Property<decimal>("LineTotalSnapshot")
                         .HasPrecision(12, 2)
@@ -816,6 +825,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("service_id");
 
+                    b.Property<Guid?>("ServiceVariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_variant_id");
+
                     b.Property<string>("SlugSnapshot")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -826,6 +839,15 @@ namespace Nestly.Infrastructure.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("unit_price_snapshot");
+
+                    b.Property<int?>("VariantDurationMinutesSnapshot")
+                        .HasColumnType("integer")
+                        .HasColumnName("variant_duration_minutes_snapshot");
+
+                    b.Property<string>("VariantNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("variant_name_snapshot");
 
                     b.HasKey("Id")
                         .HasName("pk_booking_item");
@@ -1106,6 +1128,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ParentCategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_category_id");
+
                     b.Property<string>("SeoMetaDescription")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -1128,6 +1154,9 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_category");
+
+                    b.HasIndex("ParentCategoryId")
+                        .HasDatabaseName("ix_category_parent_category_id");
 
                     b.HasIndex("Slug")
                         .IsUnique()
@@ -4309,6 +4338,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("category_id");
 
+                    b.Property<string>("CoverImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cover_image_url");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(2000)
@@ -4422,6 +4456,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("seo_title");
 
+                    b.Property<Guid?>("ServiceGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_group_id");
+
                     b.Property<string>("ShortDescription")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -4441,6 +4479,9 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_service");
+
+                    b.HasIndex("ServiceGroupId")
+                        .HasDatabaseName("ix_service_service_group_id");
 
                     b.HasIndex("Slug")
                         .IsUnique()
@@ -4463,6 +4504,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("description");
+
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
@@ -4503,10 +4548,61 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_service_addon");
 
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_service_addon_group_id");
+
                     b.HasIndex("ServiceId")
                         .HasDatabaseName("ix_service_addon_service_id");
 
                     b.ToTable("service_addon", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ServiceAddOnGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("MaxSelect")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_select");
+
+                    b.Property<int>("MinSelect")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("min_select");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SelectionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("selection_type");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_add_on_group");
+
+                    b.HasIndex("ServiceId")
+                        .HasDatabaseName("ix_service_add_on_group_service_id");
+
+                    b.ToTable("service_add_on_group", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.ServiceCityPrice", b =>
@@ -4583,6 +4679,44 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("service_faq", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.ServiceGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_group");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_service_group_category_id");
+
+                    b.ToTable("service_group", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.ServiceMedia", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4639,6 +4773,57 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_service_pincode_mapping_service_id_pincode_id");
 
                     b.ToTable("service_pincode_mapping", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ServiceVariant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_minutes");
+
+                    b.Property<string>("InclusionsOverride")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("inclusions_override");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("price");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_variant");
+
+                    b.HasIndex("ServiceId")
+                        .HasDatabaseName("ix_service_variant_service_id");
+
+                    b.ToTable("service_variant", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.SlotAvailabilityOverride", b =>
@@ -5360,6 +5545,15 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_booking_status_history_booking_booking_id");
                 });
 
+            modelBuilder.Entity("Nestly.Domain.Category", b =>
+                {
+                    b.HasOne("Nestly.Domain.Category", null)
+                        .WithMany()
+                        .HasForeignKey("ParentCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_category_category_parent_category_id");
+                });
+
             modelBuilder.Entity("Nestly.Domain.CategoryCityMapping", b =>
                 {
                     b.HasOne("Nestly.Domain.Category", null)
@@ -5862,6 +6056,24 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_role_permission_mapping_admin_role_role_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Service", b =>
+                {
+                    b.HasOne("Nestly.Domain.ServiceGroup", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_service_service_group_service_group_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ServiceAddOn", b =>
+                {
+                    b.HasOne("Nestly.Domain.ServiceAddOnGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_service_addon_service_add_on_group_group_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.ServiceCityPrice", b =>

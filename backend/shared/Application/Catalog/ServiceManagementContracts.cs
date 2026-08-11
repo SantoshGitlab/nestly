@@ -31,7 +31,9 @@ public sealed record ServiceAdminResponse(
     bool IsInspectionBased,
     bool IsSlotRequired,
     bool IsAddressRequired,
-    bool IsCustomerNoteAllowed);
+    bool IsCustomerNoteAllowed,
+    string? CoverImageUrl = null,
+    Guid? ServiceGroupId = null);
 
 /// <summary>Admin create request for a service (SRS 12.6.1/12.6.2/12.6.3).</summary>
 public sealed record ServiceCreateRequest(
@@ -56,7 +58,9 @@ public sealed record ServiceCreateRequest(
     bool IsInspectionBased,
     bool IsSlotRequired,
     bool IsAddressRequired,
-    bool IsCustomerNoteAllowed);
+    bool IsCustomerNoteAllowed,
+    string? CoverImageUrl = null,
+    Guid? ServiceGroupId = null);
 
 /// <summary>
 /// Admin update request for a service. Covers every editable field except
@@ -86,7 +90,9 @@ public sealed record ServiceUpdateRequest(
     bool IsInspectionBased,
     bool IsSlotRequired,
     bool IsAddressRequired,
-    bool IsCustomerNoteAllowed);
+    bool IsCustomerNoteAllowed,
+    string? CoverImageUrl = null,
+    Guid? ServiceGroupId = null);
 
 /// <summary>Gallery image attached to a service (SRS 12.6.2 "Gallery images").</summary>
 public sealed record ServiceMediaResponse(Guid Id, Guid ServiceId, string Url);

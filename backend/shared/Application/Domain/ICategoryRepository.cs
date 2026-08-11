@@ -28,4 +28,7 @@ public interface ICategoryRepository : IRepository<Category>
 
     /// <summary>Names for a set of category ids in one round trip (task 256) - mirrors <c>ICustomerRepository.GetNamesByIdsAsync</c>.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
+    /// <summary>Active subcategories of a parent category (Phase 3 catalog redesign), ordered for display.</summary>
+    Task<IReadOnlyList<Category>> ListChildrenAsync(Guid parentCategoryId);
 }

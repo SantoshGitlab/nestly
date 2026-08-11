@@ -39,7 +39,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var cache = await SeededCache((key, "stale"));
 
         using var context = _db.CreateContext();
-        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context));
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
 
         await handler.Handle(new DomainEventNotification<CategoryCityMappingChangedEvent>(
             new CategoryCityMappingChangedEvent(categoryId, cityId)), CancellationToken.None);
@@ -56,7 +56,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var cache = await SeededCache((key, "stale"));
 
         using var context = _db.CreateContext();
-        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context));
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
 
         await handler.Handle(new DomainEventNotification<ServicePincodeMappingChangedEvent>(
             new ServicePincodeMappingChangedEvent(serviceId, pincodeId)), CancellationToken.None);
@@ -72,7 +72,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var cache = await SeededCache((key, "stale"));
 
         using var context = _db.CreateContext();
-        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context));
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
 
         await handler.Handle(new DomainEventNotification<CategoryDeactivatedEvent>(
             new CategoryDeactivatedEvent(categoryId)), CancellationToken.None);
@@ -90,7 +90,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var cache = await SeededCache((serviceKey, "stale"), (listKey, "stale"));
 
         using var context = _db.CreateContext();
-        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context));
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
 
         await handler.Handle(new DomainEventNotification<ServiceCreatedEvent>(
             new ServiceCreatedEvent(serviceId, categoryId)), CancellationToken.None);
@@ -117,7 +117,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var cache = await SeededCache((serviceKey, "stale"), (listKey, "stale"));
 
         using var readContext = _db.CreateContext();
-        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(readContext));
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(readContext), new CategoryRepository(readContext));
 
         await handler.Handle(new DomainEventNotification<ServiceActivatedEvent>(
             new ServiceActivatedEvent(service.Id)), CancellationToken.None);
@@ -135,7 +135,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var cache = await SeededCache((serviceKey, "stale"), (unrelatedKey, "untouched"));
 
         using var context = _db.CreateContext();
-        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context));
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
 
         await handler.Handle(new DomainEventNotification<ServicePriceChangedEvent>(
             new ServicePriceChangedEvent(serviceId, 100m, 150m)), CancellationToken.None);
@@ -168,6 +168,7 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         var services = new ServiceCollection();
         services.AddSingleton<ICacheService>(cache);
         services.AddSingleton<IServiceRepository>(new ServiceRepository(context));
+        services.AddSingleton<ICategoryRepository>(new CategoryRepository(context));
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Nestly.Infrastructure.DependencyInjection).Assembly));
         await using var provider = services.BuildServiceProvider();
 

@@ -38,6 +38,29 @@ public sealed class CatalogSearchServiceTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
+    public async Task Search_results_include_a_services_cover_image_and_duration()
+    {
+        var category = new Category(Guid.NewGuid(), "Repairs", "repairs-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Fridge Repair Service", "fridge-repair-" + Guid.NewGuid(), "desc", 499m);
+        service.SetCoverImageUrl("https://picsum.photos/seed/fridge/640/480");
+        service.SetDuration(45);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).SearchAsync("fridge");
+
+        var found = result.Value.Services.Should().ContainSingle(s => s.Id == service.Id).Subject;
+        found.CoverImageUrl.Should().Be("https://picsum.photos/seed/fridge/640/480");
+        found.DurationMinutes.Should().Be(45);
+    }
+
+    [Fact]
     public async Task Search_excludes_inactive_categories_and_services()
     {
         var category = new Category(Guid.NewGuid(), "Old Painting", "old-painting-" + Guid.NewGuid(), "desc");
@@ -54,6 +77,31 @@ public sealed class CatalogSearchServiceTests : IClassFixture<TestDatabase>
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Categories.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Search_excludes_a_subcategory_and_its_service_once_the_parent_category_is_deactivated()
+    {
+        var parent = new Category(Guid.NewGuid(), "Home Cleaning7", "home-cleaning-7-" + Guid.NewGuid(), "desc");
+        var subcategory = new Category(Guid.NewGuid(), "Sofa Cleaning7", "sofa-cleaning-7-" + Guid.NewGuid(), "desc");
+        subcategory.SetParent(parent.Id);
+        var service = new Service(Guid.NewGuid(), subcategory.Id, "Sofa Shampoo Service7", "sofa-shampoo-7-" + Guid.NewGuid(), "desc", 699m);
+        parent.Deactivate();
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(parent);
+            context.Add(subcategory);
+            context.Add(service);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).SearchAsync("sofa");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Categories.Should().BeEmpty();
+        result.Value.Services.Should().BeEmpty();
     }
 
     [Theory]

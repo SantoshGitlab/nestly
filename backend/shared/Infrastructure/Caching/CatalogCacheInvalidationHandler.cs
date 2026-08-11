@@ -19,6 +19,7 @@ public sealed class CatalogCacheInvalidationHandler :
     INotificationHandler<DomainEventNotification<CategoryCreatedEvent>>,
     INotificationHandler<DomainEventNotification<CategoryActivatedEvent>>,
     INotificationHandler<DomainEventNotification<CategoryDeactivatedEvent>>,
+    INotificationHandler<DomainEventNotification<CategoryParentChangedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceCreatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceActivatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceDeactivatedEvent>>,
@@ -31,21 +32,41 @@ public sealed class CatalogCacheInvalidationHandler :
 {
     private readonly ICacheService _cache;
     private readonly IServiceRepository _serviceRepository;
+    private readonly ICategoryRepository _categoryRepository;
 
-    public CatalogCacheInvalidationHandler(ICacheService cache, IServiceRepository serviceRepository)
+    public CatalogCacheInvalidationHandler(ICacheService cache, IServiceRepository serviceRepository, ICategoryRepository categoryRepository)
     {
         _cache = cache;
         _serviceRepository = serviceRepository;
+        _categoryRepository = categoryRepository;
     }
 
     public Task Handle(DomainEventNotification<CategoryCreatedEvent> notification, CancellationToken cancellationToken) =>
         InvalidateCategory(notification.DomainEvent.CategoryId, cancellationToken);
 
+    // A child's activation state changes its parent's cached Subcategories
+    // list (Phase 3 catalog redesign), so this now also busts the parent.
     public Task Handle(DomainEventNotification<CategoryActivatedEvent> notification, CancellationToken cancellationToken) =>
-        InvalidateCategory(notification.DomainEvent.CategoryId, cancellationToken);
+        InvalidateCategoryAndItsParent(notification.DomainEvent.CategoryId, cancellationToken);
 
     public Task Handle(DomainEventNotification<CategoryDeactivatedEvent> notification, CancellationToken cancellationToken) =>
-        InvalidateCategory(notification.DomainEvent.CategoryId, cancellationToken);
+        InvalidateCategoryAndItsParent(notification.DomainEvent.CategoryId, cancellationToken);
+
+    /// <summary>Phase 3 catalog redesign: busts both the old and new parent's cache entry, since each one's cached Subcategories list just changed.</summary>
+    public async Task Handle(DomainEventNotification<CategoryParentChangedEvent> notification, CancellationToken cancellationToken)
+    {
+        await InvalidateCategory(notification.DomainEvent.CategoryId, cancellationToken);
+
+        if (notification.DomainEvent.OldParentCategoryId is Guid oldParentId)
+        {
+            await InvalidateCategory(oldParentId, cancellationToken);
+        }
+
+        if (notification.DomainEvent.NewParentCategoryId is Guid newParentId)
+        {
+            await InvalidateCategory(newParentId, cancellationToken);
+        }
+    }
 
     public async Task Handle(DomainEventNotification<ServiceCreatedEvent> notification, CancellationToken cancellationToken)
     {
@@ -79,6 +100,17 @@ public sealed class CatalogCacheInvalidationHandler :
 
     private Task InvalidateCategory(Guid categoryId, CancellationToken cancellationToken) =>
         _cache.RemoveAsync(CacheKeys.Category(categoryId), cancellationToken);
+
+    private async Task InvalidateCategoryAndItsParent(Guid categoryId, CancellationToken cancellationToken)
+    {
+        await InvalidateCategory(categoryId, cancellationToken);
+
+        var category = await _categoryRepository.GetByIdAsync(categoryId);
+        if (category?.ParentCategoryId is Guid parentId)
+        {
+            await InvalidateCategory(parentId, cancellationToken);
+        }
+    }
 
     private Task InvalidateService(Guid serviceId, CancellationToken cancellationToken) =>
         _cache.RemoveAsync(CacheKeys.Service(serviceId), cancellationToken);

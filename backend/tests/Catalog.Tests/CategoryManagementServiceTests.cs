@@ -122,6 +122,86 @@ public sealed class CategoryManagementServiceTests : IClassFixture<TestDatabase>
         (await service.SetActiveAsync(Guid.NewGuid(), true)).Error.Code.Should().Be("Category.NotFound");
     }
 
+    [Fact]
+    public async Task Creating_a_category_with_a_parent_persists_the_parent_and_lists_it_as_a_child()
+    {
+        using var context = _db.CreateContext();
+        var service = CreateService(context);
+        var parent = (await service.CreateAsync(ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]))).Value;
+
+        var childRequest = ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]) with { ParentCategoryId = parent.Id };
+        var child = await service.CreateAsync(childRequest);
+
+        child.IsSuccess.Should().BeTrue();
+        child.Value.ParentCategoryId.Should().Be(parent.Id);
+
+        var children = await service.ListChildrenAsync(parent.Id);
+        children.Should().ContainSingle(c => c.Id == child.Value.Id);
+    }
+
+    [Fact]
+    public async Task Creating_a_category_with_a_nonexistent_parent_returns_not_found()
+    {
+        using var context = _db.CreateContext();
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]) with { ParentCategoryId = Guid.NewGuid() };
+        var result = await service.CreateAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Category.ParentNotFound");
+    }
+
+    [Fact]
+    public async Task Updating_a_category_to_be_its_own_parent_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var service = CreateService(context);
+        var category = (await service.CreateAsync(ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]))).Value;
+
+        var updateRequest = new CategoryUpdateRequest(
+            category.Name, category.Slug, category.Description, category.IconUrl, category.BannerUrl,
+            category.SortOrder, category.SeoTitle, category.SeoMetaDescription, ParentCategoryId: category.Id);
+
+        var result = await service.UpdateAsync(category.Id, updateRequest);
+
+        // Caught by ValidateParentAsync's cycle walk (a self-reference is a
+        // degenerate zero-length cycle) before the domain's own SetParent
+        // guard is ever reached.
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Category.CircularParent");
+    }
+
+    [Fact]
+    public async Task Updating_a_category_to_be_a_descendants_parent_is_rejected_as_a_circular_tree()
+    {
+        using var context = _db.CreateContext();
+        var service = CreateService(context);
+        var grandparent = (await service.CreateAsync(ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]))).Value;
+        var parent = (await service.CreateAsync(
+            ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]) with { ParentCategoryId = grandparent.Id })).Value;
+
+        var updateRequest = new CategoryUpdateRequest(
+            grandparent.Name, grandparent.Slug, grandparent.Description, grandparent.IconUrl, grandparent.BannerUrl,
+            grandparent.SortOrder, grandparent.SeoTitle, grandparent.SeoMetaDescription, ParentCategoryId: parent.Id);
+
+        var result = await service.UpdateAsync(grandparent.Id, updateRequest);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Category.CircularParent");
+    }
+
+    [Fact]
+    public async Task A_category_with_no_parent_reports_no_parent_and_no_children()
+    {
+        using var context = _db.CreateContext();
+        var service = CreateService(context);
+        var category = (await service.CreateAsync(ValidCreateRequest(Guid.NewGuid().ToString("N")[..8]))).Value;
+
+        category.ParentCategoryId.Should().BeNull();
+        (await service.ListChildrenAsync(category.Id)).Should().BeEmpty();
+    }
+
     private sealed class StubAuditContextProvider : IAuditContextProvider
     {
         public AuditContext GetCurrent() =>

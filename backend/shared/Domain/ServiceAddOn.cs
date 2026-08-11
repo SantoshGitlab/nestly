@@ -18,6 +18,9 @@ public class ServiceAddOn : AggregateRoot<Guid>
     /// <summary>Whether this add-on must be included whenever its service is booked (SRS 12.7.2), vs. optional.</summary>
     public bool IsMandatory { get; private set; }
 
+    /// <summary>Null when ungrouped (today's default, unchanged behavior). Set via <see cref="SetGroupId"/> to place this add-on under a <see cref="ServiceAddOnGroup"/> (Phase 3 catalog redesign).</summary>
+    public Guid? GroupId { get; private set; }
+
     protected ServiceAddOn() { }
 
     public ServiceAddOn(Guid id, Guid serviceId, string name, decimal price) : base(id)
@@ -39,6 +42,7 @@ public class ServiceAddOn : AggregateRoot<Guid>
     public void SetSortOrder(int sortOrder) => SortOrder = sortOrder;
     public void SetQuantityAllowed(bool isQuantityAllowed) => IsQuantityAllowed = isQuantityAllowed;
     public void SetMandatory(bool isMandatory) => IsMandatory = isMandatory;
+    public void SetGroupId(Guid? groupId) => GroupId = groupId;
 
     public void Activate()
     {

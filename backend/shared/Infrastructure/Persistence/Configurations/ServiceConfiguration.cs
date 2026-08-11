@@ -24,6 +24,7 @@ public class ServiceConfiguration : IEntityTypeConfiguration<Service>
         builder.HasIndex(x => x.Slug).IsUnique();
         builder.Property(x => x.Description).IsRequired().HasMaxLength(2000);
         builder.Property(x => x.ShortDescription).HasMaxLength(500);
+        builder.Property(x => x.CoverImageUrl).HasMaxLength(500);
         builder.Property(x => x.Price).HasColumnType("decimal(18,2)").IsRequired();
         builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.Inclusions).IsRequired().HasMaxLength(4000).HasDefaultValue(string.Empty);
@@ -43,5 +44,17 @@ public class ServiceConfiguration : IEntityTypeConfiguration<Service>
         builder.Property(x => x.IsSlotRequired).IsRequired().HasDefaultValue(true);
         builder.Property(x => x.IsAddressRequired).IsRequired().HasDefaultValue(true);
         builder.Property(x => x.IsCustomerNoteAllowed).IsRequired().HasDefaultValue(true);
+
+        // SetNull (not Restrict/Cascade), mirroring ServiceAddOn.GroupId:
+        // deleting a group ungroups its services rather than orphaning or
+        // cascading - ServiceGroupManagementService additionally rejects
+        // deleting a group that still has services, so this SetNull is a
+        // safety net, not the primary guard.
+        builder.Property(x => x.ServiceGroupId);
+        builder.HasIndex(x => x.ServiceGroupId);
+        builder.HasOne<ServiceGroup>()
+            .WithMany()
+            .HasForeignKey(x => x.ServiceGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

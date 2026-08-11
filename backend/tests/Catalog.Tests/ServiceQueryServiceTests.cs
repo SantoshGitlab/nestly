@@ -19,6 +19,8 @@ public sealed class ServiceQueryServiceTests : IClassFixture<TestDatabase>
         new ServiceAddOnRepository(context),
         new ServiceFaqRepository(context),
         new ReviewRepository(context),
+        new ServiceVariantRepository(context),
+        new ServiceAddOnGroupRepository(context),
         new InMemoryCacheService());
 
     [Fact]
@@ -87,6 +89,143 @@ public sealed class ServiceQueryServiceTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
+    public async Task GetDetailBySlugAsync_includes_active_variants_and_excludes_inactive_ones()
+    {
+        var category = new Category(Guid.NewGuid(), "Appliance Repair", "appliance-repair-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "AC Repair", "ac-repair-" + Guid.NewGuid(), "desc", 500m);
+        var activeVariant = new ServiceVariant(Guid.NewGuid(), service.Id, "Split AC", 599m, 90);
+        var inactiveVariant = new ServiceVariant(Guid.NewGuid(), service.Id, "Old Variant", 399m, 60);
+        inactiveVariant.Deactivate();
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.Add(activeVariant);
+            context.Add(inactiveVariant);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.Value.Variants.Should().ContainSingle(v => v.Id == activeVariant.Id);
+    }
+
+    [Fact]
+    public async Task GetDetailBySlugAsync_for_a_service_with_no_variants_returns_an_empty_variant_list()
+    {
+        var category = new Category(Guid.NewGuid(), "Salon2", "salon-2-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Haircut", "haircut-" + Guid.NewGuid(), "desc", 299m);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.Value.Variants.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetDetailBySlugAsync_splits_addons_into_ungrouped_and_grouped()
+    {
+        var category = new Category(Guid.NewGuid(), "Cleaning2", "cleaning-2-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean 2", "deep-clean-2-" + Guid.NewGuid(), "desc", 999m);
+        var group = new ServiceAddOnGroup(Guid.NewGuid(), service.Id, "Detergent", AddOnGroupSelectionType.Single);
+        var groupedAddOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Powder", 49m);
+        groupedAddOn.SetGroupId(group.Id);
+        var ungroupedAddOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Standalone Extra", 29m);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.Add(group);
+            context.Add(groupedAddOn);
+            context.Add(ungroupedAddOn);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.Value.AddOns.Should().ContainSingle(a => a.Id == ungroupedAddOn.Id);
+        result.Value.AddOns.Should().NotContain(a => a.Id == groupedAddOn.Id);
+
+        var groupResponse = result.Value.AddOnGroups.Should().ContainSingle(g => g.Id == group.Id).Subject;
+        groupResponse.AddOns.Should().ContainSingle(a => a.Id == groupedAddOn.Id);
+    }
+
+    [Fact]
+    public async Task GetDetailBySlugAsync_for_a_service_with_no_groups_returns_an_empty_group_list_and_all_addons_ungrouped()
+    {
+        var category = new Category(Guid.NewGuid(), "Salon3", "salon-3-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Manicure", "manicure-" + Guid.NewGuid(), "desc", 199m);
+        var addOn = new ServiceAddOn(Guid.NewGuid(), service.Id, "Nail Art", 99m);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.Add(addOn);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.Value.AddOnGroups.Should().BeEmpty();
+        result.Value.AddOns.Should().ContainSingle(a => a.Id == addOn.Id);
+    }
+
+    [Fact]
+    public async Task GetDetailBySlugAsync_includes_the_cover_image_and_duration_when_set()
+    {
+        var category = new Category(Guid.NewGuid(), "Repairs3", "repairs-3-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Washing Machine Repair", "wm-repair-" + Guid.NewGuid(), "desc", 599m);
+        service.SetCoverImageUrl("https://picsum.photos/seed/wm-repair/640/480");
+        service.SetDuration(50);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.Value.CoverImageUrl.Should().Be("https://picsum.photos/seed/wm-repair/640/480");
+        result.Value.DurationMinutes.Should().Be(50);
+    }
+
+    [Fact]
+    public async Task GetDetailBySlugAsync_for_a_service_with_no_cover_image_returns_null_and_the_default_duration()
+    {
+        var category = new Category(Guid.NewGuid(), "Repairs4", "repairs-4-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Chimney Repair", "chimney-repair-" + Guid.NewGuid(), "desc", 699m);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(category);
+            context.Add(service);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.Value.CoverImageUrl.Should().BeNull();
+        result.Value.DurationMinutes.Should().Be(60);
+    }
+
+    [Fact]
     public async Task GetDetailBySlugAsync_for_an_inactive_service_returns_not_found()
     {
         var category = new Category(Guid.NewGuid(), "Salon", "salon-" + Guid.NewGuid(), "desc");
@@ -105,6 +244,52 @@ public sealed class ServiceQueryServiceTests : IClassFixture<TestDatabase>
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Catalog.ServiceNotFound");
+    }
+
+    [Fact]
+    public async Task GetDetailBySlugAsync_for_a_service_is_not_found_once_its_categorys_parent_is_deactivated()
+    {
+        var parent = new Category(Guid.NewGuid(), "Home Cleaning5", "home-cleaning-5-" + Guid.NewGuid(), "desc");
+        var subcategory = new Category(Guid.NewGuid(), "Bathroom Cleaning5", "bathroom-cleaning-5-" + Guid.NewGuid(), "desc");
+        subcategory.SetParent(parent.Id);
+        var service = new Service(Guid.NewGuid(), subcategory.Id, "Deep Bathroom Cleaning", "deep-bathroom-cleaning-" + Guid.NewGuid(), "desc", 799m);
+        parent.Deactivate();
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(parent);
+            context.Add(subcategory);
+            context.Add(service);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetDetailBySlugAsync(service.Slug);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Catalog.ServiceNotFound");
+    }
+
+    [Fact]
+    public async Task ListByCategoryAsync_for_a_subcategory_is_not_found_once_its_parent_is_deactivated()
+    {
+        var parent = new Category(Guid.NewGuid(), "Home Cleaning6", "home-cleaning-6-" + Guid.NewGuid(), "desc");
+        var subcategory = new Category(Guid.NewGuid(), "Kitchen Cleaning6", "kitchen-cleaning-6-" + Guid.NewGuid(), "desc");
+        subcategory.SetParent(parent.Id);
+        parent.Deactivate();
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(parent);
+            context.Add(subcategory);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).ListByCategoryAsync(subcategory.Id);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Catalog.CategoryNotFound");
     }
 
     /// <summary>Task 52d: FAQs are part of the service detail payload.</summary>

@@ -221,6 +221,47 @@ public class Booking : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Same as <see cref="AddItem(Guid,Guid,string,string,decimal,int)"/>,
+    /// plus the variant snapshot fields (Phase 3 catalog redesign) - used
+    /// when the booked service was booked against a specific
+    /// <see cref="ServiceVariant"/> rather than the service's flat price.
+    /// </summary>
+    public BookingItem AddItem(
+        Guid id, Guid serviceId, string nameSnapshot, string slugSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? serviceVariantId, string? variantNameSnapshot, int? variantDurationMinutesSnapshot)
+    {
+        EnsureStillMutable();
+
+        var item = new BookingItem(
+            id, Id, serviceId, nameSnapshot, slugSnapshot, unitPriceSnapshot, quantity,
+            serviceVariantId, variantNameSnapshot, variantDurationMinutesSnapshot);
+        _items.Add(item);
+        return item;
+    }
+
+    /// <summary>
+    /// Same as <see cref="AddItem(Guid,Guid,string,string,decimal,int,Guid?,string?,int?)"/>,
+    /// plus the service-group snapshot fields (Appliance/Service Group
+    /// catalog redesign) - used when the booked service currently belongs to
+    /// a <see cref="ServiceGroup"/>. Independent of the variant fields: a
+    /// service can be grouped with or without also having variants.
+    /// </summary>
+    public BookingItem AddItem(
+        Guid id, Guid serviceId, string nameSnapshot, string slugSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? serviceVariantId, string? variantNameSnapshot, int? variantDurationMinutesSnapshot,
+        Guid? serviceGroupId, string? serviceGroupNameSnapshot)
+    {
+        EnsureStillMutable();
+
+        var item = new BookingItem(
+            id, Id, serviceId, nameSnapshot, slugSnapshot, unitPriceSnapshot, quantity,
+            serviceVariantId, variantNameSnapshot, variantDurationMinutesSnapshot,
+            serviceGroupId, serviceGroupNameSnapshot);
+        _items.Add(item);
+        return item;
+    }
+
+    /// <summary>
     /// Adds an add-on to a previously added item (task 59d). Routed through
     /// the aggregate root - which owns <see cref="EnsureStillMutable"/> - and
     /// not called as <c>BookingItem.AddAddOn</c> directly, so the same
@@ -238,6 +279,23 @@ public class Booking : AggregateRoot<Guid>
             ?? throw new InvalidOperationException($"Booking item {bookingItemId} was not found on this booking.");
 
         return item.AddAddOn(id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity);
+    }
+
+    /// <summary>
+    /// Same as <see cref="AddAddOnToItem(Guid,Guid,Guid,string,decimal,int)"/>,
+    /// plus the add-on-group snapshot fields (Phase 3 catalog redesign) -
+    /// used when the selected add-on belonged to a <see cref="ServiceAddOnGroup"/>.
+    /// </summary>
+    public BookingAddOnItem AddAddOnToItem(
+        Guid bookingItemId, Guid id, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? addOnGroupId, string? groupNameSnapshot)
+    {
+        EnsureStillMutable();
+
+        var item = _items.SingleOrDefault(i => i.Id == bookingItemId)
+            ?? throw new InvalidOperationException($"Booking item {bookingItemId} was not found on this booking.");
+
+        return item.AddAddOn(id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity, addOnGroupId, groupNameSnapshot);
     }
 
     /// <summary>

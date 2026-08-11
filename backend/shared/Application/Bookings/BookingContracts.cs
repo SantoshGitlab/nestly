@@ -44,6 +44,12 @@ namespace Nestly.Application.Bookings;
 /// never a partial amount the customer has to type in. Applied last, against
 /// whatever remains payable after any coupon/subscription discount.
 /// </param>
+/// <param name="ServiceVariantId">
+/// Phase 3 catalog redesign: null for a service with no variants - the
+/// service's flat price applies exactly as before this field existed. When
+/// set, must belong to <paramref name="ServiceId"/> and be active (validated
+/// by <see cref="Pricing.IPriceCalculationService"/>).
+/// </param>
 public record BookingSummaryRequest(
     Guid ServiceId,
     Guid CityId,
@@ -55,9 +61,21 @@ public record BookingSummaryRequest(
     IReadOnlyList<AddOnSelection> AddOns,
     string? CouponCode = null,
     string? IdempotencyKey = null,
-    bool ApplyWalletCredit = false);
+    bool ApplyWalletCredit = false,
+    Guid? ServiceVariantId = null);
 
-public record BookingServiceSummary(Guid Id, string Name, string Slug);
+/// <summary>
+/// The <c>Variant*</c> fields are null when no variant was selected (Phase 3
+/// catalog redesign) - the service's flat price/duration applied instead.
+/// <c>Group*</c> is null when the service isn't assigned to a
+/// <see cref="Catalog.ServiceGroupSummaryResponse"/> section (Appliance/
+/// Service Group catalog redesign) - inherited from the service, never a
+/// customer selection.
+/// </summary>
+public record BookingServiceSummary(
+    Guid Id, string Name, string Slug,
+    Guid? VariantId = null, string? VariantName = null, int? VariantDurationMinutes = null,
+    Guid? GroupId = null, string? GroupName = null);
 
 public record BookingAddressSummary(
     Guid Id,

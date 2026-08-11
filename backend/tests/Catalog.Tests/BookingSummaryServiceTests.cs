@@ -21,6 +21,7 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
         Microsoft.Extensions.Options.IOptions<Nestly.Infrastructure.Options.BookingOptions>? bookingOptions = null) => new(
         new ServiceRepository(context),
         new ServiceAddOnRepository(context),
+        new ServiceGroupRepository(context),
         new CustomerAddressRepository(context),
         new SlotAvailabilityService(
             new ServiceabilityRepository(context),
@@ -35,7 +36,7 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
             new ServiceAddOnRepository(context),
             new ServiceabilityRepository(context),
             new ServiceCityPriceRepository(context),
-            new CityPricingPolicyRepository(context)),
+            new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
         new CouponService(
             new CouponRepository(context),
             new CouponRedemptionRepository(context),
@@ -110,6 +111,49 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
         result.Value.Address.Id.Should().Be(fixture.Address.Id);
         result.Value.Slot.SlotWindowId.Should().Be(fixture.Window.Id);
         result.Value.Price.TotalPayable.Should().Be(650m);
+    }
+
+    [Fact]
+    public async Task Summary_for_a_grouped_service_includes_the_service_groups_id_and_name()
+    {
+        Fixture fixture;
+        ServiceGroup group;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            group = new ServiceGroup(Guid.NewGuid(), fixture.Category.Id, "Repair & gas refill");
+            context.Add(group);
+            context.SaveChanges();
+
+            var serviceRepository = new ServiceRepository(context);
+            var service = (await serviceRepository.GetByIdAsync(fixture.Service.Id))!;
+            service.SetServiceGroupId(group.Id);
+            await serviceRepository.UpdateAsync(service);
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetSummaryAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Service.GroupId.Should().Be(group.Id);
+        result.Value.Service.GroupName.Should().Be("Repair & gas refill");
+    }
+
+    [Fact]
+    public async Task Summary_for_an_ungrouped_service_leaves_the_service_groups_id_and_name_null()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetSummaryAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Service.GroupId.Should().BeNull();
+        result.Value.Service.GroupName.Should().BeNull();
     }
 
     /// <summary>Task 310 (SRS 11.7.2): the balance is surfaced whether or not the customer opted in, so the checkout screen can show it before they decide.</summary>
@@ -302,6 +346,47 @@ public sealed class BookingSummaryServiceTests : IClassFixture<TestDatabase>
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Booking.QuantityTooLarge");
+    }
+
+    [Fact]
+    public async Task A_selected_variant_flows_through_to_the_summarys_service_and_price()
+    {
+        Fixture fixture;
+        ServiceVariant variant;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            variant = new ServiceVariant(Guid.NewGuid(), fixture.Service.Id, "Premium Clean", 799m, 120);
+            context.Add(variant);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var request = RequestFor(fixture) with { ServiceVariantId = variant.Id };
+        var result = await BuildService(readContext).GetSummaryAsync(fixture.Customer.Id, request);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Service.VariantId.Should().Be(variant.Id);
+        result.Value.Service.VariantName.Should().Be("Premium Clean");
+        result.Value.Service.VariantDurationMinutes.Should().Be(120);
+        result.Value.Price.BasePrice.Should().Be(799m);
+    }
+
+    [Fact]
+    public async Task A_summary_request_with_no_variant_selected_behaves_identically_to_before_variants_existed()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).GetSummaryAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Service.VariantId.Should().BeNull();
+        result.Value.Service.VariantName.Should().BeNull();
     }
 
     [Fact]
