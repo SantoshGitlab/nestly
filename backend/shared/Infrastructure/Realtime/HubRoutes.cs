@@ -16,7 +16,7 @@ public static class HubRoutes
     /// <summary>The path segment every hub is mapped under.</summary>
     public const string Prefix = "/hubs";
 
-    /// <summary>Chat (task 190) - mapped by consumer-api and admin-api.</summary>
+    /// <summary>Chat (task 190) - mapped by all three APIs.</summary>
     public const string ChatPath = Prefix + "/chat";
 
     /// <summary>Live order tracking (task 273) - mapped by all three APIs.</summary>

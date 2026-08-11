@@ -19,4 +19,14 @@ public interface IProviderRepository : IRepository<Provider>
     /// from the result, so callers keep their own fallback.
     /// </summary>
     Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
+    /// <summary>
+    /// Task 293: the admin photo-moderation queue - every provider whose
+    /// profile photo is still <see cref="ProviderPhotoModerationStatus.Pending"/>,
+    /// oldest submission first so nothing starves at the back of it.
+    /// Unpaginated: this is a work queue meant to be emptied, not a
+    /// directory, and if it ever grows large enough to need paging that is a
+    /// staffing signal rather than a query problem.
+    /// </summary>
+    Task<IReadOnlyList<Provider>> ListPendingPhotoModerationAsync(CancellationToken cancellationToken = default);
 }

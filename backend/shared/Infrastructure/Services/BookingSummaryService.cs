@@ -7,6 +7,7 @@ using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
+using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Infrastructure.Options;
 
@@ -23,22 +24,26 @@ public class BookingSummaryService : IBookingSummaryService
 {
     private readonly IServiceRepository _serviceRepository;
     private readonly IServiceAddOnRepository _addOnRepository;
+    private readonly IServiceGroupRepository _serviceGroupRepository;
     private readonly ICustomerAddressRepository _addressRepository;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IPriceCalculationService _priceCalculationService;
     private readonly ICouponService _couponService;
     private readonly ISubscriptionBenefitService _subscriptionBenefitService;
+    private readonly IWalletService _walletService;
     private readonly IServiceabilityRepository _serviceabilityRepository;
     private readonly BookingOptions _bookingOptions;
 
     public BookingSummaryService(
         IServiceRepository serviceRepository,
         IServiceAddOnRepository addOnRepository,
+        IServiceGroupRepository serviceGroupRepository,
         ICustomerAddressRepository addressRepository,
         ISlotAvailabilityService slotAvailabilityService,
         IPriceCalculationService priceCalculationService,
         ICouponService couponService,
         ISubscriptionBenefitService subscriptionBenefitService,
+        IWalletService walletService,
         IServiceabilityRepository serviceabilityRepository,
         IOptions<BookingOptions> bookingOptions)
     {
@@ -46,11 +51,13 @@ public class BookingSummaryService : IBookingSummaryService
         _bookingOptions = bookingOptions.Value;
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
+        _serviceGroupRepository = serviceGroupRepository;
         _addressRepository = addressRepository;
         _slotAvailabilityService = slotAvailabilityService;
         _priceCalculationService = priceCalculationService;
         _couponService = couponService;
         _subscriptionBenefitService = subscriptionBenefitService;
+        _walletService = walletService;
     }
 
     public async Task<Result<BookingSummaryResponse>> GetSummaryAsync(Guid customerId, BookingSummaryRequest request)
@@ -135,7 +142,7 @@ public class BookingSummaryService : IBookingSummaryService
         }
 
         var priceResult = await _priceCalculationService.CalculateAsync(
-            new PriceCalculationRequest(request.ServiceId, request.CityId, request.Quantity, request.AddOns));
+            new PriceCalculationRequest(request.ServiceId, request.CityId, request.Quantity, request.AddOns, request.ServiceVariantId));
         if (priceResult.IsFailure)
         {
             return priceResult.Error;
@@ -180,8 +187,37 @@ public class BookingSummaryService : IBookingSummaryService
             }
         }
 
+        // Task 310 (SRS 11.7.2): wallet is applied last, against whatever is
+        // still payable after coupon/subscription - unlike those two, it
+        // stacks with either. The balance itself is always surfaced (the
+        // customer must see it before deciding to use it); the applied
+        // amount is only non-zero when the caller opted in, and is capped at
+        // both the available balance and what remains payable so the
+        // customer's wallet can never be drawn down further than the
+        // booking actually costs.
+        decimal walletBalance = (await _walletService.GetBalanceAsync(customerId)).Value.Balance;
+        decimal walletApplied = 0m;
+        if (request.ApplyWalletCredit)
+        {
+            walletApplied = Math.Min(walletBalance, finalPayable);
+            finalPayable = Math.Max(0, finalPayable - walletApplied);
+        }
+
+        // Appliance/Service Group catalog redesign: inherited from the
+        // service, never a customer selection - unlike the variant above,
+        // there's nothing to validate against the request, just a name to
+        // resolve for display/snapshot purposes.
+        string? serviceGroupName = null;
+        if (service.ServiceGroupId is Guid serviceGroupId)
+        {
+            serviceGroupName = (await _serviceGroupRepository.GetByIdAsync(serviceGroupId))?.Name;
+        }
+
         var response = new BookingSummaryResponse(
-            new BookingServiceSummary(service.Id, service.Name, service.Slug),
+            new BookingServiceSummary(
+                service.Id, service.Name, service.Slug,
+                priceResult.Value.SelectedVariantId, priceResult.Value.SelectedVariantName, priceResult.Value.SelectedVariantDurationMinutes,
+                service.ServiceGroupId, serviceGroupName),
             addOnSummaries,
             new BookingAddressSummary(
                 address.Id, address.Label, address.Line1, address.Line2, address.Landmark,
@@ -193,7 +229,8 @@ public class BookingSummaryService : IBookingSummaryService
             service.ReschedulePolicy,
             coupon,
             finalPayable,
-            subscriptionBenefit);
+            subscriptionBenefit,
+            new WalletCreditSummaryResponse(walletBalance, walletApplied));
 
         return Result.Success(response);
     }

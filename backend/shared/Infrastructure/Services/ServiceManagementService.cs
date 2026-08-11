@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Abstractions.Caching;
 using Nestly.Application.Catalog;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -14,19 +15,25 @@ public class ServiceManagementService : IServiceManagementService
 
     private readonly IServiceRepository _serviceRepository;
     private readonly ICategoryRepository _categoryRepository;
+    private readonly IServiceGroupRepository _serviceGroupRepository;
     private readonly IServiceMediaRepository _serviceMediaRepository;
     private readonly IAuditLogWriter _auditLogWriter;
+    private readonly ICacheService _cache;
 
     public ServiceManagementService(
         IServiceRepository serviceRepository,
         ICategoryRepository categoryRepository,
+        IServiceGroupRepository serviceGroupRepository,
         IServiceMediaRepository serviceMediaRepository,
-        IAuditLogWriter auditLogWriter)
+        IAuditLogWriter auditLogWriter,
+        ICacheService cache)
     {
         _serviceRepository = serviceRepository;
         _categoryRepository = categoryRepository;
+        _serviceGroupRepository = serviceGroupRepository;
         _serviceMediaRepository = serviceMediaRepository;
         _auditLogWriter = auditLogWriter;
+        _cache = cache;
     }
 
     public async Task<IReadOnlyList<ServiceAdminResponse>> ListAsync(Guid? categoryId)
@@ -61,12 +68,18 @@ public class ServiceManagementService : IServiceManagementService
             return Error.Conflict("Service.DuplicateSlug", "A service with this slug already exists.");
         }
 
+        var groupValidation = await ValidateServiceGroupAsync(request.ServiceGroupId, request.CategoryId);
+        if (groupValidation.IsFailure)
+        {
+            return Result.Failure<ServiceAdminResponse>(groupValidation.Error);
+        }
+
         var service = new Service(Guid.NewGuid(), request.CategoryId, request.Name, request.Slug, request.Description, request.Price);
         ApplyEditableFields(service, request.ShortDescription, request.Inclusions, request.Exclusions,
             request.CancellationPolicy, request.ReschedulePolicy, request.DurationMinutes, request.SortOrder,
             request.SeoTitle, request.SeoMetaDescription, request.PricingType, request.IsTaxApplicable,
             request.IsAddOnAllowed, request.IsQuantityAllowed, request.IsInspectionBased, request.IsSlotRequired,
-            request.IsAddressRequired, request.IsCustomerNoteAllowed);
+            request.IsAddressRequired, request.IsCustomerNoteAllowed, request.CoverImageUrl, request.ServiceGroupId);
 
         // Staged before AddAsync so its own SaveChangesAsync commits the
         // audit row in the same transaction as the new service.
@@ -74,6 +87,12 @@ public class ServiceManagementService : IServiceManagementService
             "Service", service.Id.ToString(), "Created", OldValues: null, NewValues: Serialize(service, category.Name)));
 
         await _serviceRepository.AddAsync(service);
+
+        // Explicit (not domain-event-driven, unlike Activate/Deactivate/
+        // PriceChange): a newly created service can already belong to a
+        // group, and the category-detail cache's section-header rendering
+        // depends on that being fresh.
+        await _cache.RemoveAsync(CacheKeys.Category(request.CategoryId));
 
         return ToResponse(service, category.Name);
     }
@@ -97,8 +116,15 @@ public class ServiceManagementService : IServiceManagementService
             return Error.Conflict("Service.DuplicateSlug", "A service with this slug already exists.");
         }
 
+        var groupValidation = await ValidateServiceGroupAsync(request.ServiceGroupId, request.CategoryId);
+        if (groupValidation.IsFailure)
+        {
+            return Result.Failure<ServiceAdminResponse>(groupValidation.Error);
+        }
+
         var oldCategory = await _categoryRepository.GetByIdAsync(service.CategoryId);
         string oldValues = Serialize(service, oldCategory?.Name ?? string.Empty);
+        Guid oldCategoryId = service.CategoryId;
 
         service.SetCategoryId(request.CategoryId);
         service.SetName(request.Name);
@@ -109,13 +135,46 @@ public class ServiceManagementService : IServiceManagementService
             request.CancellationPolicy, request.ReschedulePolicy, request.DurationMinutes, request.SortOrder,
             request.SeoTitle, request.SeoMetaDescription, request.PricingType, request.IsTaxApplicable,
             request.IsAddOnAllowed, request.IsQuantityAllowed, request.IsInspectionBased, request.IsSlotRequired,
-            request.IsAddressRequired, request.IsCustomerNoteAllowed);
+            request.IsAddressRequired, request.IsCustomerNoteAllowed, request.CoverImageUrl, request.ServiceGroupId);
 
         await _auditLogWriter.WriteAsync(new AuditEntry(
             "Service", service.Id.ToString(), "Updated", oldValues, Serialize(service, category.Name)));
 
         await _serviceRepository.UpdateAsync(service);
+
+        // Explicit (see CreateAsync): the section-header grouping this
+        // service renders under lives in the category-detail cache, which no
+        // domain event evicts on a plain field edit.
+        await _cache.RemoveAsync(CacheKeys.Category(oldCategoryId));
+        if (oldCategoryId != request.CategoryId)
+        {
+            await _cache.RemoveAsync(CacheKeys.Category(request.CategoryId));
+        }
+
         return ToResponse(service, category.Name);
+    }
+
+    /// <summary>A service's group, if any, must belong to the same category the service itself is being saved under.</summary>
+    private async Task<Result> ValidateServiceGroupAsync(Guid? serviceGroupId, Guid categoryId)
+    {
+        if (serviceGroupId is null)
+        {
+            return Result.Success();
+        }
+
+        var group = await _serviceGroupRepository.GetByIdAsync(serviceGroupId.Value);
+        if (group is null)
+        {
+            return Result.Failure(Error.NotFound("ServiceGroup.NotFound", "The specified service group does not exist."));
+        }
+
+        if (group.CategoryId != categoryId)
+        {
+            return Result.Failure(Error.Validation(
+                "ServiceGroup.CategoryMismatch", "The specified service group belongs to a different category."));
+        }
+
+        return Result.Success();
     }
 
     public async Task<Result> SetActiveAsync(Guid id, bool isActive)
@@ -213,9 +272,13 @@ public class ServiceManagementService : IServiceManagementService
         bool isInspectionBased,
         bool isSlotRequired,
         bool isAddressRequired,
-        bool isCustomerNoteAllowed)
+        bool isCustomerNoteAllowed,
+        string? coverImageUrl,
+        Guid? serviceGroupId)
     {
         service.SetShortDescription(shortDescription);
+        service.SetCoverImageUrl(coverImageUrl);
+        service.SetServiceGroupId(serviceGroupId);
         service.SetInclusions(inclusions);
         service.SetExclusions(exclusions);
         service.SetCancellationPolicy(cancellationPolicy);
@@ -269,7 +332,9 @@ public class ServiceManagementService : IServiceManagementService
         service.IsInspectionBased,
         service.IsSlotRequired,
         service.IsAddressRequired,
-        service.IsCustomerNoteAllowed);
+        service.IsCustomerNoteAllowed,
+        service.CoverImageUrl,
+        service.ServiceGroupId);
 
     private static ServiceMediaResponse ToResponse(ServiceMedia media) => new(media.Id, media.ServiceId, media.Url);
 }

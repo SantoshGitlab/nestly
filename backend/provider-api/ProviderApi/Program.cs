@@ -154,11 +154,35 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
+
+// Serves completion-verification photos LocalDiskFileStorageService writes
+// (job-completion camera upload). Read-only static serving, no
+// authentication - the refs themselves are unguessable (GUID filenames),
+// matching every other "reference-only" evidence field's existing
+// unauthenticated-by-URL assumption (e.g. KYC document refs) rather than
+// inventing a new access-control model just for this one asset type.
+{
+    var fileStorageOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<FileStorageOptions>>().Value;
+    var uploadsDirectory = Path.Combine(app.Environment.ContentRootPath, fileStorageOptions.UploadsPath);
+    Directory.CreateDirectory(uploadsDirectory);
+    app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsDirectory),
+        RequestPath = fileStorageOptions.RequestPath,
+    });
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+
+// Task 190/193: real-time chat transport for the provider reply view - see
+// ChatHub's doc comment for the JWT-over-query-string auth and cross-process
+// (Redis backplane) design, and ChatHub.CanProviderAccessAsync for the same
+// live-assignment ownership check every other provider job action uses.
+app.MapHub<ChatHub>(HubRoutes.ChatPath);
 
 // Task 273: live order tracking. provider-api mapped no hub at all before
 // this - the provider side of tracking is the half that produces the data

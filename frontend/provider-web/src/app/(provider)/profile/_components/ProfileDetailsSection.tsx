@@ -227,6 +227,23 @@ export function ProfileDetailsSection() {
                   </Badge>
                 </dd>
               </div>
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  Rating
+                </dt>
+                <dd className="nums text-sm text-fg">
+                  {profile.averageRating !== null ? (
+                    <>
+                      ★ {profile.averageRating.toFixed(1)}{" "}
+                      <span className="text-fg-subtle">
+                        ({profile.reviewCount} review{profile.reviewCount === 1 ? "" : "s"})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-fg-subtle">Not yet rated</span>
+                  )}
+                </dd>
+              </div>
             </dl>
           </>
         )}

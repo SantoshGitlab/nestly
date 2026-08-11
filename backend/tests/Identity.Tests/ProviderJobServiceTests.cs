@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
@@ -42,13 +43,14 @@ public class ProviderJobServiceTests : IDisposable
         new BookingProviderAssignmentRepository(context),
         CreateAssignmentService(context),
         new BookingCompletionProofRepository(context),
-        new NoOpBookingEtaService());
+        new NoOpBookingEtaService(),
+        new RecurringBookingPlanRepository(context), new NoOpFileStorageService());
 
     private BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
         new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);
 
-    private static Booking NewAwaitingFulfilmentBooking(Guid customerId)
+    private static Booking NewAwaitingFulfilmentBooking(Guid customerId, Guid? recurringBookingPlanId = null)
     {
         var booking = new Booking(
             Guid.NewGuid(), customerId,
@@ -56,7 +58,8 @@ public class ProviderJobServiceTests : IDisposable
             null,
             new AddressSnapshot("Home", "221B Baker Street", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Asha Rao", "9876543210"),
             new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
-            new PriceSnapshot(999m, 1, 999m, 0m, 0m, 999m, 0m, 0m, 0m, 999m));
+            new PriceSnapshot(999m, 1, 999m, 0m, 0m, 999m, 0m, 0m, 0m, 999m),
+            recurringBookingPlanId: recurringBookingPlanId);
         booking.AddItem(Guid.NewGuid(), Guid.NewGuid(), "Deep Cleaning", "deep-cleaning", 999m, 1);
         booking.TransitionTo(BookingStatus.PaymentPending);
         booking.TransitionTo(BookingStatus.Confirmed);
@@ -79,6 +82,128 @@ public class ProviderJobServiceTests : IDisposable
         assignResult.IsSuccess.Should().BeTrue();
 
         return booking.Id;
+    }
+
+    /// <summary>
+    /// Seeds a plan plus a booking that carries its id (task 296's FK, set for
+    /// real by the scheduler since task 297), then assigns it to
+    /// <see cref="_providerId"/>.
+    ///
+    /// Unlike the one-off seed above, this one builds the whole
+    /// geography/catalog tree the plan's foreign keys demand
+    /// (RecurringBookingPlanConfiguration puts a Restrict FK on every one of
+    /// customer/service/city/locality/address/slot-window). Microsoft.Data.Sqlite
+    /// enables <c>PRAGMA foreign_keys</c> by default, so those constraints are
+    /// live in this suite even though its <see cref="TestDatabase"/> never
+    /// mentions them.
+    /// </summary>
+    private async Task<(Guid BookingId, RecurringBookingPlan Plan)> SeedRecurringAssignedBookingAsync(
+        NestlyDbContext context, RecurringBookingRecurrenceFrequency frequency)
+    {
+        string pincodeCode = Guid.NewGuid().ToString("N")[..6];
+        var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active);
+        var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
+        var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
+        var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
+        var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+        var address = new CustomerAddress(
+            Guid.NewGuid(), customer.Id, "Home", "221B Baker Street", null, null,
+            pincodeCode, "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Asha Rao", "9876543210", true);
+        address.LinkToGeography(pincode.Id, locality.Id);
+        var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Deep Cleaning", "deep-clean-" + Guid.NewGuid(), "desc", 999m);
+        var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+
+        context.AddRange(customer, state, city, zone, pincode, locality, address, category, service, window);
+        await context.SaveChangesAsync();
+
+        var plan = new RecurringBookingPlan(
+            Guid.NewGuid(), customer.Id, service.Id, city.Id, locality.Id, address.Id, window.Id,
+            quantity: 1,
+            frequency,
+            frequency == RecurringBookingRecurrenceFrequency.Monthly ? null : DayOfWeek.Tuesday,
+            frequency == RecurringBookingRecurrenceFrequency.Monthly ? 11 : null,
+            startDate: DateOnly.FromDateTime(DateTime.UtcNow),
+            endDate: null,
+            occurrenceCount: 8);
+        await context.AddAsync(plan);
+
+        var booking = NewAwaitingFulfilmentBooking(customer.Id, plan.Id);
+        await context.AddAsync(booking);
+        await context.SaveChangesAsync();
+
+        var assignResult = await CreateAssignmentService(context).AssignAsync(
+            booking.Id, _adminUserId, new AssignProviderRequest(_providerId, ResponseDeadline: null));
+        assignResult.IsSuccess.Should().BeTrue();
+
+        return (booking.Id, plan);
+    }
+
+    // --- Task 300: recurring jobs are distinguishable from one-off jobs ---
+
+    [Fact]
+    public async Task ListAsync_marks_a_job_generated_by_a_recurring_plan_with_the_plans_cadence()
+    {
+        await using var context = _database.CreateContext();
+        var (bookingId, plan) = await SeedRecurringAssignedBookingAsync(
+            context, RecurringBookingRecurrenceFrequency.Biweekly);
+
+        var result = await CreateJobService(context).ListAsync(_providerId, status: null, date: null);
+
+        var job = result.Value.Items.Should().ContainSingle(i => i.BookingId == bookingId).Subject;
+        job.RecurringBookingPlanId.Should().Be(plan.Id);
+        job.RecurringFrequency.Should().Be(RecurringBookingRecurrenceFrequency.Biweekly);
+    }
+
+    [Fact]
+    public async Task ListAsync_leaves_a_one_off_job_unmarked()
+    {
+        // The badge only means something if it is absent on an ordinary job -
+        // a field that is always populated distinguishes nothing.
+        await using var context = _database.CreateContext();
+        var bookingId = await SeedAssignedBookingAsync(context);
+
+        var result = await CreateJobService(context).ListAsync(_providerId, status: null, date: null);
+
+        var job = result.Value.Items.Should().ContainSingle(i => i.BookingId == bookingId).Subject;
+        job.RecurringBookingPlanId.Should().BeNull();
+        job.RecurringFrequency.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ListAsync_reads_the_cadence_live_so_a_changed_plan_is_reflected_on_an_already_generated_job()
+    {
+        // The reason the cadence is read through the plan id instead of being
+        // copied onto the booking when the occurrence is generated. A customer
+        // who moves a weekly plan to monthly must not leave the provider's
+        // list advertising a weekly commitment that no longer exists.
+        Guid bookingId;
+        Guid planId;
+
+        await using (var seedContext = _database.CreateContext())
+        {
+            (bookingId, var plan) = await SeedRecurringAssignedBookingAsync(
+                seedContext, RecurringBookingRecurrenceFrequency.Weekly);
+            planId = plan.Id;
+        }
+
+        await using (var editContext = _database.CreateContext())
+        {
+            // Rewritten directly: the plan aggregate exposes no "change
+            // cadence" behaviour today (a customer cancels and re-creates), and
+            // what is under test is that the job list re-reads the row rather
+            // than how the row came to change.
+            await editContext.Database.ExecuteSqlRawAsync(
+                "UPDATE recurring_booking_plan SET frequency = 'Monthly', recurrence_day_of_week = NULL, recurrence_day_of_month = 11 WHERE id = {0}",
+                planId);
+        }
+
+        await using var readContext = _database.CreateContext();
+        var result = await CreateJobService(readContext).ListAsync(_providerId, status: null, date: null);
+
+        result.Value.Items.Single(i => i.BookingId == bookingId).RecurringFrequency
+            .Should().Be(RecurringBookingRecurrenceFrequency.Monthly);
     }
 
     [Fact]

@@ -183,6 +183,7 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
             new ServiceAddOnRepository(context),
+            new ServiceGroupRepository(context),
             new CustomerAddressRepository(context),
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
@@ -197,9 +198,10 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         TestServices.BookingOptions());
 
@@ -219,7 +221,9 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
             context);
     }
 
@@ -515,8 +519,10 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
     private static ServiceManagementService BuildServiceManagementService(NestlyDbContext context) => new(
         new ServiceRepository(context),
         new CategoryRepository(context),
+        new ServiceGroupRepository(context),
         new ServiceMediaRepository(context),
-        new AuditLogWriter(context, new StubAuditContextProvider(AuditActorType.AdminUser, Guid.NewGuid())));
+        new AuditLogWriter(context, new StubAuditContextProvider(AuditActorType.AdminUser, Guid.NewGuid())),
+        new InMemoryCacheService());
 
     [Fact]
     public async Task A_service_is_created_updated_and_deactivated_through_ServiceManagementService()

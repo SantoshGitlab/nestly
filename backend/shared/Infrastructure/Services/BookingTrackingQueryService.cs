@@ -1,5 +1,6 @@
 using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.Reviews;
 using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -25,19 +26,25 @@ public sealed class BookingTrackingQueryService : IBookingTrackingQueryService
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderLocationPingRepository _locationPingRepository;
     private readonly IBookingTrackingRepository _trackingRepository;
+    // Task 293: the assigned provider's own rating, for the summary this
+    // screen renders. Read-only and only when a provider is actually on the
+    // job - an unassigned booking's snapshot costs exactly what it did.
+    private readonly IReviewRepository _reviewRepository;
 
     public BookingTrackingQueryService(
         IBookingRepository bookingRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderRepository providerRepository,
         IProviderLocationPingRepository locationPingRepository,
-        IBookingTrackingRepository trackingRepository)
+        IBookingTrackingRepository trackingRepository,
+        IReviewRepository reviewRepository)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _providerRepository = providerRepository;
         _locationPingRepository = locationPingRepository;
         _trackingRepository = trackingRepository;
+        _reviewRepository = reviewRepository;
     }
 
     public async Task<Result<BookingTrackingResponse>> GetForCustomerAsync(Guid customerId, Guid bookingId)
@@ -120,6 +127,10 @@ public sealed class BookingTrackingQueryService : IBookingTrackingQueryService
             ? null
             : await _providerRepository.GetByIdAsync(assignment.ProviderId);
 
+        var providerRating = provider is null
+            ? null
+            : await _reviewRepository.GetProviderRatingAsync(provider.Id);
+
         var latestPing = await _locationPingRepository.GetLatestForBookingAsync(booking.Id);
         var tracking = await _trackingRepository.GetByBookingAsync(booking.Id);
 
@@ -127,7 +138,7 @@ public sealed class BookingTrackingQueryService : IBookingTrackingQueryService
             booking.Id,
             booking.Status,
             BookingStatusMapper.LabelFor(booking.Status),
-            provider is null ? null : TrackedProviderSummary.From(provider),
+            provider is null ? null : TrackedProviderSummary.From(provider, providerRating),
             latestPing is null
                 ? null
                 : new TrackedLocation(latestPing.Latitude, latestPing.Longitude, latestPing.RecordedAtUtc),

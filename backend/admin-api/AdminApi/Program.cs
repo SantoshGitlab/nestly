@@ -88,6 +88,22 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors(Nestly.Infrastructure.DependencyInjection.NestlyCorsPolicy);
+
+// Serves CMS media (task 314) LocalDiskFileStorageService writes. Read-only
+// static serving, no authentication - refs are unguessable (GUID
+// filenames), same convention as provider-api's completion-photo serving
+// (see that Program.cs's identical block for the full rationale).
+{
+    var fileStorageOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Nestly.Infrastructure.Options.FileStorageOptions>>().Value;
+    var uploadsDirectory = Path.Combine(app.Environment.ContentRootPath, fileStorageOptions.UploadsPath);
+    Directory.CreateDirectory(uploadsDirectory);
+    app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsDirectory),
+        RequestPath = fileStorageOptions.RequestPath,
+    });
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -142,6 +158,13 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         job => job.SweepAsync(CancellationToken.None),
         "*/5 * * * *");
 }
+
+// Task 294: delivers customer notifications whose in-process, post-commit
+// dispatch never completed. This is the "and a retry path that does not depend
+// on the in-process handler having run" half of the rule docs/ARCHITECTURE.md
+// sets out under "DOMAIN EVENT DISPATCH AND DELIVERY" - without it the durable
+// intent rows would accumulate and nothing would ever send them.
+app.ScheduleNotificationIntentSweep();
 
 app.MapControllers();
 

@@ -20,8 +20,10 @@ public sealed class ServiceManagementServiceTests : IClassFixture<TestDatabase>
         new(
             new ServiceRepository(context),
             new CategoryRepository(context),
+            new ServiceGroupRepository(context),
             new ServiceMediaRepository(context),
-            new AuditLogWriter(context, new StubAuditContextProvider()));
+            new AuditLogWriter(context, new StubAuditContextProvider()),
+            new InMemoryCacheService());
 
     private static async Task<CategoryResponse> SeedCategoryAsync(NestlyDbContext context)
     {
@@ -159,6 +161,100 @@ public sealed class ServiceManagementServiceTests : IClassFixture<TestDatabase>
         var reloaded = (await service.GetByIdAsync(created.Id)).Value;
         reloaded.IsActive.Should().BeFalse();
         reloaded.IsFeatured.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Creating_a_service_with_no_cover_image_url_defaults_to_null()
+    {
+        using var context = _db.CreateContext();
+        var category = await SeedCategoryAsync(context);
+        var service = CreateService(context);
+
+        var created = await service.CreateAsync(ValidCreateRequest(category.Id, Guid.NewGuid().ToString("N")[..8]));
+
+        created.Value.CoverImageUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Creating_and_updating_a_services_cover_image_url_persists_it()
+    {
+        using var context = _db.CreateContext();
+        var category = await SeedCategoryAsync(context);
+        var service = CreateService(context);
+        var request = ValidCreateRequest(category.Id, Guid.NewGuid().ToString("N")[..8]) with
+        {
+            CoverImageUrl = "https://picsum.photos/seed/deep-cleaning/640/480",
+        };
+
+        var created = await service.CreateAsync(request);
+        created.Value.CoverImageUrl.Should().Be("https://picsum.photos/seed/deep-cleaning/640/480");
+
+        var updateRequest = new ServiceUpdateRequest(
+            CategoryId: category.Id, Name: created.Value.Name, Slug: created.Value.Slug,
+            Description: created.Value.Description, ShortDescription: created.Value.ShortDescription,
+            Price: created.Value.Price, Inclusions: created.Value.Inclusions, Exclusions: created.Value.Exclusions,
+            CancellationPolicy: created.Value.CancellationPolicy, ReschedulePolicy: created.Value.ReschedulePolicy,
+            DurationMinutes: created.Value.DurationMinutes, SortOrder: created.Value.SortOrder,
+            SeoTitle: created.Value.SeoTitle, SeoMetaDescription: created.Value.SeoMetaDescription,
+            PricingType: created.Value.PricingType, IsTaxApplicable: created.Value.IsTaxApplicable,
+            IsAddOnAllowed: created.Value.IsAddOnAllowed, IsQuantityAllowed: created.Value.IsQuantityAllowed,
+            IsInspectionBased: created.Value.IsInspectionBased, IsSlotRequired: created.Value.IsSlotRequired,
+            IsAddressRequired: created.Value.IsAddressRequired, IsCustomerNoteAllowed: created.Value.IsCustomerNoteAllowed,
+            CoverImageUrl: null);
+
+        var updated = await service.UpdateAsync(created.Value.Id, updateRequest);
+        updated.Value.CoverImageUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Creating_a_service_in_a_group_belonging_to_the_same_category_persists_it()
+    {
+        using var context = _db.CreateContext();
+        var category = await SeedCategoryAsync(context);
+        var groupRepository = new ServiceGroupRepository(context);
+        var group = new ServiceGroup(Guid.NewGuid(), category.Id, "Repair & gas refill");
+        await groupRepository.AddAsync(group);
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(category.Id, Guid.NewGuid().ToString("N")[..8]) with { ServiceGroupId = group.Id };
+        var created = await service.CreateAsync(request);
+
+        created.IsSuccess.Should().BeTrue();
+        created.Value.ServiceGroupId.Should().Be(group.Id);
+    }
+
+    [Fact]
+    public async Task Creating_a_service_in_a_group_from_a_different_category_is_rejected()
+    {
+        using var context = _db.CreateContext();
+        var category = await SeedCategoryAsync(context);
+        var otherCategory = new Category(Guid.NewGuid(), "Other", $"other-{Guid.NewGuid():N}", "desc");
+        var categoryRepository = new CategoryRepository(context);
+        await categoryRepository.AddAsync(otherCategory);
+        var groupRepository = new ServiceGroupRepository(context);
+        var group = new ServiceGroup(Guid.NewGuid(), otherCategory.Id, "Service");
+        await groupRepository.AddAsync(group);
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(category.Id, Guid.NewGuid().ToString("N")[..8]) with { ServiceGroupId = group.Id };
+        var result = await service.CreateAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ServiceGroup.CategoryMismatch");
+    }
+
+    [Fact]
+    public async Task Creating_a_service_with_an_unknown_group_returns_not_found()
+    {
+        using var context = _db.CreateContext();
+        var category = await SeedCategoryAsync(context);
+        var service = CreateService(context);
+
+        var request = ValidCreateRequest(category.Id, Guid.NewGuid().ToString("N")[..8]) with { ServiceGroupId = Guid.NewGuid() };
+        var result = await service.CreateAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ServiceGroup.NotFound");
     }
 
     [Fact]

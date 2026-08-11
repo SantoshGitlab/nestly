@@ -32,6 +32,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
             new ServiceAddOnRepository(context),
+            new ServiceGroupRepository(context),
             new CustomerAddressRepository(context),
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
@@ -46,9 +47,10 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         TestServices.BookingOptions());
 
@@ -68,7 +70,9 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
             context);
     }
 
@@ -356,7 +360,9 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
                 new BookingRepository(readContext), new ProviderRepository(readContext), new ServiceRepository(readContext),
                 assignmentRepository, new ProviderScheduleConflictService(readContext), readContext),
             new BookingCompletionProofRepository(readContext),
-            new NoOpBookingEtaService());
+            new NoOpBookingEtaService(),
+            new RecurringBookingPlanRepository(readContext),
+            new NoOpFileStorageService());
         var jobDetail = await jobService.GetDetailAsync(providerId, fixture.BookingId);
         jobDetail.IsSuccess.Should().BeTrue();
         jobDetail.Value.Status.Should().Be(Nestly.Application.ProviderJobs.ProviderJobStatus.Withdrawn);

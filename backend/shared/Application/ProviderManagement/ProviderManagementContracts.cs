@@ -66,7 +66,16 @@ public sealed record ProviderBackgroundCheckResponse(
     DateTime CheckedAt,
     string? Notes);
 
-/// <summary>Full admin provider detail (task 150a/150b): profile plus KYC documents and background check history for the approval workflow.</summary>
+/// <summary>
+/// Full admin provider detail (task 150a/150b): profile plus KYC documents
+/// and background check history for the approval workflow, plus the profile
+/// photo and its moderation state (task 293).
+/// </summary>
+/// <param name="Photo">
+/// Appended last on purpose: this is a positional record, and inserting a
+/// parameter mid-list would silently re-bind every argument after it at the
+/// one call site (<c>ProviderDetailMapper</c>) that builds it.
+/// </param>
 public sealed record ProviderDetailResponse(
     Guid Id,
     string LegalName,
@@ -81,13 +90,47 @@ public sealed record ProviderDetailResponse(
     decimal? Latitude,
     decimal? Longitude,
     IReadOnlyList<ProviderKycDocumentResponse> KycDocuments,
-    IReadOnlyList<ProviderBackgroundCheckResponse> BackgroundChecks);
+    IReadOnlyList<ProviderBackgroundCheckResponse> BackgroundChecks,
+    ProviderPhotoResponse Photo);
+
+// ---- Photo moderation (task 293) ----
+
+/// <summary>
+/// One provider's profile photo and where it stands with moderation (task
+/// 293) - the row the admin queue renders and the shape every verdict
+/// returns.
+/// </summary>
+/// <param name="PhotoUrl">Deliberately the raw stored reference, not <see cref="Provider.PublicPhotoUrl"/>: a moderator has to see the photo precisely because it has NOT been approved.</param>
+public sealed record ProviderPhotoResponse(
+    Guid ProviderId,
+    string DisplayName,
+    string? PhotoUrl,
+    ProviderPhotoModerationStatus? ModerationStatus,
+    Guid? ModeratedByAdminUserId,
+    DateTime? ModeratedAtUtc,
+    string? ModerationNote);
+
+/// <summary>A rejection must say why - the note is shown back to the provider so a rejected photo is actionable rather than a silent dead end (mirrors <see cref="RejectProviderKycDocumentRequest"/>).</summary>
+public sealed record RejectProviderPhotoRequest(string Reason);
 
 // ---- KYC approval and activation (task 150b, 160) ----
 
 public sealed record RejectProviderKycDocumentRequest(string Reason);
 
 public sealed record RecordBackgroundCheckRequest(ProviderBackgroundCheckStatus Status, string? Notes);
+
+// ---- Capacity limits (task 245 built enforcement, task 308 adds the write path) ----
+
+/// <summary>
+/// A provider's dispatch capacity limits. Null on either field means
+/// unlimited (mirrors <see cref="ProviderCapacity"/>'s own null-is-unlimited
+/// convention) - returned even when no <see cref="ProviderCapacity"/> row
+/// exists yet, so the admin screen always has something to render.
+/// </summary>
+public sealed record ProviderCapacityResponse(Guid ProviderId, int? MaxJobsPerDay, int? MaxJobsPerSlot);
+
+/// <summary>Full-overwrite set of a provider's capacity limits (PUT-style, same convention as <see cref="UpdateProviderRequest"/>). Null clears a limit back to unlimited.</summary>
+public sealed record SetProviderCapacityRequest(int? MaxJobsPerDay, int? MaxJobsPerSlot);
 
 // ---- Performance view (task 150c) ----
 

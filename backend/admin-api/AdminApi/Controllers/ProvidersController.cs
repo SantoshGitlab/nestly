@@ -33,36 +33,45 @@ public class ProvidersController : ControllerBase
     private readonly IProviderManagementService _providerManagementService;
     private readonly IProviderKycApprovalService _kycApprovalService;
     private readonly IProviderEarningLedgerService _earningLedgerService;
+    private readonly IProviderPhotoModerationService _photoModerationService;
     private readonly IValidator<ProviderSearchRequest> _searchValidator;
     private readonly IValidator<CreateProviderRequest> _createValidator;
     private readonly IValidator<UpdateProviderRequest> _updateValidator;
     private readonly IValidator<SuspendProviderRequest> _suspendValidator;
     private readonly IValidator<RejectProviderKycDocumentRequest> _rejectKycValidator;
+    private readonly IValidator<RejectProviderPhotoRequest> _rejectPhotoValidator;
     private readonly IValidator<RecordBackgroundCheckRequest> _backgroundCheckValidator;
     private readonly IValidator<RecordProviderEarningAdjustmentRequest> _earningAdjustmentValidator;
+    private readonly IValidator<SetProviderCapacityRequest> _setCapacityValidator;
 
     public ProvidersController(
         IProviderManagementService providerManagementService,
         IProviderKycApprovalService kycApprovalService,
         IProviderEarningLedgerService earningLedgerService,
+        IProviderPhotoModerationService photoModerationService,
         IValidator<ProviderSearchRequest> searchValidator,
         IValidator<CreateProviderRequest> createValidator,
         IValidator<UpdateProviderRequest> updateValidator,
         IValidator<SuspendProviderRequest> suspendValidator,
         IValidator<RejectProviderKycDocumentRequest> rejectKycValidator,
+        IValidator<RejectProviderPhotoRequest> rejectPhotoValidator,
         IValidator<RecordBackgroundCheckRequest> backgroundCheckValidator,
-        IValidator<RecordProviderEarningAdjustmentRequest> earningAdjustmentValidator)
+        IValidator<RecordProviderEarningAdjustmentRequest> earningAdjustmentValidator,
+        IValidator<SetProviderCapacityRequest> setCapacityValidator)
     {
         _providerManagementService = providerManagementService;
         _kycApprovalService = kycApprovalService;
         _earningLedgerService = earningLedgerService;
+        _photoModerationService = photoModerationService;
         _searchValidator = searchValidator;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _suspendValidator = suspendValidator;
         _rejectKycValidator = rejectKycValidator;
+        _rejectPhotoValidator = rejectPhotoValidator;
         _backgroundCheckValidator = backgroundCheckValidator;
         _earningAdjustmentValidator = earningAdjustmentValidator;
+        _setCapacityValidator = setCapacityValidator;
     }
 
     // ---- CRUD (task 150a) ----
@@ -169,6 +178,52 @@ public class ProvidersController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    // ---- Profile photo moderation (task 293) ----
+
+    /// <summary>
+    /// The photo-moderation queue (task 293): every provider whose profile
+    /// photo is awaiting a verdict. A provider photo is user-supplied content
+    /// shown to customers, so it goes through the same admin gate this API
+    /// already applies to KYC documents and review text - it is not published
+    /// on upload.
+    /// </summary>
+    [HttpGet("photo-moderation/pending")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<ProviderPhotoResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListPendingPhotos(CancellationToken cancellationToken) =>
+        Ok(await _photoModerationService.ListPendingAsync(cancellationToken));
+
+    /// <summary>Approves a provider's profile photo - the only transition that makes it visible to customers (task 293).</summary>
+    [HttpPost("{providerId:guid}/photo/approve")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(ProviderPhotoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ApprovePhoto(Guid providerId, CancellationToken cancellationToken)
+    {
+        var result = await _photoModerationService.ApproveAsync(providerId, CurrentAdminUserId(), cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Rejects a provider's profile photo (task 293). The reason is shown back to the provider so a rejection is actionable.</summary>
+    [HttpPost("{providerId:guid}/photo/reject")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(ProviderPhotoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RejectPhoto(Guid providerId, [FromBody] RejectProviderPhotoRequest request, CancellationToken cancellationToken)
+    {
+        var validation = await _rejectPhotoValidator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _photoModerationService.RejectAsync(providerId, CurrentAdminUserId(), request, cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     // ---- KYC approval and background check / activation (task 150b, 160) ----
 
     /// <summary>Approves a submitted KYC document (task 150b, the admin-side counterpart to task 146c's submission flow).</summary>
@@ -229,6 +284,45 @@ public class ProvidersController : ControllerBase
     public async Task<IActionResult> Activate(Guid providerId)
     {
         var result = await _kycApprovalService.ActivateAsync(providerId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    // ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----
+
+    /// <summary>
+    /// A provider's dispatch capacity limits (task 245/308). Hard-enforced by
+    /// the automatic-assignment engine; still only an advisory load signal
+    /// on manual admin assignment (PROVIDER.md OPEN DECISIONS - AUTOMATIC
+    /// ASSIGNMENT #2). Unlimited (both null) until an admin sets one below.
+    /// </summary>
+    [HttpGet("{providerId:guid}/capacity")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(ProviderCapacityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCapacity(Guid providerId)
+    {
+        var result = await _providerManagementService.GetCapacityAsync(providerId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Sets (or clears, via null) a provider's <c>MaxJobsPerDay</c>/<c>MaxJobsPerSlot</c>
+    /// (task 308). Full-overwrite, same PUT-style convention as <see cref="Update"/>.
+    /// </summary>
+    [HttpPut("{providerId:guid}/capacity")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(ProviderCapacityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetCapacity(Guid providerId, [FromBody] SetProviderCapacityRequest request)
+    {
+        var validation = await _setCapacityValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _providerManagementService.SetCapacityAsync(providerId, request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

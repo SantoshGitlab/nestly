@@ -47,6 +47,13 @@ export enum ProviderKycVerificationStatus {
   Rejected = 2,
 }
 
+/** Mirrors Nestly.Domain.ProviderPhotoModerationStatus's declaration order exactly (task 293). */
+export enum ProviderPhotoModerationStatus {
+  Pending = 0,
+  Approved = 1,
+  Rejected = 2,
+}
+
 /** Mirrors Nestly.Domain.ProviderBackgroundCheckStatus's declaration order exactly. */
 export enum ProviderBackgroundCheckStatus {
   Pending = 0,
@@ -158,6 +165,27 @@ export interface ProviderBackgroundCheck {
   notes: string | null;
 }
 
+/**
+ * A provider's profile photo and where it stands with moderation (task 293).
+ *
+ * `photoUrl` is the raw stored reference, deliberately NOT the customer-facing
+ * `PublicPhotoUrl` - a moderator has to see the photo precisely because it has
+ * not been approved. `moderationStatus` is null exactly when `photoUrl` is.
+ */
+export interface ProviderPhoto {
+  providerId: string;
+  displayName: string;
+  photoUrl: string | null;
+  moderationStatus: ProviderPhotoModerationStatus | null;
+  moderatedByAdminUserId: string | null;
+  moderatedAtUtc: string | null;
+  moderationNote: string | null;
+}
+
+export interface RejectProviderPhotoRequest {
+  reason: string;
+}
+
 export interface ProviderDetail {
   id: string;
   legalName: string;
@@ -174,6 +202,28 @@ export interface ProviderDetail {
   longitude: number | null;
   kycDocuments: ProviderKycDocument[];
   backgroundChecks: ProviderBackgroundCheck[];
+  /** Task 293. Appended last, matching the C# positional record's own append-only rule. */
+  photo: ProviderPhoto;
+}
+
+// ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----
+
+/**
+ * A provider's dispatch capacity limits. Null on either field means
+ * unlimited. Hard-enforced by the automatic-assignment engine; still only an
+ * advisory load signal on manual admin assignment (PROVIDER.md OPEN
+ * DECISIONS - AUTOMATIC ASSIGNMENT #2).
+ */
+export interface ProviderCapacity {
+  providerId: string;
+  maxJobsPerDay: number | null;
+  maxJobsPerSlot: number | null;
+}
+
+/** Full-overwrite set of a provider's capacity limits. Null clears a limit back to unlimited. */
+export interface SetProviderCapacityRequest {
+  maxJobsPerDay: number | null;
+  maxJobsPerSlot: number | null;
 }
 
 // ---- KYC approval and background check / activation (task 150b, 160) ----

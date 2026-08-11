@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Badge, Button } from "@/components/ui";
-import { ActiveBadge, ConfirmDialog, DataTable, formatCurrency } from "@/components/data-table";
+import { ActiveBadge, ConfirmDialog, DataTable, formatCurrency, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { describeError } from "@/lib/api";
 import { billingCycleLabel, type SubscriptionPlan } from "../_lib/plans-api";
@@ -115,6 +115,12 @@ export function PlansTable({
       header: "Status",
       sortValue: (plan) => plan.isActive,
       cell: (plan) => <ActiveBadge active={plan.isActive} />,
+    },
+    {
+      key: "created",
+      header: "Created",
+      sortValue: (plan) => plan.createdAtUtc,
+      cell: (plan) => <span className="nums whitespace-nowrap">{formatDate(plan.createdAtUtc)}</span>,
     },
   ];
 

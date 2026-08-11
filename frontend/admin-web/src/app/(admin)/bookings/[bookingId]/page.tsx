@@ -45,6 +45,7 @@ import {
   RefundStatus,
   RescheduleActor,
 } from "@/lib/bookings-types";
+import type { AdminTrackedProviderSummary } from "@/lib/bookings-types";
 import {
   assignProviderToBooking,
   getBookingAssignmentHistory,
@@ -869,6 +870,8 @@ function TrackingCard({ bookingId, bookingStatus }: { bookingId: string; booking
           destination={tracking.destination}
         />
 
+        {tracking.provider ? <TrackedProviderIdentity provider={tracking.provider} /> : null}
+
         <DescriptionList
           items={[
             {
@@ -895,6 +898,50 @@ function TrackingCard({ bookingId, bookingStatus }: { bookingId: string; booking
         />
       </div>
     </Card>
+  );
+}
+
+/**
+ * Who ops is looking at, as the customer sees them (task 293): the approved
+ * profile photo and the provider's own rating, beside the name the list above
+ * already carries.
+ *
+ * Both stay optional and both go missing for ordinary reasons - no photo set
+ * or none approved yet, and no visible reviews yet - so this renders the same
+ * initials placeholder and simply omits the stars rather than showing a zero.
+ */
+function TrackedProviderIdentity({ provider }: { provider: AdminTrackedProviderSummary }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-3">
+      {provider.photoUrl ? (
+        /* next/image needs the host in next.config's allowlist and a
+           provider-supplied URL can point anywhere. */
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={provider.photoUrl}
+          alt=""
+          className="h-12 w-12 shrink-0 rounded-full border border-line object-cover"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+        >
+          {provider.displayName.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="truncate font-medium text-fg">{provider.displayName}</p>
+        {provider.rating !== null ? (
+          <p className="text-sm text-fg-muted">
+            <span aria-hidden>★</span>{" "}
+            <span className="nums">{provider.rating.toFixed(1)}</span>
+          </p>
+        ) : (
+          <p className="text-sm text-fg-subtle">No rating yet</p>
+        )}
+      </div>
+    </div>
   );
 }
 

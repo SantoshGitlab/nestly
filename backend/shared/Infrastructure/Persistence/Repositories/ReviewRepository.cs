@@ -32,6 +32,25 @@ public class ReviewRepository : IReviewRepository
             .OrderByDescending(r => r.CreatedAtUtc)
             .ToListAsync();
 
+    /// <inheritdoc/>
+    public async Task<ProviderRatingSummary?> GetProviderRatingAsync(Guid providerId, CancellationToken cancellationToken = default)
+    {
+        // GroupBy over a constant key so Average and Count come back from one
+        // aggregate query, and an empty set yields no row at all rather than
+        // an average over nothing (which is what makes "no rating yet"
+        // expressible without a second COUNT round trip).
+        var aggregate = await _context.Reviews
+            .AsNoTracking()
+            .Where(r => r.ProviderId == providerId && r.Status == ReviewStatus.Visible)
+            .GroupBy(_ => 1)
+            .Select(g => new { Average = g.Average(r => (double)r.Rating), Count = g.Count() })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return aggregate is null
+            ? null
+            : new ProviderRatingSummary(providerId, Math.Round(aggregate.Average, 1), aggregate.Count);
+    }
+
     public Task<Review?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _context.Reviews.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 

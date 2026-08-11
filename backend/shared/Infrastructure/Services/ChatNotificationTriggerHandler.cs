@@ -5,6 +5,7 @@ using Nestly.Application.Bookings;
 using Nestly.Application.Chat;
 using Nestly.Application.Notifications;
 using Nestly.Application.Support;
+using Nestly.BuildingBlocks.Primitives;
 using Nestly.Domain;
 using Nestly.Domain.Events;
 using Nestly.Infrastructure.Persistence.Interceptors;
@@ -27,8 +28,23 @@ namespace Nestly.Infrastructure.Services;
 /// push would need provider-api's own device-token infrastructure, which
 /// task 193's provider reply view does not yet exist to produce messages
 /// from anyway). Revisit once provider-side chat lands.
+///
+/// <para>
+/// <b>Task 294 - durable, and the presence check is why the Skipped state
+/// exists.</b> The intent to notify is committed with the chat message
+/// itself, before anything is known about whether the recipient is online.
+/// Presence is a live fact that can only be read at delivery time, and it can
+/// legitimately answer "do not send" - so a recipient found online resolves
+/// the intent to <see cref="NotificationIntentStatus.Skipped"/> rather than
+/// leaving it pending for the sweep to keep re-offering. Note the consequence,
+/// which is the right one: if this handler dies before the presence check, the
+/// sweep re-runs it minutes later and re-reads presence <i>then</i> - a
+/// customer who has since come online is correctly not pushed to.
+/// </para>
 /// </summary>
-public sealed class ChatNotificationTriggerHandler : INotificationHandler<DomainEventNotification<ChatMessageSentEvent>>
+public sealed class ChatNotificationTriggerHandler :
+    INotificationHandler<DomainEventNotification<ChatMessageSentEvent>>,
+    INotificationTriggerHandler
 {
     private readonly IBookingRepository _bookingRepository;
     private readonly ISupportTicketRepository _supportTicketRepository;
@@ -36,6 +52,7 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
     private readonly IDeviceTokenRepository _deviceTokenRepository;
     private readonly IChatPresenceTracker _presenceTracker;
     private readonly INotificationDispatchService _notificationDispatchService;
+    private readonly INotificationIntentCoordinator _intentCoordinator;
     private readonly ILogger<ChatNotificationTriggerHandler> _logger;
 
     public ChatNotificationTriggerHandler(
@@ -45,6 +62,7 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
         IDeviceTokenRepository deviceTokenRepository,
         IChatPresenceTracker presenceTracker,
         INotificationDispatchService notificationDispatchService,
+        INotificationIntentCoordinator intentCoordinator,
         ILogger<ChatNotificationTriggerHandler> logger)
     {
         _bookingRepository = bookingRepository;
@@ -53,18 +71,28 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
         _deviceTokenRepository = deviceTokenRepository;
         _presenceTracker = presenceTracker;
         _notificationDispatchService = notificationDispatchService;
+        _intentCoordinator = intentCoordinator;
         _logger = logger;
     }
 
-    public async Task Handle(DomainEventNotification<ChatMessageSentEvent> notification, CancellationToken cancellationToken)
-    {
-        var domainEvent = notification.DomainEvent;
+    public bool CanHandle(Type domainEventType) => domainEventType == typeof(ChatMessageSentEvent);
 
+    public Task HandleAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default) =>
+        domainEvent is ChatMessageSentEvent messageSent
+            ? HandleAsync(messageSent, cancellationToken)
+            : Task.CompletedTask;
+
+    public Task Handle(DomainEventNotification<ChatMessageSentEvent> notification, CancellationToken cancellationToken) =>
+        HandleAsync(notification.DomainEvent, cancellationToken);
+
+    private async Task HandleAsync(ChatMessageSentEvent domainEvent, CancellationToken cancellationToken)
+    {
         if (domainEvent.SenderType == ChatSenderType.Customer)
         {
             // The customer is the sender, not the recipient - see this
             // handler's doc comment for why the other direction isn't
-            // notified yet.
+            // notified yet. NotificationIntentPlanner agrees, so there is no
+            // intent row to resolve here.
             return;
         }
 
@@ -80,6 +108,8 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
             _logger.LogWarning(
                 "Chat message {MessageId} could not resolve a recipient customer for {ContextType} {ContextId}.",
                 domainEvent.MessageId, domainEvent.ContextType, domainEvent.ContextId);
+            await _intentCoordinator.SkipAsync(
+                domainEvent, NotificationEventType.NewChatMessage, "No recipient customer could be resolved for the thread.", cancellationToken);
             return;
         }
 
@@ -88,6 +118,8 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
         // still fires rather than being silently skipped.
         if (await _presenceTracker.IsOnlineAsync(customerId.Value, cancellationToken))
         {
+            await _intentCoordinator.SkipAsync(
+                domainEvent, NotificationEventType.NewChatMessage, "Recipient has a live connection.", cancellationToken);
             return;
         }
 
@@ -95,25 +127,34 @@ public sealed class ChatNotificationTriggerHandler : INotificationHandler<Domain
         if (customer is null)
         {
             _logger.LogWarning("Customer {CustomerId} not found while dispatching a chat-message notification.", customerId);
+            await _intentCoordinator.SkipAsync(
+                domainEvent, NotificationEventType.NewChatMessage, "Customer no longer exists.", cancellationToken);
             return;
         }
 
-        var variables = new Dictionary<string, string>
-        {
-            ["CustomerName"] = customer.Name,
-            ["SenderType"] = domainEvent.SenderType.ToString(),
-            ["MessagePreview"] = domainEvent.Body.Length > 120 ? domainEvent.Body[..120] + "..." : domainEvent.Body
-        };
-
-        var deviceTokens = await _deviceTokenRepository.ListActiveByOwnerAsync(DeviceTokenOwner.ForCustomer(customerId.Value));
-
-        await _notificationDispatchService.DispatchAsync(
-            customerId.Value,
+        await _intentCoordinator.DeliverAsync(
+            domainEvent,
             NotificationEventType.NewChatMessage,
-            new NotificationRecipient(customer.Mobile, customer.Email, deviceTokens.Select(t => t.Token).ToList()),
-            variables,
-            bookingId: domainEvent.ContextType == ChatContextType.Booking ? domainEvent.ContextId : null,
-            supportTicketId: domainEvent.ContextType == ChatContextType.SupportTicket ? domainEvent.ContextId : null,
-            cancellationToken: cancellationToken);
+            async ct =>
+            {
+                var variables = new Dictionary<string, string>
+                {
+                    ["CustomerName"] = customer.Name,
+                    ["SenderType"] = domainEvent.SenderType.ToString(),
+                    ["MessagePreview"] = domainEvent.Body.Length > 120 ? domainEvent.Body[..120] + "..." : domainEvent.Body
+                };
+
+                var deviceTokens = await _deviceTokenRepository.ListActiveByOwnerAsync(DeviceTokenOwner.ForCustomer(customerId.Value));
+
+                await _notificationDispatchService.DispatchAsync(
+                    customerId.Value,
+                    NotificationEventType.NewChatMessage,
+                    new NotificationRecipient(customer.Mobile, customer.Email, deviceTokens.Select(t => t.Token).ToList()),
+                    variables,
+                    bookingId: domainEvent.ContextType == ChatContextType.Booking ? domainEvent.ContextId : null,
+                    supportTicketId: domainEvent.ContextType == ChatContextType.SupportTicket ? domainEvent.ContextId : null,
+                    cancellationToken: ct);
+            },
+            cancellationToken);
     }
 }

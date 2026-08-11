@@ -20,6 +20,10 @@ public class BookingAddOnItem : Entity<Guid>
     public int Quantity { get; private set; }
     public decimal LineTotalSnapshot { get; private set; }
 
+    /// <summary>Traceability only - not a foreign key, same convention as <see cref="ServiceAddOnId"/>. Null when the add-on was ungrouped (today's default) at booking time.</summary>
+    public Guid? AddOnGroupId { get; private set; }
+    public string? GroupNameSnapshot { get; private set; }
+
     protected BookingAddOnItem() { }
 
     public BookingAddOnItem(Guid id, Guid bookingItemId, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity)
@@ -36,5 +40,15 @@ public class BookingAddOnItem : Entity<Guid>
         UnitPriceSnapshot = unitPriceSnapshot;
         Quantity = quantity;
         LineTotalSnapshot = unitPriceSnapshot * quantity;
+    }
+
+    /// <summary>Same as the base constructor, plus the add-on-group snapshot fields (Phase 3 catalog redesign) - used when the selected add-on belonged to a <see cref="ServiceAddOnGroup"/>.</summary>
+    public BookingAddOnItem(
+        Guid id, Guid bookingItemId, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? addOnGroupId, string? groupNameSnapshot)
+        : this(id, bookingItemId, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity)
+    {
+        AddOnGroupId = addOnGroupId;
+        GroupNameSnapshot = groupNameSnapshot;
     }
 }

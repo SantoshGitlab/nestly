@@ -44,6 +44,7 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
             new ServiceAddOnRepository(context),
+            new ServiceGroupRepository(context),
             new CustomerAddressRepository(context),
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
@@ -58,9 +59,10 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         TestServices.BookingOptions());
 
@@ -80,7 +82,9 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
             context);
     }
 
@@ -273,5 +277,69 @@ public sealed class BookingConcurrencyTests : IClassFixture<TestDatabase>
         var bookings = await new BookingRepository(readContext)
             .ListByCustomerAsync(fixture.CustomerA.Id, Enum.GetValues<BookingStatus>());
         bookings.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// Task 310: wallet credit applied at checkout is debited atomically with
+    /// the booking write (<c>WalletService.DebitAsync</c>, reusing
+    /// <c>BookingService.CreateAsync</c>'s own ambient Serializable
+    /// transaction rather than nesting one - see that method's doc comment).
+    ///
+    /// Every call to <see cref="Nestly.Application.Bookings.IBookingService.CreateAsync"/>
+    /// re-reads the wallet balance from scratch via its own internal summary
+    /// call, immediately before writing - there is no client-supplied balance
+    /// or amount it ever trusts. That is what makes a double-spend
+    /// structurally impossible here, the same way BookingConcurrencyTests'
+    /// other cases prove impossibility by re-running the real check against
+    /// already-changed state rather than by literally threading two calls
+    /// against SQLite's single connection (see the class doc comment): the
+    /// second booking's own fresh read sees the balance the first booking
+    /// already spent, and applies zero rather than double-counting it or
+    /// erroring - the wallet ledger's <c>BalanceAfter</c> column is the
+    /// single source of truth both bookings agree on, one after another.
+    /// </summary>
+    [Fact]
+    public async Task Two_bookings_from_the_same_customer_racing_to_apply_the_same_wallet_balance_only_let_the_first_spend_it()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = SeedTwoCustomers(context);
+        }
+
+        // Customer A's wallet holds exactly the price of one booking (the
+        // fixture's service is 500 with no add-ons/tax) - not enough for two.
+        using (var creditContext = _db.CreateContext())
+        {
+            await new WalletService(new WalletLedgerRepository(creditContext), creditContext)
+                .CreditAsync(fixture.CustomerA.Id, 500m, WalletSourceType.PromotionalCredit, null, "Test wallet credit");
+        }
+
+        var walletRequest = RequestFor(fixture, fixture.AddressA.Id) with { ApplyWalletCredit = true };
+
+        Result<BookingDetailResponse> first;
+        using (var context1 = _db.CreateContext())
+        {
+            first = await BuildService(context1).CreateAsync(fixture.CustomerA.Id, walletRequest);
+        }
+
+        first.IsSuccess.Should().BeTrue();
+        first.Value.WalletCreditApplied.Should().Be(500m);
+
+        // A second booking - a duplicated tab, a retried request, or simply
+        // the same customer checking out again - opts into wallet credit the
+        // same way, against a balance the first booking already fully spent.
+        Result<BookingDetailResponse> second;
+        using (var context2 = _db.CreateContext())
+        {
+            second = await BuildService(context2).CreateAsync(fixture.CustomerA.Id, walletRequest);
+        }
+
+        second.IsSuccess.Should().BeTrue("a drained wallet must not block checkout - it should simply contribute nothing");
+        second.Value.WalletCreditApplied.Should().BeNull("the balance the first booking spent must not be counted twice");
+
+        using var readContext = _db.CreateContext();
+        var balance = await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.CustomerA.Id);
+        balance.Value.Balance.Should().Be(0m, "only the first booking's debit should ever have been recorded");
     }
 }

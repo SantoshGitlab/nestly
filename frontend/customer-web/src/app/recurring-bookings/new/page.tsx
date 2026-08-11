@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
 import {
+  RECURRING_FREQUENCY_OPTIONS,
   STICKY_BAR_SPACER,
   ScreenSkeleton,
   StickyActionBar,
@@ -36,12 +37,6 @@ import type {
   RecurringBookingPlanResponse,
   ServiceDetail,
 } from "@/lib/types";
-
-const FREQUENCY_OPTIONS: { value: RecurringBookingRecurrenceFrequency; label: string }[] = [
-  { value: RecurringBookingRecurrenceFrequency.Weekly, label: "Every week" },
-  { value: RecurringBookingRecurrenceFrequency.Biweekly, label: "Every 2 weeks" },
-  { value: RecurringBookingRecurrenceFrequency.Monthly, label: "Every month" },
-];
 
 /**
  * Set up a recurring booking plan (PRODUCT-ENHANCEMENTS.md section 2, task
@@ -323,7 +318,7 @@ function NewRecurringBookingPlanScreen() {
       <Card title="Recurrence" description={`Repeats every ${dayLabel.toLowerCase()}.`}>
         <div className="flex flex-col gap-5">
           <div role="radiogroup" aria-label="Frequency" className="flex flex-wrap gap-2">
-            {FREQUENCY_OPTIONS.map((option) => {
+            {RECURRING_FREQUENCY_OPTIONS.map((option) => {
               const isSelected = frequency === option.value;
               return (
                 <button

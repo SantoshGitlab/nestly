@@ -188,6 +188,7 @@ export function OverridesSection({ canWrite }: { canWrite: boolean }) {
         }
         skeletonRows={4}
         minWidth="880px"
+        maxHeight="420px"
         rowActions={
           canWrite
             ? (o) => (

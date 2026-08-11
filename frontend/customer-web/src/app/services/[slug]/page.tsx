@@ -121,6 +121,8 @@ export default function ServiceDetailPage() {
             serviceId={service.id}
             addOns={service.addOns}
             cityId={city ? city.id : null}
+            variants={service.variants}
+            addOnGroups={service.addOnGroups}
           />
           <ServiceAvailability serviceId={service.id} />
 

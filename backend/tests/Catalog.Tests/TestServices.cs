@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Infrastructure.Options;
@@ -70,6 +71,25 @@ internal static class TestServices
     }
 
     /// <summary>
+    /// The real task 294 coordinator over the test database. Real, not a stub:
+    /// the claim it performs <i>is</i> the deduplication guarantee, so a test
+    /// that swapped it for a pass-through would stop covering the one thing
+    /// this collaborator exists for. With no intent rows present it fails open
+    /// and dispatches, which is exactly how the handlers behaved before task
+    /// 294 - that is what keeps the pre-existing trigger-wiring tests
+    /// measuring what they always measured.
+    /// </summary>
+    public static NotificationIntentCoordinator IntentCoordinator(
+        NestlyDbContext context,
+        NotificationIntentOptions? options = null,
+        TimeProvider? timeProvider = null) =>
+        new(
+            new NotificationIntentRepository(context),
+            Monitor(options ?? new NotificationIntentOptions()),
+            timeProvider ?? TimeProvider.System,
+            NullLogger<NotificationIntentCoordinator>.Instance);
+
+    /// <summary>
     /// Fulfilment notification switches, all enabled unless a test names the
     /// ones it wants muted (task 276).
     /// </summary>
@@ -78,13 +98,15 @@ internal static class TestServices
         bool providerEnRoute = true,
         bool providerArrived = true,
         bool jobStarted = true,
-        bool jobCompleted = true) =>
+        bool jobCompleted = true,
+        bool providerChanged = true) =>
         Monitor(new FulfilmentNotificationOptions
         {
             ProviderAssignedEnabled = providerAssigned,
             ProviderEnRouteEnabled = providerEnRoute,
             ProviderArrivedEnabled = providerArrived,
             JobStartedEnabled = jobStarted,
-            JobCompletedEnabled = jobCompleted
+            JobCompletedEnabled = jobCompleted,
+            ProviderChangedEnabled = providerChanged
         });
 }

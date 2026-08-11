@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
@@ -45,6 +45,7 @@ export default function BookingPaymentPage() {
 
 function BookingPaymentScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
   const serviceSlug = useSearchParams().get("serviceSlug");
   const successHref = `/booking/success/${id}${serviceSlug ? `?serviceSlug=${serviceSlug}` : ""}`;
@@ -89,8 +90,9 @@ function BookingPaymentScreen() {
   useEffect(() => {
     if (!isConfirmed) return;
     if (serviceSlug) clearDraft(serviceSlug);
+    queryClient.invalidateQueries({ queryKey: ["bookings"] });
     router.replace(successHref);
-  }, [isConfirmed, router, successHref, serviceSlug]);
+  }, [isConfirmed, router, successHref, serviceSlug, queryClient]);
 
   const orderQuery = useQuery({
     queryKey: ["payment-order", id, attempt],
@@ -132,6 +134,7 @@ function BookingPaymentScreen() {
         // payment" prompt on the next visit to this service.
         if (serviceSlug) clearDraft(serviceSlug);
 
+        queryClient.invalidateQueries({ queryKey: ["bookings"] });
         navigated.current = true;
         router.push(successHref);
         // Left busy through the route transition so the button cannot be

@@ -30,5 +30,21 @@ public class ProviderConfiguration : IEntityTypeConfiguration<Provider>
         // Task 268. Nullable: null exactly when the coordinates are, so a
         // never-located provider is distinguishable from one located long ago.
         builder.Property(x => x.LocationUpdatedAtUtc);
+
+        // Task 293. A reference to an already-hosted image, sized like every
+        // other media reference in this schema (ProviderKycDocument.FileRef).
+        builder.Property(x => x.PhotoUrl).HasMaxLength(2000);
+        builder.Property(x => x.PhotoModerationStatus).HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.PhotoModeratedByAdminUserId);
+        builder.Property(x => x.PhotoModeratedAtUtc);
+        builder.Property(x => x.PhotoModerationNote).HasMaxLength(1000);
+
+        // Supports the admin moderation queue's only query - every provider
+        // whose photo is still awaiting a verdict - which would otherwise
+        // scan the whole provider table on every load of that screen.
+        builder.HasIndex(x => x.PhotoModerationStatus);
+
+        // Derived from the two columns above - a gate, not stored state.
+        builder.Ignore(x => x.PublicPhotoUrl);
     }
 }

@@ -63,31 +63,55 @@ public class WalletService : IWalletService
     /// shape already used by PaymentWebhookService/RefundService: Postgres
     /// aborts one side of two concurrent debits that would otherwise both
     /// read the same stale balance and both pass the check.
+    ///
+    /// Task 310: a caller with its own ambient transaction already open (e.g.
+    /// <c>BookingService.CreateAsync</c>, applying wallet credit atomically
+    /// with the booking write) does not get a second, nested transaction
+    /// here - EF Core does not support nesting <c>BeginTransactionAsync</c>
+    /// calls on one context. That caller is responsible for having opened its
+    /// own ambient transaction at <see cref="IsolationLevel.Serializable"/>
+    /// itself, so the same conflict-detection guarantee still applies.
     /// </summary>
     public async Task<Result<WalletLedgerEntry>> DebitAsync(Guid customerId, decimal amount, WalletSourceType sourceType, Guid? sourceReferenceId, string description)
     {
-        await using var dbTransaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-
-        decimal currentBalance = (await _repository.GetLatestAsync(customerId))?.BalanceAfter ?? 0m;
-        if (amount > currentBalance)
-        {
-            return Error.Business("Wallet.InsufficientBalance", "The wallet does not have enough balance for this debit.");
-        }
-
-        var entry = new WalletLedgerEntry(
-            Guid.NewGuid(), customerId, WalletEntryType.Debit, amount, currentBalance - amount, sourceType, sourceReferenceId, description);
+        var ambientTransaction = _context.Database.CurrentTransaction;
+        var ownTransaction = ambientTransaction is null
+            ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable)
+            : null;
 
         try
         {
+            decimal currentBalance = (await _repository.GetLatestAsync(customerId))?.BalanceAfter ?? 0m;
+            if (amount > currentBalance)
+            {
+                return Error.Business("Wallet.InsufficientBalance", "The wallet does not have enough balance for this debit.");
+            }
+
+            var entry = new WalletLedgerEntry(
+                Guid.NewGuid(), customerId, WalletEntryType.Debit, amount, currentBalance - amount, sourceType, sourceReferenceId, description);
+
             await _repository.AddAsync(entry);
             await ConsumeExpiringCreditsAsync(customerId, amount);
-            await dbTransaction.CommitAsync();
+
+            if (ownTransaction is not null)
+            {
+                await ownTransaction.CommitAsync();
+            }
+
             return entry;
         }
         catch
         {
-            await dbTransaction.RollbackAsync();
+            if (ownTransaction is not null)
+            {
+                await ownTransaction.RollbackAsync();
+            }
+
             throw;
+        }
+        finally
+        {
+            ownTransaction?.Dispose();
         }
     }
 

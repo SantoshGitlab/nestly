@@ -152,6 +152,7 @@ function BookingDetailScreen() {
                 ? { code: booking.couponCode, amount: booking.couponDiscountAmount }
                 : null
             }
+            walletCreditApplied={booking.walletCreditApplied}
             total={booking.finalPayable}
             totalLabel="Amount paid"
           />
@@ -205,6 +206,14 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
         </div>
 
         <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3">
+          {booking.provider?.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a remote provider photo, not an app asset next/image can optimise usefully here
+            <img
+              src={booking.provider.photoUrl}
+              alt=""
+              className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-line"
+            />
+          ) : (
           <span
             aria-hidden
             className={cx(
@@ -229,13 +238,28 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
               <circle cx="9" cy="7" r="4" />
             </svg>
           </span>
+          )}
           <div className="min-w-0">
-            <p className="text-sm font-medium text-fg">Your professional</p>
+            <p className="text-sm font-medium text-fg">
+              {booking.provider ? booking.provider.displayName : "Your professional"}
+            </p>
             <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">
               {assignment === null
                 ? "Not assigned yet — we'll match a professional to this slot shortly."
                 : providerAssignmentLabel(assignment)}
             </p>
+            {/* Task 293: real values at last. Both stay optional and both go
+                missing for ordinary reasons - no approved photo yet, no
+                visible reviews yet - so a null renders as the placeholder
+                avatar and no stars rather than a zero. */}
+            {booking.provider && booking.provider.rating !== null ? (
+              <p className="mt-1 flex items-center gap-1 text-sm text-fg-muted">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5 text-accent-500" aria-hidden>
+                  <path d="M12 2.5 14.9 8.6l6.6.9-4.8 4.7 1.2 6.6-6-3.1-6 3.1 1.2-6.6-4.8-4.7 6.6-.9L12 2.5Z" />
+                </svg>
+                <span className="nums">{booking.provider.rating.toFixed(1)}</span>
+              </p>
+            ) : null}
           </div>
           {assignment !== null ? (
             <Badge tone={providerAssignmentTone(assignment)} className="ml-auto shrink-0">

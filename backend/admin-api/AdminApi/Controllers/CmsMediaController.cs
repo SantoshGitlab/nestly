@@ -13,11 +13,13 @@ namespace Nestly.AdminApi.Controllers;
 
 /// <summary>
 /// Admin CMS media library management (SRS 12.16.2 "media upload support",
-/// task 124e): CRUD over the URL-referenced asset library <see cref="Banner"/>
-/// draws its image from (see <see cref="Nestly.Domain.CmsMedia"/>'s doc
-/// comment for why this is a URL reference rather than a file upload - no
-/// blob-storage abstraction exists in this codebase yet, matching
-/// <see cref="Nestly.Domain.ServiceMedia"/>'s same shallow pattern).
+/// task 124e): CRUD over the asset library <see cref="Banner"/> draws its
+/// image from, plus <see cref="Upload"/> (task 314) - a genuine file upload
+/// via <c>IFileStorageService</c>, the same abstraction provider-web's
+/// job-completion photos use. <c>Create</c>/<c>Update</c> still accept a
+/// hand-typed URL directly (an already-hosted external image, or a CDN
+/// asset uploaded outside this app) - the two are not mutually exclusive,
+/// every <see cref="Nestly.Domain.CmsMedia"/> row is just a URL either way.
 /// Read-only actions require "cms.read"; every mutating action requires
 /// "cms.write" (task 96b/96c), matching <c>CouponsController</c>'s
 /// per-action policy split.
@@ -80,6 +82,60 @@ public class CmsMediaController : ControllerBase
             ? CreatedAtAction(nameof(GetById), new { id = result.Value.Id }, result.Value)
             : result.ToProblemResult();
     }
+
+    /// <summary>
+    /// Task 314: registers a new media asset from an uploaded file instead of
+    /// a hand-typed URL. Validated here rather than via a FluentValidation
+    /// record validator since the payload is multipart, not JSON -
+    /// content-type is checked against an image allowlist and size is capped
+    /// before anything is read into memory or written to disk, mirroring
+    /// provider-api's <c>JobsController.UploadCompletionPhoto</c> exactly.
+    /// </summary>
+    [HttpPost("upload")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(CmsMediaResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [RequestSizeLimit(MaxUploadBytes)]
+    public async Task<IActionResult> Upload(IFormFile file, [FromForm] string? altText)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Problem("A file is required.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (file.Length > MaxUploadBytes)
+        {
+            return Problem($"Files must be {MaxUploadBytes / (1024 * 1024)}MB or smaller.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (!AllowedUploadContentTypes.Contains(file.ContentType))
+        {
+            return Problem("Only JPEG, PNG, or WebP images are accepted.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        await using var stream = file.OpenReadStream();
+        var relativeRef = await _mediaService.SaveFileAsync(stream, file.FileName, file.ContentType);
+
+        // IFileStorageService only knows the ref relative to this API's own
+        // origin - resolved to an absolute URL here (not in the service,
+        // which has no HTTP context) so the stored CmsMedia.Url works when
+        // read back from any origin: customer-web, admin-web, anywhere else
+        // this library is rendered from.
+        var absoluteUrl = $"{Request.Scheme}://{Request.Host}{relativeRef}";
+        var createResult = await _mediaService.CreateAsync(new CmsMediaCreateRequest(absoluteUrl, altText));
+        return createResult.IsSuccess
+            ? CreatedAtAction(nameof(GetById), new { id = createResult.Value.Id }, createResult.Value)
+            : createResult.ToProblemResult();
+    }
+
+    private const long MaxUploadBytes = 8 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedUploadContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    };
 
     /// <summary>Edits a media asset's URL/alt text.</summary>
     [HttpPut("{id:guid}")]

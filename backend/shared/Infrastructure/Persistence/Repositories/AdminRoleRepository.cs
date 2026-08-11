@@ -33,4 +33,7 @@ public class AdminRoleRepository : IAdminRoleRepository
 
     public async Task<IReadOnlyList<AdminRole>> ListAllAsync() =>
         await _context.Set<AdminRole>().OrderBy(x => x.Name).ToListAsync();
+
+    public Task<AdminRole?> GetByNameAsync(string name) =>
+        _context.Set<AdminRole>().FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower());
 }

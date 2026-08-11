@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Nestly.Application;
 using Nestly.Application.ProviderProfile;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -45,7 +46,8 @@ public class ProviderProfileServiceTests : IDisposable
     }
 
     private ProviderProfileService CreateService(NestlyDbContext context) =>
-        new(new ProviderRepository(context), new ProviderServiceAreaRepository(context), new ProviderSkillMappingRepository(context));
+        new(new ProviderRepository(context), new ProviderServiceAreaRepository(context), new ProviderSkillMappingRepository(context),
+            new ReviewRepository(context));
 
     [Fact]
     public async Task GetAsync_returns_the_provider_profile()
@@ -56,6 +58,58 @@ public class ProviderProfileServiceTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.Value.DisplayName.Should().Be("Ravi's Repairs");
         result.Value.Status.Should().Be(nameof(ProviderStatus.PendingVerification));
+    }
+
+    [Fact]
+    public async Task GetAsync_has_no_rating_when_the_provider_has_no_visible_reviews_yet()
+    {
+        await using var context = _database.CreateContext();
+        var result = await CreateService(context).GetAsync(_providerId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AverageRating.Should().BeNull("a provider with zero visible reviews has no rating - distinct from a rating of zero");
+        result.Value.ReviewCount.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetAsync_returns_the_average_and_count_of_only_visible_provider_scoped_reviews()
+    {
+        await using var context = _database.CreateContext();
+
+        var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Priya Nair", CustomerStatus.Active);
+        var service = new Service(Guid.NewGuid(), _categoryId, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 500m);
+        context.Add(customer);
+        context.Add(service);
+
+        // Review.BookingId is uniquely indexed (one primary review per
+        // booking), so each review needs its own booking - mirrors
+        // ProviderPhotoAndRatingTests' fixture shape exactly.
+        Booking NewBooking() => new(
+            Guid.NewGuid(), customer.Id,
+            new CustomerSnapshot(customer.Name, customer.Mobile),
+            null,
+            new AddressSnapshot("Home", "12 MG Road", null, null, "560001", "Bengaluru", "Karnataka", 12.97m, 77.59m, customer.Name, "9876543210"),
+            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+            new PriceSnapshot(500m, 1, 500m, 0, 0, 500m, 0, 0, 0, 500m));
+
+        var bookingA = NewBooking();
+        var bookingB = NewBooking();
+        var bookingC = NewBooking();
+        context.Add(bookingA);
+        context.Add(bookingB);
+        context.Add(bookingC);
+
+        context.Add(new Review(Guid.NewGuid(), bookingA.Id, customer.Id, service.Id, _providerId, 5, null));
+        context.Add(new Review(Guid.NewGuid(), bookingB.Id, customer.Id, service.Id, _providerId, 3, null));
+        // Not provider-scoped (task 293's backfill population) - must not count toward this provider's rating.
+        context.Add(new Review(Guid.NewGuid(), bookingC.Id, customer.Id, service.Id, null, 1, null));
+        await context.SaveChangesAsync();
+
+        var result = await CreateService(context).GetAsync(_providerId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AverageRating.Should().Be(4.0);
+        result.Value.ReviewCount.Should().Be(2);
     }
 
     [Fact]

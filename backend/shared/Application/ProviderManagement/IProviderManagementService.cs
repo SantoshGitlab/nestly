@@ -30,4 +30,10 @@ public interface IProviderManagementService
 
     /// <summary>Job-fulfilment performance summary (task 150c).</summary>
     Task<Result<ProviderPerformanceResponse>> GetPerformanceAsync(Guid providerId);
+
+    /// <summary>Current dispatch capacity limits (task 245/308). Unlimited (both null) when no <c>ProviderCapacity</c> row exists yet.</summary>
+    Task<Result<ProviderCapacityResponse>> GetCapacityAsync(Guid providerId);
+
+    /// <summary>Sets a provider's dispatch capacity limits, hard-enforced by the automatic-assignment engine (task 245, 308).</summary>
+    Task<Result<ProviderCapacityResponse>> SetCapacityAsync(Guid providerId, SetProviderCapacityRequest request);
 }

@@ -1,9 +1,13 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
+using Nestly.Application.Reviews;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
+using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -31,7 +35,17 @@ public class BookingService : IBookingService
     // (PROVIDER.md scope boundary), so the one place that needs to name the
     // provider resolves it through the repository instead.
     private readonly IProviderRepository _providerRepository;
+    // Task 293: the per-provider rating aggregate behind the same summary.
+    // Read-only, and only for the assigned provider - this service does not
+    // otherwise know about reviews.
+    private readonly IReviewRepository _reviewRepository;
     private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
+    // Task 310: applying wallet credit at checkout goes through the same
+    // atomic DebitAsync the standalone wallet-spend paths use (NestlyCoinsService's
+    // clawback, RefundService's wallet payout) - see WalletService.DebitAsync's
+    // doc comment for how it detects and reuses this method's own ambient
+    // transaction instead of nesting one.
+    private readonly IWalletService _walletService;
     // Same reasoning as RefundService: the slot-capacity reservation, coupon
     // reservation, subscription free-visit consumption and the booking write
     // itself are each their own SaveChangesAsync against repositories that
@@ -53,7 +67,9 @@ public class BookingService : IBookingService
         IMetricsService metricsService,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderRepository providerRepository,
+        IReviewRepository reviewRepository,
         ICustomerSubscriptionRepository customerSubscriptionRepository,
+        IWalletService walletService,
         NestlyDbContext context)
     {
         _summaryService = summaryService;
@@ -64,11 +80,13 @@ public class BookingService : IBookingService
         _metricsService = metricsService;
         _assignmentRepository = assignmentRepository;
         _providerRepository = providerRepository;
+        _reviewRepository = reviewRepository;
         _customerSubscriptionRepository = customerSubscriptionRepository;
+        _walletService = walletService;
         _context = context;
     }
 
-    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request)
+    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null)
     {
         // Task 241: checked before anything else reserves - a retried
         // request carrying the same key must not take a second slot seat,
@@ -118,14 +136,21 @@ public class BookingService : IBookingService
         var summary = summaryResult.Value;
 
         // Everything below writes: slot capacity, coupon usage, subscription
-        // free-visit credit, and the booking itself each go through their own
-        // SaveChangesAsync on this same scoped context. Without an explicit
-        // transaction, an exception partway through (e.g. the booking insert
-        // itself failing) would leave an earlier reservation - most
-        // dangerously the slot capacity, since nothing else ever frees it -
-        // committed with no booking to show for it. Same pattern as
-        // RefundService for the same reason.
-        await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+        // free-visit credit, wallet credit, and the booking itself each go
+        // through their own SaveChangesAsync on this same scoped context.
+        // Without an explicit transaction, an exception partway through (e.g.
+        // the booking insert itself failing) would leave an earlier
+        // reservation - most dangerously the slot capacity, since nothing
+        // else ever frees it - committed with no booking to show for it. Same
+        // pattern as RefundService for the same reason.
+        //
+        // Task 310: Serializable only when wallet credit is actually being
+        // applied - WalletService.DebitAsync's read-check-write needs that
+        // isolation level to catch two concurrent debits that would otherwise
+        // both read the same stale balance (see its doc comment); an ordinary
+        // booking that never touches the wallet ledger does not pay for it.
+        var isolationLevel = summary.Wallet.AppliedAmount > 0 ? IsolationLevel.Serializable : IsolationLevel.Unspecified;
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync(isolationLevel);
         try
         {
             // Reserve the slot's per-day capacity (SRS 12.10.1, task 135c)
@@ -185,8 +210,33 @@ public class BookingService : IBookingService
                 }
             }
 
+            // Task 310: applied last, after every other reservation above -
+            // matching the order the summary itself computed it in (against
+            // whatever remains payable once coupon/subscription have already
+            // been taken off). bookingId is minted here, ahead of the Booking
+            // constructor below, purely so the wallet ledger entry can carry
+            // a real SourceReferenceId rather than being written first and
+            // patched afterwards.
+            var bookingId = Guid.NewGuid();
+            if (summary.Wallet.AppliedAmount > 0)
+            {
+                var debitResult = await _walletService.DebitAsync(
+                    customerId, summary.Wallet.AppliedAmount, WalletSourceType.BookingWalletCredit, bookingId,
+                    "Wallet credit applied at checkout");
+                if (debitResult.IsFailure)
+                {
+                    // Lost the race against another concurrent spend of the
+                    // same balance (or it genuinely changed since the preview
+                    // was fetched) - same "stale preview, fail cleanly"
+                    // handling as a coupon or slot that went stale underneath
+                    // the customer.
+                    _metricsService.RecordBookingCreated(succeeded: false, debitResult.Error.Code);
+                    return debitResult.Error;
+                }
+            }
+
             var booking = new Booking(
-                Guid.NewGuid(),
+                bookingId,
                 customerId,
                 new CustomerSnapshot(customer.Name, customer.Mobile),
                 summary.Address.Id,
@@ -205,19 +255,54 @@ public class BookingService : IBookingService
                 summary.SubscriptionBenefit?.SubscriptionId,
                 summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
                 summary.SubscriptionBenefit?.DiscountAmount,
-                string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey);
+                string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey,
+                // Task 297: the occurrence's link back to the plan that
+                // generated it. Set here rather than by the scheduler
+                // afterwards so it is part of the same insert - a booking that
+                // exists without its plan id, even briefly, is one the admin
+                // (task 299) and provider (task 300) views would show as a
+                // one-off.
+                recurringBookingPlanId,
+                summary.Wallet.AppliedAmount);
 
             // Add-on line items come from the price breakdown, not summary.AddOns:
             // the breakdown already carries each selection's quantity and
             // resolved unit price, exactly what the snapshot needs, whereas
             // summary.AddOns is a plain catalog projection for display.
-            var item = booking.AddItem(
-                Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
-                summary.Price.BasePrice, summary.Price.Quantity);
+            //
+            // Phase 3 catalog redesign: the variant/group overloads are used
+            // only when the summary actually carries a selection - a service
+            // with no variants and an add-on with no group produce exactly
+            // the same BookingItem/BookingAddOnItem rows as before this field
+            // existed.
+            var item = summary.Service.VariantId is Guid variantId
+                ? booking.AddItem(
+                    Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                    summary.Price.BasePrice, summary.Price.Quantity,
+                    variantId, summary.Service.VariantName, summary.Service.VariantDurationMinutes,
+                    summary.Service.GroupId, summary.Service.GroupName)
+                : summary.Service.GroupId is Guid serviceGroupId
+                    ? booking.AddItem(
+                        Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                        summary.Price.BasePrice, summary.Price.Quantity,
+                        null, null, null,
+                        serviceGroupId, summary.Service.GroupName)
+                    : booking.AddItem(
+                        Guid.NewGuid(), summary.Service.Id, summary.Service.Name, summary.Service.Slug,
+                        summary.Price.BasePrice, summary.Price.Quantity);
 
             foreach (var addOnLine in summary.Price.AddOnLineItems)
             {
-                booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+                if (addOnLine.GroupId is Guid groupId)
+                {
+                    booking.AddAddOnToItem(
+                        item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity,
+                        groupId, addOnLine.GroupName);
+                }
+                else
+                {
+                    booking.AddAddOnToItem(item.Id, Guid.NewGuid(), addOnLine.AddOnId, addOnLine.Name, addOnLine.UnitPrice, addOnLine.Quantity);
+                }
             }
 
             booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
@@ -263,16 +348,18 @@ public class BookingService : IBookingService
         }
     }
 
-    public async Task<Result<IReadOnlyList<BookingListItemResponse>>> ListAsync(Guid customerId, BookingStatusBucket? bucket)
+    public async Task<Result<BookingListResponse>> ListAsync(Guid customerId, BookingStatusBucket? bucket, int page = 1, int pageSize = 20)
     {
         var statuses = bucket is null
             ? Enum.GetValues<BookingStatus>()
             : BookingStatusMapper.StatusesInBucket(bucket.Value);
 
-        var bookings = await _bookingRepository.ListByCustomerAsync(customerId, statuses);
+        (page, pageSize) = PagedQueryExtensions.Normalize(page, pageSize);
 
-        IReadOnlyList<BookingListItemResponse> response = bookings.Select(ToListItem).ToList();
-        return Result.Success(response);
+        var (bookings, totalCount) = await _bookingRepository.ListByCustomerPagedAsync(customerId, statuses, page, pageSize);
+
+        IReadOnlyList<BookingListItemResponse> items = bookings.Select(ToListItem).ToList();
+        return Result.Success(new BookingListResponse(items, totalCount, page, pageSize));
     }
 
     public async Task<Result<BookingDetailResponse>> GetDetailAsync(Guid customerId, Guid bookingId)
@@ -304,6 +391,8 @@ public class BookingService : IBookingService
     /// customer must stop seeing a provider the moment they are off the job.
     /// One extra read by primary key, and only when a provider is actually
     /// assigned - an unassigned booking's detail costs exactly what it did.
+    /// Task 293 adds a second read, the rating aggregate, under the same
+    /// condition and for the same reason.
     /// </summary>
     private async Task<BookingProviderSummary?> ProviderSummaryFor(BookingProviderAssignment? assignment)
     {
@@ -313,7 +402,13 @@ public class BookingService : IBookingService
         }
 
         var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-        return provider is null ? null : BookingProviderSummary.From(provider);
+        if (provider is null)
+        {
+            return null;
+        }
+
+        var rating = await _reviewRepository.GetProviderRatingAsync(provider.Id);
+        return BookingProviderSummary.From(provider, rating);
     }
 
     private static BookingDetailResponse ToDetailResponse(
@@ -330,7 +425,10 @@ public class BookingService : IBookingService
 
         return new BookingDetailResponse(
             booking.Id,
-            new BookingServiceSummary(item?.ServiceId ?? Guid.Empty, item?.NameSnapshot ?? string.Empty, item?.SlugSnapshot ?? string.Empty),
+            new BookingServiceSummary(
+                item?.ServiceId ?? Guid.Empty, item?.NameSnapshot ?? string.Empty, item?.SlugSnapshot ?? string.Empty,
+                item?.ServiceVariantId, item?.VariantNameSnapshot, item?.VariantDurationMinutesSnapshot,
+                item?.ServiceGroupId, item?.ServiceGroupNameSnapshot),
             addOns,
             new BookingAddressSummary(
                 booking.SourceAddressId ?? Guid.Empty, booking.AddressLabelSnapshot, booking.AddressLine1Snapshot,
@@ -340,9 +438,11 @@ public class BookingService : IBookingService
             new BookingSlotSummary(booking.SlotWindowId, booking.SlotWindowNameSnapshot, booking.SlotDate, booking.SlotStartTimeSnapshot, booking.SlotEndTimeSnapshot),
             new Application.Pricing.PriceBreakdownResponse(
                 booking.BasePriceSnapshot, booking.QuantitySnapshot, booking.BaseTotalSnapshot,
-                item?.AddOns.Select(a => new Application.Pricing.AddOnLineItem(a.ServiceAddOnId, a.NameSnapshot, a.UnitPriceSnapshot, a.Quantity, a.LineTotalSnapshot)).ToList() ?? [],
+                item?.AddOns.Select(a => new Application.Pricing.AddOnLineItem(
+                    a.ServiceAddOnId, a.NameSnapshot, a.UnitPriceSnapshot, a.Quantity, a.LineTotalSnapshot, a.AddOnGroupId, a.GroupNameSnapshot)).ToList() ?? [],
                 booking.AddOnTotalSnapshot, booking.VisitChargeSnapshot, booking.SubtotalSnapshot,
-                booking.TaxPercentageSnapshot, booking.TaxAmountSnapshot, booking.PlatformFeeSnapshot, booking.TotalPayableSnapshot),
+                booking.TaxPercentageSnapshot, booking.TaxAmountSnapshot, booking.PlatformFeeSnapshot, booking.TotalPayableSnapshot,
+                item?.ServiceVariantId, item?.VariantNameSnapshot, item?.VariantDurationMinutesSnapshot),
             booking.Status,
             BookingStatusMapper.LabelFor(booking.Status),
             booking.StatusHistory
@@ -354,6 +454,7 @@ public class BookingService : IBookingService
             booking.CouponDiscountAmountSnapshot,
             booking.TotalPayableSnapshot,
             providerAssignmentStatus,
-            provider);
+            provider,
+            booking.WalletCreditAppliedSnapshot);
     }
 }

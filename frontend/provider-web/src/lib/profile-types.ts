@@ -56,6 +56,16 @@ export interface SubmitKycDocumentRequest {
   docNumber?: string;
 }
 
+/**
+ * `photoUrl` is a file *reference/URL* string, not a binary upload - same
+ * constraint as `SubmitKycDocumentRequest.fileRef`, since there is still no
+ * file storage backend. Null or empty clears the photo. Setting one always
+ * sends it back for admin review.
+ */
+export interface UpdateProviderPhotoRequest {
+  photoUrl: string | null;
+}
+
 export interface ServiceArea {
   id: string;
   providerId: string;

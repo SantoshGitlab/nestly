@@ -32,7 +32,9 @@ import { describeError } from "@/lib/api";
 import {
   activateProvider,
   approveKycDocument,
+  approveProviderPhoto,
   createPayoutBatch,
+  getProviderCapacity,
   getProviderDetail,
   getProviderEarnings,
   getProviderPerformance,
@@ -40,7 +42,9 @@ import {
   recordBackgroundCheck,
   recordEarningAdjustment,
   rejectKycDocument,
+  rejectProviderPhoto,
   searchPayouts,
+  setProviderCapacity,
   suspendProvider,
   updateProvider,
   updatePayoutStatus,
@@ -53,10 +57,11 @@ import {
   ProviderKycVerificationStatus,
   ProviderOnboardingStatus,
   ProviderPayoutStatus,
+  ProviderPhotoModerationStatus,
   ProviderStatus,
 } from "@/lib/providers-types";
 import type { BadgeTone } from "@/components/ui";
-import type { ProviderDetail } from "@/lib/providers-types";
+import type { ProviderCapacity, ProviderDetail } from "@/lib/providers-types";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
 const STATUS_LABELS: Record<ProviderStatus, string> = {
@@ -92,6 +97,18 @@ const KYC_STATUS_TONES: Record<ProviderKycVerificationStatus, BadgeTone> = {
   [ProviderKycVerificationStatus.Pending]: "warning",
   [ProviderKycVerificationStatus.Approved]: "success",
   [ProviderKycVerificationStatus.Rejected]: "danger",
+};
+
+const PHOTO_STATUS_LABELS: Record<ProviderPhotoModerationStatus, string> = {
+  [ProviderPhotoModerationStatus.Pending]: "Pending review",
+  [ProviderPhotoModerationStatus.Approved]: "Live to customers",
+  [ProviderPhotoModerationStatus.Rejected]: "Rejected",
+};
+
+const PHOTO_STATUS_TONES: Record<ProviderPhotoModerationStatus, BadgeTone> = {
+  [ProviderPhotoModerationStatus.Pending]: "warning",
+  [ProviderPhotoModerationStatus.Approved]: "success",
+  [ProviderPhotoModerationStatus.Rejected]: "danger",
 };
 
 const BACKGROUND_CHECK_STATUS_LABELS: Record<ProviderBackgroundCheckStatus, string> = {
@@ -158,6 +175,10 @@ export default function ProviderDetailPage() {
     queryKey: ["admin-provider-payouts", providerId],
     queryFn: () => searchPayouts(providerId),
   });
+  const capacityQuery = useQuery({
+    queryKey: ["admin-provider-capacity", providerId],
+    queryFn: () => getProviderCapacity(providerId),
+  });
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -167,6 +188,9 @@ export default function ProviderDetailPage() {
 
   const [rejectReasonByDoc, setRejectReasonByDoc] = useState<Record<string, string>>({});
   const [pendingKycRejection, setPendingKycRejection] = useState<{ id: string; label: string } | null>(null);
+
+  const [photoRejectReason, setPhotoRejectReason] = useState("");
+  const [isConfirmingPhotoRejection, setIsConfirmingPhotoRejection] = useState(false);
 
   const [bgStatus, setBgStatus] = useState(String(ProviderBackgroundCheckStatus.Passed));
   const [bgNotes, setBgNotes] = useState("");
@@ -185,6 +209,7 @@ export default function ProviderDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["admin-provider-performance", providerId] });
     queryClient.invalidateQueries({ queryKey: ["admin-provider-earnings", providerId] });
     queryClient.invalidateQueries({ queryKey: ["admin-provider-payouts", providerId] });
+    queryClient.invalidateQueries({ queryKey: ["admin-provider-capacity", providerId] });
   };
 
   const onError = (err: unknown) => setActionError(describeError(err));
@@ -213,6 +238,13 @@ export default function ProviderDetailPage() {
     onError,
   });
 
+  const capacityMutation = useMutation({
+    mutationFn: (values: { maxJobsPerDay: number | null; maxJobsPerSlot: number | null }) =>
+      setProviderCapacity(providerId, values),
+    onSuccess: () => onSuccess("Capacity limits updated."),
+    onError,
+  });
+
   const suspendMutation = useMutation({
     mutationFn: () => suspendProvider(providerId, { reason: suspendReason }),
     onSuccess: () => {
@@ -238,6 +270,22 @@ export default function ProviderDetailPage() {
   const approveKycMutation = useMutation({
     mutationFn: (documentId: string) => approveKycDocument(documentId),
     onSuccess: () => onSuccess("KYC document approved."),
+    onError,
+  });
+
+  const approvePhotoMutation = useMutation({
+    mutationFn: () => approveProviderPhoto(providerId),
+    onSuccess: () => onSuccess("Photo approved - customers can now see it."),
+    onError,
+  });
+
+  const rejectPhotoMutation = useMutation({
+    mutationFn: (reason: string) => rejectProviderPhoto(providerId, { reason }),
+    onSuccess: () => {
+      setIsConfirmingPhotoRejection(false);
+      setPhotoRejectReason("");
+      onSuccess("Photo rejected.");
+    },
     onError,
   });
 
@@ -403,6 +451,97 @@ export default function ProviderDetailPage() {
             ) : null}
           </div>
         ) : null}
+      </Card>
+
+      <Card
+        title="Dispatch capacity"
+        description="Max jobs per day/slot (task 245, 308). Hard-enforced by automatic assignment; manual admin assignment only shows this as a load signal, not a block."
+      >
+        {capacityQuery.isPending ? (
+          <SkeletonText lines={2} />
+        ) : capacityQuery.isError ? (
+          <SectionError error={capacityQuery.error} onRetry={() => capacityQuery.refetch()} />
+        ) : canWriteProvider ? (
+          <CapacityEditor
+            key={providerId}
+            capacity={capacityQuery.data}
+            saving={capacityMutation.isPending}
+            onSave={(values) => capacityMutation.mutate(values)}
+          />
+        ) : (
+          <p className="text-sm text-fg-muted">
+            Max/day: <span className="text-fg">{capacityQuery.data.maxJobsPerDay ?? "Unlimited"}</span> · Max/slot:{" "}
+            <span className="text-fg">{capacityQuery.data.maxJobsPerSlot ?? "Unlimited"}</span>
+          </p>
+        )}
+      </Card>
+
+      <Card
+        title="Profile photo"
+        description="Customers see this on their booking and live-tracking screens - only once it is approved (task 293)"
+      >
+        {provider.photo.photoUrl === null ? (
+          <EmptyState
+            title="No photo submitted yet"
+            description="The provider sets this from the provider app. Until then customers see a placeholder avatar."
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              {/* next/image needs the host in next.config's allowlist and a
+                  provider-supplied URL can point anywhere, so a plain img is
+                  the only workable element here. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={provider.photo.photoUrl}
+                alt={`Submitted profile photo for ${provider.displayName}`}
+                className="h-24 w-24 shrink-0 rounded-full border border-line object-cover"
+              />
+              <div className="min-w-0">
+                {provider.photo.moderationStatus !== null ? (
+                  <Badge tone={PHOTO_STATUS_TONES[provider.photo.moderationStatus]}>
+                    {PHOTO_STATUS_LABELS[provider.photo.moderationStatus]}
+                  </Badge>
+                ) : null}
+                {provider.photo.moderatedAtUtc ? (
+                  <p className="mt-1.5 text-xs text-fg-subtle">
+                    Reviewed {formatDateTime(provider.photo.moderatedAtUtc)}
+                  </p>
+                ) : null}
+                {provider.photo.moderationNote ? (
+                  <p className="mt-1 text-xs text-fg-muted">{provider.photo.moderationNote}</p>
+                ) : null}
+                <p className="mt-1 break-all text-xs text-fg-subtle">{provider.photo.photoUrl}</p>
+              </div>
+            </div>
+
+            {canWriteProvider && provider.photo.moderationStatus === ProviderPhotoModerationStatus.Pending ? (
+              <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end">
+                <Button
+                  variant="secondary"
+                  loading={approvePhotoMutation.isPending}
+                  onClick={() => approvePhotoMutation.mutate()}
+                >
+                  Approve
+                </Button>
+                <div className="flex-1">
+                  <Field
+                    label="Rejection reason"
+                    value={photoRejectReason}
+                    onChange={(e) => setPhotoRejectReason(e.target.value)}
+                  />
+                </div>
+                <Button
+                  variant="danger"
+                  disabled={!photoRejectReason.trim()}
+                  onClick={() => setIsConfirmingPhotoRejection(true)}
+                >
+                  Reject
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </Card>
 
       <Card title="KYC documents" description="Approve or reject each submitted document (task 150b)">
@@ -754,6 +893,23 @@ export default function ProviderDetailPage() {
       </ConfirmDialog>
 
       <ConfirmDialog
+        open={isConfirmingPhotoRejection}
+        title="Reject this profile photo?"
+        description="Customers keep seeing the placeholder avatar until the provider submits a new one."
+        confirmLabel="Reject photo"
+        cancelLabel="Keep pending"
+        loading={rejectPhotoMutation.isPending}
+        error={rejectPhotoMutation.isError ? describeError(rejectPhotoMutation.error) : null}
+        onCancel={() => setIsConfirmingPhotoRejection(false)}
+        onConfirm={() => rejectPhotoMutation.mutate(photoRejectReason.trim())}
+      >
+        <p className="text-sm text-fg-muted">
+          Reason shown to the provider —{" "}
+          <span className="font-medium text-fg">{photoRejectReason}</span>
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
         open={pendingPayoutFailure !== null}
         title="Mark this payout failed?"
         description="The batch is closed as failed and the amount stays owed to the provider."
@@ -767,6 +923,69 @@ export default function ProviderDetailPage() {
           payoutStatusMutation.mutate({ payoutId: pendingPayoutFailure, status: ProviderPayoutStatus.Failed });
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Dispatch capacity limits editor (task 308). Owns its own state, seeded
+ * from the loaded capacity, same reason as `ProfileEditor` below - blank
+ * means "unlimited" here (mirroring `ProviderCapacity`'s own null-is-
+ * unlimited convention), not "leave unchanged".
+ */
+function CapacityEditor({
+  capacity,
+  saving,
+  onSave,
+}: {
+  capacity: ProviderCapacity;
+  saving: boolean;
+  onSave: (values: { maxJobsPerDay: number | null; maxJobsPerSlot: number | null }) => void;
+}) {
+  const [maxJobsPerDay, setMaxJobsPerDay] = useState(capacity.maxJobsPerDay?.toString() ?? "");
+  const [maxJobsPerSlot, setMaxJobsPerSlot] = useState(capacity.maxJobsPerSlot?.toString() ?? "");
+
+  const invalid =
+    (maxJobsPerDay.trim() !== "" && Number(maxJobsPerDay) <= 0) ||
+    (maxJobsPerSlot.trim() !== "" && Number(maxJobsPerSlot) <= 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <FormGrid columns={2}>
+        <Field
+          label="Max jobs per day"
+          type="number"
+          min="1"
+          step="1"
+          hint="Leave blank for unlimited."
+          value={maxJobsPerDay}
+          onChange={(e) => setMaxJobsPerDay(e.target.value)}
+        />
+        <Field
+          label="Max jobs per slot"
+          type="number"
+          min="1"
+          step="1"
+          hint="Leave blank for unlimited."
+          value={maxJobsPerSlot}
+          onChange={(e) => setMaxJobsPerSlot(e.target.value)}
+        />
+      </FormGrid>
+      <FormActions align="start">
+        <Button
+          variant="secondary"
+          disabled={invalid}
+          loading={saving}
+          onClick={() =>
+            onSave({
+              maxJobsPerDay: maxJobsPerDay.trim() === "" ? null : Number(maxJobsPerDay),
+              maxJobsPerSlot: maxJobsPerSlot.trim() === "" ? null : Number(maxJobsPerSlot),
+            })
+          }
+        >
+          Save capacity
+        </Button>
+      </FormActions>
     </div>
   );
 }

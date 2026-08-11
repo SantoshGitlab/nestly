@@ -23,9 +23,20 @@ const item: Variants = {
 };
 
 /**
- * Scroll-triggered staggered entrance for a grid/list. Fires once when ~15%
- * into view, not on every re-scroll. Reduced-motion is handled once, product
- * -wide, by the `MotionConfig reducedMotion="user"` in app/providers.tsx.
+ * Staggered entrance for a grid/list, animated on mount rather than
+ * scroll-into-view (was `whileInView` with a percentage `viewport.amount` -
+ * unreachable once a list is taller than viewportHeight/amount, which
+ * silently froze every row at opacity 0 forever for a long list: a real bug,
+ * a customer with enough bookings saw a permanently blank "My bookings"
+ * page. It also never re-fires when a parent stays mounted across content
+ * swaps that don't change its own on-screen position - e.g. tab-switching
+ * between booking-status buckets - since nothing about the container's own
+ * visibility changes to retrigger the observer, even with `once: false`).
+ * Plain mount animation has neither failure mode: every child runs its own
+ * initial -> animate transition the moment it exists, regardless of list
+ * length, scroll position, or whether the parent itself just remounted.
+ * Reduced-motion is handled once, product-wide, by the `MotionConfig
+ * reducedMotion="user"` in app/providers.tsx.
  *
  * `as="ul"` keeps real list semantics for screen readers when wrapping a
  * list of bookings/addresses/etc; use `RevealItem` (an `motion.li`) for its
@@ -42,13 +53,7 @@ export function Reveal({
 }) {
   const MotionTag = as === "ul" ? motion.ul : motion.div;
   return (
-    <MotionTag
-      className={className}
-      variants={container}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.15 }}
-    >
+    <MotionTag className={className} variants={container} initial="hidden" animate="show">
       {children}
     </MotionTag>
   );

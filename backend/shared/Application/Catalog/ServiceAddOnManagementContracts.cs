@@ -11,7 +11,8 @@ public sealed record ServiceAddOnAdminResponse(
     bool IsActive,
     int SortOrder,
     bool IsQuantityAllowed,
-    bool IsMandatory);
+    bool IsMandatory,
+    Guid? GroupId = null);
 
 /// <summary>Admin create request for an add-on, mapped to a service at creation (SRS 12.7.1).</summary>
 public sealed record ServiceAddOnCreateRequest(
@@ -21,7 +22,8 @@ public sealed record ServiceAddOnCreateRequest(
     decimal Price,
     int SortOrder,
     bool IsQuantityAllowed,
-    bool IsMandatory);
+    bool IsMandatory,
+    Guid? GroupId = null);
 
 /// <summary>
 /// Admin update request for an add-on, including re-mapping it to a
@@ -36,4 +38,5 @@ public sealed record ServiceAddOnUpdateRequest(
     decimal Price,
     int SortOrder,
     bool IsQuantityAllowed,
-    bool IsMandatory);
+    bool IsMandatory,
+    Guid? GroupId = null);

@@ -13,10 +13,12 @@ import type {
   CreateProviderPayoutRequest,
   CreateProviderRequest,
   EligibleProvider,
+  ProviderCapacity,
   ProviderDetail,
   ProviderEarningsSummary,
   ProviderKycDocument,
   ProviderPayout,
+  ProviderPhoto,
   ProviderPayoutSearchResponse,
   ProviderPerformance,
   ProviderSearchParams,
@@ -27,6 +29,8 @@ import type {
   RecordProviderEarningAdjustmentRequest,
   RejectAssignmentRequest,
   RejectProviderKycDocumentRequest,
+  RejectProviderPhotoRequest,
+  SetProviderCapacityRequest,
   SuspendProviderRequest,
   UpdateProviderPayoutStatusRequest,
   UpdateProviderRequest,
@@ -96,6 +100,38 @@ export const recordBackgroundCheck = (providerId: string, request: RecordBackgro
 
 export const activateProvider = (providerId: string) =>
   apiFetch<ProviderDetail>(`${PROVIDERS_BASE}/${providerId}/activate`, { method: "POST", authenticated: true });
+
+// ---- Profile photo moderation (task 293) ----
+
+/** The moderation queue: every provider whose photo is awaiting a verdict. */
+export const listPendingProviderPhotos = () =>
+  apiFetch<ProviderPhoto[]>(`${PROVIDERS_BASE}/photo-moderation/pending`, { authenticated: true });
+
+/** Approving is the only thing that makes a photo visible to customers. */
+export const approveProviderPhoto = (providerId: string) =>
+  apiFetch<ProviderPhoto>(`${PROVIDERS_BASE}/${providerId}/photo/approve`, {
+    method: "POST",
+    authenticated: true,
+  });
+
+export const rejectProviderPhoto = (providerId: string, request: RejectProviderPhotoRequest) =>
+  apiFetch<ProviderPhoto>(`${PROVIDERS_BASE}/${providerId}/photo/reject`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+// ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----
+
+export const getProviderCapacity = (providerId: string) =>
+  apiFetch<ProviderCapacity>(`${PROVIDERS_BASE}/${providerId}/capacity`, { authenticated: true });
+
+export const setProviderCapacity = (providerId: string, request: SetProviderCapacityRequest) =>
+  apiFetch<ProviderCapacity>(`${PROVIDERS_BASE}/${providerId}/capacity`, {
+    method: "PUT",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
 
 // ---- Performance and earnings (task 150c, 148) ----
 

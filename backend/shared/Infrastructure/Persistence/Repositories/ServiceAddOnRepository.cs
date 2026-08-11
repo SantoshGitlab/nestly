@@ -62,4 +62,7 @@ public class ServiceAddOnRepository : IServiceAddOnRepository
 
         return await query.OrderBy(a => a.SortOrder).ThenBy(a => a.Name).ToListAsync();
     }
+
+    public Task<bool> ExistsByGroupIdAsync(Guid groupId) =>
+        _context.Set<ServiceAddOn>().AnyAsync(a => a.GroupId == groupId);
 }

@@ -17,6 +17,7 @@ import { BookingStatusBadge } from "@/components/status-badges";
 import { searchBookings } from "@/lib/bookings-api";
 import type { AdminBookingListItem } from "@/lib/bookings-types";
 import { BookingStatus } from "@/lib/types";
+import { BookingsTabs } from "./_components/BookingsTabs";
 
 const PAGE_SIZE = 20;
 
@@ -156,6 +157,8 @@ export default function BookingsPage() {
         title="Bookings"
         subtitle="Search bookings and manage cancellations, reschedules and refunds (SRS 12.11)."
       />
+
+      <BookingsTabs />
 
       <FilterBar
         onSubmit={onSubmit}

@@ -1,7 +1,9 @@
 using Nestly.Application.Catalog;
 using Nestly.Application.Coupons;
 using Nestly.Application.Pricing;
+using Nestly.Application.Reviews;
 using Nestly.Application.Subscriptions;
+using Nestly.Application.Wallet;
 using Nestly.Domain;
 
 namespace Nestly.Application.Bookings;
@@ -34,6 +36,20 @@ namespace Nestly.Application.Bookings;
 /// omits it (e.g. RecurringBookingSchedulerService) simply gets no dedup
 /// protection, same as an ordinary create today.
 /// </param>
+/// <param name="ApplyWalletCredit">
+/// Task 310 (SRS 11.7.2). A boolean toggle rather than a customer-specified
+/// amount, matching the "applied automatically" promise the /wallet page
+/// already makes - opting in applies as much of the available balance as the
+/// booking can absorb (see <see cref="WalletCreditSummaryResponse.AppliedAmount"/>),
+/// never a partial amount the customer has to type in. Applied last, against
+/// whatever remains payable after any coupon/subscription discount.
+/// </param>
+/// <param name="ServiceVariantId">
+/// Phase 3 catalog redesign: null for a service with no variants - the
+/// service's flat price applies exactly as before this field existed. When
+/// set, must belong to <paramref name="ServiceId"/> and be active (validated
+/// by <see cref="Pricing.IPriceCalculationService"/>).
+/// </param>
 public record BookingSummaryRequest(
     Guid ServiceId,
     Guid CityId,
@@ -44,9 +60,22 @@ public record BookingSummaryRequest(
     int Quantity,
     IReadOnlyList<AddOnSelection> AddOns,
     string? CouponCode = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    bool ApplyWalletCredit = false,
+    Guid? ServiceVariantId = null);
 
-public record BookingServiceSummary(Guid Id, string Name, string Slug);
+/// <summary>
+/// The <c>Variant*</c> fields are null when no variant was selected (Phase 3
+/// catalog redesign) - the service's flat price/duration applied instead.
+/// <c>Group*</c> is null when the service isn't assigned to a
+/// <see cref="Catalog.ServiceGroupSummaryResponse"/> section (Appliance/
+/// Service Group catalog redesign) - inherited from the service, never a
+/// customer selection.
+/// </summary>
+public record BookingServiceSummary(
+    Guid Id, string Name, string Slug,
+    Guid? VariantId = null, string? VariantName = null, int? VariantDurationMinutes = null,
+    Guid? GroupId = null, string? GroupName = null);
 
 public record BookingAddressSummary(
     Guid Id,
@@ -65,9 +94,7 @@ public record BookingAddressSummary(
 public record BookingSlotSummary(Guid SlotWindowId, string Name, DateOnly Date, TimeSpan StartTime, TimeSpan EndTime);
 
 /// <summary>
-/// Booking summary data (SRS 11.7.2). Wallet credit is omitted - that module
-/// doesn't apply at checkout yet (Phase 4's wallet tasks cover the ledger
-/// and balance API only, not spending at checkout). <paramref name="Coupon"/>
+/// Booking summary data (SRS 11.7.2). <paramref name="Coupon"/>
 /// is null when no coupon was applied (or removed); when present,
 /// <paramref name="FinalPayable"/> is <c>Price.TotalPayable - Coupon.DiscountAmount</c>
 /// (SRS 14.1's formula subtracts the discount after tax/fees, not before) -
@@ -80,6 +107,11 @@ public record BookingSlotSummary(Guid SlotWindowId, string Name, DateOnly Date, 
 /// always takes precedence: <paramref name="SubscriptionBenefit"/> is only
 /// ever populated when <paramref name="Coupon"/> is null, so the two never
 /// stack on the same booking.
+///
+/// <paramref name="Wallet"/> (task 310) is always populated - its Balance is
+/// surfaced whether or not the customer opted in, and its AppliedAmount folds
+/// into <paramref name="FinalPayable"/> last, after both the coupon/subscription
+/// discount above: unlike those two, wallet credit stacks with either.
 /// </summary>
 public record BookingSummaryResponse(
     BookingServiceSummary Service,
@@ -91,7 +123,8 @@ public record BookingSummaryResponse(
     string? ReschedulePolicy,
     CouponSummaryResponse? Coupon,
     decimal FinalPayable,
-    SubscriptionBenefitSummary? SubscriptionBenefit = null);
+    SubscriptionBenefitSummary? SubscriptionBenefit,
+    WalletCreditSummaryResponse Wallet);
 
 /// <summary>
 /// One entry in a booking's status timeline (SRS 11.13, task 60c), mirroring
@@ -106,11 +139,12 @@ public record BookingStatusTimelineEntry(BookingStatus? FromStatus, BookingStatu
 /// provider's id, phone, email or status: this rides on a general booking
 /// read, and a general read is the wrong place to widen PII exposure.
 ///
-/// <paramref name="PhotoUrl"/> and <paramref name="Rating"/> are nullable
-/// because no column backs either today (see <see cref="From"/>); the fields
-/// exist now so the shape does not change under the frontends when the data
-/// arrives, and a null renders as the placeholder avatar / hidden rating a
-/// live tracking screen already needs for a brand-new provider.
+/// <paramref name="PhotoUrl"/> and <paramref name="Rating"/> are both real
+/// values since task 293, and both stay nullable because both are genuinely
+/// absent for ordinary reasons (see <see cref="From"/>). The shape is
+/// unchanged from the one task 275 fixed, so nothing moved under the
+/// frontends: they already render a null photo as the placeholder avatar and
+/// a null rating as no stars.
 /// </summary>
 public record BookingProviderSummary(string DisplayName, string? PhotoUrl, double? Rating)
 {
@@ -119,19 +153,31 @@ public record BookingProviderSummary(string DisplayName, string? PhotoUrl, doubl
     /// and the live tracking response so the two can never disagree about
     /// who the provider is.
     ///
-    /// PhotoUrl and Rating are hardcoded null, in one place, on purpose:
-    /// <see cref="Domain.Provider"/> has no photo column, and
-    /// <see cref="Domain.Review"/> is scoped to a service, not a provider
-    /// (no ProviderId on it, no per-provider aggregate on IReviewRepository),
-    /// so there is no honest value to return. Deriving a "provider rating"
-    /// from the service reviews left on their bookings would put a number a
-    /// customer reads as being about this person on top of data that is not -
-    /// a product decision and a schema change, not something to infer inside
-    /// a response mapper. Left null rather than faked, and left visible here
-    /// rather than dropped from the contract.
+    /// Task 293 closed the two gaps that used to force both optional fields
+    /// to a hardcoded null here:
+    ///
+    /// <list type="bullet">
+    /// <item><see cref="Domain.Provider"/> now carries a photo, and this
+    /// reads <see cref="Domain.Provider.PublicPhotoUrl"/> rather than the raw
+    /// column - a photo awaiting moderation or already rejected must not
+    /// reach a customer's screen, and that gate lives on the entity so no
+    /// mapper can forget it.</item>
+    /// <item><see cref="Domain.Review"/> is now provider-scoped, so the
+    /// rating passed in is computed over reviews written about THIS person
+    /// (<c>IReviewRepository.GetProviderRatingAsync</c>) rather than inferred
+    /// from the services they happened to work on. The caller supplies it
+    /// instead of this mapper fetching it, because a mapper that queries is a
+    /// mapper that queries once per row.</item>
+    /// </list>
+    ///
+    /// Still null in the honest cases, and callers must keep rendering them:
+    /// a provider who has not set a photo, one whose photo has not been
+    /// approved yet, and one with no visible reviews yet - which is every
+    /// brand-new professional, and must read as "no rating" rather than a bad
+    /// one.
     /// </summary>
-    public static BookingProviderSummary From(Provider provider) =>
-        new(provider.DisplayName, null, null);
+    public static BookingProviderSummary From(Provider provider, ProviderRatingSummary? rating) =>
+        new(provider.DisplayName, provider.PublicPhotoUrl, rating?.AverageRating);
 }
 
 /// <summary>
@@ -170,7 +216,10 @@ public record BookingDetailResponse(
     decimal? CouponDiscountAmount,
     decimal FinalPayable,
     BookingProviderAssignmentStatus? ProviderAssignmentStatus,
-    BookingProviderSummary? Provider);
+    BookingProviderSummary? Provider,
+    // Wallet balance applied at checkout (task 310), mirroring
+    // Domain.Booking.WalletCreditAppliedSnapshot. Null when none was applied.
+    decimal? WalletCreditApplied = null);
 
 /// <summary>A row in the booking list (SRS 11.13, task 60b) - a lighter shape than the detail, for a list screen.</summary>
 public record BookingListItemResponse(
@@ -181,3 +230,6 @@ public record BookingListItemResponse(
     BookingStatus Status,
     string StatusLabel,
     DateTime CreatedAtUtc);
+
+/// <summary>A page of the customer's own booking list, newest first, plus the total match count for that bucket - the same Items/TotalCount/Page/PageSize shape the admin booking search already uses.</summary>
+public record BookingListResponse(IReadOnlyList<BookingListItemResponse> Items, int TotalCount, int Page, int PageSize);

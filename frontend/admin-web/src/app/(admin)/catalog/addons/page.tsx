@@ -10,7 +10,7 @@ import { Alert, Button, Card, CheckboxField, Field, PageHeading, Select } from "
 import { FormActions, FormGrid, formatCurrency } from "@/components/data-table";
 import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
-import { createServiceAddOn, listServiceAddOns, listServices, setServiceAddOnActive } from "@/lib/catalog-api";
+import { createServiceAddOn, listAddOnGroups, listServiceAddOns, listServices, setServiceAddOnActive } from "@/lib/catalog-api";
 import type { ServiceAddOnAdminResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
@@ -24,6 +24,7 @@ const addOnSchema = z.object({
   sortOrder: z.number().int().min(0),
   isQuantityAllowed: z.boolean(),
   isMandatory: z.boolean(),
+  groupId: z.string().optional().or(z.literal("")),
 });
 type AddOnFormValues = z.infer<typeof addOnSchema>;
 
@@ -57,14 +58,23 @@ export default function CatalogAddOnsPage() {
       sortOrder: 0,
       isQuantityAllowed: false,
       isMandatory: false,
+      groupId: "",
     },
   });
+
+  const formServiceId = form.watch("serviceId");
+  const groupsQuery = useQuery({
+    queryKey: ["addon-groups", formServiceId],
+    queryFn: () => listAddOnGroups(formServiceId || undefined),
+    enabled: Boolean(formServiceId),
+  });
+  const groupOptions = (groupsQuery.data ?? []).map((g) => ({ value: g.id, label: g.name }));
 
   const createMutation = useMutation({
     mutationFn: createServiceAddOn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["service-addons"] });
-      form.reset({ ...form.getValues(), name: "", description: "", price: 0 });
+      form.reset({ ...form.getValues(), name: "", description: "", price: 0, groupId: "" });
     },
   });
 
@@ -82,6 +92,7 @@ export default function CatalogAddOnsPage() {
       sortOrder: values.sortOrder,
       isQuantityAllowed: values.isQuantityAllowed,
       isMandatory: values.isMandatory,
+      groupId: values.groupId || null,
     }),
   );
 
@@ -189,6 +200,15 @@ export default function CatalogAddOnsPage() {
               />
               <Field label="Sort order" type="number" error={form.formState.errors.sortOrder?.message} {...form.register("sortOrder", { valueAsNumber: true })} />
             </FormGrid>
+
+            <Select
+              label="Group"
+              hint={formServiceId ? "Optional — place this add-on under a pick-one/pick-many group (Phase 3)." : "Select a service first."}
+              placeholder="Ungrouped"
+              disabled={!formServiceId}
+              options={groupOptions}
+              {...form.register("groupId")}
+            />
 
             <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <legend className="mb-2 text-sm font-medium text-fg">Add-on options</legend>

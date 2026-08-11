@@ -22,4 +22,7 @@ public interface IServiceAddOnRepository : IRepository<ServiceAddOn>
     /// add-on pricing (SRS 12.8.1) screens.
     /// </summary>
     Task<IReadOnlyList<ServiceAddOn>> ListAllAsync(Guid? serviceId);
+
+    /// <summary>Whether any add-on still references this group (Phase 3 catalog redesign) - guards <see cref="IServiceAddOnGroupManagementService.DeleteAsync"/> against orphaning a group's members.</summary>
+    Task<bool> ExistsByGroupIdAsync(Guid groupId);
 }

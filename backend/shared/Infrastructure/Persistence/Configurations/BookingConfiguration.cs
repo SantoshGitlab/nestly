@@ -59,6 +59,7 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
 
         builder.Property(x => x.CouponCodeSnapshot).HasMaxLength(50);
         builder.Property(x => x.CouponDiscountAmountSnapshot).HasPrecision(12, 2);
+        builder.Property(x => x.WalletCreditAppliedSnapshot).HasPrecision(12, 2);
 
         // Task 179: traceability only, not a foreign key - see SubscriptionId's doc comment.
         builder.Property(x => x.SubscriptionId);
@@ -81,6 +82,21 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         // foreign key by convention - confirmed in
         // database/migrations/NestlyDbContextModelSnapshot.cs. An explicit
         // duplicate would violate DATABASE.md's "avoid excessive indexing."
+
+        // Task 296: a real foreign key, unlike SourceAddressId/SlotWindowId/
+        // SubscriptionId above - see the property's doc comment. Restrict
+        // because a plan is only ever Cancelled/Completed, never hard-deleted,
+        // so this can never block a legitimate operation while it does
+        // guarantee tasks 299/300's booking -> plan join is never dangling.
+        // EF Core creates ix_booking_recurring_booking_plan_id for this FK by
+        // convention (same reasoning as AssignedProviderId above), so no
+        // explicit HasIndex - a duplicate would violate DATABASE.md's
+        // "avoid excessive indexing".
+        builder.Property(x => x.RecurringBookingPlanId);
+        builder.HasOne<RecurringBookingPlan>()
+            .WithMany()
+            .HasForeignKey(x => x.RecurringBookingPlanId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(x => x.Items)
             .WithOne()

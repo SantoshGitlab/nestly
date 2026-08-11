@@ -1,3 +1,5 @@
+using Nestly.Domain;
+
 namespace Nestly.Application.Catalog;
 
 /// <summary>Category card for a listing page (SRS 11.1/11.5), scoped to a serviceable city.</summary>
@@ -15,16 +17,69 @@ public record ServiceAddOnSummaryResponse(
     string? Description,
     decimal Price);
 
-/// <summary>A service as it appears nested under a category detail (SRS 11.5).</summary>
+/// <summary>
+/// A service as it appears nested under a category detail (SRS 11.5).
+/// <see cref="AddOns"/> is ungrouped add-ons only (Phase 3 catalog redesign) -
+/// grouped add-ons aren't surfaced at this summary level, only on the service
+/// detail page. <see cref="CoverImageUrl"/> is null until an admin sets one -
+/// the customer app renders a graphic fallback rather than a broken image.
+/// </summary>
 public record ServiceSummaryResponse(
     Guid Id,
     string Name,
     string Slug,
     string Description,
     decimal Price,
+    IReadOnlyList<ServiceAddOnSummaryResponse> AddOns,
+    string? CoverImageUrl,
+    int DurationMinutes);
+
+/// <summary>A priced/timed option a service can be booked as, as shown to a customer (Phase 3 catalog redesign).</summary>
+public record ServiceVariantSummaryResponse(
+    Guid Id,
+    string Name,
+    decimal Price,
+    int DurationMinutes,
+    string? InclusionsOverride);
+
+/// <summary>
+/// A named group of add-ons with a selection rule, as shown to a customer
+/// (Phase 3 catalog redesign). <see cref="SelectionType"/> is the enum's
+/// string name ("Single"/"Multiple"), not the C# enum type itself - no
+/// <c>JsonStringEnumConverter</c> is registered app-wide, so an enum-typed
+/// field here would serialize as its numeric ordinal instead (same reasoning
+/// as <see cref="ServiceAdminResponse.PricingType"/>).
+/// </summary>
+public record ServiceAddOnGroupSummaryResponse(
+    Guid Id,
+    string Name,
+    string SelectionType,
+    int MinSelect,
+    int? MaxSelect,
     IReadOnlyList<ServiceAddOnSummaryResponse> AddOns);
 
-/// <summary>Category detail: the category plus its active services and their add-ons (task 41, SRS 11.5).</summary>
+/// <summary>
+/// A named section header for a subset of a category's services (e.g. "Repair
+/// &amp; gas refill" under "AC"), as shown to a customer. Only ever included
+/// when it has at least one active service - the UI must never render an
+/// empty header. <see cref="Services"/> is ordered for display, same as
+/// <see cref="CategoryDetailResponse.Services"/>.
+/// </summary>
+public record ServiceGroupSummaryResponse(
+    Guid Id,
+    string Name,
+    IReadOnlyList<ServiceSummaryResponse> Services);
+
+/// <summary>
+/// Category detail: the category plus its active subcategories, services and
+/// their add-ons (task 41, SRS 11.5; subcategories added Phase 3 catalog
+/// redesign). <see cref="Services"/> is ungrouped services only (Appliance/
+/// Service Group catalog redesign) - a service assigned to a group is
+/// surfaced under its entry in <see cref="ServiceGroups"/> instead, never
+/// both. For every category with no service groups (the default, and every
+/// category before this field existed), <see cref="ServiceGroups"/> is empty
+/// and <see cref="Services"/> behaves exactly as before.
+/// </summary>
 public record CategoryDetailResponse(
     Guid Id,
     string Name,
@@ -32,7 +87,9 @@ public record CategoryDetailResponse(
     string Description,
     string? IconUrl,
     string? BannerUrl,
-    IReadOnlyList<ServiceSummaryResponse> Services);
+    IReadOnlyList<ServiceSummaryResponse> Services,
+    IReadOnlyList<CategorySummaryResponse> Subcategories,
+    IReadOnlyList<ServiceGroupSummaryResponse> ServiceGroups);
 
 /// <summary>Service card for a "services within category" listing (task 42a, SRS 11.5.3).</summary>
 public record ServiceListItemResponse(
@@ -40,12 +97,20 @@ public record ServiceListItemResponse(
     string Name,
     string Slug,
     string Description,
-    decimal Price);
+    decimal Price,
+    string? CoverImageUrl,
+    int DurationMinutes);
 
 /// <summary>One FAQ entry on a service detail page (task 52d, SRS 11.6.1).</summary>
 public record ServiceFaqResponse(Guid Id, string Question, string Answer);
 
-/// <summary>Full service detail page content (task 42b, SRS 11.6.1).</summary>
+/// <summary>
+/// Full service detail page content (task 42b, SRS 11.6.1). <see cref="AddOns"/>
+/// is ungrouped add-ons only (Phase 3 catalog redesign) - grouped add-ons are
+/// in <see cref="AddOnGroups"/> instead. <see cref="Variants"/> is empty for a
+/// service with no priced/timed options, in which case <see cref="Price"/>
+/// (unchanged) is the price to book at.
+/// </summary>
 public record ServiceDetailResponse(
     Guid Id,
     string Name,
@@ -60,7 +125,11 @@ public record ServiceDetailResponse(
     string CategoryName,
     string CategorySlug,
     IReadOnlyList<ServiceAddOnSummaryResponse> AddOns,
-    IReadOnlyList<ServiceFaqResponse> Faqs);
+    IReadOnlyList<ServiceFaqResponse> Faqs,
+    IReadOnlyList<ServiceVariantSummaryResponse> Variants,
+    IReadOnlyList<ServiceAddOnGroupSummaryResponse> AddOnGroups,
+    string? CoverImageUrl,
+    int DurationMinutes);
 
 /// <summary>One recent review shown in a service's rating summary (task 52f, SRS 11.6.1).</summary>
 public record ServiceReviewItemResponse(Guid Id, int Rating, string? ReviewText, DateTime CreatedAtUtc);

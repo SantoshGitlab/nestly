@@ -33,4 +33,7 @@ public interface IServiceRepository : IRepository<Service>
 
     /// <summary>Every service regardless of category or active status, for the admin base-price management screen (SRS 12.8.1).</summary>
     Task<IReadOnlyList<Service>> ListAllAsync();
+
+    /// <summary>Whether any service still references this service group - mirrors <c>IServiceAddOnRepository.ExistsByGroupIdAsync</c>, used to block deleting an in-use group.</summary>
+    Task<bool> ExistsByServiceGroupIdAsync(Guid serviceGroupId);
 }

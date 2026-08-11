@@ -21,5 +21,17 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(x => x.SortOrder).IsRequired();
         builder.Property(x => x.SeoTitle).HasMaxLength(200);
         builder.Property(x => x.SeoMetaDescription).HasMaxLength(500);
+
+        // Phase 3 catalog redesign: the first real FK constraint among the
+        // catalog entities (Category/Service/ServiceAddOn otherwise cross-
+        // reference each other via unconstrained indexed Guid columns only) -
+        // parent/child is genuine same-aggregate-type tree integrity, so
+        // Restrict prevents orphaning a subcategory by deleting its parent.
+        builder.Property(x => x.ParentCategoryId);
+        builder.HasIndex(x => x.ParentCategoryId);
+        builder.HasOne<Category>()
+            .WithMany()
+            .HasForeignKey(x => x.ParentCategoryId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

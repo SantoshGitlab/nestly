@@ -16,6 +16,7 @@ public class CategoryQueryService : ICategoryQueryService
     private readonly ICategoryRepository _categoryRepository;
     private readonly IServiceRepository _serviceRepository;
     private readonly IServiceAddOnRepository _addOnRepository;
+    private readonly IServiceGroupRepository _serviceGroupRepository;
     private readonly IServiceabilityRepository _serviceabilityRepository;
     private readonly ICacheService _cache;
 
@@ -23,12 +24,14 @@ public class CategoryQueryService : ICategoryQueryService
         ICategoryRepository categoryRepository,
         IServiceRepository serviceRepository,
         IServiceAddOnRepository addOnRepository,
+        IServiceGroupRepository serviceGroupRepository,
         IServiceabilityRepository serviceabilityRepository,
         ICacheService cache)
     {
         _categoryRepository = categoryRepository;
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
+        _serviceGroupRepository = serviceGroupRepository;
         _serviceabilityRepository = serviceabilityRepository;
         _cache = cache;
     }
@@ -57,7 +60,7 @@ public class CategoryQueryService : ICategoryQueryService
         // The slug -> id lookup is a cheap unique-index hit and always fresh;
         // only the expensive nested services+add-ons assembly below is cached.
         var category = await _categoryRepository.GetBySlugAsync(slug);
-        if (category is null || !category.IsActive)
+        if (category is null || !await IsVisibleInHierarchyAsync(category))
         {
             return Error.NotFound("Catalog.CategoryNotFound", "The specified category does not exist.");
         }
@@ -77,19 +80,26 @@ public class CategoryQueryService : ICategoryQueryService
                     .GroupBy(a => a.ServiceId)
                     .ToDictionary(g => g.Key, g => (IReadOnlyList<ServiceAddOn>)g.ToList());
 
-                var serviceResponses = new List<ServiceSummaryResponse>(services.Count);
+                // Appliance/Service Group catalog redesign: split the
+                // already-fetched, already-ordered service list by
+                // ServiceGroupId rather than a second query - one list
+                // fetched above serves both the ungrouped Services field and
+                // each group's members.
+                var ungroupedServices = services.Where(s => s.ServiceGroupId is null).ToList();
+                var servicesByGroup = services.Where(s => s.ServiceGroupId is not null)
+                    .GroupBy(s => s.ServiceGroupId!.Value)
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
-                foreach (var service in services)
-                {
-                    var addOns = addOnsByService.TryGetValue(service.Id, out var found) ? found : [];
-                    serviceResponses.Add(new ServiceSummaryResponse(
-                        service.Id,
-                        service.Name,
-                        service.Slug,
-                        service.Description,
-                        service.Price,
-                        addOns.Select(ToAddOnSummary).ToList()));
-                }
+                var serviceResponses = ungroupedServices.Select(s => ToServiceSummary(s, addOnsByService)).ToList();
+
+                var groups = await _serviceGroupRepository.ListActiveByCategoryIdsAsync([category.Id]);
+                var serviceGroupResponses = groups
+                    .Where(g => servicesByGroup.ContainsKey(g.Id))
+                    .Select(g => new ServiceGroupSummaryResponse(
+                        g.Id, g.Name, servicesByGroup[g.Id].Select(s => ToServiceSummary(s, addOnsByService)).ToList()))
+                    .ToList();
+
+                var subcategories = await _categoryRepository.ListChildrenAsync(category.Id);
 
                 return new CategoryDetailResponse(
                     category.Id,
@@ -98,11 +108,61 @@ public class CategoryQueryService : ICategoryQueryService
                     category.Description,
                     category.IconUrl,
                     category.BannerUrl,
-                    serviceResponses);
+                    serviceResponses,
+                    subcategories.Select(ToSummary).ToList(),
+                    serviceGroupResponses);
             },
             DetailTtl);
 
         return detail;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="category"/> and every one of its ancestor
+    /// categories are active (SRS 11.5.4, 12.5.3) - deactivating a parent
+    /// hides its sub-categories and their services from customer-facing
+    /// discovery even while a sub-category's own active flag stays true.
+    /// Bounded to 32 hops so malformed/cyclical parent data can't spin this
+    /// into an infinite walk (a true cycle is already rejected at write
+    /// time by <c>CategoryManagementService</c>, so this is a defensive
+    /// ceiling, not an expected path).
+    /// </summary>
+    private async Task<bool> IsVisibleInHierarchyAsync(Category category)
+    {
+        Category? current = category;
+        for (var hop = 0; hop < 32 && current is not null; hop++)
+        {
+            if (!current.IsActive)
+            {
+                return false;
+            }
+
+            if (current.ParentCategoryId is null)
+            {
+                return true;
+            }
+
+            current = await _categoryRepository.GetByIdAsync(current.ParentCategoryId.Value);
+        }
+
+        return false;
+    }
+
+    private static ServiceSummaryResponse ToServiceSummary(
+        Service service, IReadOnlyDictionary<Guid, IReadOnlyList<ServiceAddOn>> addOnsByService)
+    {
+        var addOns = addOnsByService.TryGetValue(service.Id, out var found) ? found : [];
+        return new ServiceSummaryResponse(
+            service.Id,
+            service.Name,
+            service.Slug,
+            service.Description,
+            service.Price,
+            // Ungrouped only (Phase 3 catalog redesign) - grouped add-ons
+            // aren't shown at this summary level.
+            addOns.Where(a => a.GroupId is null).Select(ToAddOnSummary).ToList(),
+            service.CoverImageUrl,
+            service.DurationMinutes);
     }
 
     private static CategorySummaryResponse ToSummary(Category category) => new(

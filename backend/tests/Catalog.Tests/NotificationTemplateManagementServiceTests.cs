@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Notifications;
@@ -170,6 +171,59 @@ public sealed class NotificationTemplateManagementServiceTests : IClassFixture<T
         (await service.GetByIdAsync(Guid.NewGuid())).Error.Code.Should().Be("NotificationTemplate.NotFound");
         (await service.ActivateAsync(Guid.NewGuid())).Error.Code.Should().Be("NotificationTemplate.NotFound");
         (await service.PreviewAsync(Guid.NewGuid(), new NotificationTemplatePreviewRequest(new Dictionary<string, string>()))).Error.Code.Should().Be("NotificationTemplate.NotFound");
+    }
+
+    /// <summary>
+    /// Pins the defensive filter <c>NotificationTemplateRepository.KnownEventTypeOnly</c> exists
+    /// for. It shipped in 088ba63 with no test of its own - it was written as PostgreSQL-only
+    /// raw SQL (<c>= ANY(array)</c>), which this SQLite-backed suite cannot execute at all, so
+    /// the behaviour was unverifiable until the filter was re-expressed in LINQ on 2026-08-08.
+    /// Without it, one unrecognized <c>event_type</c> takes down every notification dispatch in
+    /// the app and the admin screen an operator would use to find the offending row.
+    /// </summary>
+    [Fact]
+    public async Task An_event_type_the_enum_no_longer_defines_is_filtered_out_instead_of_crashing_every_caller()
+    {
+        using var context = _db.CreateContext();
+        var service = CreateService(context);
+        var repository = new NotificationTemplateRepository(context);
+
+        var good = (await service.CreateAsync(new NotificationTemplateCreateRequest(
+            NotificationEventType.JobCompleted, NotificationChannel.Email, "job_completed_email", "Job completed", "Body"))).Value;
+
+        // A value the enum does not define - what a renamed member or a hand-inserted row leaves
+        // behind. EF's string-to-enum converter throws the moment it materializes this row, so
+        // it has to be excluded in SQL, before materialization, not filtered in memory after.
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO notification_template
+                (id, event_type, channel, template_key, subject, body, is_active, created_at_utc, updated_at_utc)
+            VALUES
+                ({0}, 'AnEventTypeThisEnumNoLongerDefines', 'Email', 'stale_row_email', 'Stale', 'Body', 1, {1}, {1})
+            """,
+            Guid.NewGuid().ToString(), DateTime.UtcNow.ToString("O"));
+
+        try
+        {
+            // Each of these would throw, not merely omit a row, if the filter regressed.
+            var active = await repository.ListActiveAsync();
+            active.Should().Contain(t => t.Id == good.Id);
+            active.Should().NotContain(t => t.TemplateKey == "stale_row_email");
+
+            var all = await repository.ListAsync(channel: null, eventType: null, isActive: null);
+            all.Should().Contain(t => t.Id == good.Id);
+            all.Should().NotContain(t => t.TemplateKey == "stale_row_email");
+
+            // The dispatch path the outage actually ran through.
+            var renderer = new NotificationTemplateRenderer(repository, new MemoryCache(new MemoryCacheOptions()));
+            (await renderer.SupportsChannelAsync(NotificationEventType.JobCompleted, NotificationChannel.Email))
+                .Should().BeTrue();
+        }
+        finally
+        {
+            // The fixture's database is shared by every test in this class.
+            await context.Database.ExecuteSqlRawAsync("DELETE FROM notification_template WHERE template_key = 'stale_row_email';");
+        }
     }
 
     private sealed class StubAuditContextProvider : IAuditContextProvider

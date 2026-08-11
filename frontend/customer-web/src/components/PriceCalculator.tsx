@@ -3,26 +3,43 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Alert, Button, Skeleton, cx } from "@/components/ui";
+import { AddOnGroupSelector, VariantPicker } from "@/components/patterns";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import type { PriceBreakdown, PriceCalculationRequest, ServiceAddOnSummary } from "@/lib/types";
+import type {
+  PriceBreakdown,
+  PriceCalculationRequest,
+  ServiceAddOnGroupSummary,
+  ServiceAddOnSummary,
+  ServiceVariantSummary,
+} from "@/lib/types";
 
 /**
  * Live, server-calculated price breakdown (SRS 11.6.1, 11.9 - "final price
- * must be calculated server-side", task 48). Quantity and add-on selections
- * are local UI state; every change re-requests the authoritative total
- * rather than computing it client-side.
+ * must be calculated server-side", task 48). Quantity, variant and add-on
+ * selections are local UI state; every change re-requests the authoritative
+ * total rather than computing it client-side.
+ *
+ * `variants`/`addOnGroups` default to empty (Phase 3 catalog redesign) - a
+ * service with neither renders and behaves exactly as it did before those
+ * fields existed: no variant picker, no grouped selectors, just the flat
+ * ungrouped add-on list.
  */
 export function PriceCalculator({
   serviceId,
   addOns,
   cityId,
+  variants = [],
+  addOnGroups = [],
 }: {
   serviceId: string;
   addOns: ServiceAddOnSummary[];
   cityId: string | null;
+  variants?: ServiceVariantSummary[];
+  addOnGroups?: ServiceAddOnGroupSummary[];
 }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set());
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(variants[0]?.id ?? null);
 
   const toggleAddOn = (id: string) => {
     setSelectedAddOnIds((prev) => {
@@ -50,9 +67,10 @@ export function PriceCalculator({
             addOns: Array.from(selectedAddOnIds)
               .sort()
               .map((addOnId) => ({ addOnId, quantity: 1 })),
+            serviceVariantId: selectedVariantId,
           }
         : null,
-    [cityId, serviceId, quantity, selectedAddOnIds],
+    [cityId, serviceId, quantity, selectedAddOnIds, selectedVariantId],
   );
 
   const query = useQuery({
@@ -70,6 +88,8 @@ export function PriceCalculator({
 
   return (
     <div className="flex flex-col gap-5 rounded-2xl border border-line bg-surface p-5 shadow-sm">
+      <VariantPicker variants={variants} selectedId={selectedVariantId} onSelect={setSelectedVariantId} />
+
       {/* A group, not a label: the value is a <span>, and htmlFor on a
           non-labelable element leaves the control unlabelled. */}
       <div
@@ -94,6 +114,10 @@ export function PriceCalculator({
           </StepperButton>
         </div>
       </div>
+
+      {addOnGroups.map((group) => (
+        <AddOnGroupSelector key={group.id} group={group} selectedIds={selectedAddOnIds} onToggle={toggleAddOn} />
+      ))}
 
       {addOns.length > 0 ? (
         <fieldset className="flex flex-col gap-2">

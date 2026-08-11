@@ -100,6 +100,21 @@ export interface ServiceSummary {
   description: string;
   price: number;
   addOns: ServiceAddOnSummary[];
+  /** Null until an admin sets one - render a graphic fallback, not a broken image. */
+  coverImageUrl: string | null;
+  durationMinutes: number;
+}
+
+/**
+ * A named section header for a subset of a category's services (e.g.
+ * "Repair & gas refill" under "AC"). Appliance/Service Group catalog
+ * redesign - only ever present when it has at least one service; the UI
+ * must never render an empty header.
+ */
+export interface ServiceGroupSummary {
+  id: string;
+  name: string;
+  services: ServiceSummary[];
 }
 
 export interface CategoryDetail {
@@ -109,7 +124,12 @@ export interface CategoryDetail {
   description: string;
   iconUrl: string | null;
   bannerUrl: string | null;
+  /** Ungrouped services only (Appliance/Service Group catalog redesign) - a service assigned to a group appears in `serviceGroups` instead, never both. */
   services: ServiceSummary[];
+  /** Active subcategories, if any (Phase 3 catalog redesign) - empty for a leaf category, unchanged from before this field existed. */
+  subcategories: CategorySummary[];
+  /** Empty for every category with no service groups (the default, and every category before this field existed). */
+  serviceGroups: ServiceGroupSummary[];
 }
 
 export interface ServiceListItem {
@@ -118,12 +138,35 @@ export interface ServiceListItem {
   slug: string;
   description: string;
   price: number;
+  coverImageUrl: string | null;
+  durationMinutes: number;
 }
 
 export interface ServiceFaq {
   id: string;
   question: string;
   answer: string;
+}
+
+/** A priced, timed option a service can be booked as (Phase 3 catalog redesign). */
+export interface ServiceVariantSummary {
+  id: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+  inclusionsOverride: string | null;
+}
+
+export type AddOnGroupSelectionType = "Single" | "Multiple";
+
+/** A named group of add-ons with a selection rule (Phase 3 catalog redesign). */
+export interface ServiceAddOnGroupSummary {
+  id: string;
+  name: string;
+  selectionType: AddOnGroupSelectionType;
+  minSelect: number;
+  maxSelect: number | null;
+  addOns: ServiceAddOnSummary[];
 }
 
 export interface ServiceDetail {
@@ -139,8 +182,14 @@ export interface ServiceDetail {
   categoryId: string;
   categoryName: string;
   categorySlug: string;
+  /** Ungrouped add-ons only (Phase 3 catalog redesign) - grouped add-ons are in addOnGroups instead. */
   addOns: ServiceAddOnSummary[];
   faqs: ServiceFaq[];
+  /** Empty for a service with no priced/timed options - book at the flat `price` above. */
+  variants: ServiceVariantSummary[];
+  addOnGroups: ServiceAddOnGroupSummary[];
+  coverImageUrl: string | null;
+  durationMinutes: number;
 }
 
 /** One recent review in a service's rating summary (SRS 11.6.1). */
@@ -228,6 +277,8 @@ export interface PriceCalculationRequest {
   cityId: string;
   quantity: number;
   addOns: AddOnSelection[];
+  /** Null for a service with no variants (Phase 3 catalog redesign) - the flat service price applies. */
+  serviceVariantId?: string | null;
 }
 
 export interface AddOnLineItem {
@@ -236,6 +287,9 @@ export interface AddOnLineItem {
   unitPrice: number;
   quantity: number;
   lineTotal: number;
+  /** Null for an ungrouped add-on (Phase 3 catalog redesign). */
+  groupId?: string | null;
+  groupName?: string | null;
 }
 
 export interface PriceBreakdown {
@@ -250,6 +304,10 @@ export interface PriceBreakdown {
   taxAmount: number;
   platformFee: number;
   totalPayable: number;
+  /** Null when no variant was selected (Phase 3 catalog redesign) - basePrice is the service's flat price. */
+  selectedVariantId?: string | null;
+  selectedVariantName?: string | null;
+  selectedVariantDurationMinutes?: number | null;
 }
 
 /**
@@ -270,12 +328,26 @@ export interface BookingSummaryRequestBody {
   couponCode?: string | null;
   /** Only meaningful on POST /bookings - ignored by the /bookings/summary preview. See BookingContracts.cs. */
   idempotencyKey?: string | null;
+  /**
+   * Task 310 (SRS 11.7.2). A boolean toggle, not a customer-typed amount - opting
+   * in applies as much of the wallet balance as the booking can absorb (see
+   * `BookingSummary.wallet.appliedAmount`), matching the "applied automatically"
+   * wording on the wallet page. Applied last, after any coupon/subscription
+   * discount, and stacks with either.
+   */
+  applyWalletCredit?: boolean;
+  /** Null for a service with no variants (Phase 3 catalog redesign). */
+  serviceVariantId?: string | null;
 }
 
 export interface BookingServiceSummary {
   id: string;
   name: string;
   slug: string;
+  /** Null when no variant was selected (Phase 3 catalog redesign). */
+  variantId?: string | null;
+  variantName?: string | null;
+  variantDurationMinutes?: number | null;
 }
 
 export interface BookingAddressSummary {
@@ -309,7 +381,14 @@ export interface CouponSummary {
   discountAmount: number;
 }
 
-/** Booking summary/preview (SRS 11.7), with the coupon module wired in (task 77). */
+/** Mirrors the C# WalletCreditSummaryResponse record (WalletContracts.cs). Always present on a BookingSummary - balance is surfaced whether or not it's applied (task 310). */
+export interface WalletCreditSummary {
+  balance: number;
+  /** Zero unless the request opted in via applyWalletCredit - capped at both the balance and whatever remains payable. */
+  appliedAmount: number;
+}
+
+/** Booking summary/preview (SRS 11.7), with the coupon module wired in (task 77) and wallet credit (task 310). */
 export interface BookingSummary {
   service: BookingServiceSummary;
   addOns: ServiceAddOnSummary[];
@@ -319,7 +398,8 @@ export interface BookingSummary {
   cancellationPolicy: string | null;
   reschedulePolicy: string | null;
   coupon: CouponSummary | null;
-  /** price.totalPayable - coupon.discountAmount when a coupon is applied, else === price.totalPayable. */
+  wallet: WalletCreditSummary;
+  /** price.totalPayable, less coupon.discountAmount and wallet.appliedAmount when either applies. */
   finalPayable: number;
 }
 
@@ -400,10 +480,31 @@ export interface BookingDetail {
   createdAtUtc: string;
   couponCode: string | null;
   couponDiscountAmount: number | null;
+  /** Wallet balance applied at checkout (task 310). Null when none was applied. */
+  walletCreditApplied: number | null;
   /** Equals price.totalPayable on a persisted booking - both already reflect the discounted amount actually charged. */
   finalPayable: number;
   /** Null until a provider is assigned; then tracks the live assignment row (task 208). */
   providerAssignmentStatus: BookingProviderAssignmentStatus | null;
+  /**
+   * Who is coming (task 275), populated with real data since task 293.
+   * Appears and disappears with `providerAssignmentStatus` - both are driven
+   * by the same live assignment, so a professional taken off the job stops
+   * showing here immediately.
+   */
+  provider: BookingProviderSummary | null;
+}
+
+/**
+ * The assigned professional's public identity (task 275/293). `photoUrl` is
+ * null until they have set a photo AND an admin has approved it; `rating` is
+ * null until they have visible reviews - which is every new professional, and
+ * must read as "no rating" rather than a bad one.
+ */
+export interface BookingProviderSummary {
+  displayName: string;
+  photoUrl: string | null;
+  rating: number | null;
 }
 
 export interface BookingListItem {
@@ -414,6 +515,14 @@ export interface BookingListItem {
   status: BookingStatus;
   statusLabel: string;
   createdAtUtc: string;
+}
+
+/** Mirrors Nestly.Application.Bookings.BookingListResponse - a page of the customer's own bookings, newest first. */
+export interface BookingListResponse {
+  items: BookingListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 /**
@@ -666,6 +775,10 @@ export enum WalletSourceType {
   ReferralCreditExpiry = 5,
   NestlyCoinsReward = 6,
   NestlyCoinsClawback = 7,
+  /** Debited when a customer applies wallet balance at checkout (task 310). */
+  BookingWalletCredit = 8,
+  /** Credited back when a booking that consumed wallet balance is fully refunded (task 310). */
+  BookingWalletCreditReversal = 9,
 }
 
 export interface WalletBalanceResponse {

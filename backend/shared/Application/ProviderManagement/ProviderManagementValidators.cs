@@ -42,6 +42,16 @@ public class UpdateProviderRequestValidator : AbstractValidator<UpdateProviderRe
     }
 }
 
+/// <summary>Mirrors <see cref="ProviderCapacity.SetLimits"/>'s own invariant (positive when set) so a bad value 400s here instead of round-tripping to the domain exception.</summary>
+public class SetProviderCapacityRequestValidator : AbstractValidator<SetProviderCapacityRequest>
+{
+    public SetProviderCapacityRequestValidator()
+    {
+        RuleFor(x => x.MaxJobsPerDay).GreaterThan(0).When(x => x.MaxJobsPerDay.HasValue);
+        RuleFor(x => x.MaxJobsPerSlot).GreaterThan(0).When(x => x.MaxJobsPerSlot.HasValue);
+    }
+}
+
 public class SuspendProviderRequestValidator : AbstractValidator<SuspendProviderRequest>
 {
     public SuspendProviderRequestValidator()
@@ -53,6 +63,15 @@ public class SuspendProviderRequestValidator : AbstractValidator<SuspendProvider
 public class RejectProviderKycDocumentRequestValidator : AbstractValidator<RejectProviderKycDocumentRequest>
 {
     public RejectProviderKycDocumentRequestValidator()
+    {
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+    }
+}
+
+/// <summary>Task 293. Same shape as the KYC rejection above, and required for the same reason: a rejection the provider cannot act on is just a disappearance.</summary>
+public class RejectProviderPhotoRequestValidator : AbstractValidator<RejectProviderPhotoRequest>
+{
+    public RejectProviderPhotoRequestValidator()
     {
         RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
     }

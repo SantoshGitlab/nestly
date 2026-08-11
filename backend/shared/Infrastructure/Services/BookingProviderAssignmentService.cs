@@ -133,7 +133,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             var currentAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
             if (currentAssignment is not null)
             {
-                currentAssignment.MarkReassigned();
+                currentAssignment.MarkReassigned(providerId);
                 await _assignmentRepository.UpdateAsync(currentAssignment);
             }
 
@@ -141,6 +141,14 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
                 Guid.NewGuid(), bookingId, providerId, assignedByType, adminUserId, responseDeadline);
             await _assignmentRepository.AddAsync(assignment);
 
+            // A booking that is already Assigned stays Assigned - swapping the
+            // provider is not a lifecycle transition. That used to make the
+            // swap invisible to everything downstream (task 295): no
+            // BookingStatusChangedEvent meant no notification, so a customer
+            // who had been told who was coming was never told it had changed.
+            // The signal now comes from MarkReassigned's
+            // BookingProviderChangedEvent above, which fires on both branches
+            // of this if and does not depend on a status change.
             if (booking.Status == BookingStatus.AwaitingFulfilment)
             {
                 booking.TransitionTo(BookingStatus.Assigned, reason);
@@ -399,8 +407,9 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             .Where(c => providerIds.Contains(c.ProviderId))
             .ToDictionaryAsync(c => c.ProviderId, c => c.MaxJobsPerDay);
 
-        // Advisory load signal (ProviderCapacity's own doc comment: "an admin
-        // can consult them when hand-assigning a booking") - counts this
+        // Advisory load signal only (PROVIDER.md OPEN DECISIONS - AUTOMATIC
+        // ASSIGNMENT #2 - manual admin assignment does not hard-enforce
+        // ProviderCapacity, only the automatic engine does) - counts this
         // provider's other live jobs on the same slot date, not a hard filter.
         var jobsTodayByProvider = await _context.Set<Booking>()
             .Where(b => b.AssignedProviderId != null

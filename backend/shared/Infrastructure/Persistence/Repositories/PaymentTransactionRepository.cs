@@ -109,6 +109,41 @@ public class PaymentTransactionRepository : IPaymentTransactionRepository
         return await query.OrderByDescending(t => t.CreatedAtUtc).ToListAsync();
     }
 
+    public async Task<(IReadOnlyList<PaymentTransaction> Rows, int TotalCount)> SearchAsync(
+        Guid? bookingId, PaymentTransactionStatus? status, DateTime? fromUtc, DateTime? toUtc, int page, int pageSize)
+    {
+        var query = FullyLoaded();
+
+        if (bookingId is not null)
+        {
+            query = query.Where(t => t.BookingId == bookingId.Value);
+        }
+
+        if (status is not null)
+        {
+            query = query.Where(t => t.Status == status.Value);
+        }
+
+        if (fromUtc is not null)
+        {
+            query = query.Where(t => t.CreatedAtUtc >= fromUtc.Value);
+        }
+
+        if (toUtc is not null)
+        {
+            query = query.Where(t => t.CreatedAtUtc <= toUtc.Value);
+        }
+
+        int totalCount = await query.CountAsync();
+
+        var rows = await query
+            .OrderByDescending(t => t.CreatedAtUtc)
+            .ApplyPaging(page, pageSize)
+            .ToListAsync();
+
+        return (rows, totalCount);
+    }
+
     private IQueryable<PaymentTransaction> FullyLoaded() =>
         _context.PaymentTransactions.Include(t => t.Attempts);
 }

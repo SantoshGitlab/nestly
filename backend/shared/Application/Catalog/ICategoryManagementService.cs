@@ -15,4 +15,7 @@ public interface ICategoryManagementService
     Task<Result<CategoryResponse>> UpdateAsync(Guid id, CategoryUpdateRequest request);
     Task<Result> SetActiveAsync(Guid id, bool isActive);
     Task<Result> SetFeaturedAsync(Guid id, bool isFeatured);
+
+    /// <summary>Active subcategories of a category, for the admin "Subcategories" list (Phase 3 catalog redesign).</summary>
+    Task<IReadOnlyList<CategoryResponse>> ListChildrenAsync(Guid parentCategoryId);
 }

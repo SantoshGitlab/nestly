@@ -87,11 +87,24 @@ public static class AdminModules
     /// <summary>Subscription plan config CRUD (PRODUCT-ENHANCEMENTS.md #1 RBAC ADDITIONS "View / Configure", task 180). Read = View plan list/detail, Write = create/update/activate/deactivate a plan - the catalog's standard two-tier split matches this module's "View / Configure" spec exactly, no collapsing needed.</summary>
     public const string Subscription = "subscription";
 
-    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Provider, Phase 9 Referral, Phase 10 Chat/Subscription, and Phase 11 Nestly Coins module additions (tasks 150c, 173, 194, 180, 202).</summary>
+    /// <summary>
+    /// Customer payment transaction view - list + detail with attempt/refund
+    /// history (SRS 12.13.1, task 311). Deliberately read-only today: SRS
+    /// 12.13.1 itself only asks for a view, and the refund-initiation
+    /// actions SRS 12.13.2-3 describe are a separate, larger task no
+    /// controller implements yet (see <c>PaymentsController</c> in
+    /// admin-api). No existing module already covered this - <see cref="Payout"/>
+    /// is provider payout batches (money going out to providers), a
+    /// different concept from customer payment transactions (money coming in
+    /// from customers) - so this is a new module rather than a reuse.
+    /// </summary>
+    public const string Payments = "payments";
+
+    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Provider, Phase 9 Referral, Phase 10 Chat/Subscription, Phase 11 Nestly Coins, and Phase 18 Payments module additions (tasks 150c, 173, 194, 180, 202, 311).</summary>
     public static readonly IReadOnlyList<string> All =
     [
         Dashboard, Customers, Catalog, Pricing, Serviceability, Slots, Bookings,
         Coupons, Support, Reviews, Cms, Notifications, Reports, Audit, Settings,
-        Provider, Payout, Referral, Chat, NestlyCoins, Subscription
+        Provider, Payout, Referral, Chat, NestlyCoins, Subscription, Payments
     ];
 }

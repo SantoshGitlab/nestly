@@ -44,6 +44,18 @@ public class ProviderRepository : IProviderRepository
             .ToDictionaryAsync(p => p.Id, p => p.DisplayName);
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Provider>> ListPendingPhotoModerationAsync(CancellationToken cancellationToken = default) =>
+        await _context.Set<Provider>()
+            .AsNoTracking()
+            .Where(p => p.PhotoModerationStatus == ProviderPhotoModerationStatus.Pending)
+            // UpdatedAt moves on any profile edit, so it is not a submission
+            // timestamp - but it is the only ordering this entity offers, and
+            // a photo submission always bumps it. Good enough for "work the
+            // oldest first"; it is a queue order, not an audit fact.
+            .OrderBy(p => p.UpdatedAt)
+            .ToListAsync(cancellationToken);
+
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Provider>().AnyAsync(p => p.Id == id);
 

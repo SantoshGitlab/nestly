@@ -7,6 +7,7 @@ import {
   DetailList,
   DetailRow,
   formatCalendarDate,
+  recurringFrequencyLabel,
   recurringPlanStatusTone,
 } from "@/components/patterns";
 import { Reveal, RevealItem } from "@/components/motion";
@@ -105,19 +106,6 @@ function RecurringBookingsScreen() {
   );
 }
 
-function frequencyLabel(frequency: RecurringBookingRecurrenceFrequency): string {
-  switch (frequency) {
-    case RecurringBookingRecurrenceFrequency.Weekly:
-      return "Every week";
-    case RecurringBookingRecurrenceFrequency.Biweekly:
-      return "Every 2 weeks";
-    case RecurringBookingRecurrenceFrequency.Monthly:
-      return "Every month";
-    default:
-      return "Unknown";
-  }
-}
-
 function statusLabel(status: RecurringBookingPlanStatus): string {
   switch (status) {
     case RecurringBookingPlanStatus.Active:
@@ -186,7 +174,7 @@ function PlanCard({ plan }: { plan: RecurringBookingPlanResponse }) {
   return (
     <Card
       title={plan.serviceName}
-      description={`${frequencyLabel(plan.frequency)} ${dayDescription(plan)}`.trim()}
+      description={`${recurringFrequencyLabel(plan.frequency)} ${dayDescription(plan)}`.trim()}
       actions={
         <Badge tone={recurringPlanStatusTone(plan.status)}>{statusLabel(plan.status)}</Badge>
       }

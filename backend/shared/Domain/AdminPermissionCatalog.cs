@@ -99,6 +99,11 @@ public static class AdminPermissionCatalog
             // that is Finance Admin's territory below.
             // Chat=true added (task 193): this role already owns Support and
             // Bookings, the two contexts a chat thread is ever scoped to.
+            // Payments=false added (task 311): this role already sees a
+            // booking's payment incidentally via Bookings - read-only direct
+            // access to the transaction list/detail formalises that same
+            // visibility, not new financial authority (which stays with
+            // Finance Admin below).
             [AdminRoleNames.OperationsAdmin] =
             [
                 (AdminModules.Dashboard, true), (AdminModules.Customers, true),
@@ -108,7 +113,7 @@ public static class AdminPermissionCatalog
                 (AdminModules.Pricing, false), (AdminModules.Coupons, false),
                 (AdminModules.Reviews, false), (AdminModules.Reports, false),
                 (AdminModules.Audit, false), (AdminModules.Provider, true),
-                (AdminModules.Chat, true)
+                (AdminModules.Chat, true), (AdminModules.Payments, false)
             ],
 
             // Booking Admin: the booking lifecycle and the slot capacity it
@@ -190,13 +195,18 @@ public static class AdminPermissionCatalog
             // recurring subscription revenue as reporting context, not
             // plan-configuration authority, which stays with Marketing
             // Admin above - same treatment as Referral=false right above.
+            // Payments=true added (task 311): the customer payment
+            // transaction view (SRS 12.13.1) is the reconciliation surface
+            // this role exists for - same tier as Payout, the other module
+            // that is directly "money moving" rather than reporting context.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
                 (AdminModules.Coupons, false), (AdminModules.Reports, true),
                 (AdminModules.Audit, false), (AdminModules.Provider, false),
                 (AdminModules.Payout, true), (AdminModules.Referral, false),
-                (AdminModules.NestlyCoins, false), (AdminModules.Subscription, false)
+                (AdminModules.NestlyCoins, false), (AdminModules.Subscription, false),
+                (AdminModules.Payments, true)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

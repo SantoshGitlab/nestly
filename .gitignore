@@ -4,6 +4,9 @@
 bin/
 obj/
 
+# Runtime-uploaded files (LocalDiskFileStorageService) - local/dev only, never committed
+App_Data/
+
 # Visual Studio
 .vs/
 *.user
@@ -32,6 +35,9 @@ coverage/
 
 # Local Postgres backups (task 139) - never commit real data dumps
 database/backups/
+
+# Local Redis dump - runtime artifact, never commit
+dump.rdb
 
 # Environment
 .env

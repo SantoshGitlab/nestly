@@ -94,6 +94,7 @@ export function AddOnPricesSection({ canWrite }: { canWrite: boolean }) {
         hideDensityToggle
         skeletonRows={4}
         minWidth="640px"
+        maxHeight="420px"
       />
     </div>
   );

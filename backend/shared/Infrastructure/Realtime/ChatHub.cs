@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Chat;
 using Nestly.Application.Identity;
@@ -23,16 +24,16 @@ namespace Nestly.Infrastructure.Realtime;
 /// hub purely for live delivery and presence.
 ///
 /// One hub TYPE, mapped at the same route (<see cref="HubRoutes.ChatPath"/>)
-/// by both consumer-api (customer JWT, the process's default auth scheme)
-/// and admin-api (admin JWT, its default scheme) - <c>[Authorize]</c> with no
-/// explicit scheme resolves to whichever scheme is default in the hosting
-/// process, so this single class works unmodified in both. That matters for
-/// group broadcast: SignalR's backplane (<c>AddStackExchangeRedis</c>, wired
-/// in each API's Program.cs when Redis is configured) fans a group message
-/// out to every server subscribed under the hub's type name - had
-/// consumer-api and admin-api instead each defined their own hub class, a
+/// by consumer-api (customer JWT), admin-api (admin JWT) and provider-api
+/// (provider JWT), each the default auth scheme in its own process -
+/// <c>[Authorize]</c> with no explicit scheme resolves to whichever scheme is
+/// default in the hosting process, so this single class works unmodified in
+/// all three. That matters for group broadcast: SignalR's backplane
+/// (<c>AddStackExchangeRedis</c>, wired in each API's Program.cs when Redis
+/// is configured) fans a group message out to every server subscribed under
+/// the hub's type name - had each API instead defined their own hub class, a
 /// message persisted by one process could never reach a live connection held
-/// by the other, since they are separate processes with separate in-memory
+/// by another, since they are separate processes with separate in-memory
 /// connection tables. See docs/PRODUCT-ENHANCEMENTS.md's IN-APP CHAT section
 /// for why this is the first real-time feature in the codebase to need
 /// cross-process delivery at all (every previous notification channel -
@@ -49,23 +50,29 @@ namespace Nestly.Infrastructure.Realtime;
 [Authorize]
 public sealed class ChatHub : Hub
 {
+    private readonly RealtimeActorContext _actorContext;
     private readonly IChatPresenceTracker _presenceTracker;
     private readonly IChatThreadRepository _threadRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly ISupportTicketRepository _supportTicketRepository;
+    private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly ILogger<ChatHub> _logger;
 
     public ChatHub(
+        RealtimeActorContext actorContext,
         IChatPresenceTracker presenceTracker,
         IChatThreadRepository threadRepository,
         IBookingRepository bookingRepository,
         ISupportTicketRepository supportTicketRepository,
+        IBookingProviderAssignmentRepository assignmentRepository,
         ILogger<ChatHub> logger)
     {
+        _actorContext = actorContext;
         _presenceTracker = presenceTracker;
         _threadRepository = threadRepository;
         _bookingRepository = bookingRepository;
         _supportTicketRepository = supportTicketRepository;
+        _assignmentRepository = assignmentRepository;
         _logger = logger;
     }
 
@@ -88,8 +95,10 @@ public sealed class ChatHub : Hub
 
     /// <summary>
     /// Joins this connection to the thread's broadcast group, after verifying
-    /// access - a customer only for a thread on their own booking/ticket, an
-    /// admin holding "chat.read" for any thread (task 193's support console).
+    /// access - a customer only for a thread on their own booking/ticket, a
+    /// provider only for a thread on a booking they are the live assignment
+    /// on (task 193's provider reply view), an admin holding "chat.read" for
+    /// any thread (task 193's support console).
     /// </summary>
     public async Task JoinThread(Guid threadId)
     {
@@ -110,21 +119,34 @@ public sealed class ChatHub : Hub
     public async Task LeaveThread(Guid threadId) =>
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, ChatGroups.Thread(threadId));
 
-    private async Task<bool> CanAccessAsync(ChatThread thread)
+    /// <summary>
+    /// Dispatches on <see cref="RealtimeActorContext.Kind"/> - the same
+    /// scheme-derived signal <see cref="BookingTrackingAuthorizer"/> uses -
+    /// rather than a claim on the principal, because a customer JWT and a
+    /// provider JWT are claim-for-claim identical (see
+    /// <see cref="RealtimeActorKind"/>'s doc comment) and only the process's
+    /// registered auth scheme actually distinguishes them. Fails closed:
+    /// <see cref="RealtimeActorKind.Unknown"/> (a process with no
+    /// authentication registered) is denied, not defaulted to allowed.
+    /// </summary>
+    private async Task<bool> CanAccessAsync(ChatThread thread) => _actorContext.Kind switch
     {
-        if (IsAdmin())
-        {
-            // Admin-api registers one authorization policy per permission
-            // code (task 96b), but that registration is process-wide and
-            // this hub type is shared with consumer-api, which never
-            // registers a "chat.read" policy - a class/method-level
-            // [Authorize(Policy = "chat.read")] would throw for every
-            // consumer-api connection. Checking the claim directly (the same
-            // claim PermissionAuthorizationHandler itself evaluates) gets
-            // the same enforcement without that coupling.
-            return Context.User!.HasClaim(AdminClaimTypes.Permission, "chat.read");
-        }
+        // Admin-api registers one authorization policy per permission
+        // code (task 96b), but that registration is process-wide and
+        // this hub type is shared with the other two APIs, which never
+        // register a "chat.read" policy - a class/method-level
+        // [Authorize(Policy = "chat.read")] would throw for every
+        // non-admin connection. Checking the claim directly (the same
+        // claim PermissionAuthorizationHandler itself evaluates) gets
+        // the same enforcement without that coupling.
+        RealtimeActorKind.Admin => Context.User!.HasClaim(AdminClaimTypes.Permission, "chat.read"),
+        RealtimeActorKind.Customer => await CanCustomerAccessAsync(thread),
+        RealtimeActorKind.Provider => await CanProviderAccessAsync(thread),
+        _ => false
+    };
 
+    private async Task<bool> CanCustomerAccessAsync(ChatThread thread)
+    {
         Guid customerId = CurrentUserId();
         return thread.ContextType switch
         {
@@ -136,7 +158,17 @@ public sealed class ChatHub : Hub
         };
     }
 
-    private bool IsAdmin() => Context.User!.HasClaim(c => c.Type == AdminClaimTypes.AdminRoleName);
+    /// <summary>Same LIVE-assignment rule (status Assigned or Accepted) <c>ProviderChatService</c>/<c>ProviderJobService</c> enforce over REST - a provider has no support-ticket-context thread.</summary>
+    private async Task<bool> CanProviderAccessAsync(ChatThread thread)
+    {
+        if (thread.ContextType != ChatContextType.Booking)
+        {
+            return false;
+        }
+
+        var assignment = await _assignmentRepository.GetActiveByBookingAsync(thread.ContextId);
+        return assignment is not null && assignment.ProviderId == CurrentUserId();
+    }
 
     private Guid CurrentUserId() => Guid.Parse(Context.User!.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
 }

@@ -57,7 +57,8 @@ public class BookingTrackingEndToEndWalkTests : IDisposable
         new BookingProviderAssignmentRepository(context),
         CreateAssignmentService(context),
         new BookingCompletionProofRepository(context),
-        etaService);
+        etaService,
+        new RecurringBookingPlanRepository(context), new NoOpFileStorageService());
 
     private static ProviderLocationIngestService CreateIngestService(
         NestlyDbContext context, IBookingEtaService etaService) => new(
@@ -73,7 +74,8 @@ public class BookingTrackingEndToEndWalkTests : IDisposable
         new BookingProviderAssignmentRepository(context),
         new ProviderRepository(context),
         new ProviderLocationPingRepository(context),
-        new BookingTrackingRepository(context));
+        new BookingTrackingRepository(context),
+        new ReviewRepository(context));
 
     private async Task<Guid> SeedAwaitingFulfilmentBookingAsync(NestlyDbContext context)
     {

@@ -28,6 +28,7 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         var summaryService = new BookingSummaryService(
             new ServiceRepository(context),
             new ServiceAddOnRepository(context),
+            new ServiceGroupRepository(context),
             new CustomerAddressRepository(context),
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
@@ -42,9 +43,10 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
         new ServiceabilityRepository(context),
         TestServices.BookingOptions());
 
@@ -64,7 +66,9 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
             new NoOpMetricsService(),
             new BookingProviderAssignmentRepository(context),
             new ProviderRepository(context),
+            new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
             context);
     }
 
@@ -140,6 +144,78 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         reloaded.Should().NotBeNull();
         reloaded!.Items.Should().ContainSingle();
         reloaded.Items[0].AddOns.Should().ContainSingle(a => a.LineTotalSnapshot == 300m);
+    }
+
+    [Fact]
+    public async Task CreateAsync_with_a_selected_variant_and_a_grouped_addon_persists_their_snapshots()
+    {
+        Fixture fixture;
+        ServiceVariant variant;
+        ServiceAddOnGroup group;
+        ServiceAddOn groupedAddOn;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            variant = new ServiceVariant(Guid.NewGuid(), fixture.Service.Id, "Premium Clean", 799m, 120);
+            group = new ServiceAddOnGroup(Guid.NewGuid(), fixture.Service.Id, "Detergent", AddOnGroupSelectionType.Single);
+            groupedAddOn = new ServiceAddOn(Guid.NewGuid(), fixture.Service.Id, "Eco Detergent", 60m);
+            groupedAddOn.SetGroupId(group.Id);
+            context.Add(variant);
+            context.Add(group);
+            context.Add(groupedAddOn);
+            context.SaveChanges();
+        }
+
+        using var createContext = _db.CreateContext();
+        var request = RequestFor(fixture, [new AddOnSelection(groupedAddOn.Id, 1)]) with { ServiceVariantId = variant.Id };
+        var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, request);
+
+        created.IsSuccess.Should().BeTrue();
+        created.Value.Service.VariantId.Should().Be(variant.Id);
+        created.Value.Price.BasePrice.Should().Be(799m);
+
+        using var readContext = _db.CreateContext();
+        var reloaded = await new BookingRepository(readContext).GetByIdAsync(created.Value.Id);
+        var item = reloaded!.Items.Should().ContainSingle().Subject;
+        item.ServiceVariantId.Should().Be(variant.Id);
+        item.VariantNameSnapshot.Should().Be("Premium Clean");
+        item.VariantDurationMinutesSnapshot.Should().Be(120);
+
+        var addOnItem = item.AddOns.Should().ContainSingle().Subject;
+        addOnItem.AddOnGroupId.Should().Be(group.Id);
+        addOnItem.GroupNameSnapshot.Should().Be("Detergent");
+    }
+
+    [Fact]
+    public async Task CreateAsync_for_a_grouped_service_persists_the_service_group_snapshot()
+    {
+        Fixture fixture;
+        ServiceGroup group;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            group = new ServiceGroup(Guid.NewGuid(), fixture.Service.CategoryId, "Repair & gas refill");
+            context.Add(group);
+            context.SaveChanges();
+
+            var serviceRepository = new ServiceRepository(context);
+            var service = (await serviceRepository.GetByIdAsync(fixture.Service.Id))!;
+            service.SetServiceGroupId(group.Id);
+            await serviceRepository.UpdateAsync(service);
+        }
+
+        using var createContext = _db.CreateContext();
+        var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+
+        created.IsSuccess.Should().BeTrue();
+        created.Value.Service.GroupId.Should().Be(group.Id);
+        created.Value.Service.GroupName.Should().Be("Repair & gas refill");
+
+        using var readContext = _db.CreateContext();
+        var reloaded = await new BookingRepository(readContext).GetByIdAsync(created.Value.Id);
+        var item = reloaded!.Items.Should().ContainSingle().Subject;
+        item.ServiceGroupId.Should().Be(group.Id);
+        item.ServiceGroupNameSnapshot.Should().Be("Repair & gas refill");
     }
 
     [Fact]
@@ -348,13 +424,46 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         var service = BuildService(readContext);
 
         var upcoming = await service.ListAsync(fixture.Customer.Id, BookingStatusBucket.Upcoming);
-        upcoming.Value.Should().ContainSingle();
+        upcoming.Value.Items.Should().ContainSingle();
+        upcoming.Value.TotalCount.Should().Be(1);
 
         var completed = await service.ListAsync(fixture.Customer.Id, BookingStatusBucket.Completed);
-        completed.Value.Should().BeEmpty();
+        completed.Value.Items.Should().BeEmpty();
+        completed.Value.TotalCount.Should().Be(0);
 
         var all = await service.ListAsync(fixture.Customer.Id, bucket: null);
-        all.Value.Should().ContainSingle();
+        all.Value.Items.Should().ContainSingle();
+    }
+
+    /// <summary>Task 301-follow-up: a customer with more bookings than fit on one page gets a page, not the whole history at once - and TotalCount still reflects the full match count so the frontend knows there is a next page.</summary>
+    [Fact]
+    public async Task ListAsync_pages_results_newest_first()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            using var createContext = _db.CreateContext();
+            var created = await BuildService(createContext).CreateAsync(fixture.Customer.Id, RequestFor(fixture));
+            created.IsSuccess.Should().BeTrue();
+        }
+
+        using var readContext = _db.CreateContext();
+        var service = BuildService(readContext);
+
+        var firstPage = await service.ListAsync(fixture.Customer.Id, bucket: null, page: 1, pageSize: 2);
+        firstPage.Value.Items.Should().HaveCount(2);
+        firstPage.Value.TotalCount.Should().Be(3);
+
+        var secondPage = await service.ListAsync(fixture.Customer.Id, bucket: null, page: 2, pageSize: 2);
+        secondPage.Value.Items.Should().ContainSingle();
+        secondPage.Value.TotalCount.Should().Be(3);
+
+        firstPage.Value.Items.Select(i => i.Id).Should().NotIntersectWith(secondPage.Value.Items.Select(i => i.Id));
     }
 
     /// <summary>

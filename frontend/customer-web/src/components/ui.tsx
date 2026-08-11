@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, forwardRef, useContext, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -1030,7 +1031,16 @@ export function Modal({
 
   const sizes = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" } as const;
 
-  return (
+  // Portalled to <body> rather than rendered in place: `fixed inset-0` only
+  // covers the actual viewport if every ancestor is un-filtered/untransformed
+  // - a `backdrop-filter`/`filter`/`transform` anywhere up the tree (e.g.
+  // SiteHeader's `backdrop-blur-md`) makes that ancestor the containing
+  // block instead, so a Modal opened from inside it renders squashed into
+  // that ancestor's own box instead of centered on the page (this is exactly
+  // what happened to CitySelector's modal, nested inside SiteHeader). A
+  // portal sidesteps the whole class of bug instead of requiring every
+  // future trigger location to stay filter/transform-free above it.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
       <div
         className="absolute inset-0 animate-fade-in bg-overlay/50 backdrop-blur-[2px]"
@@ -1083,7 +1093,8 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

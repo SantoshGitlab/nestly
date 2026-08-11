@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -36,6 +36,7 @@ const registerSchema = z
     consentAccepted: z.literal(true, {
       message: "You must accept the Terms & Privacy Policy",
     }),
+    referralCode: z.string(),
   })
   // The server rejects a password without an email
   // (Registration.EmailRequiredForPassword); say so before the round trip.
@@ -45,12 +46,33 @@ const registerSchema = z
   });
 
 export default function RegisterPage() {
+  // Suspense for useSearchParams below (see login/page.tsx for the same
+  // pattern): reading the `?ref=` invite code opts this tree out of static
+  // rendering, which the App Router requires a boundary around.
+  return (
+    <Suspense
+      fallback={
+        <AuthShell title="Create your account" subtitle="We verify your mobile number with a one-time code.">
+          <div />
+        </AuthShell>
+      }
+    >
+      <RegisterScreen />
+    </Suspense>
+  );
+}
+
+function RegisterScreen() {
   const router = useRouter();
+  // Shared referral links carry the referrer's code as `?ref=` (see
+  // ReferralOptions.ShareLinkBaseUrl, "https://nestly.app/register?ref=").
+  const referralCodeFromLink = useSearchParams().get("ref") ?? "";
   const [step, setStep] = useState<"otp" | "details">("otp");
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const { remaining, start, canResend } = useResendCountdown();
 
   const otpForm = useForm<z.infer<typeof otpRequestSchema>>({
@@ -70,6 +92,7 @@ export default function RegisterPage() {
       // schema's "you must accept" rule can never fire and the account is
       // created recording a consent the customer never actually gave.
       consentAccepted: false as unknown as true,
+      referralCode: referralCodeFromLink,
     },
   });
 
@@ -121,9 +144,19 @@ export default function RegisterPage() {
           email: values.email === "" ? null : values.email,
           password: values.password === "" ? null : values.password,
           consentAccepted: values.consentAccepted,
+          referralCode: values.referralCode === "" ? null : values.referralCode,
         }),
       });
-      router.push("/login");
+      // A referral code was submitted: pause on a confirmation instead of an
+      // immediate redirect. The server processes referrals best-effort
+      // (CustomerRegistrationService.TryCreateReferralAsync) and never
+      // reports back whether the code matched, so this can only confirm the
+      // code was submitted, not that a reward was created.
+      if (values.referralCode !== "") {
+        setRegistered(true);
+      } else {
+        router.push("/login");
+      }
     } catch (err) {
       setError(describeError(err));
     }
@@ -145,7 +178,17 @@ export default function RegisterPage() {
         </>
       }
     >
-      {step === "otp" ? (
+      {registered ? (
+        <div className="flex flex-col gap-4">
+          <Alert tone="success">
+            Account created — you were invited by a friend. If your code was
+            valid, their reward will be added once it qualifies.
+          </Alert>
+          <Button size="lg" fullWidth onClick={() => router.push("/login")}>
+            Continue to sign in
+          </Button>
+        </div>
+      ) : step === "otp" ? (
         <form onSubmit={onRequestOtp} className="flex flex-col gap-4" noValidate>
           {error ? <Alert>{error}</Alert> : null}
           <Field
@@ -202,6 +245,14 @@ export default function RegisterPage() {
             hint="Optional — at least 8 characters."
             error={detailsForm.formState.errors.password?.message}
             {...detailsForm.register("password")}
+          />
+
+          <Field
+            label="Referral code"
+            autoComplete="off"
+            hint="Optional — from a friend's invite link."
+            error={detailsForm.formState.errors.referralCode?.message}
+            {...detailsForm.register("referralCode")}
           />
 
           <div className="flex flex-col gap-1.5">

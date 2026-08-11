@@ -63,6 +63,7 @@ export function ServicePricesSection({ canWrite }: { canWrite: boolean }) {
         emptyDescription="Create a service in the catalog first — a price has nothing to attach to until then."
         hideDensityToggle
         skeletonRows={4}
+        maxHeight="420px"
       />
     </div>
   );

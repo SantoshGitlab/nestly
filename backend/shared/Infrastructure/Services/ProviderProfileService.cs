@@ -1,5 +1,6 @@
 using Nestly.Application;
 using Nestly.Application.ProviderProfile;
+using Nestly.Application.Reviews;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -17,15 +18,18 @@ public class ProviderProfileService : IProviderProfileService
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderServiceAreaRepository _serviceAreaRepository;
     private readonly IProviderSkillMappingRepository _skillMappingRepository;
+    private readonly IReviewRepository _reviewRepository;
 
     public ProviderProfileService(
         IProviderRepository providerRepository,
         IProviderServiceAreaRepository serviceAreaRepository,
-        IProviderSkillMappingRepository skillMappingRepository)
+        IProviderSkillMappingRepository skillMappingRepository,
+        IReviewRepository reviewRepository)
     {
         _providerRepository = providerRepository;
         _serviceAreaRepository = serviceAreaRepository;
         _skillMappingRepository = skillMappingRepository;
+        _reviewRepository = reviewRepository;
     }
 
     public async Task<Result<ProviderProfileResponse>> GetAsync(Guid providerId)
@@ -37,7 +41,7 @@ public class ProviderProfileService : IProviderProfileService
                 Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
         }
 
-        return Result.Success(ToResponse(provider));
+        return Result.Success(await ToResponseAsync(provider));
     }
 
     public async Task<Result<ProviderProfileResponse>> UpdateAsync(Guid providerId, UpdateProviderProfileRequest request)
@@ -52,7 +56,31 @@ public class ProviderProfileService : IProviderProfileService
         provider.UpdateProfile(request.LegalName, request.DisplayName, request.Email);
         await _providerRepository.UpdateAsync(provider);
 
-        return Result.Success(ToResponse(provider));
+        return Result.Success(await ToResponseAsync(provider));
+    }
+
+    /// <inheritdoc/>
+    public async Task<Result<ProviderProfileResponse>> UpdatePhotoAsync(Guid providerId, UpdateProviderPhotoRequest request)
+    {
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        if (provider is null)
+        {
+            return Result.Failure<ProviderProfileResponse>(
+                Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PhotoUrl))
+        {
+            provider.RemovePhoto();
+        }
+        else
+        {
+            provider.SubmitPhoto(request.PhotoUrl);
+        }
+
+        await _providerRepository.UpdateAsync(provider);
+
+        return Result.Success(await ToResponseAsync(provider));
     }
 
     public async Task<IReadOnlyList<ProviderServiceAreaResponse>> GetServiceAreasAsync(Guid providerId)
@@ -101,9 +129,18 @@ public class ProviderProfileService : IProviderProfileService
         return Result.Success<IReadOnlyList<ProviderSkillResponse>>(skills.Select(ToResponse).ToList());
     }
 
-    private static ProviderProfileResponse ToResponse(Provider provider) => new(
-        provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
-        provider.Status.ToString(), provider.OnboardingStatus.ToString());
+    private async Task<ProviderProfileResponse> ToResponseAsync(Provider provider)
+    {
+        var rating = await _reviewRepository.GetProviderRatingAsync(provider.Id);
+        return new(
+            provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
+            provider.Status.ToString(), provider.OnboardingStatus.ToString(),
+            // Deliberately the raw PhotoUrl, not PublicPhotoUrl - see the
+            // response's own doc comment: this is the only surface where the
+            // provider needs to see their own not-yet-approved photo.
+            provider.PhotoUrl, provider.PhotoModerationStatus?.ToString(), provider.PhotoModerationNote,
+            rating?.AverageRating, rating?.ReviewCount);
+    }
 
     private static ProviderServiceAreaResponse ToResponse(ProviderServiceArea area) => new(
         area.Id, area.ProviderId, area.CityId, area.ZoneId, area.PincodeId, area.IsActive);

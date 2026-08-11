@@ -22,14 +22,13 @@ For each task you work on:
    aren't decomposed, but never report or use a line number as if it were the
    id. When reading the file with a line-numbering tool, strip the line-number
    prefix before quoting or referencing the id.
-2. Read the `notes` column carefully — many rows have a note like "reset:
-   previously auto-marked done by unverified local-model automation... needs
-   real implementation" or point at `_salvage/` for a relevant draft. A
-   previous automation run left useful (but misplaced, wrong-namespace) draft
-   code in `_salvage/` — read `_salvage/README.md` before implementing
-   anything in the Booking, Slots, Support/Notifications, or
-   auth/rate-limiting areas; there may already be a usable starting point
-   there that just needs the namespace fixed to match the real convention.
+2. Read the `notes` column carefully — many rows carry the audit findings from
+   an earlier cleanup, and closed rows record what was actually verified and
+   how. Some older notes point at `_salvage/` for a draft: **that directory no
+   longer exists**, and neither does `tasks-corrupted.csv`. Those areas
+   (Booking, Slots, Support/Notifications, auth/rate-limiting) are all
+   implemented and merged now, so treat such a note as history rather than as
+   a starting point.
 3. Implement the task, matching the existing codebase's conventions exactly:
    namespace `Nestly.Domain` / `Nestly.Infrastructure.Persistence.Configurations`
    / etc. (file-scoped namespaces), `Entity<Guid>` base type from

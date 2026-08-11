@@ -9,13 +9,19 @@ The rest of the documentation suite describes how things *should* be built
 is the only one that describes **the current state of the repository** — so
 treat the others as the specification and this one as the map.
 
-Last verified: 2026-08-01. Phase numbering changed since the previous
-verification: Provider moved from Phase 8 (deferred, after everything) to
-Phase 7 (before Hardening & Launch, now Phase 8) — see PROVIDER.md's STATUS
-section. Two new phases were added: 9 (Referral & Growth) and 10 (Product
-Enhancements — subscriptions, recurring bookings, in-app chat, service
-completion verification). See TASKS-SUMMARY.md for authoritative current
-counts; the table below is a snapshot and will drift.
+Last verified: **2026-08-08**, against `main` at commit `39cc78a`.
+
+The backlog is now **complete**: `tasks.csv` carries 627 rows, of which 577 are
+`done` and the remaining 50 are `decomposed` parent placeholders already
+satisfied by their own lettered subtasks. There are **zero `todo` rows**. All
+eleven phases (0–10, plus Phase 11 Nestly Coins) are closed. See
+TASKS-SUMMARY.md for the per-phase table.
+
+Work beyond the backlog is tracked in
+**[ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md)** —
+verified gaps between what the specs describe and what the code does, with
+file:line evidence. That document, not this one, is where the next task comes
+from.
 
 ---
 
@@ -40,46 +46,59 @@ Full requirements: [SRS.md](SRS.md).
 This is the section most likely to be out of date, and the most important to
 keep honest.
 
-**Phase 0 (Foundation) is complete — 25/25. Phase 1 (Identity & Customer) is
-complete — 46/46**, merged to `main`. Overall backlog: **73 of 221 tasks
-done** (the backlog grew from 196 to 221 rows as later phases were decomposed
-into subtasks — that is expected, not lost work). The active phase is
-**Phase 2 — Catalog & Serviceability (2/26)**.
+**Every phase in `tasks.csv` is closed.** The platform is feature-complete
+against its own backlog: three APIs, three frontends, 141 domain entities and
+140 migrations. What remains is not backlog delivery but the gap set in
+[ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) and the
+release-readiness work in [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md).
 
 ### What genuinely exists and is verified
 
+Verified 2026-08-08 by building and testing a clean checkout of `origin/main`
+(not a working tree): `dotnet build Nestly.sln` **0 errors / 0 warnings**,
+`dotnet test Nestly.sln` **1767 passing / 0 failing**.
+
 | Area | State |
 |---|---|
-| Solution & layering | 7 projects (adds `Identity.Tests`), dependencies flow inward, builds clean |
-| BuildingBlocks | `Result`/`Error` primitives, `Entity`/`AggregateRoot`/`ValueObject`, correlation-id and global-exception middleware |
-| Persistence | EF Core + PostgreSQL, snake_case naming, configuration-by-assembly-scan, 8 migrations applied against a real database |
-| Domain entities | Customer, CustomerAuthIdentity, CustomerSession, CustomerOtp, CustomerAddress, LoginAttempt, CustomerCommunicationPreference, Category, Service, ServiceAddOn, ServiceFaq, ServiceMedia, SupportTicketComment, AuditLog |
-| Identity & auth | Mobile+OTP and email+password registration/login, JWT access+refresh with rotation, login throttling/lockout, forgot/reset password (verified against the account's mobile, not the unverified email) |
-| Profile & addresses | View/edit profile, re-verified mobile/email change, communication preferences, full address-book CRUD with a partial-unique-index-enforced single default |
-| Consumer-web screens | Login (OTP + password), registration, forgot/reset password, profile, address book — real product screens, not scaffolds |
-| Tests | `Identity.Tests`: 69 tests (unit + SQLite-backed integration) covering OTP lifecycle, login lockout, uniqueness constraints, password reset, profile service |
-| Caching | `ICacheService` over Redis, with in-process fallback — wired, no consumer yet (first real cache use case lands with Phase 2 catalog) |
-| Background jobs | Hangfire on PostgreSQL, admin-only dashboard — wired, no consumer yet |
-| Audit trail | `audit_log` table + `IAuditLogWriter` |
-| Health checks | `/health/live`, `/health/ready` (Postgres + Redis) |
-| Observability | Serilog structured logging, correlation ids |
-| DevOps | Dockerfiles for both APIs, docker-compose (Postgres + Redis + both APIs), GitHub Actions CI |
-| Admin frontend | `admin-web` scaffolded only — no product screens yet (Phase 6) |
+| Solution & layering | 18 projects across 3 API hosts + 4 shared libraries + 4 test projects; dependencies flow inward |
+| Backend APIs | `consumer-api` (27 controllers), `admin-api` (32), `provider-api` (8) |
+| Frontends | `customer-web`, `admin-web`, `provider-web` — all three are real product apps, not scaffolds |
+| Persistence | EF Core + PostgreSQL, snake_case, configuration-by-assembly-scan, 140 migrations, replayable from an empty database (task 207) |
+| Domain | 141 entities; 15 derive from `AggregateRoot` and raise domain events |
+| Modules live | Identity, catalog, serviceability, slots, booking, payments, wallet, coupons, cancellation/reschedule, reviews, support, notifications, admin panel + RBAC, provider/partner, referral, Nestly Coins, subscriptions, recurring bookings, chat, live tracking, completion verification |
+| Tests | 1767 across `Catalog.Tests` (1443), `Identity.Tests` (304), `CustomerManagement.Tests` (12), `Performance.Tests` (8) — SQLite-backed integration, not just unit |
+| Caching | `ICacheService` over Redis with in-process fallback — in real use (catalog, notification templates) |
+| Background jobs | Hangfire on PostgreSQL — in real use (expiry sweeps, recurring-booking scheduling, notification intents) |
+| Realtime | SignalR — chat and live booking tracking |
+| Audit trail | `audit_log` + `IAuditLogWriter`, enlisted in the caller's unit of work |
+| Observability | Serilog structured logging, correlation ids, `IMetricsService` |
+| DevOps | Dockerfiles, docker-compose (Postgres + Redis + APIs), GitHub Actions CI |
 
 ### What does **not** exist yet
 
-Be blunt about this, because the layering makes it easy to assume otherwise:
+Be blunt about this, because feature-complete-against-backlog is not the same
+as complete:
 
-- **No catalog, serviceability, booking, payments, slots, coupons, post-booking
-  or admin panel.** Phases 2–7. Some early drafts sit in `_salvage/` (see §7).
-- **MediatR (`ICommand`/`IQuery`/handlers) and `AggregateRoot`/domain events
-  are wired but have zero real callers** — every Phase 1 controller calls its
-  service directly rather than going through `ISender`, and every entity so
-  far derives from plain `Entity<Guid>`, not `AggregateRoot`. Flagged by a
-  ponytail-audit pass on 2026-07-28 and left in place rather than removed,
-  since both are documented architecture here — but do not assume a command/
-  query or a domain event actually fires anywhere yet; grep before relying on
-  either.
+- **The gaps in
+  [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md)** —
+  including several features whose backend ships and whose frontend never calls
+  it (referral attribution at sign-up, admin account unlock, provider push
+  registration), and one, wallet-credit-at-checkout, where the product tells the
+  customer something the code does not do.
+- **The MediatR request pipeline (`ICommand`/`IQuery`) still has zero
+  implementations** — `Application/Abstractions/Messaging.cs` defines the
+  abstractions and nothing implements them; every controller calls its service
+  directly rather than through `ISender`. Grep before assuming a command or
+  query handler exists.
+- **Domain events, by contrast, are genuinely live** — this reversed since the
+  2026-08-01 verification. `DomainEventDispatchInterceptor` publishes them
+  through MediatR's `IPublisher` on `SaveChanges`, and 16 handlers consume 8
+  event types (notifications, metrics, realtime broadcast, referral fraud
+  signals). Note the ordering consequence: handlers run **after** the save,
+  inside the same request.
+- **Release readiness.** QA's 2026-08-07 verdict is **NO-GO**, on absence of
+  evidence rather than known defects: all 587 inventoried UI features remain
+  runtime-unverified, and there is no admin-web browser E2E suite.
 
 ---
 
@@ -123,19 +142,22 @@ Detail: [ARCHITECTURE.md](ARCHITECTURE.md).
 backend/
   consumer-api/ConsumerApi/     Customer-facing API. Enqueues jobs, runs none.
   admin-api/AdminApi/           Admin API. Runs the Hangfire server + dashboard.
+  provider-api/ProviderApi/     Service-provider API (jobs, availability, earnings)
   shared/
     Domain/                     Entities and business rules
     Application/                Use cases + abstractions Infrastructure implements
-    Infrastructure/             Persistence, caching, jobs, auditing
+    Infrastructure/             Persistence, caching, jobs, auditing, realtime
     BuildingBlocks/             Result/Error, entity primitives, middleware
+  tests/                        Catalog, Identity, CustomerManagement, Performance
 database/
   migrations/                   EF Core migrations AND the model snapshot (see §5)
   scripts/  seed/               Operational SQL, idempotent seed data
 frontend/
-  customer-web/  admin-web/     Next.js scaffolds
+  customer-web/                 Next.js — customer app
+  admin-web/                    Next.js — admin panel
+  provider-web/                 Next.js — provider app
 docs/                           Documentation suite — README.md is the index
-_salvage/                       Quarantined drafts, NOT compiled (see §7)
-tasks.csv                       The backlog: 196 phased tasks
+tasks.csv                       The backlog: 627 rows, all closed (see §8)
 ```
 
 ---
@@ -251,51 +273,71 @@ That history left artefacts you will encounter:
 - **Fabricated code has appeared more than once** — SQL Server APIs in this
   PostgreSQL project, invented method names, namespaces derived from folder
   paths instead of `RootNamespace`. It was discarded, not patched.
-- **`_salvage/`** holds drafts rescued from those runs (booking, slots, auth
-  and notification sketches). It is **deliberately outside every `.csproj`** and
-  does not compile. Treat it as reference material, not as working code, and
-  re-verify anything you promote out of it.
-- **`tasks-corrupted.csv`** is a retained artefact of a CSV corruption incident.
-  The live backlog is `tasks.csv`.
+- **`_salvage/` and `tasks-corrupted.csv` are gone.** Both are referenced by
+  older documents and commit messages; neither exists on `main` any more.
+  Nothing was promoted out of `_salvage/` unverified.
+- **A defensive fix can itself be the outage.** `NotificationTemplateRepository`
+  shipped a filter (088ba63) that stops one malformed `notification_template`
+  row from killing all dispatch — written as PostgreSQL-only raw SQL, which the
+  SQLite-backed suite could not execute, so it landed with a permanently
+  failing test and no coverage of the behaviour it existed for. Fixed
+  2026-08-08. The lesson generalises: **raw SQL must run on both providers, or
+  the tests that would catch it silently stop running.**
 
 The practical rule: **`tasks.csv` status is a claim; the code is the evidence.**
 A task note saying "verified by claude-code" records what was actually checked
 and how — prefer those. When in doubt, grep for the thing before assuming it
-exists.
+exists. The same applies to this document: it was materially wrong for a week
+(claiming Phase 2 was active, with no booking or payments, while all eleven
+phases were in fact closed) because nothing regenerates it. If you find it
+stale, fix it in the same pass.
 
 ---
 
 ## 8. THE ROADMAP
 
-`tasks.csv` carries a `phase` column; work proceeds phase by phase.
+`tasks.csv` carries a `phase` column; work proceeds phase by phase. Counts
+below are from `tasks.csv` itself on 2026-08-08, not from TASKS-SUMMARY.md
+(which is regenerated only at phase boundaries and lags).
 
-| Phase | Scope | Done |
-|---|---|---|
-| 0 | Foundation — solution, persistence, caching, jobs, audit, DevOps | 25/25 |
-| 1 | Identity & Customer — registration, JWT, profile, addresses, tests | 46/46 |
-| 2 | Catalog & Serviceability | 67/72 |
-| 3 | Booking Core | 47/56 |
-| 4 | Payments & Financial | 40/46 |
-| 5 | Post-Booking — reviews, support, notifications | 40/47 |
-| 6 | Admin Panel | 104/119 |
-| 7 | Provider — service-provider identity, onboarding, assignment, earnings (PROVIDER.md) | 21/25 |
-| 8 | Hardening & Launch | 22/38 |
-| 9 | Referral & Growth — refer-and-earn, milestones, expiring wallet credit (REFERRAL.md) | 0/16 |
-| 10 | Product Enhancements — subscriptions, recurring bookings, in-app chat, completion verification (PRODUCT-ENHANCEMENTS.md) | 0/22 |
+| Phase | Scope | Done | Open |
+|---|---|---|---|
+| 0 | Foundation — solution, persistence, caching, jobs, audit, DevOps | 25/25 | — |
+| 1 | Identity & Customer — registration, JWT, profile, addresses | 46/46 | — |
+| 2 | Catalog & Serviceability | 69/72 | — |
+| 3 | Booking Core | 47/56 | — |
+| 4 | Payments & Financial | 40/46 | — |
+| 5 | Post-Booking — reviews, support, notifications | 40/47 | — |
+| 6 | Admin Panel | 104/121 | 2 |
+| 7 | Partner — provider identity, onboarding, assignment, earnings (PROVIDER.md) | 23/27 | — |
+| 8 | Hardening & Launch | 35/41 | — |
+| 9 | Referral & Growth (REFERRAL.md) | 16/16 | — |
+| 10 | Product Enhancements — subscriptions, recurring bookings, chat, completion verification (PRODUCT-ENHANCEMENTS.md) | 22/22 | — |
+| 11 | Nestly Coins & Loyalty (NESTLY-COINS.md) | 5/5 | — |
+| 12 | Premium UI & UX Overhaul | 21/21 | — |
+| 13 | Booking Funnel Defects | 12/12 | — |
+| 14 | Automatic Provider Assignment | 9/9 | — |
+| 15 | QA Audit Defects | 13/13 | — |
+| 16 | End-to-End Order Tracking (TRACKING.md) | 32/32 | — |
+| 17 | Recurring Services | 5/5 | — |
+| 18 | Spec-Gap Closure — verified gaps between the specs and the code | 2/20 | 16 |
 
-Per-phase task counts grew as several tasks were decomposed into subtasks by
-an automated worker (e.g. `#35` → `#35a`..`#35d` → `#35ba`..`#35bx4`); the
-done/total ratio for a phase is only meaningful relative to its *current*
-total, not the number originally planned. **Provider was moved from Phase 8
-to Phase 7 on 2026-07-31** — it now runs before Hardening & Launch, not after
-everything else — see PROVIDER.md's STATUS section for why.
+The `Done` column counts only rows with status `done`; the remainder in
+phases 2–8 are `decomposed` parent placeholders, each already satisfied by its
+own lettered subtasks (e.g. `#35` → `#35a`..`#35d`). A `done/total` ratio is
+only meaningful against a phase's *current* total, not the number originally
+planned. **Provider/Partner moved from Phase 8 to Phase 7 on 2026-07-31** — see
+PROVIDER.md's STATUS section for why.
 
-**Phase 8 (Hardening & Launch) and Phase 7 (Provider) are both active**, with
-Phases 0–6 fully or substantially complete. There is an authenticated
-principal throughout the system, RBAC is in place for the admin panel
-(Phase 6), and the payment/wallet/coupon infrastructure Phases 9 and 10
-depend on (referral rewards, subscription billing) already exists and is
-largely done.
+**Phases 0–17 are closed.** The open work is **Phase 18**, derived from
+[ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md), plus
+two low-priority admin table-UX rows (`#301`, `#302`) in Phase 6.
+
+Several sessions work this repository concurrently, and a `todo` row does not
+mean nobody has started it. **Claim before you begin** —
+`python3 scripts/task_claim.py status`, then
+`task_claim.py next --owner <label> --pid <pid>` — and close rows with
+`task_claim.py done <id> --note ...` rather than hand-editing `tasks.csv`.
 
 ---
 

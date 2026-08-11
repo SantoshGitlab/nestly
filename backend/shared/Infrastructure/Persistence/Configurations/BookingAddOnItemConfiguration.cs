@@ -20,6 +20,12 @@ public class BookingAddOnItemConfiguration : IEntityTypeConfiguration<BookingAdd
         builder.Property(x => x.Quantity).IsRequired();
         builder.Property(x => x.LineTotalSnapshot).IsRequired().HasPrecision(12, 2);
 
+        // Phase 3 catalog redesign: AddOnGroupId is deliberately not a
+        // foreign key, same convention as ServiceAddOnId above. Null when
+        // the selected add-on was ungrouped (today's default).
+        builder.Property(x => x.AddOnGroupId);
+        builder.Property(x => x.GroupNameSnapshot).HasMaxLength(200);
+
         builder.HasIndex(x => x.BookingItemId);
     }
 }

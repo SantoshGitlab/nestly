@@ -10,7 +10,7 @@ import { Alert, Button, Card, CheckboxField, Field, PageHeading, Select, Textare
 import { FormActions, FormGrid, formatCurrency } from "@/components/data-table";
 import { EntityTable } from "@/components/entity-table";
 import { describeError } from "@/lib/api";
-import { createService, listCategories, listServices, setServiceActive } from "@/lib/catalog-api";
+import { createService, listCategories, listServiceGroups, listServices, setServiceActive } from "@/lib/catalog-api";
 import type { ServiceAdminResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
@@ -25,10 +25,12 @@ const serviceSchema = z.object({
   shortDescription: z.string().max(500).optional().or(z.literal("")),
   description: z.string().max(2000),
   price: z.number().positive("Price must be greater than 0"),
+  coverImageUrl: z.string().max(500).optional().or(z.literal("")),
   durationMinutes: z.number().int().positive("Duration must be greater than 0"),
   inclusions: z.string().max(4000),
   exclusions: z.string().max(4000),
   sortOrder: z.number().int().min(0),
+  serviceGroupId: z.string().optional().or(z.literal("")),
   pricingType: z.enum(["Fixed", "Variable"]),
   isTaxApplicable: z.boolean(),
   isAddOnAllowed: z.boolean(),
@@ -70,10 +72,12 @@ export default function CatalogServicesPage() {
       shortDescription: "",
       description: "",
       price: 0,
+      coverImageUrl: "",
       durationMinutes: 60,
       inclusions: "",
       exclusions: "",
       sortOrder: 0,
+      serviceGroupId: "",
       pricingType: "Fixed",
       isTaxApplicable: true,
       isAddOnAllowed: true,
@@ -84,6 +88,17 @@ export default function CatalogServicesPage() {
       isCustomerNoteAllowed: true,
     },
   });
+
+  const selectedCategoryId = form.watch("categoryId");
+  const serviceGroupsQuery = useQuery({
+    queryKey: ["service-groups", selectedCategoryId],
+    queryFn: () => listServiceGroups(selectedCategoryId),
+    enabled: !!selectedCategoryId,
+  });
+  const serviceGroupOptions = [
+    { value: "", label: "No group" },
+    ...(serviceGroupsQuery.data ?? []).map((g) => ({ value: g.id, label: g.name })),
+  ];
 
   const createMutation = useMutation({
     mutationFn: createService,
@@ -106,12 +121,14 @@ export default function CatalogServicesPage() {
       description: values.description,
       shortDescription: values.shortDescription || null,
       price: values.price,
+      coverImageUrl: values.coverImageUrl || null,
       inclusions: values.inclusions,
       exclusions: values.exclusions,
       cancellationPolicy: null,
       reschedulePolicy: null,
       durationMinutes: values.durationMinutes,
       sortOrder: values.sortOrder,
+      serviceGroupId: values.serviceGroupId || null,
       seoTitle: null,
       seoMetaDescription: null,
       pricingType: values.pricingType,
@@ -256,6 +273,12 @@ export default function CatalogServicesPage() {
               error={form.formState.errors.shortDescription?.message}
               {...form.register("shortDescription")}
             />
+            <Field
+              label="Cover image URL"
+              hint="Shown on customer-facing listing cards. Leave blank to use a graphic placeholder."
+              error={form.formState.errors.coverImageUrl?.message}
+              {...form.register("coverImageUrl")}
+            />
             <Textarea label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
             <FormGrid>
               <Textarea label="Inclusions" error={form.formState.errors.inclusions?.message} {...form.register("inclusions")} />
@@ -278,6 +301,14 @@ export default function CatalogServicesPage() {
                 {...form.register("pricingType")}
               />
             </FormGrid>
+
+            <Select
+              label="Service group"
+              hint="Optional section header shown on the customer-facing listing (e.g. &ldquo;Repair &amp; gas refill&rdquo;). Leave as No group to show this service directly under the category."
+              disabled={!selectedCategoryId}
+              options={serviceGroupOptions}
+              {...form.register("serviceGroupId")}
+            />
 
             <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <legend className="mb-2 text-sm font-medium text-fg">Booking options</legend>

@@ -22,6 +22,7 @@ import { formatDateTime, formatInr, formatIsoDate, formatTime } from "@/lib/form
 import { listJobs } from "@/lib/jobs-api";
 import { JobStatus } from "@/lib/jobs-types";
 import { JobStatusBadge } from "./_components/JobStatusBadge";
+import { RecurringJobBadge } from "./_components/RecurringJobBadge";
 import type { JobListItem } from "@/lib/jobs-types";
 
 const STATUS_OPTIONS = [
@@ -171,6 +172,7 @@ export default function JobsPage() {
  */
 function JobCard({ job }: { job: JobListItem }) {
   const needsResponse = job.status === JobStatus.Assigned;
+  const isRecurring = job.recurringBookingPlanId !== null;
 
   return (
     <Link href={`/jobs/${job.bookingId}`} className="group block h-full">
@@ -185,7 +187,14 @@ function JobCard({ job }: { job: JobListItem }) {
         )}
       >
         <div className="flex items-start justify-between gap-3">
-          <JobStatusBadge status={job.status} />
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <JobStatusBadge status={job.status} />
+            {/* Sits beside the status rather than below the customer's name:
+                whether this is a standing customer changes how a provider
+                reads the whole card, so it has to be in the first thing they
+                look at, not a footnote. */}
+            {isRecurring ? <RecurringJobBadge frequency={job.recurringFrequency} /> : null}
+          </div>
           <span className="nums shrink-0 text-sm font-semibold text-fg">
             {formatInr(job.totalPayableSnapshot)}
           </span>

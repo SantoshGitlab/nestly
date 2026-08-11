@@ -6,6 +6,44 @@ public sealed record BookingCreatedEvent(Guid BookingId, Guid CustomerId) : Doma
 
 public sealed record BookingStatusChangedEvent(Guid BookingId, BookingStatus FromStatus, BookingStatus ToStatus) : DomainEvent;
 
+/// <summary>
+/// The provider a booking is being fulfilled by was swapped for a different
+/// one (task 295) - raised by <see cref="BookingProviderAssignment.MarkReassigned"/>
+/// on the row being superseded, which is the only place one live assignment is
+/// replaced by another.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why this event exists at all.</b> A reassignment of an already-Assigned
+/// booking performs no status transition - the booking was Assigned before and
+/// is Assigned after - so <see cref="BookingStatusChangedEvent"/>, the stream
+/// every booking-lifecycle handler subscribes to, says nothing about it. Until
+/// this event, a customer expecting one professional could have the job handed
+/// to another with no signal anywhere in the system, and would greet the wrong
+/// person at the door.
+/// </para>
+/// <para>
+/// Same ids-only rule as the task 272 family below: a display name is looked
+/// up by whichever handler is entitled to render one.
+/// </para>
+/// </remarks>
+/// <param name="PreviousAssignmentAccepted">
+/// Whether the superseded assignment had been <see cref="BookingProviderAssignmentStatus.Accepted"/>
+/// - i.e. whether <see cref="PreviousProviderId"/> is a provider the customer
+/// was ever told about. Carried as a fact of the domain rather than resolved
+/// by the reader, because the row's status is destroyed by the very call that
+/// raises this event. <c>BookingNotificationTriggerHandler</c> notifies only
+/// when it is true: under the acceptance-only rule (task 295) an unaccepted
+/// offer was never announced, so "your professional has changed" would be
+/// about a name the customer never heard.
+/// </param>
+public sealed record BookingProviderChangedEvent(
+    Guid BookingId,
+    Guid PreviousAssignmentId,
+    Guid PreviousProviderId,
+    Guid NewProviderId,
+    bool PreviousAssignmentAccepted) : DomainEvent;
+
 // --- Task 272: the order-tracking event family ---
 //
 // All five live here rather than in per-aggregate files (the convention the
@@ -25,7 +63,16 @@ public sealed record BookingStatusChangedEvent(Guid BookingId, BookingStatus Fro
 // see DomainEventDispatchInterceptor and the "DOMAIN EVENT DISPATCH AND
 // DELIVERY" section of docs/ARCHITECTURE.md. A dropped tracking broadcast is
 // acceptable (REST re-read is the source of truth); a dropped notification is
-// not, so no notification trigger may hang off these events alone.
+// not, so no notification trigger may hang off these events *alone*.
+//
+// Task 294 is what makes that condition satisfiable rather than a prohibition:
+// an event listed in NotificationIntentPlanner gets a durable notification
+// intent written inside the transaction that raised it, plus a sweep that
+// re-runs the handler. ProviderAssignmentAcceptedEvent is in that registry,
+// which is why ProviderAssigned is allowed to trigger from it. The other four
+// events here are not, and a notification trigger must not be added to one
+// without adding it to the planner in the same change - otherwise the trigger
+// is back to at-most-once with nothing saying so.
 
 /// <summary>
 /// The provider accepted an outstanding assignment (task 272) - raised by

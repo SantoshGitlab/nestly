@@ -139,14 +139,18 @@ public sealed class ProviderDoubleBookingTests : IClassFixture<TestDatabase>
     // overlap invariant, and a sandbox-only response leaves task 267's ranking
     // at the straight-line ordering they were written against.
     private static ProviderAutoAssignmentHandler BuildHandler(NestlyDbContext context) => new(
-        new ProviderMatchingService(
-            new BookingRepository(context),
-            context,
-            new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
-            Options.Create(new AutoAssignmentOptions())),
+        new EligibleProviderSearchService(
+            new ProviderMatchingService(
+                new BookingRepository(context),
+                context,
+                new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
+                Options.Create(new AutoAssignmentOptions())),
+            BuildEligibilityService(context)),
         BuildEligibilityService(context),
         BuildAssignmentService(context),
         new BookingProviderAssignmentRepository(context),
+        new BookingRepository(context),
+        new RecurringPlanProviderContinuityService(new BookingRepository(context)),
         Options.Create(new AutoAssignmentOptions { RetryAttempts = 3, Enabled = true }),
         NullLogger<ProviderAutoAssignmentHandler>.Instance);
 
@@ -182,7 +186,7 @@ public sealed class ProviderDoubleBookingTests : IClassFixture<TestDatabase>
                 assignment.Reject("Not available.");
                 break;
             case BookingProviderAssignmentStatus.Reassigned:
-                assignment.MarkReassigned();
+                assignment.MarkReassigned(Guid.NewGuid());
                 break;
             case BookingProviderAssignmentStatus.Withdrawn:
                 assignment.Withdraw();

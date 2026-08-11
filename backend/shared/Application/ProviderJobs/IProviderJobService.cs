@@ -75,6 +75,16 @@ public interface IProviderJobService
     Task<Result<ProviderJobDetailResponse>> UploadCompletionProofAsync(Guid providerId, Guid bookingId, UploadJobCompletionProofRequest request);
 
     /// <summary>
+    /// Uploads one camera/gallery photo captured for job-completion
+    /// verification and returns the ref to feed into
+    /// <see cref="SubmitCompletionProofAsync"/>. Scoped by the same
+    /// accepted-assignment ownership check as every other job action - only
+    /// the provider currently on this booking's live assignment may attach
+    /// evidence to it.
+    /// </summary>
+    Task<Result<UploadCompletionPhotoResponse>> UploadCompletionPhotoAsync(Guid providerId, Guid bookingId, Stream content, string fileNameHint, string contentType);
+
+    /// <summary>
     /// Submits (or resubmits) the richer completion evidence - photos plus
     /// checklist - that <see cref="CompleteAsync"/> requires to exist before
     /// it will move the booking to Completed (tasks 195-197). Distinct from

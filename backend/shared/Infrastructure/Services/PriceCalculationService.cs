@@ -21,19 +21,25 @@ public class PriceCalculationService : IPriceCalculationService
     private readonly IServiceabilityRepository _serviceabilityRepository;
     private readonly IServiceCityPriceRepository _cityPriceRepository;
     private readonly ICityPricingPolicyRepository _pricingPolicyRepository;
+    private readonly IServiceVariantRepository _variantRepository;
+    private readonly IServiceAddOnGroupRepository _groupRepository;
 
     public PriceCalculationService(
         IServiceRepository serviceRepository,
         IServiceAddOnRepository addOnRepository,
         IServiceabilityRepository serviceabilityRepository,
         IServiceCityPriceRepository cityPriceRepository,
-        ICityPricingPolicyRepository pricingPolicyRepository)
+        ICityPricingPolicyRepository pricingPolicyRepository,
+        IServiceVariantRepository variantRepository,
+        IServiceAddOnGroupRepository groupRepository)
     {
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
         _serviceabilityRepository = serviceabilityRepository;
         _cityPriceRepository = cityPriceRepository;
         _pricingPolicyRepository = pricingPolicyRepository;
+        _variantRepository = variantRepository;
+        _groupRepository = groupRepository;
     }
 
     public async Task<Result<PriceBreakdownResponse>> CalculateAsync(PriceCalculationRequest request)
@@ -54,7 +60,20 @@ public class PriceCalculationService : IPriceCalculationService
             return Error.NotFound("Pricing.CityNotFound", "The specified city does not exist.");
         }
 
-        var addOnLineItems = new List<AddOnLineItem>(request.AddOns.Count);
+        // Phase 3 catalog redesign: a selected variant's own price/duration
+        // takes over from the service's flat Price - null when the caller
+        // never supplies a variant id, the default/unchanged path.
+        ServiceVariant? selectedVariant = null;
+        if (request.ServiceVariantId is Guid variantId)
+        {
+            selectedVariant = await _variantRepository.GetByIdAsync(variantId);
+            if (selectedVariant is null || !selectedVariant.IsActive || selectedVariant.ServiceId != request.ServiceId)
+            {
+                return Error.NotFound("Pricing.VariantNotFound", "The specified variant is not available for this service.");
+            }
+        }
+
+        var selectedAddOns = new List<ServiceAddOn>(request.AddOns.Count);
         foreach (var selection in request.AddOns)
         {
             if (selection.Quantity <= 0)
@@ -68,12 +87,42 @@ public class PriceCalculationService : IPriceCalculationService
                 return Error.Validation("Pricing.InvalidAddOn", $"Add-on {selection.AddOnId} is not available for this service.");
             }
 
-            decimal lineTotal = addOn.Price * selection.Quantity;
-            addOnLineItems.Add(new AddOnLineItem(addOn.Id, addOn.Name, addOn.Price, selection.Quantity, lineTotal));
+            selectedAddOns.Add(addOn);
         }
 
-        var cityOverride = await _cityPriceRepository.GetForServiceAndCityAsync(request.ServiceId, request.CityId);
-        decimal basePrice = cityOverride?.Price ?? service.Price;
+        // Phase 3 catalog redesign: validate pick-one/pick-many group rules
+        // before computing totals. Add-ons with no GroupId (today's default)
+        // are never checked - see AddOnGroupSelectionRules' doc comment.
+        var groupIds = selectedAddOns.Where(a => a.GroupId is not null).Select(a => a.GroupId!.Value).Distinct().ToList();
+        var groupsById = await _groupRepository.GetByIdsAsync(groupIds);
+        var ruleValidation = AddOnGroupSelectionRules.Validate(selectedAddOns, groupsById);
+        if (ruleValidation.IsFailure)
+        {
+            return ruleValidation.Error;
+        }
+
+        var addOnLineItems = new List<AddOnLineItem>(selectedAddOns.Count);
+        foreach (var (addOn, selection) in selectedAddOns.Zip(request.AddOns))
+        {
+            decimal lineTotal = addOn.Price * selection.Quantity;
+            string? groupName = addOn.GroupId is Guid gid && groupsById.TryGetValue(gid, out var g) ? g.Name : null;
+            addOnLineItems.Add(new AddOnLineItem(addOn.Id, addOn.Name, addOn.Price, selection.Quantity, lineTotal, addOn.GroupId, groupName));
+        }
+
+        // City price overrides apply to the service's flat price only (Phase
+        // 3 catalog redesign scope boundary) - a selected variant's own
+        // price is definitive and is never adjusted per city.
+        decimal basePrice;
+        if (selectedVariant is not null)
+        {
+            basePrice = selectedVariant.Price;
+        }
+        else
+        {
+            var cityOverride = await _cityPriceRepository.GetForServiceAndCityAsync(request.ServiceId, request.CityId);
+            basePrice = cityOverride?.Price ?? service.Price;
+        }
+
         decimal baseTotal = basePrice * request.Quantity;
         decimal addOnTotal = addOnLineItems.Sum(a => a.LineTotal);
 
@@ -100,6 +149,9 @@ public class PriceCalculationService : IPriceCalculationService
             taxPercentage,
             taxAmount,
             platformFee,
-            totalPayable);
+            totalPayable,
+            selectedVariant?.Id,
+            selectedVariant?.Name,
+            selectedVariant?.DurationMinutes);
     }
 }

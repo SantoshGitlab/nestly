@@ -69,6 +69,7 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
   entityLabel = "record",
   labelOf,
   minWidth,
+  maxHeight,
   skeletonRows = 5,
   hideDensityToggle = false,
   footer,
@@ -100,6 +101,8 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
   /** Human name of a row, shown in the confirmation so the admin sees what they are acting on. */
   labelOf?: (item: T) => string;
   minWidth?: string;
+  /** Caps the table's own height and scrolls internally, keeping other page sections reachable without scrolling past every row. */
+  maxHeight?: string;
   skeletonRows?: number;
   hideDensityToggle?: boolean;
   footer?: ReactNode;
@@ -159,6 +162,7 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
         }
         emptyAction={emptyAction}
         minWidth={minWidth}
+        maxHeight={maxHeight}
         skeletonRows={skeletonRows}
         hideDensityToggle={hideDensityToggle}
         footer={footer}

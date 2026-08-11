@@ -16,19 +16,22 @@
  */
 
 :root {
-  /* Brand — violet-indigo. Warm enough to read as "home", saturated enough to
-     read as premium rather than corporate-blue. 600 is the primary action. */
-  --brand-50: 245 244 255;
-  --brand-100: 237 235 254;
-  --brand-200: 221 218 253;
-  --brand-300: 196 189 250;
-  --brand-400: 165 148 246;
-  --brand-500: 138 108 240;
-  --brand-600: 118 74 231;
-  --brand-700: 101 56 205;
-  --brand-800: 85 48 168;
-  --brand-900: 71 43 133;
-  --brand-950: 44 24 89;
+  /* Brand — navy-blue, matching the Resido reference's real-estate palette
+     (bg-primary #074DA3 at brand-600, its heading navy #0C2339 at brand-900,
+     its dark-button/footer navy #041B2D at brand-950). Re-skins the whole
+     product to that "listings" look without touching any component below —
+     everything downstream reads this ramp, never a hardcoded hue. */
+  --brand-50: 236 243 250;
+  --brand-100: 219 234 248;
+  --brand-200: 186 214 241;
+  --brand-300: 144 187 230;
+  --brand-400: 96 152 215;
+  --brand-500: 45 111 194;
+  --brand-600: 7 77 163;
+  --brand-700: 9 61 128;
+  --brand-800: 12 48 100;
+  --brand-900: 12 35 57;
+  --brand-950: 4 27 45;
 
   /* Accent — amber. Reserved for rewards, Nestly Coins, ratings, and
      "highlighted value" moments. Never used for primary navigation. */
@@ -59,16 +62,18 @@
   /* Lines */
   --border: 226 229 236;
   --border-strong: 203 208 220;
-  --ring: 118 74 231;
+  --ring: 7 77 163;
 
   /* Status. Each has a solid tone for text/icons and a `-soft` background
-     tuned to sit behind that tone at AA contrast. */
-  --success: 4 120 87;
-  --success-soft: 209 250 229;
+     tuned to sit behind that tone at AA contrast. Success/danger retinted to
+     the Resido reference's listing-badge hues (#009868 "Verified" green,
+     #A70A29 "For Sell"/"New" red) so status pills read like the reference. */
+  --success: 0 130 89;
+  --success-soft: 214 247 233;
   --warning: 180 83 9;
   --warning-soft: 254 243 199;
-  --danger: 190 32 62;
-  --danger-soft: 255 228 233;
+  --danger: 167 10 41;
+  --danger-soft: 250 222 227;
   --info: 29 78 216;
   --info-soft: 219 234 254;
 
@@ -79,7 +84,7 @@
   --shadow-md: 0 2px 4px -1px rgb(16 20 32 / 0.05), 0 8px 20px -6px rgb(16 20 32 / 0.10);
   --shadow-lg: 0 4px 8px -4px rgb(16 20 32 / 0.06), 0 16px 40px -12px rgb(16 20 32 / 0.16);
   --shadow-xl: 0 8px 16px -8px rgb(16 20 32 / 0.08), 0 28px 64px -16px rgb(16 20 32 / 0.22);
-  --shadow-brand: 0 4px 14px -4px rgb(118 74 231 / 0.40);
+  --shadow-brand: 0 4px 14px -4px rgb(7 77 163 / 0.40);
 
   /* Motion. A single decelerating curve everywhere keeps interactions feeling
      like one product; durations stay short enough never to gate input. */
@@ -107,7 +112,7 @@
 
   --border: 40 44 56;
   --border-strong: 58 64 79;
-  --ring: 165 148 246;
+  --ring: 96 152 215;
 
   /* Dark-mode status tones invert: the soft background becomes a low-alpha
      tint of the hue and the solid tone lightens to stay legible on it. */
@@ -115,8 +120,8 @@
   --success-soft: 6 42 34;
   --warning: 252 211 77;
   --warning-soft: 51 32 4;
-  --danger: 253 138 158;
-  --danger-soft: 60 12 24;
+  --danger: 248 130 152;
+  --danger-soft: 58 14 26;
   --info: 147 197 253;
   --info-soft: 18 33 66;
 
@@ -125,7 +130,7 @@
   --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.40), 0 8px 20px -6px rgb(0 0 0 / 0.50);
   --shadow-lg: 0 4px 8px -4px rgb(0 0 0 / 0.45), 0 16px 40px -12px rgb(0 0 0 / 0.60);
   --shadow-xl: 0 8px 16px -8px rgb(0 0 0 / 0.50), 0 28px 64px -16px rgb(0 0 0 / 0.70);
-  --shadow-brand: 0 4px 18px -4px rgb(118 74 231 / 0.55);
+  --shadow-brand: 0 4px 18px -4px rgb(45 111 194 / 0.55);
 }
 
 @layer base {
@@ -244,6 +249,22 @@
       radial-gradient(60% 80% at 12% 8%, rgb(var(--brand-500) / 0.55), transparent 60%),
       radial-gradient(50% 70% at 88% 25%, rgb(var(--accent-500) / 0.25), transparent 60%),
       radial-gradient(75% 65% at 50% 120%, rgb(var(--brand-700) / 0.7), transparent 60%);
+  }
+
+  /* Solid listing-banner fill (Resido reference's "classical-property" page
+     header) — flat brand-600, distinct from `.hero-mesh`'s gradient wash, so
+     the two banner styles read as different surfaces rather than the same
+     one reused. Paired with `.banner-blob` decorations below. */
+  .listing-banner {
+    background-color: rgb(var(--brand-600));
+  }
+
+  /* One rounded translucent shape, positioned per-instance via inline style
+     or a sibling utility — the reference banner scatters a handful of these
+     at varying sizes/opacities behind its content. Decorative only. */
+  .banner-blob {
+    border-radius: 9999px;
+    background-color: rgb(255 255 255 / 0.08);
   }
 
   /* Fractal-noise grain, inlined as an SVG data URI so it costs no network

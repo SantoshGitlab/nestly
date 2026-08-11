@@ -63,6 +63,18 @@ public class Booking : AggregateRoot<Guid>
     public decimal? CouponDiscountAmountSnapshot { get; private set; }
 
     /// <summary>
+    /// Wallet balance applied at checkout (SRS 11.7.2, task 310), debited from
+    /// the customer's <see cref="WalletLedgerEntry"/> ledger in the same
+    /// transaction as this booking's insert - see <c>BookingService.CreateAsync</c>.
+    /// Null when no wallet credit was applied, same "null means not used"
+    /// convention as <see cref="CouponDiscountAmountSnapshot"/>. Stacks with a
+    /// coupon or subscription benefit (unlike those two, which are mutually
+    /// exclusive with each other) - wallet is applied last, against whatever
+    /// remains payable after any other discount.
+    /// </summary>
+    public decimal? WalletCreditAppliedSnapshot { get; private set; }
+
+    /// <summary>
     /// Traceability only, same convention as <see cref="SlotWindowId"/> - not
     /// a foreign key (PRODUCT-ENHANCEMENTS.md #1, task 179). Null when no
     /// active subscription benefit was applied at booking time. A coupon and
@@ -77,6 +89,26 @@ public class Booking : AggregateRoot<Guid>
     public bool SubscriptionFreeVisitApplied { get; private set; }
 
     public decimal? SubscriptionDiscountAmountSnapshot { get; private set; }
+
+    /// <summary>
+    /// Task 296 (Phase 17): the <see cref="RecurringBookingPlan"/> that
+    /// generated this booking, or null for an ordinary one-off booking. This
+    /// is a REAL foreign key (see <c>BookingConfiguration</c>), unlike
+    /// <see cref="SourceAddressId"/>/<see cref="SlotWindowId"/>/<see cref="SubscriptionId"/>,
+    /// which are traceability-only precisely because the rows they point at
+    /// are mutable catalog/config that may be edited or deleted after the
+    /// snapshot was taken. A plan is different: it is never hard-deleted - it
+    /// is Cancelled or Completed and kept - so a Restrict FK here can never
+    /// block a legitimate operation, and it guarantees the join the admin
+    /// (task 299) and provider (task 300) read models make is never dangling.
+    ///
+    /// The column carries no snapshot of the plan's own fields (frequency,
+    /// day-of-week, ...) on purpose: a customer who changes their plan's
+    /// frequency expects the badge on their upcoming jobs to say the new
+    /// frequency, so those must be read live through this key rather than
+    /// frozen at generation time.
+    /// </summary>
+    public Guid? RecurringBookingPlanId { get; private set; }
 
     /// <summary>Task 241: the client-minted key from POST /bookings' idempotencyKey - see BookingService.CreateAsync. Null for callers that don't supply one (e.g. RecurringBookingSchedulerService), which simply get no dedup protection. BookingConfiguration puts a unique index on (CustomerId, IdempotencyKey); Postgres treats every NULL as distinct from every other, so only two of the same customer's rows sharing the same non-null key ever collide.</summary>
     public string? IdempotencyKey { get; private set; }
@@ -113,7 +145,9 @@ public class Booking : AggregateRoot<Guid>
         Guid? subscriptionId = null,
         bool subscriptionFreeVisitApplied = false,
         decimal? subscriptionDiscountAmount = null,
-        string? idempotencyKey = null)
+        string? idempotencyKey = null,
+        Guid? recurringBookingPlanId = null,
+        decimal? walletCreditApplied = null)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -157,12 +191,14 @@ public class Booking : AggregateRoot<Guid>
 
         CouponCodeSnapshot = couponCode;
         CouponDiscountAmountSnapshot = couponDiscountAmount;
+        WalletCreditAppliedSnapshot = walletCreditApplied is > 0 ? walletCreditApplied : null;
 
         SubscriptionId = subscriptionId;
         SubscriptionFreeVisitApplied = subscriptionFreeVisitApplied;
         SubscriptionDiscountAmountSnapshot = subscriptionDiscountAmount;
 
         IdempotencyKey = idempotencyKey;
+        RecurringBookingPlanId = recurringBookingPlanId;
 
         Status = BookingStatus.Initiated;
         CreatedAtUtc = DateTime.UtcNow;
@@ -185,6 +221,47 @@ public class Booking : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Same as <see cref="AddItem(Guid,Guid,string,string,decimal,int)"/>,
+    /// plus the variant snapshot fields (Phase 3 catalog redesign) - used
+    /// when the booked service was booked against a specific
+    /// <see cref="ServiceVariant"/> rather than the service's flat price.
+    /// </summary>
+    public BookingItem AddItem(
+        Guid id, Guid serviceId, string nameSnapshot, string slugSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? serviceVariantId, string? variantNameSnapshot, int? variantDurationMinutesSnapshot)
+    {
+        EnsureStillMutable();
+
+        var item = new BookingItem(
+            id, Id, serviceId, nameSnapshot, slugSnapshot, unitPriceSnapshot, quantity,
+            serviceVariantId, variantNameSnapshot, variantDurationMinutesSnapshot);
+        _items.Add(item);
+        return item;
+    }
+
+    /// <summary>
+    /// Same as <see cref="AddItem(Guid,Guid,string,string,decimal,int,Guid?,string?,int?)"/>,
+    /// plus the service-group snapshot fields (Appliance/Service Group
+    /// catalog redesign) - used when the booked service currently belongs to
+    /// a <see cref="ServiceGroup"/>. Independent of the variant fields: a
+    /// service can be grouped with or without also having variants.
+    /// </summary>
+    public BookingItem AddItem(
+        Guid id, Guid serviceId, string nameSnapshot, string slugSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? serviceVariantId, string? variantNameSnapshot, int? variantDurationMinutesSnapshot,
+        Guid? serviceGroupId, string? serviceGroupNameSnapshot)
+    {
+        EnsureStillMutable();
+
+        var item = new BookingItem(
+            id, Id, serviceId, nameSnapshot, slugSnapshot, unitPriceSnapshot, quantity,
+            serviceVariantId, variantNameSnapshot, variantDurationMinutesSnapshot,
+            serviceGroupId, serviceGroupNameSnapshot);
+        _items.Add(item);
+        return item;
+    }
+
+    /// <summary>
     /// Adds an add-on to a previously added item (task 59d). Routed through
     /// the aggregate root - which owns <see cref="EnsureStillMutable"/> - and
     /// not called as <c>BookingItem.AddAddOn</c> directly, so the same
@@ -202,6 +279,23 @@ public class Booking : AggregateRoot<Guid>
             ?? throw new InvalidOperationException($"Booking item {bookingItemId} was not found on this booking.");
 
         return item.AddAddOn(id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity);
+    }
+
+    /// <summary>
+    /// Same as <see cref="AddAddOnToItem(Guid,Guid,Guid,string,decimal,int)"/>,
+    /// plus the add-on-group snapshot fields (Phase 3 catalog redesign) -
+    /// used when the selected add-on belonged to a <see cref="ServiceAddOnGroup"/>.
+    /// </summary>
+    public BookingAddOnItem AddAddOnToItem(
+        Guid bookingItemId, Guid id, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? addOnGroupId, string? groupNameSnapshot)
+    {
+        EnsureStillMutable();
+
+        var item = _items.SingleOrDefault(i => i.Id == bookingItemId)
+            ?? throw new InvalidOperationException($"Booking item {bookingItemId} was not found on this booking.");
+
+        return item.AddAddOn(id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity, addOnGroupId, groupNameSnapshot);
     }
 
     /// <summary>

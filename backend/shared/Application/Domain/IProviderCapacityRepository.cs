@@ -4,15 +4,21 @@ namespace Nestly.Application;
 
 /// <summary>
 /// Persistence for a provider's dispatch capacity limits (PROVIDER.md
-/// "provider_capacity", task 245). No admin/provider-facing write path exists
-/// yet anywhere in this codebase (confirmed while building task 245 - the
-/// entity and its EF configuration were the only things that existed) - every
-/// provider effectively has unlimited capacity today, which is a real,
-/// honestly-documented gap, not something this repository's read-only shape
-/// papers over. Read-only for the same reason: task 245's automatic-assignment
-/// gate only needs to consult a limit if one is ever set by a future task.
+/// "provider_capacity", task 245; write path added task 308). Task 245's
+/// automatic-assignment gate (<c>IProviderAssignmentEligibilityService</c>)
+/// reads this to hard-enforce <c>MaxJobsPerDay</c>/<c>MaxJobsPerSlot</c>;
+/// <see cref="UpsertAsync"/> is the admin-facing write path that lets an
+/// admin actually set those limits instead of every provider being
+/// permanently unlimited.
 /// </summary>
 public interface IProviderCapacityRepository
 {
     Task<ProviderCapacity?> GetByProviderAsync(Guid providerId);
+
+    /// <summary>
+    /// Creates or replaces the one <see cref="ProviderCapacity"/> row for a
+    /// provider (unique index on <c>ProviderId</c> - one row per provider,
+    /// no separate create/delete verbs needed).
+    /// </summary>
+    Task UpsertAsync(ProviderCapacity capacity);
 }

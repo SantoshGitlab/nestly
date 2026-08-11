@@ -38,7 +38,8 @@ public static class NotificationTemplateSeedData
     /// Every (EventType, Channel) combination the trigger wiring depends on -
     /// one row per event type per channel, three channels throughout. Grown
     /// by task 87a-d's original 8, then referral/recurring/subscription/
-    /// expiry, then task 276's five fulfilment events. Each growth spurt also
+    /// expiry, then task 276's five fulfilment events, then task 295's
+    /// ProviderChanged. Each growth spurt also
     /// needs an incremental seed migration for live databases (see
     /// <c>SeedFulfilmentNotificationTemplates</c>) - this list alone only
     /// feeds tests and a freshly migrated database.
@@ -171,6 +172,24 @@ public static class NotificationTemplateSeedData
             "Hi {{CustomerName}},\n\n{{ProviderName}} has been assigned to your {{ServiceName}} booking on {{SlotDate}} ({{SlotWindow}}). You can follow their progress in the app once they set off."),
         Row(NotificationEventType.ProviderAssigned, NotificationChannel.Push, "provider_assigned_push", "Professional assigned",
             "{{ProviderName}} will handle your {{ServiceName}} on {{SlotDate}}, {{SlotWindow}}."),
+
+        // Task 295: the professional the customer was already told about has
+        // been replaced. A distinct template rather than a second
+        // ProviderAssigned, whose bodies above all read as a first assignment.
+        //
+        // These bodies name the *outgoing* provider ({{PreviousProviderName}})
+        // and deliberately do not name the incoming one, even though
+        // {{ProviderName}} is supplied: at the moment this sends, the
+        // replacement has only been offered the job, and naming a provider
+        // before they accept is the exact defect task 295 removed from
+        // ProviderAssigned. The customer learns the new name from
+        // ProviderAssigned when that provider accepts.
+        Row(NotificationEventType.ProviderChanged, NotificationChannel.Sms, "provider_changed_sms", null,
+            "Update: {{PreviousProviderName}} can no longer attend your {{ServiceName}} on {{SlotDate}}. We're arranging another professional and will confirm shortly. - Nestly"),
+        Row(NotificationEventType.ProviderChanged, NotificationChannel.Email, "provider_changed_email", "Your professional has changed",
+            "Hi {{CustomerName}},\n\n{{PreviousProviderName}} is no longer able to attend your {{ServiceName}} booking on {{SlotDate}} ({{SlotWindow}}). We're arranging another professional for the same slot and will confirm as soon as they've accepted - your booking itself is unchanged."),
+        Row(NotificationEventType.ProviderChanged, NotificationChannel.Push, "provider_changed_push", "Your professional has changed",
+            "{{PreviousProviderName}} can no longer attend your {{ServiceName}}. We're arranging a replacement."),
 
         Row(NotificationEventType.ProviderEnRoute, NotificationChannel.Sms, "provider_en_route_sms", null,
             "{{ProviderName}} is on the way for your {{ServiceName}}. Track them live in the app. - Nestly"),

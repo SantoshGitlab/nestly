@@ -104,6 +104,11 @@ public class CategoriesController : ControllerBase
         return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
+    [HttpGet("{id:guid}/children")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<CategoryResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListChildren(Guid id) => Ok(await _categoryManagementService.ListChildrenAsync(id));
+
     [HttpPost("{id:guid}/feature")]
     [Authorize(Policy = WritePolicy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

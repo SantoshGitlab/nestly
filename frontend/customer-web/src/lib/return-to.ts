@@ -12,8 +12,13 @@
 /** Query parameter carrying the path to return to after signing in. */
 export const RETURN_TO_PARAM = "next";
 
-/** Where sign-in lands when there is no pending destination. */
-export const DEFAULT_POST_LOGIN_PATH = "/profile";
+/**
+ * Where sign-in lands when there is no pending destination. The home page,
+ * not the profile form - dropping a customer who just signed in with
+ * nothing pending straight onto a form asking for their date of birth reads
+ * as unfinished, not welcoming.
+ */
+export const DEFAULT_POST_LOGIN_PATH = "/";
 
 /**
  * Whether a return-to value is a path on this site.

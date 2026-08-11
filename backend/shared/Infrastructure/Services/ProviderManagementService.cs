@@ -15,6 +15,7 @@ public class ProviderManagementService : IProviderManagementService
     private readonly IBookingRepository _bookingRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly IProviderEarningLedgerRepository _earningLedgerRepository;
+    private readonly IProviderCapacityRepository _capacityRepository;
 
     public ProviderManagementService(
         IProviderRepository providerRepository,
@@ -22,7 +23,8 @@ public class ProviderManagementService : IProviderManagementService
         IProviderBackgroundCheckRepository backgroundCheckRepository,
         IBookingRepository bookingRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
-        IProviderEarningLedgerRepository earningLedgerRepository)
+        IProviderEarningLedgerRepository earningLedgerRepository,
+        IProviderCapacityRepository capacityRepository)
     {
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
@@ -30,6 +32,7 @@ public class ProviderManagementService : IProviderManagementService
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _earningLedgerRepository = earningLedgerRepository;
+        _capacityRepository = capacityRepository;
     }
 
     public async Task<Result<ProviderSearchResponse>> SearchAsync(ProviderSearchRequest request)
@@ -156,6 +159,39 @@ public class ProviderManagementService : IProviderManagementService
             CompletedJobs: bookings.Count(b => b.Status == BookingStatus.Completed),
             InProgressJobs: bookings.Count(b => b.Status == BookingStatus.InProgress),
             LifetimeEarnings: latestLedgerEntry?.BalanceAfter ?? 0m);
+    }
+
+    public async Task<Result<ProviderCapacityResponse>> GetCapacityAsync(Guid providerId)
+    {
+        if (!await _providerRepository.ExistsAsync(providerId))
+        {
+            return Error.NotFound("Provider.NotFound", "Provider was not found.");
+        }
+
+        var capacity = await _capacityRepository.GetByProviderAsync(providerId);
+        return new ProviderCapacityResponse(providerId, capacity?.MaxJobsPerDay, capacity?.MaxJobsPerSlot);
+    }
+
+    public async Task<Result<ProviderCapacityResponse>> SetCapacityAsync(Guid providerId, SetProviderCapacityRequest request)
+    {
+        if (!await _providerRepository.ExistsAsync(providerId))
+        {
+            return Error.NotFound("Provider.NotFound", "Provider was not found.");
+        }
+
+        ProviderCapacity capacity;
+        try
+        {
+            capacity = new ProviderCapacity(Guid.NewGuid(), providerId, request.MaxJobsPerDay, request.MaxJobsPerSlot);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            return Error.Validation("ProviderCapacity.InvalidLimits", ex.Message);
+        }
+
+        await _capacityRepository.UpsertAsync(capacity);
+
+        return new ProviderCapacityResponse(providerId, capacity.MaxJobsPerDay, capacity.MaxJobsPerSlot);
     }
 
     /// <summary>

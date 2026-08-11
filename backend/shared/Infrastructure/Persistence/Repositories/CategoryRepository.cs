@@ -96,4 +96,12 @@ public class CategoryRepository : ICategoryRepository
 
         return await results.ToListAsync();
     }
+
+    public async Task<IReadOnlyList<Category>> ListChildrenAsync(Guid parentCategoryId) =>
+        await _context.Set<Category>()
+            .AsNoTracking()
+            .Where(c => c.ParentCategoryId == parentCategoryId && c.IsActive)
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
+            .ToListAsync();
 }

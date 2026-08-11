@@ -4,7 +4,7 @@
  * `CmsMediaController`. Every call is authenticated - these are admin-only
  * endpoints gated behind the "cms" permission module server-side.
  */
-import { API_V1, apiFetch } from "./api";
+import { API_V1, apiFetch, apiFetchUpload } from "./api";
 import type {
   BannerAdminSearchResponse,
   BannerCreateRequest,
@@ -115,3 +115,11 @@ export const listCmsMedia = () => apiFetch<CmsMediaResponse[]>(MEDIA_BASE, { aut
 
 export const createCmsMedia = (request: CmsMediaCreateRequest) =>
   apiFetch<CmsMediaResponse>(MEDIA_BASE, { method: "POST", authenticated: true, body: JSON.stringify(request) });
+
+/** Task 314: uploads a file directly instead of registering an already-hosted URL. */
+export const uploadCmsMedia = (file: File, altText: string | null) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (altText !== null) formData.append("altText", altText);
+  return apiFetchUpload<CmsMediaResponse>(`${MEDIA_BASE}/upload`, formData, { authenticated: true });
+};

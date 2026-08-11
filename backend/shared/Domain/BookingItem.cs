@@ -25,6 +25,23 @@ public class BookingItem : Entity<Guid>
     public int Quantity { get; private set; }
     public decimal LineTotalSnapshot { get; private set; }
 
+    /// <summary>Traceability only - not a foreign key, same convention as <see cref="ServiceId"/>. Null when no variant was selected (Phase 3 catalog redesign) - the flat <see cref="Service"/> price/duration applied instead.</summary>
+    public Guid? ServiceVariantId { get; private set; }
+    public string? VariantNameSnapshot { get; private set; }
+    public int? VariantDurationMinutesSnapshot { get; private set; }
+
+    /// <summary>
+    /// Traceability only - not a foreign key, same convention as
+    /// <see cref="ServiceId"/>. Null when the service wasn't assigned to a
+    /// <see cref="ServiceGroup"/> at booking time (Appliance/Service Group
+    /// catalog redesign) - inherited from the service, never a customer
+    /// selection, so it's captured here purely so a past booking's detail
+    /// still shows which section the service was booked under even if the
+    /// service is later re-grouped or ungrouped.
+    /// </summary>
+    public Guid? ServiceGroupId { get; private set; }
+    public string? ServiceGroupNameSnapshot { get; private set; }
+
     public IReadOnlyList<BookingAddOnItem> AddOns => _addOns;
 
     protected BookingItem() { }
@@ -46,9 +63,42 @@ public class BookingItem : Entity<Guid>
         LineTotalSnapshot = unitPriceSnapshot * quantity;
     }
 
+    /// <summary>Same as the base constructor, plus the variant snapshot fields (Phase 3 catalog redesign) - used when the booked service line was booked against a specific <see cref="ServiceVariant"/> rather than the service's flat price.</summary>
+    public BookingItem(
+        Guid id, Guid bookingId, Guid serviceId, string nameSnapshot, string slugSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? serviceVariantId, string? variantNameSnapshot, int? variantDurationMinutesSnapshot)
+        : this(id, bookingId, serviceId, nameSnapshot, slugSnapshot, unitPriceSnapshot, quantity)
+    {
+        ServiceVariantId = serviceVariantId;
+        VariantNameSnapshot = variantNameSnapshot;
+        VariantDurationMinutesSnapshot = variantDurationMinutesSnapshot;
+    }
+
+    /// <summary>Same as the variant-carrying constructor, plus the service-group snapshot fields (Appliance/Service Group catalog redesign) - used when the booked service currently belongs to a <see cref="ServiceGroup"/>.</summary>
+    public BookingItem(
+        Guid id, Guid bookingId, Guid serviceId, string nameSnapshot, string slugSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? serviceVariantId, string? variantNameSnapshot, int? variantDurationMinutesSnapshot,
+        Guid? serviceGroupId, string? serviceGroupNameSnapshot)
+        : this(id, bookingId, serviceId, nameSnapshot, slugSnapshot, unitPriceSnapshot, quantity,
+              serviceVariantId, variantNameSnapshot, variantDurationMinutesSnapshot)
+    {
+        ServiceGroupId = serviceGroupId;
+        ServiceGroupNameSnapshot = serviceGroupNameSnapshot;
+    }
+
     public BookingAddOnItem AddAddOn(Guid id, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity)
     {
         var addOn = new BookingAddOnItem(id, Id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity);
+        _addOns.Add(addOn);
+        return addOn;
+    }
+
+    /// <summary>Same as <see cref="AddAddOn(Guid,Guid,string,decimal,int)"/>, plus the add-on-group snapshot fields (Phase 3 catalog redesign) - used when the selected add-on belonged to a <see cref="ServiceAddOnGroup"/>.</summary>
+    public BookingAddOnItem AddAddOn(
+        Guid id, Guid serviceAddOnId, string nameSnapshot, decimal unitPriceSnapshot, int quantity,
+        Guid? addOnGroupId, string? groupNameSnapshot)
+    {
+        var addOn = new BookingAddOnItem(id, Id, serviceAddOnId, nameSnapshot, unitPriceSnapshot, quantity, addOnGroupId, groupNameSnapshot);
         _addOns.Add(addOn);
         return addOn;
     }

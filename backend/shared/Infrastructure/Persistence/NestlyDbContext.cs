@@ -41,6 +41,10 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketComment> SupportTicketComments { get; set; }
     public DbSet<NotificationEvent> NotificationEvents { get; set; }
+
+    /// <summary>Task 294: the durable record that a notification is owed, written inside the transaction that warrants it. See <see cref="NotificationIntent"/>.</summary>
+    public DbSet<NotificationIntent> NotificationIntents { get; set; }
+
     public DbSet<DeviceToken> DeviceTokens { get; set; }
     public DbSet<SystemSetting> SystemSettings { get; set; }
     public DbSet<CmsPage> CmsPages { get; set; }

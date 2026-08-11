@@ -214,18 +214,27 @@ approach as the five above.
    *ranking* only where one candidate's own asymmetry differs from its
    peers' — a far smaller error than the straight-line ordering it replaces.
 
-2. **Capacity: hard-enforced for auto-assignment only, still advisory for
-   manual.** `ProviderCapacity`'s doc comment states it is "advisory only in
-   v1 — nothing enforces these limits automatically." Task 245 enforces
-   `MaxJobsPerDay`/`MaxJobsPerSlot` when the automatic engine filters
-   candidates — a machine picking a provider needs a hard cap, since there is
-   no human in the loop to notice an overload the way an admin browsing a
-   list would. Manual admin assignment keeps today's advisory-only behaviour
-   unchanged; enforcing it there too is a separate, undecided product
-   question this task does not resolve. *(Still true for the capacity
-   **limits**. Decision 7 below separates out the one thing that is not a
-   limit at all — being in two places at once — and makes that a hard stop on
-   both paths.)*
+2. **Capacity: hard-enforced for auto-assignment, still advisory for
+   manual.** Task 245 enforces `MaxJobsPerDay`/`MaxJobsPerSlot` as a **hard
+   limit** when the automatic engine filters candidates — a machine picking a
+   provider needs a hard cap, since there is no human in the loop to notice
+   an overload the way an admin browsing a list would. Manual admin
+   assignment keeps advisory-only behaviour (the candidate list surfaces a
+   provider's current load as a signal but does not block on it); enforcing
+   it there too is a separate, undecided product question this decision does
+   not resolve. *(Still true for the capacity **limits**. Decision 7 below
+   separates out the one thing that is not a limit at all — being in two
+   places at once — and makes that a hard stop on both paths.)*
+
+   Task 245 built the enforcement side of this with no way for an admin to
+   ever set a limit — every provider was permanently unlimited by omission,
+   not by design. Task 308 closes that gap: `GET`/`PUT
+   /admin/providers/{id}/capacity` plus an admin-web control on the provider
+   detail page, gated behind the same `provider.write` permission as the
+   rest of the provider-admin controller. `ProviderCapacity`'s own doc
+   comment states the hard-limit/advisory split above plainly — it no longer
+   says "advisory only," which stopped being true the moment task 245's
+   enforcement shipped.
 
 3. **Rating: still not an input — corrected while implementing task 244.**
    Decision 4 above (task 144) left this "deferred, not discarded... once

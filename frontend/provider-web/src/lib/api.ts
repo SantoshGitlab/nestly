@@ -155,3 +155,19 @@ export async function apiFetch<T>(
 
   return (await response.json()) as T;
 }
+
+/**
+ * Multipart file upload. No `Content-Type` default here (unlike `apiFetch`)
+ * - the browser must set it itself to `multipart/form-data; boundary=...`
+ * when the body is a `FormData`; a fixed `application/json` header (or any
+ * explicit multipart header without the boundary the browser generates)
+ * would produce a body the server can't parse.
+ */
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  init?: Omit<ApiFetchOptions, "body" | "method">,
+): Promise<T> {
+  const response = await performFetch(path, { ...init, method: "POST", body: formData }, {});
+  return (await response.json()) as T;
+}

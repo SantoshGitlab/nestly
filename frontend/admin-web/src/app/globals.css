@@ -191,6 +191,10 @@
 
   /* Scrollbars, themed. Left as the platform default on touch devices. */
   @media (pointer: fine) {
+    * {
+      scrollbar-color: rgb(var(--border-strong)) transparent;
+      scrollbar-width: thin;
+    }
     ::-webkit-scrollbar {
       width: 10px;
       height: 10px;

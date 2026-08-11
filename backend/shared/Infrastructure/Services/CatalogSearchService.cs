@@ -39,10 +39,64 @@ public class CatalogSearchService : ICatalogSearchService
         var categories = await _categoryRepository.SearchActiveAsync(trimmed, MaxResultsPerType);
         var services = await _serviceRepository.SearchActiveAsync(trimmed, MaxResultsPerType);
 
-        IReadOnlyList<CategorySummaryResponse> categoryResults = categories.Select(ToSummary).ToList();
-        IReadOnlyList<ServiceListItemResponse> serviceResults = services.Select(ToListItem).ToList();
+        // Own-active flag alone isn't enough once categories nest (SRS
+        // 11.5.4, 12.5.3): a sub-category or service can stay individually
+        // active while a deactivated ancestor should still hide it from
+        // customer-facing discovery, matching the same rule applied to
+        // direct category/service detail lookups.
+        var visibleCategories = new List<Category>(categories.Count);
+        foreach (var category in categories)
+        {
+            if (await IsVisibleInHierarchyAsync(category))
+            {
+                visibleCategories.Add(category);
+            }
+        }
+
+        var visibleServices = new List<Service>(services.Count);
+        foreach (var service in services)
+        {
+            var owningCategory = await _categoryRepository.GetByIdAsync(service.CategoryId);
+            if (owningCategory is not null && await IsVisibleInHierarchyAsync(owningCategory))
+            {
+                visibleServices.Add(service);
+            }
+        }
+
+        IReadOnlyList<CategorySummaryResponse> categoryResults = visibleCategories.Select(ToSummary).ToList();
+        IReadOnlyList<ServiceListItemResponse> serviceResults = visibleServices.Select(ToListItem).ToList();
 
         return new CatalogSearchResponse(categoryResults, serviceResults);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="category"/> and every one of its ancestor
+    /// categories are active - mirrors
+    /// <c>CategoryQueryService.IsVisibleInHierarchyAsync</c> /
+    /// <c>ServiceQueryService.IsCategoryVisibleInHierarchyAsync</c>.
+    /// Bounded to 32 hops as a defensive ceiling against malformed/cyclical
+    /// parent data (a true cycle is already rejected at write time by
+    /// <c>CategoryManagementService</c>).
+    /// </summary>
+    private async Task<bool> IsVisibleInHierarchyAsync(Category category)
+    {
+        Category? current = category;
+        for (var hop = 0; hop < 32 && current is not null; hop++)
+        {
+            if (!current.IsActive)
+            {
+                return false;
+            }
+
+            if (current.ParentCategoryId is null)
+            {
+                return true;
+            }
+
+            current = await _categoryRepository.GetByIdAsync(current.ParentCategoryId.Value);
+        }
+
+        return false;
     }
 
     private static CategorySummaryResponse ToSummary(Category category) => new(
@@ -58,5 +112,7 @@ public class CatalogSearchService : ICatalogSearchService
         service.Name,
         service.Slug,
         service.Description,
-        service.Price);
+        service.Price,
+        service.CoverImageUrl,
+        service.DurationMinutes);
 }
