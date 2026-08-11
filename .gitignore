@@ -36,6 +36,9 @@ coverage/
 # Local Postgres backups (task 139) - never commit real data dumps
 database/backups/
 
+# Local Redis dump - runtime artifact, never commit
+dump.rdb
+
 # Environment
 .env
 .env.*
