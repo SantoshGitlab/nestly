@@ -19,18 +19,21 @@ import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
  * immediately via subscribeToAuthChanges - covering both "never logged in"
  * and "was logged in, token just expired/was revoked" in the same code path.
  */
+// Flips true after this tab's first client render commits - see
+// customer-web/src/components/RequireAuth.tsx for why `typeof window` alone
+// isn't enough (it's defined during hydration too, not just after it, so
+// reading real auth state on the first paint would mismatch the `undefined`
+// the server rendered).
+let hasClientRendered = false;
+
 export function RequireProviderAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
-  // Undefined only for the SSR/first-paint render: sessionStorage does not
-  // exist there, and guessing either way would flash the wrong UI. Every
-  // later client-side render has `window` defined, so read the real value
-  // immediately instead of forcing an extra loading frame through a
-  // useEffect first.
   const [authed, setAuthed] = useState<boolean | undefined>(() =>
-    typeof window === "undefined" ? undefined : isAuthenticated(),
+    hasClientRendered ? isAuthenticated() : undefined,
   );
 
   useEffect(() => {
+    hasClientRendered = true;
     const sync = () => setAuthed(isAuthenticated());
     sync();
     return subscribeToAuthChanges(sync);
