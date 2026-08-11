@@ -17,9 +17,16 @@ import { buildLoginHref } from "@/lib/return-to";
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
-  // Undefined until the first client render: sessionStorage does not exist
-  // during SSR, and guessing either way would flash the wrong UI.
-  const [authed, setAuthed] = useState<boolean | undefined>(undefined);
+  // Undefined only for the SSR/first-paint render: sessionStorage does not
+  // exist there, and guessing either way would flash the wrong UI. Every
+  // client-side navigation after that mounts this component with `window`
+  // already defined, so it can read the real value immediately instead of
+  // forcing an extra skeleton-flash frame through a useEffect first - this
+  // guard is remounted on every one of the ~20 authenticated routes below,
+  // since none of them share a layout that would keep a single instance.
+  const [authed, setAuthed] = useState<boolean | undefined>(() =>
+    typeof window === "undefined" ? undefined : isAuthenticated(),
+  );
 
   useEffect(() => {
     const sync = () => setAuthed(isAuthenticated());

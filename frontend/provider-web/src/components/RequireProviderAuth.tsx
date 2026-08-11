@@ -21,9 +21,14 @@ import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
  */
 export function RequireProviderAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
-  // Undefined until the first client render: sessionStorage does not exist
-  // during SSR, and guessing either way would flash the wrong UI.
-  const [authed, setAuthed] = useState<boolean | undefined>(undefined);
+  // Undefined only for the SSR/first-paint render: sessionStorage does not
+  // exist there, and guessing either way would flash the wrong UI. Every
+  // later client-side render has `window` defined, so read the real value
+  // immediately instead of forcing an extra loading frame through a
+  // useEffect first.
+  const [authed, setAuthed] = useState<boolean | undefined>(() =>
+    typeof window === "undefined" ? undefined : isAuthenticated(),
+  );
 
   useEffect(() => {
     const sync = () => setAuthed(isAuthenticated());
