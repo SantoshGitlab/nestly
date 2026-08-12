@@ -86,16 +86,16 @@ export function ServiceCard({
             ) : (
               <span />
             )}
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-400">
-              View details
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3.5 py-1.5 text-xs font-semibold text-fg-on-brand shadow-brand transition-colors duration-fast ease-out group-hover:bg-brand-700">
+              Explore details
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="h-3.5 w-3.5 transition-transform duration-fast ease-out group-hover:translate-x-0.5"
+                className="h-3 w-3 transition-transform duration-fast ease-out group-hover:translate-x-0.5"
                 aria-hidden
               >
                 <path d="M5 12h14M13 6l6 6-6 6" />
