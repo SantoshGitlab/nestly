@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { PriceCalculator } from "@/components/PriceCalculator";
 import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
@@ -72,7 +73,7 @@ export default function ServiceDetailPage() {
         </ol>
       </nav>
 
-      <ServiceHero name={service.name} />
+      <ServiceHero name={service.name} coverImageUrl={service.coverImageUrl} />
 
       <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-8">
@@ -141,18 +142,34 @@ export default function ServiceDetailPage() {
   );
 }
 
-/** Icon-on-gradient hero (see src/lib/serviceVisuals.tsx) so the detail page isn't a wall of text either. */
-function ServiceHero({ name }: { name: string }) {
+/** Admin-supplied photo when present (see ServiceCard for the same pattern); otherwise the icon-on-gradient fallback from src/lib/serviceVisuals.tsx. */
+function ServiceHero({ name, coverImageUrl }: { name: string; coverImageUrl?: string | null }) {
   const { icon: Icon, gradient } = getServiceVisual(name);
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = coverImageUrl && !imageFailed;
 
   return (
     <div
       aria-hidden
-      className={`flex h-36 items-center justify-center rounded-2xl bg-gradient-to-br ${gradient} text-white/90 shadow-sm sm:h-44`}
+      className="relative h-48 overflow-hidden rounded-2xl shadow-sm sm:h-64"
     >
-      <span className="scale-[2]">
-        <Icon />
-      </span>
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
+        <img
+          src={coverImageUrl}
+          alt=""
+          onError={() => setImageFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div
+          className={`flex h-full items-center justify-center bg-gradient-to-br ${gradient} text-white/90`}
+        >
+          <span className="scale-[2]">
+            <Icon />
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,12 +1,11 @@
 import type { ComponentType } from "react";
 
 /**
- * Services have no admin-supplied image field yet (ServiceSummary/ServiceDetail
- * carry no imageUrl - see docs/API.md's ServicesController shape), so a plain
- * text list is what SRS 11.5.3 actually renders today. Recognizable per-category
- * icon art (picture superiority effect: an icon is recalled faster than a name)
- * closes that gap without inventing a backend field - keyed off the service
- * name itself, same pattern HeroBanner already uses for its decorative cluster.
+ * Fallback art for services/categories that have no admin-supplied
+ * coverImageUrl/iconUrl set. Recognizable per-category icon art (picture
+ * superiority effect: an icon is recalled faster than a name) beats a plain
+ * text list - keyed off the service name itself, same pattern HeroBanner
+ * already uses for its decorative cluster.
  */
 
 const ICON_PROPS = {
