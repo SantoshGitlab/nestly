@@ -7,6 +7,18 @@ import { ScreenSkeleton } from "@/components/patterns";
 import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
 import { buildLoginHref } from "@/lib/return-to";
 
+// Flips true after this tab's first client render commits. `window` exists
+// during hydration too, not just after it, so gating on `typeof window` alone
+// would read real auth state on the very first paint and mismatch the
+// `undefined` the server rendered - React would then discard the server HTML
+// and hydrate-replace it. Gating on "have we committed at least one client
+// render" instead keeps that first paint at `undefined` (matching SSR) while
+// letting every later mount of this guard - it remounts on each of the ~20
+// authenticated routes below, since none of them share a layout that would
+// keep a single instance - skip straight to the real value instead of
+// flashing a skeleton for a frame on every navigation.
+let hasClientRendered = false;
+
 /**
  * Client-side guard for the signed-in screens.
  *
@@ -17,11 +29,12 @@ import { buildLoginHref } from "@/lib/return-to";
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
-  // Undefined until the first client render: sessionStorage does not exist
-  // during SSR, and guessing either way would flash the wrong UI.
-  const [authed, setAuthed] = useState<boolean | undefined>(undefined);
+  const [authed, setAuthed] = useState<boolean | undefined>(() =>
+    hasClientRendered ? isAuthenticated() : undefined,
+  );
 
   useEffect(() => {
+    hasClientRendered = true;
     const sync = () => setAuthed(isAuthenticated());
     sync();
     return subscribeToAuthChanges(sync);

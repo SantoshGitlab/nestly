@@ -19,13 +19,21 @@ import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
  * via subscribeToAuthChanges - covering both "never logged in" and
  * "was logged in, token just expired/was revoked" in the same code path.
  */
+// Flips true after this tab's first client render commits - see
+// customer-web/src/components/RequireAuth.tsx for why `typeof window` alone
+// isn't enough (it's defined during hydration too, not just after it, so
+// reading real auth state on the first paint would mismatch the `undefined`
+// the server rendered).
+let hasClientRendered = false;
+
 export function RequireAdminAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
-  // Undefined until the first client render: sessionStorage does not exist
-  // during SSR, and guessing either way would flash the wrong UI.
-  const [authed, setAuthed] = useState<boolean | undefined>(undefined);
+  const [authed, setAuthed] = useState<boolean | undefined>(() =>
+    hasClientRendered ? isAuthenticated() : undefined,
+  );
 
   useEffect(() => {
+    hasClientRendered = true;
     const sync = () => setAuthed(isAuthenticated());
     sync();
     return subscribeToAuthChanges(sync);

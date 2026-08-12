@@ -1,0 +1,32 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgb(0 130 89)" />
+      <stop offset="100%" stop-color="rgb(9 61 128)" />
+    </linearGradient>
+    <radialGradient id="sheen" cx="80%" cy="15%" r="65%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="vignette" cx="50%" cy="55%" r="75%">
+      <stop offset="60%" stop-color="#000000" stop-opacity="0" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16" />
+    </radialGradient>
+    <pattern id="texture" width="28" height="28" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="28" stroke="#ffffff" stroke-opacity="0.05" stroke-width="10" />
+    </pattern>
+  </defs>
+
+  <rect width="800" height="600" fill="url(#bg)" />
+  <rect width="800" height="600" fill="url(#texture)" />
+  <rect width="800" height="600" fill="url(#sheen)" />
+  <rect width="800" height="600" fill="url(#vignette)" />
+
+  <circle cx="660" cy="90" r="130" fill="#ffffff" opacity="0.06" />
+  <circle cx="90" cy="520" r="170" fill="#ffffff" opacity="0.05" />
+
+  <g transform="translate(280,180) scale(10)" fill="none" stroke="#ffffff" stroke-opacity="0.95" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 7V5.5a4 4 0 0 1 8 0V7M6 10h12M6 14h12M9 21l-2-3M15 21l2-3M4 8l2.5 2M20 8l-2.5 2" />
+      <rect x="8" y="7" width="8" height="11" rx="4" />
+  </g>
+</svg>

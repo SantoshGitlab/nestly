@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { SPRING } from "@/components/motion";
+import { getServiceVisual } from "@/lib/serviceVisuals";
 
 /**
  * Service/package card for a listing (SRS 11.5.3): photo, name, duration,
@@ -32,6 +33,7 @@ export function ServiceCard({
   coverImageUrl?: string | null;
   addOnCount?: number;
 }) {
+  const { icon: Icon, gradient } = getServiceVisual(name);
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = coverImageUrl && !imageFailed;
 
@@ -53,8 +55,11 @@ export function ServiceCard({
               className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-5xl" aria-hidden>
-              🧰
+            <div
+              aria-hidden
+              className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${gradient} text-white/90`}
+            >
+              <Icon />
             </div>
           )}
         </div>

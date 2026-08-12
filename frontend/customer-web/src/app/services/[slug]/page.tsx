@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { PriceCalculator } from "@/components/PriceCalculator";
 import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
@@ -10,6 +11,7 @@ import { ServiceFaqs } from "@/components/ServiceFaqs";
 import { Alert, Button, Skeleton } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { getServiceVisual } from "@/lib/serviceVisuals";
 import type { ServiceDetail } from "@/lib/types";
 
 /**
@@ -71,7 +73,9 @@ export default function ServiceDetailPage() {
         </ol>
       </nav>
 
-      <div className="grid gap-8 md:grid-cols-[1fr_20rem]">
+      <ServiceHero name={service.name} coverImageUrl={service.coverImageUrl} />
+
+      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
         <div className="flex min-w-0 flex-col gap-8">
           <div>
             <h1 className="text-display-sm font-semibold text-fg">{service.name}</h1>
@@ -138,6 +142,38 @@ export default function ServiceDetailPage() {
   );
 }
 
+/** Admin-supplied photo when present (see ServiceCard for the same pattern); otherwise the icon-on-gradient fallback from src/lib/serviceVisuals.tsx. */
+function ServiceHero({ name, coverImageUrl }: { name: string; coverImageUrl?: string | null }) {
+  const { icon: Icon, gradient } = getServiceVisual(name);
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = coverImageUrl && !imageFailed;
+
+  return (
+    <div
+      aria-hidden
+      className="relative h-48 overflow-hidden rounded-2xl shadow-sm sm:h-64"
+    >
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
+        <img
+          src={coverImageUrl}
+          alt=""
+          onError={() => setImageFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div
+          className={`flex h-full items-center justify-center bg-gradient-to-br ${gradient} text-white/90`}
+        >
+          <span className="scale-[2]">
+            <Icon />
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InclusionList({
   headingId,
   title,
@@ -192,7 +228,8 @@ function ServiceDetailSkeleton() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <Skeleton className="h-4 w-72" />
-      <div className="mt-5 grid gap-8 md:grid-cols-[1fr_20rem]">
+      <Skeleton className="mt-5 h-36 rounded-2xl sm:h-44" />
+      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
         <div className="flex flex-col gap-6">
           <Skeleton className="h-9 w-3/4" />
           <div className="flex flex-col gap-2">
