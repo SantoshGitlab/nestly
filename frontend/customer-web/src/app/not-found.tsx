@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LinkButton } from "@/components/ui";
 
 /**
  * Branded 404 (task 228). Next's default not-found page ignores the design
@@ -15,12 +15,9 @@ export default function CustomerNotFound() {
           The page you&apos;re looking for doesn&apos;t exist or has moved.
         </p>
 
-        <Link
-          href="/"
-          className="mt-8 inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-        >
+        <LinkButton href="/" className="mt-8">
           Go home
-        </Link>
+        </LinkButton>
       </div>
     </main>
   );

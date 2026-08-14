@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkButton,
   Modal,
   PageHeading,
   Skeleton,
@@ -84,14 +85,7 @@ function RecurringBookingsScreen() {
         <EmptyState
           title="No recurring bookings yet"
           description="Set one up from any service's booking summary and it will repeat on the schedule you choose."
-          action={
-            <Link
-              href="/categories"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-            >
-              Browse services
-            </Link>
-          }
+          action={<LinkButton href="/categories">Browse services</LinkButton>}
         />
       ) : (
         <Reveal as="ul" className="flex flex-col gap-4">

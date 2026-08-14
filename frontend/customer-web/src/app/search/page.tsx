@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { CategoryGridSkeleton } from "@/components/CategoryGridSkeleton";
@@ -10,7 +9,7 @@ import { CategoryTile } from "@/components/CategoryTile";
 import { Reveal, revealItem } from "@/components/motion";
 import { SearchBar } from "@/components/SearchBar";
 import { ServiceCard } from "@/components/ServiceCard";
-import { Alert, Button, EmptyState, PageHeading, Skeleton } from "@/components/ui";
+import { Alert, Button, EmptyState, LinkButton, PageHeading, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CatalogSearchResult } from "@/lib/types";
 
@@ -103,16 +102,13 @@ function SearchResults() {
           // A Link, not a Button with a router push: this is a plain
           // navigation and must stay middle-clickable.
           action={
-            <Link
-              href="/categories"
-              className="inline-flex h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
-            >
+            <LinkButton href="/categories" variant="secondary">
               Browse categories
-            </Link>
+            </LinkButton>
           }
         />
       ) : (
-        <div className="flex flex-col gap-12">
+        <div className="flex flex-col gap-6">
           {query.data.categories.length > 0 ? (
             <section aria-labelledby="search-categories-heading">
               <h2
@@ -145,7 +141,7 @@ function SearchResults() {
                   {query.data.services.length}
                 </span>
               </h2>
-              <Reveal className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {query.data.services.map((service) => (
                   <motion.div key={service.id} variants={revealItem}>
                     <ServiceCard
@@ -169,14 +165,14 @@ function SearchResults() {
 
 function SearchResultsSkeleton() {
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-6">
       <div>
         <Skeleton className="mb-4 h-6 w-32" />
         <CategoryGridSkeleton count={4} />
       </div>
       <div>
         <Skeleton className="mb-4 h-6 w-28" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-72 rounded-2xl" />
           ))}

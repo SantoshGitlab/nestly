@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import type { ReactNode } from "react";
@@ -16,7 +15,7 @@ import {
   formatTimeRange,
 } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card } from "@/components/ui";
+import { Alert, Button, Card, LinkButton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { BookingDetail, ServiceDetail } from "@/lib/types";
 
@@ -163,23 +162,18 @@ function BookingSuccessScreen() {
           ) : null}
         </Card>
 
-        {/* Styled links rather than <Link><Button/></Link>: a button inside an
+        {/* LinkButtons rather than <Link><Button/></Link>: a button inside an
             anchor is invalid HTML and gives assistive tech two nested
             interactive elements for one action. Both names are addressed by
-            the E2E suite. */}
+            the E2E suite. `flex-1` (not `fullWidth`) so the two share the row
+            equally once `sm:flex-row` kicks in. */}
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link
-            href={`/bookings/${booking.id}`}
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-lg bg-brand-600 px-5 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
-          >
+          <LinkButton href={`/bookings/${booking.id}`} size="lg" className="flex-1">
             View booking details
-          </Link>
-          <Link
-            href="/bookings"
-            className="inline-flex h-11 flex-1 items-center justify-center rounded-lg border border-line bg-surface px-5 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 active:scale-[0.98]"
-          >
+          </LinkButton>
+          <LinkButton href="/bookings" variant="secondary" size="lg" className="flex-1">
             Go to my bookings
-          </Link>
+          </LinkButton>
         </div>
       </div>
     </main>

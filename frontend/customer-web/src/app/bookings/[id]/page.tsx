@@ -1,9 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import type { ReactNode } from "react";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
   BookingStatusBadge,
@@ -20,7 +18,7 @@ import {
   providerAssignmentTone,
 } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Badge, Button, Card, PageHeading, Skeleton, cx } from "@/components/ui";
+import { Alert, Badge, Button, Card, LinkButton, PageHeading, Skeleton, cx } from "@/components/ui";
 import { isBookingTrackable, useBookingTracking } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import {
@@ -269,13 +267,12 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
         </div>
 
         {isBookingTrackable(booking.status) ? (
-          <Link
+          <LinkButton
             href={`/bookings/${booking.id}/track`}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
+            icon={<span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-fg-on-brand" />}
           >
-            <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-fg-on-brand" />
             Track live
-          </Link>
+          </LinkButton>
         ) : null}
       </div>
     </Card>
@@ -405,7 +402,7 @@ function refundStatusTone(status: RefundStatus) {
 
 /**
  * Action CTAs (task 65c, SRS 11.13.2), wired to the real post-booking flows
- * (tasks 89a-c, 90, 91, 92). Every action is a styled `Link` rather than
+ * (tasks 89a-c, 90, 91, 92). Every action is `LinkButton` (ui.tsx) rather than
  * `<Link><Button/></Link>` — a button inside an anchor is invalid HTML and
  * exposes two nested controls for one action. The accessible names
  * "Cancel booking" and "Reschedule booking" are addressed by the E2E suite
@@ -422,45 +419,56 @@ function ActionCtas({ booking, isClosed }: { booking: BookingDetail; isClosed: b
   return (
     <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-4 shadow-sm">
       {canRebook ? (
-        <ActionLink href={`/services/${booking.service.slug}`} variant="primary">
+        <LinkButton href={`/services/${booking.service.slug}`} fullWidth>
           Book again
-        </ActionLink>
+        </LinkButton>
       ) : null}
 
       {!isClosed ? (
-        <ActionLink href={`/bookings/${booking.id}/reschedule`}>Reschedule booking</ActionLink>
+        <LinkButton href={`/bookings/${booking.id}/reschedule`} variant="secondary" fullWidth>
+          Reschedule booking
+        </LinkButton>
       ) : null}
 
       {canRebook ? (
-        <ActionLink href={`/recurring-bookings/new?serviceSlug=${booking.service.slug}`}>
+        <LinkButton href={`/recurring-bookings/new?serviceSlug=${booking.service.slug}`} variant="secondary" fullWidth>
           Set up recurring booking
-        </ActionLink>
+        </LinkButton>
       ) : null}
 
-      <ActionLink href={`/bookings/${booking.id}/review`}>Leave a review</ActionLink>
+      <LinkButton href={`/bookings/${booking.id}/review`} variant="secondary" fullWidth>
+        Leave a review
+      </LinkButton>
 
       {booking.status === BookingStatus.Completed ? (
-        <ActionLink href="/refer-earn">Refer a friend &amp; earn</ActionLink>
+        <LinkButton href="/refer-earn" variant="secondary" fullWidth>
+          Refer a friend &amp; earn
+        </LinkButton>
       ) : null}
 
-      <ActionLink href={`/support/new?bookingId=${booking.id}`}>Raise an issue</ActionLink>
+      <LinkButton href={`/support/new?bookingId=${booking.id}`} variant="secondary" fullWidth>
+        Raise an issue
+      </LinkButton>
 
-      <ActionLink href="/bookings">Back to my bookings</ActionLink>
+      <LinkButton href="/bookings" variant="secondary" fullWidth>
+        Back to my bookings
+      </LinkButton>
 
       {/* Kept as an unconditional fallback alongside the real ticketing flow
           above - useful if the in-app flow itself is the thing that's broken. */}
-      <a
+      <LinkButton
         href={`mailto:support@nestly.app?subject=${encodeURIComponent(`Booking ${booking.id}`)}`}
-        className="inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-medium text-fg-muted transition duration-fast ease-out hover:bg-surface-3 hover:text-fg"
+        variant="ghost"
+        fullWidth
       >
         Email support
-      </a>
+      </LinkButton>
 
       {!isClosed ? (
         <div className="mt-1 border-t border-line pt-3">
-          <ActionLink href={`/bookings/${booking.id}/cancel`} variant="danger">
+          <LinkButton href={`/bookings/${booking.id}/cancel`} variant="danger-soft" fullWidth>
             Cancel booking
-          </ActionLink>
+          </LinkButton>
           <p className="mt-2 text-xs leading-relaxed text-fg-subtle">
             Cancelling can&apos;t be undone. You&apos;ll see the exact refund before you confirm.
           </p>
@@ -470,32 +478,6 @@ function ActionCtas({ booking, isClosed }: { booking: BookingDetail; isClosed: b
   );
 }
 
-function ActionLink({
-  href,
-  children,
-  variant = "secondary",
-}: {
-  href: string;
-  children: ReactNode;
-  variant?: "primary" | "secondary" | "danger";
-}) {
-  return (
-    <Link
-      href={href}
-      className={cx(
-        "inline-flex h-10 w-full items-center justify-center rounded-lg px-4 text-sm font-medium transition duration-fast ease-out active:scale-[0.98]",
-        variant === "primary" &&
-          "bg-brand-600 text-fg-on-brand shadow-brand hover:bg-brand-700",
-        variant === "secondary" &&
-          "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
-        variant === "danger" &&
-          "border border-danger/30 bg-danger-soft text-danger hover:border-danger/50",
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
 
 /** Photo + checklist evidence the provider submitted at job completion (tasks 195-198). */
 function CompletionProofCard({ bookingId }: { bookingId: string }) {

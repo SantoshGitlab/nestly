@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { Timeline } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { TrackingMap } from "@/components/TrackingMap";
-import { Alert, Button, Card, PageHeading, Skeleton, cx } from "@/components/ui";
+import { Alert, Button, Card, LinkButton, PageHeading, Skeleton, cx } from "@/components/ui";
 import { isBookingTrackable, useLiveBookingTracking } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { BookingStatus } from "@/lib/types";
@@ -62,7 +62,7 @@ function TrackScreen() {
   useLiveBookingTracking(trackable ? id : undefined);
 
   if (bookingQuery.isPending) {
-    return <ScreenSkeleton />;
+    return <TrackingScreenSkeleton />;
   }
 
   if (bookingQuery.isError || !bookingQuery.data) {
@@ -96,12 +96,9 @@ function TrackScreen() {
               : "This booking is no longer trackable."}
           </Alert>
         </div>
-        <Link
-          href={`/bookings/${booking.id}`}
-          className="mt-6 inline-flex h-10 items-center justify-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
-        >
+        <LinkButton href={`/bookings/${booking.id}`} variant="secondary" className="mt-6">
           Back to booking
-        </Link>
+        </LinkButton>
       </main>
     );
   }
@@ -292,7 +289,13 @@ function formatMinutes(seconds: number): string {
   return `${minutes} min`;
 }
 
-function ScreenSkeleton() {
+/**
+ * Bespoke (map + stepper + provider card), not the shared `ScreenSkeleton`
+ * from `patterns.tsx` (that one is a generic card stack and doesn't fit this
+ * layout) — named distinctly so it doesn't shadow the shared component of
+ * the same name for anyone reading or importing from this file.
+ */
+function TrackingScreenSkeleton() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10" aria-hidden>
       <Skeleton className="h-8 w-56" />

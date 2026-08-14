@@ -243,6 +243,46 @@ export const RECURRING_FREQUENCY_OPTIONS: {
   RecurringBookingRecurrenceFrequency.Monthly,
 ].map((value) => ({ value, label: recurringFrequencyLabel(value) }));
 
+/**
+ * Segmented pill radiogroup over {@link RECURRING_FREQUENCY_OPTIONS} - the
+ * exact same control was independently built on the booking summary page and
+ * the standalone "new recurring booking" page; this is the one shared copy.
+ */
+export function FrequencyPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: RecurringBookingRecurrenceFrequency;
+  onChange: (value: RecurringBookingRecurrenceFrequency) => void;
+  label: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+      {RECURRING_FREQUENCY_OPTIONS.map((option) => {
+        const isSelected = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            onClick={() => onChange(option.value)}
+            className={cx(
+              "rounded-xl border px-3.5 py-2 text-sm font-medium transition duration-fast ease-out",
+              isSelected
+                ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
+                : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function supportStatusTone(status: SupportTicketStatus): BadgeTone {
   switch (status) {
     case SupportTicketStatus.Open:
@@ -480,7 +520,7 @@ export function PriceBreakdownSkeleton() {
 /* -------------------------------------------------------------------------- */
 
 /** Shared selected/idle treatment for a radio- or checkbox-backed option row, matching the address/add-on pickers already in the booking flow. */
-const OPTION_ROW = (checked: boolean) =>
+export const OPTION_ROW = (checked: boolean) =>
   cx(
     "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm transition duration-fast ease-out",
     checked

@@ -4,11 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { PageBanner } from "@/components/PageBanner";
 import { ServiceCard } from "@/components/ServiceCard";
 import { ServiceGroupSection } from "@/components/ServiceGroupSection";
 import { SubcategoryChips } from "@/components/SubcategoryChips";
 import { Reveal, revealItem } from "@/components/motion";
-import { Alert, Button, EmptyState, Skeleton } from "@/components/ui";
+import { Alert, Button, EmptyState, LinkButton, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CategoryDetail } from "@/lib/types";
 
@@ -53,11 +54,16 @@ export default function CategoryDetailPage() {
 
   return (
     <main className="flex w-full flex-col">
-      <ListingBanner
+      <PageBanner
         title={category.name}
         description={category.description}
-        serviceCount={totalServiceCount}
+        imageUrl={category.pageBannerUrl}
         breadcrumb={<Breadcrumb categoryName={category.name} />}
+        badge={
+          <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+            {totalServiceCount} {totalServiceCount === 1 ? "service" : "services"} available
+          </span>
+        }
       />
 
       <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
@@ -81,16 +87,13 @@ export default function CategoryDetailPage() {
               title="Nothing listed yet"
               description="No services are listed under this category in your city yet — check back soon."
               action={
-                <Link
-                  href="/categories"
-                  className="inline-flex h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
-                >
+                <LinkButton href="/categories" variant="secondary">
                   Browse other categories
-                </Link>
+                </LinkButton>
               }
             />
           ) : (
-            <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-6">
               {/* Section headers only for groups that exist (SRS 11.5.5) - a
                   category with none renders exactly the flat grid below, same
                   as every category before service groups existed. */}
@@ -144,48 +147,6 @@ function Breadcrumb({ categoryName }: { categoryName: string }) {
         </li>
       </ol>
     </nav>
-  );
-}
-
-/**
- * Full-bleed listing banner (visual-only, matching the Resido reference
- * site's "classical-property" listing page: a solid brand-600 band with
- * scattered translucent circles behind a centered title). Breaks out of the
- * page's max-w wrapper on purpose — `ListingBanner` owns its own full-width
- * background and re-applies the max-w constraint only to its inner content.
- * The service count is real (the same total the page body computes), not
- * fabricated chrome.
- */
-function ListingBanner({
-  title,
-  description,
-  serviceCount,
-  breadcrumb,
-}: {
-  title: string;
-  description: string;
-  serviceCount: number;
-  breadcrumb: React.ReactNode;
-}) {
-  return (
-    <section className="listing-banner relative isolate overflow-hidden px-4 py-12 sm:px-6 sm:py-16">
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <span className="banner-blob absolute -left-10 -top-16 h-56 w-56" />
-        <span className="banner-blob absolute -right-16 top-6 h-72 w-72" />
-        <span className="banner-blob absolute bottom-[-4.5rem] left-1/3 h-48 w-48" />
-      </div>
-
-      <div className="relative mx-auto flex w-full max-w-7xl flex-col items-start gap-4">
-        {breadcrumb}
-        <h1 className="text-display-sm font-bold text-white sm:text-display-md">{title}</h1>
-        {description ? (
-          <p className="max-w-2xl text-[0.9375rem] leading-relaxed text-white/85 text-pretty">{description}</p>
-        ) : null}
-        <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
-          {serviceCount} {serviceCount === 1 ? "service" : "services"} available
-        </span>
-      </div>
-    </section>
   );
 }
 

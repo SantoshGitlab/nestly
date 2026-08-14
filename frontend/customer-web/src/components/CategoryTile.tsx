@@ -29,6 +29,9 @@ export function CategoryTile({ category }: { category: CategorySummary }) {
         transition={SPRING}
         className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-xs transition-shadow duration-200 ease-out group-hover:border-brand-600/30 group-hover:shadow-lg"
       >
+        {/* Photo-only card face — no icon fallback. A category with no image
+            yet shows the plain brand gradient (still on-brand, never a
+            broken image or a placeholder icon) until an admin uploads one. */}
         <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-brand-gradient">
           {showImage ? (
             // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
@@ -38,16 +41,7 @@ export function CategoryTile({ category }: { category: CategorySummary }) {
               onError={() => setImageFailed(true)}
               className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-5xl" aria-hidden>
-              {category.iconUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
-                <img src={category.iconUrl} alt="" className="h-12 w-12 object-contain brightness-0 invert" />
-              ) : (
-                "🧰"
-              )}
-            </div>
-          )}
+          ) : null}
 
           {category.isFeatured ? (
             <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded bg-success px-2.5 py-1 text-[0.6875rem] font-semibold text-white shadow-sm">

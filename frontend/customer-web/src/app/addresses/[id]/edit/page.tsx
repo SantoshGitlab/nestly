@@ -7,7 +7,7 @@ import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AddressForm, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
-import { Alert, Button, Card, EmptyState, PageHeading, Skeleton } from "@/components/ui";
+import { Alert, Button, Card, EmptyState, LinkButton, PageHeading, Skeleton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CustomerAddress } from "@/lib/types";
 
@@ -52,7 +52,7 @@ function EditAddress() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl animate-rise px-6 py-12">
+    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading title="Edit address" />
 
       {query.isPending ? (
@@ -81,14 +81,7 @@ function EditAddress() {
         <EmptyState
           title="That address no longer exists"
           description="It may have been deleted from your address book on another device."
-          action={
-            <Link
-              href="/addresses"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-            >
-              Back to address book
-            </Link>
-          }
+          action={<LinkButton href="/addresses">Back to address book</LinkButton>}
         />
       ) : (
         <Card title="Address details">

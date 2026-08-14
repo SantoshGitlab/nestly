@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkButton,
   Modal,
   PageHeading,
   Skeleton,
@@ -76,15 +77,10 @@ function AddressBook() {
       />
 
       <div className="mb-6">
-        {/* A styled Link, not a Button inside a Link: nesting a <button> in an
+        {/* LinkButton, not a Button inside a Link: nesting a <button> in an
             <a> is invalid HTML and gives one action two focusable controls.
             This also keeps the target middle-clickable. */}
-        <Link
-          href="/addresses/new"
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-        >
-          Add address
-        </Link>
+        <LinkButton href="/addresses/new">Add address</LinkButton>
       </div>
 
       {error ? (
@@ -117,14 +113,7 @@ function AddressBook() {
         <EmptyState
           title="No addresses yet"
           description="Add your first address and we'll set it as your default automatically."
-          action={
-            <Link
-              href="/addresses/new"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-            >
-              Add address
-            </Link>
-          }
+          action={<LinkButton href="/addresses/new">Add address</LinkButton>}
         />
       ) : (
         <Reveal as="ul" className="flex flex-col gap-4">

@@ -7,12 +7,14 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
+import { PageBanner } from "@/components/PageBanner";
 import {
   AddOnGroupSelector,
   BookingProgress,
+  FrequencyPicker,
+  OPTION_ROW,
   PriceBreakdownList,
   PriceBreakdownSkeleton,
-  RECURRING_FREQUENCY_OPTIONS,
   STICKY_BAR_SPACER,
   ScreenSkeleton,
   StickyActionBar,
@@ -30,6 +32,7 @@ import {
   CheckboxField,
   EmptyState,
   Field,
+  LinkButton,
   PageHeading,
   Skeleton,
   cx,
@@ -42,6 +45,7 @@ import { RecurringBookingRecurrenceFrequency } from "@/lib/types";
 import type {
   BookingSummary,
   BookingSummaryRequestBody,
+  CategoryDetail,
   CreateRecurringBookingPlanRequestBody,
   CustomerAddress,
   RecurringBookingPlanResponse,
@@ -183,6 +187,17 @@ function BookingSummaryScreen() {
     queryKey: ["service", serviceSlug],
     queryFn: () => apiFetch<ServiceDetail>(`${API_V1}/services/${serviceSlug}`),
     enabled: !!serviceSlug,
+  });
+
+  // Checkout banner (SRS 11.5 + booking summary): `ServiceDetail` already
+  // carries `categorySlug`, so this is the same category-detail fetch
+  // `app/categories/[slug]/page.tsx` makes — just for its `pageBannerUrl`,
+  // not the full page. Only enabled once the service has resolved.
+  const categorySlug = serviceQuery.data?.categorySlug;
+  const categoryQuery = useQuery({
+    queryKey: ["category", categorySlug],
+    queryFn: () => apiFetch<CategoryDetail>(`${API_V1}/categories/${categorySlug}`),
+    enabled: !!categorySlug,
   });
 
   const addressesQuery = useQuery({
@@ -595,14 +610,7 @@ function BookingSummaryScreen() {
         <EmptyState
           title="No service selected"
           description="Choose a service first and we'll bring you straight back here to review it."
-          action={
-            <Link
-              href="/categories"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-            >
-              Browse services
-            </Link>
-          }
+          action={<LinkButton href="/categories">Browse services</LinkButton>}
         />
       </main>
     );
@@ -650,6 +658,10 @@ function BookingSummaryScreen() {
       )}
     >
       <div className="flex min-w-0 flex-col gap-6 md:col-start-1">
+        {categoryQuery.data?.pageBannerUrl ? (
+          <PageBanner title={service.categoryName} imageUrl={categoryQuery.data.pageBannerUrl} size="compact" />
+        ) : null}
+
         <div>
           <BookingProgress current={0} />
           <PageHeading title="Review your booking" subtitle={service.name} />
@@ -732,15 +744,7 @@ function BookingSummaryScreen() {
                 {service.addOns.map((addOn) => {
                   const checked = selectedAddOnIds.has(addOn.id);
                   return (
-                    <label
-                      key={addOn.id}
-                      className={cx(
-                        "flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-sm transition duration-fast ease-out",
-                        checked
-                          ? "border-brand-600/40 bg-brand-50 dark:bg-brand-500/10"
-                          : "border-line bg-surface hover:border-line-strong hover:bg-surface-2",
-                      )}
-                    >
+                    <label key={addOn.id} className={OPTION_ROW(checked)}>
                       <span className="flex min-w-0 items-center gap-2.5">
                         <input
                           type="checkbox"
@@ -782,14 +786,7 @@ function BookingSummaryScreen() {
             <EmptyState
               title="No saved addresses"
               description="Add the address you'd like this service delivered to."
-              action={
-                <Link
-                  href={addNewAddressHref}
-                  className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-                >
-                  Add an address
-                </Link>
-              }
+              action={<LinkButton href={addNewAddressHref}>Add an address</LinkButton>}
             />
           ) : (
             <div className="flex flex-col gap-2">
@@ -908,32 +905,11 @@ function BookingSummaryScreen() {
 
               {repeatEnabled ? (
                 <div className="flex flex-col gap-4 border-t border-line pt-4">
-                  <div
-                    role="radiogroup"
-                    aria-label="Repeat frequency"
-                    className="flex flex-wrap gap-2"
-                  >
-                    {RECURRING_FREQUENCY_OPTIONS.map((option) => {
-                      const isSelected = repeatFrequency === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={isSelected}
-                          onClick={() => setRepeatFrequency(option.value)}
-                          className={cx(
-                            "rounded-xl border px-3.5 py-2 text-sm font-medium transition duration-fast ease-out",
-                            isSelected
-                              ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
-                              : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
-                          )}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <FrequencyPicker
+                    label="Repeat frequency"
+                    value={repeatFrequency}
+                    onChange={setRepeatFrequency}
+                  />
 
                   <Field
                     id="repeat-count"
@@ -990,15 +966,18 @@ function BookingSummaryScreen() {
               </div>
             ) : (
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  id="coupon-code"
-                  aria-label="Coupon code"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value)}
-                  placeholder="Enter coupon code"
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm uppercase text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:normal-case placeholder:text-fg-subtle hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25"
-                />
+                <div className="w-full">
+                  <Field
+                    type="text"
+                    id="coupon-code"
+                    label="Coupon code"
+                    hideLabel
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value)}
+                    placeholder="Enter coupon code"
+                    className="uppercase placeholder:normal-case"
+                  />
+                </div>
                 <Button
                   type="button"
                   variant="secondary"
@@ -1117,15 +1096,12 @@ function BookingSummaryScreen() {
             opt-in deliberately doesn't - a schedule with no booking today, or
             one bounded by an end date rather than a visit count. Reworded from
             "Set up as recurring instead" so the two aren't read as rival ways
-            to do the same thing. A styled Link rather than
-            <Link><Button/></Link>: a button inside an anchor is invalid HTML
-            and gives assistive tech two nested controls for one action. */}
-        <Link
-          href={`/recurring-bookings/new?serviceSlug=${service.slug}`}
-          className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
-        >
+            to do the same thing. LinkButton rather than <Link><Button/></Link>:
+            a button inside an anchor is invalid HTML and gives assistive tech
+            two nested controls for one action. */}
+        <LinkButton href={`/recurring-bookings/new?serviceSlug=${service.slug}`} variant="secondary" fullWidth>
           Schedule for later without booking now
-        </Link>
+        </LinkButton>
       </aside>
     </main>
   );

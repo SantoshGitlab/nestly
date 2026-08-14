@@ -8,7 +8,7 @@ import { PriceCalculator } from "@/components/PriceCalculator";
 import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
 import { ServiceFaqs } from "@/components/ServiceFaqs";
-import { Alert, Button, Skeleton } from "@/components/ui";
+import { Alert, Button, LinkButton, Skeleton } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { getServiceVisual } from "@/lib/serviceVisuals";
@@ -33,7 +33,7 @@ export default function ServiceDetailPage() {
 
   if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load this service"
@@ -52,7 +52,7 @@ export default function ServiceDetailPage() {
   const service = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-5xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-7xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
       <nav aria-label="Breadcrumb" className="mb-5 text-sm">
         <ol className="flex flex-wrap items-center gap-1.5 text-fg-muted">
           <li>
@@ -127,15 +127,12 @@ export default function ServiceDetailPage() {
           />
           <ServiceAvailability serviceId={service.id} />
 
-          {/* A styled Link, not <Link><Button/></Link>: nesting a button
-              inside an anchor is invalid HTML and gives assistive tech two
-              nested interactive elements for one action. */}
-          <Link
-            href={`/booking/summary?serviceSlug=${service.slug}`}
-            className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-brand-600 text-[0.9375rem] font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
-          >
+          {/* LinkButton, not <Link><Button/></Link>: nesting a button inside
+              an anchor is invalid HTML and gives assistive tech two nested
+              interactive elements for one action. */}
+          <LinkButton href={`/booking/summary?serviceSlug=${service.slug}`} size="lg" fullWidth>
             Book now
-          </Link>
+          </LinkButton>
         </aside>
       </div>
     </main>
@@ -226,7 +223,7 @@ function InclusionList({
 /** Mirrors the loaded layout so the two columns don't jump into place. */
 function ServiceDetailSkeleton() {
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
       <Skeleton className="h-4 w-72" />
       <Skeleton className="mt-5 h-36 rounded-2xl sm:h-44" />
       <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">

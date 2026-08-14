@@ -7,7 +7,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
 import {
-  RECURRING_FREQUENCY_OPTIONS,
+  FrequencyPicker,
   STICKY_BAR_SPACER,
   ScreenSkeleton,
   StickyActionBar,
@@ -22,6 +22,7 @@ import {
   CheckboxField,
   EmptyState,
   Field,
+  LinkButton,
   PageHeading,
   Select,
   Skeleton,
@@ -173,14 +174,7 @@ function NewRecurringBookingPlanScreen() {
         <EmptyState
           title="No service selected"
           description="Pick the service you'd like on a repeating schedule."
-          action={
-            <Link
-              href="/categories"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-            >
-              Browse services
-            </Link>
-          }
+          action={<LinkButton href="/categories">Browse services</LinkButton>}
         />
       </main>
     );
@@ -242,14 +236,7 @@ function NewRecurringBookingPlanScreen() {
           <EmptyState
             title="No saved addresses"
             description="Add an address before setting up a repeating plan."
-            action={
-              <Link
-                href="/addresses/new"
-                className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-              >
-                Add an address
-              </Link>
-            }
+            action={<LinkButton href="/addresses/new">Add an address</LinkButton>}
           />
         ) : (
           <Select
@@ -317,28 +304,7 @@ function NewRecurringBookingPlanScreen() {
 
       <Card title="Recurrence" description={`Repeats every ${dayLabel.toLowerCase()}.`}>
         <div className="flex flex-col gap-5">
-          <div role="radiogroup" aria-label="Frequency" className="flex flex-wrap gap-2">
-            {RECURRING_FREQUENCY_OPTIONS.map((option) => {
-              const isSelected = frequency === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => setFrequency(option.value)}
-                  className={cx(
-                    "rounded-xl border px-3.5 py-2 text-sm font-medium transition duration-fast ease-out",
-                    isSelected
-                      ? "border-brand-600 bg-brand-600 text-fg-on-brand shadow-brand"
-                      : "border-line bg-surface text-fg hover:border-line-strong hover:bg-surface-2",
-                  )}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+          <FrequencyPicker label="Frequency" value={frequency} onChange={setFrequency} />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field

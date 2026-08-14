@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
 import { formatInstant, supportStatusTone } from "@/components/patterns";
 import { MotionLink, Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -10,6 +9,7 @@ import {
   Badge,
   Button,
   EmptyState,
+  LinkButton,
   PageHeading,
   Skeleton,
 } from "@/components/ui";
@@ -38,7 +38,7 @@ function SupportTicketsScreen() {
       <PageHeading
         title="Support tickets"
         subtitle="Everything you've raised with us, and where each one stands."
-        // A styled Link, not `<Link><Button/></Link>`: a button inside an
+        // LinkButton, not `<Link><Button/></Link>`: a button inside an
         // anchor is invalid HTML and exposes two nested controls for one
         // action, which is the exact shape the booking detail screen fixed.
         actions={<RaiseIssueLink />}
@@ -89,14 +89,7 @@ function SupportTicketsScreen() {
 /** One accessible name, one styling, two placements — the heading action and
  *  the empty state's next step. */
 function RaiseIssueLink() {
-  return (
-    <Link
-      href="/support/new"
-      className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
-    >
-      Raise an issue
-    </Link>
-  );
+  return <LinkButton href="/support/new">Raise an issue</LinkButton>;
 }
 
 function TicketRow({ ticket }: { ticket: SupportTicketSummaryResponse }) {
@@ -104,7 +97,7 @@ function TicketRow({ ticket }: { ticket: SupportTicketSummaryResponse }) {
     <MotionLink
       href={`/support/${ticket.id}`}
       variant="nudge"
-      className="block rounded-2xl border border-line bg-surface p-4 shadow-sm transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+      className="block rounded-2xl border border-line bg-surface p-4 shadow-sm transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 hover:shadow-md sm:p-5"
     >
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0 font-medium text-fg">{ticket.subject}</span>

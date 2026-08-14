@@ -65,8 +65,15 @@ export default function RootLayout({
             </a>
             <SiteHeader />
             {/* Skip-link target. A wrapper rather than the pages' own <main>
-                elements, so the anchor works without editing every route. */}
-            <div id="main">{children}</div>
+                elements, so the anchor works without editing every route.
+                `pt-[4.5rem]` compensates for `SiteHeader` now being
+                permanently `fixed` (h-[4.5rem]) rather than `sticky` — every
+                page keeps the exact spacing it had before; only the home
+                hero cancels this out (`-mt-[4.5rem]` in HeroBanner.tsx) to
+                sit flush under the header's transparent-over-photo state. */}
+            <div id="main" className="pt-[4.5rem]">
+              {children}
+            </div>
           </ToastProvider>
         </Providers>
       </body>

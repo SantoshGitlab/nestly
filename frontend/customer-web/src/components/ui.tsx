@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { createContext, forwardRef, useContext, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
+  AnchorHTMLAttributes,
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
@@ -315,6 +317,7 @@ function FieldShell({
   hint,
   error,
   required,
+  hideLabel,
   children,
 }: {
   id: string;
@@ -322,11 +325,13 @@ function FieldShell({
   hint?: string;
   error?: string;
   required?: boolean;
+  /** Keeps the accessible name (still a real `<label>`, still `htmlFor`-linked) but visually hides it — for a deliberately compact, unlabeled-looking control. Prefer a visible label; this exists for the rare control (e.g. a coupon-code field inline with its own "Apply" button) that a visible label would visually break. */
+  hideLabel?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-fg">
+      <label htmlFor={id} className={hideLabel ? "sr-only" : "text-sm font-medium text-fg"}>
         {label}
         {required ? (
           <span className="ml-0.5 text-danger" aria-hidden>
@@ -363,10 +368,12 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
    * (typed `string`) that this interface would otherwise clash with.
    */
   leading?: ReactNode;
+  /** See `FieldShell`'s doc comment — visually hides the label without removing its accessible name. */
+  hideLabel?: boolean;
 }
 
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
-  { label, error, hint, leading, id, className = "", ...props },
+  { label, error, hint, leading, hideLabel, id, className = "", ...props },
   ref,
 ) {
   const inputId = controlId(id, props.name, label);
@@ -394,6 +401,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
       hint={hint}
       error={error}
       required={props.required}
+      hideLabel={hideLabel}
     >
       {leading ? (
         <div className="relative">
@@ -591,6 +599,8 @@ const BUTTON_VARIANTS = {
     "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2 active:bg-surface-3",
   danger:
     "bg-danger text-white shadow-xs hover:brightness-95 active:brightness-90 dark:text-bg",
+  /** Softer than `danger` — for a destructive action that's still one step from final (e.g. "Cancel booking", which still confirms before anything happens), vs. `danger`'s solid fill for the confirm step itself. */
+  "danger-soft": "border border-danger/30 bg-danger-soft text-danger hover:border-danger/50",
   ghost: "text-fg-muted hover:bg-surface-3 hover:text-fg active:bg-surface-3",
   subtle:
     "bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25",
@@ -645,6 +655,51 @@ export function Button({
       {loading ? <Spinner /> : icon}
       {children}
     </button>
+  );
+}
+
+/**
+ * `Button`'s exact visual variants on an `<a>` (via next/link) instead of a
+ * `<button>` — for navigation that must look like a button but can't nest a
+ * real `<button>` inside it (a button inside an anchor is invalid HTML and
+ * gives assistive tech two nested interactive elements for one action; see
+ * `services/[slug]/page.tsx`'s "Book now" for the canonical case). Shares
+ * `BUTTON_VARIANTS`/`BUTTON_SIZES` with `Button` so the two can never drift —
+ * before this existed, half a dozen call sites hand-copied `Button`'s classes
+ * onto a `<Link>` instead, which is exactly the drift this prevents.
+ */
+export function LinkButton({
+  variant = "primary",
+  size = "md",
+  fullWidth = false,
+  icon,
+  className = "",
+  children,
+  ...props
+}: {
+  variant?: keyof typeof BUTTON_VARIANTS;
+  size?: keyof typeof BUTTON_SIZES;
+  fullWidth?: boolean;
+  icon?: ReactNode;
+  className?: string;
+  children?: ReactNode;
+} & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> &
+  Required<Pick<AnchorHTMLAttributes<HTMLAnchorElement>, "href">>) {
+  return (
+    <Link
+      {...props}
+      className={cx(
+        "inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg font-medium transition duration-fast ease-out",
+        "active:scale-[0.98]",
+        BUTTON_VARIANTS[variant],
+        BUTTON_SIZES[size],
+        fullWidth && "w-full",
+        className,
+      )}
+    >
+      {icon}
+      {children}
+    </Link>
   );
 }
 

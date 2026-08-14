@@ -18,7 +18,7 @@ import type { City } from "@/lib/types";
  * inherits Escape-to-close, focus trapping and focus restore — the previous
  * bespoke version had none of those.
  */
-export function CitySelector() {
+export function CitySelector({ transparent = false }: { transparent?: boolean }) {
   const { city } = useSelectedCity();
   const [open, setOpen] = useState(false);
 
@@ -27,9 +27,14 @@ export function CitySelector() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-9 max-w-[11rem] items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium text-fg shadow-xs transition-colors duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+        className={cx(
+          "inline-flex h-9 max-w-[11rem] items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-fast ease-out",
+          transparent
+            ? "border border-white/30 bg-white/10 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.5)] hover:bg-white/20"
+            : "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
+        )}
       >
-        <PinIcon />
+        <PinIcon className={transparent ? "text-white/80" : undefined} />
         <span className="truncate">
           {/* `undefined` is "still reading storage", `null` is "read, none chosen" —
               they must not collapse into the same label. */}
@@ -128,7 +133,7 @@ function CityList({
   );
 }
 
-function PinIcon() {
+function PinIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -137,7 +142,7 @@ function PinIcon() {
       strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-4 w-4 shrink-0 text-fg-subtle"
+      className={cx("h-4 w-4 shrink-0", className ?? "text-fg-subtle")}
       aria-hidden
     >
       <path d="M12 21s7-6.4 7-11a7 7 0 1 0-14 0c0 4.6 7 11 7 11Z" />

@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import Link from "next/link";
 import { formatInstant, inr } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
@@ -11,6 +10,7 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkButton,
   Skeleton,
   TBody,
   TD,
@@ -213,14 +213,7 @@ function LedgerCard({
         icon={<WalletIcon />}
         title="No wallet activity yet"
         description="Refunds, promotional credit and referral rewards all land here. Turn on &ldquo;Use my wallet balance&rdquo; on your next booking summary to put it towards that booking."
-        action={
-          <Link
-            href="/categories"
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
-          >
-            Browse services
-          </Link>
-        }
+        action={<LinkButton href="/categories">Browse services</LinkButton>}
       />
     );
   }

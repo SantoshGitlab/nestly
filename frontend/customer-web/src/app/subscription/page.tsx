@@ -172,7 +172,13 @@ function MySubscriptionView({ subscription }: { subscription: MySubscriptionResp
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+    // max-w-3xl, not max-w-2xl: matches both this page's own loading skeleton
+    // (line ~116, sized for the sibling PlanSelectionView's 2-col plan grid)
+    // and the other single-column "my X" account pages at this width
+    // (bookings, recurring-bookings, support, refer-earn, wallet) — was 2xl,
+    // which visibly narrowed on every load once the skeleton resolved into
+    // this view.
+    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       <PageHeading
         title="My subscription"
         subtitle="Your Nestly membership and remaining benefits."

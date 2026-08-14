@@ -10,7 +10,7 @@ import {
 } from "@/components/patterns";
 import { MotionLink, Reveal, RevealItem } from "@/components/motion";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, EmptyState, PageHeading, Skeleton, Tabs } from "@/components/ui";
+import { Alert, Button, EmptyState, LinkButton, PageHeading, Skeleton, Tabs } from "@/components/ui";
 import { isBookingTrackable } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { BookingListResponse, BookingStatusBucket } from "@/lib/types";
@@ -113,14 +113,7 @@ function BookingsScreen() {
         <EmptyState
           title={EMPTY_COPY[bucket].title}
           description={EMPTY_COPY[bucket].description}
-          action={
-            <Link
-              href="/categories"
-              className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700"
-            >
-              Browse services
-            </Link>
-          }
+          action={<LinkButton href="/categories">Browse services</LinkButton>}
         />
       ) : (
         <Reveal as="ul" className="flex flex-col gap-3">

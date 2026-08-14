@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Button, cx } from "@/components/ui";
+import { Button, LinkButton, cx } from "@/components/ui";
 import { API_V1, apiFetch } from "@/lib/api";
 import {
   clearSession,
@@ -23,7 +23,26 @@ import {
  * phone. Only the genuinely navigational links stay in the bar; the rest are
  * account destinations and now sit behind an account menu, with the same set
  * mirrored into a drawer at mobile widths.
+ *
+ * "Editorial" chrome v6: on the home route, before the page scrolls, the bar
+ * is transparent and floats directly over `HeroBanner`'s photo — white text
+ * with the same text-shadow treatment the hero's own copy uses, so the two
+ * sections read as one continuous piece rather than a chrome bar stacked on
+ * top of a banner. Past a small scroll threshold (`SCROLL_SOLID_PX`), or on
+ * every other route, it's the solid bar this file already had: `bg-surface`,
+ * hairline bottom rule, underline-indicator nav links (same active-tab idiom
+ * as `Tabs` in ui.tsx).
+ *
+ * The bar is *permanently* `fixed` rather than switching between `fixed`
+ * (over the hero) and `sticky` (everywhere else) — only its colors ever
+ * transition. Toggling position type at the exact moment `scrolled` flips
+ * would re-flow the header into document flow mid-scroll and visibly jump
+ * the page; toggling only `bg-*`/`text-*`/`border-*` classes can't. Every
+ * route compensates via `#main`'s `pt-[4.5rem]` in `app/layout.tsx`; the
+ * home hero cancels that one padding back out (`-mt-[4.5rem]` in
+ * `HeroBanner.tsx`) so it still starts at true y=0 under the transparent bar.
  */
+const SCROLL_SOLID_PX = 24;
 
 /** Account-menu destinations, in the order they matter to a signed-in customer. */
 const ACCOUNT_LINKS = [
@@ -42,6 +61,8 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [authed, setAuthed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const isHome = pathname === "/";
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const sync = () => setAuthed(isAuthenticated());
@@ -54,6 +75,18 @@ export function SiteHeader() {
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
+
+  // Only the home route ever needs this listener (elsewhere `transparent` is
+  // always false), but mounting it unconditionally keeps the hook order
+  // stable across route changes rather than conditionally calling useEffect.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > SCROLL_SOLID_PX);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const transparent = isHome && !scrolled;
 
   const signOut = async () => {
     const refreshToken = getRefreshToken();
@@ -76,21 +109,44 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur-md">
+    <header
+      className={cx(
+        "fixed inset-x-0 top-0 z-40 transition-[background-color,border-color,backdrop-filter] duration-300",
+        transparent
+          ? "border-b border-transparent bg-transparent"
+          : "border-b border-line/70 bg-surface/85 backdrop-blur-md",
+      )}
+    >
       <nav
         aria-label="Primary"
-        className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:px-6"
+        className="mx-auto flex h-[4.5rem] w-full max-w-7xl items-center gap-3 px-4 sm:px-6"
       >
         <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Nestly home">
           <NestlyMark />
-          <span className="text-[0.9375rem] font-semibold tracking-tight text-fg">Nestly</span>
+          <span
+            style={transparent ? TEXT_SHADOW : undefined}
+            className={cx(
+              "text-[0.9375rem] font-semibold tracking-tight transition-colors duration-300",
+              transparent ? "text-white" : "text-fg",
+            )}
+          >
+            Nestly
+          </span>
         </Link>
 
-        <div className="ml-2 hidden items-center gap-1 md:flex">
-          <NavLink href="/categories" active={pathname.startsWith("/categories")}>
+        <span
+          aria-hidden
+          className={cx(
+            "mx-5 hidden h-6 w-px transition-colors duration-300 md:block",
+            transparent ? "bg-white/30" : "bg-line",
+          )}
+        />
+
+        <div className="hidden h-full items-center gap-6 md:flex">
+          <NavLink href="/categories" active={pathname.startsWith("/categories")} transparent={transparent}>
             Categories
           </NavLink>
-          <NavLink href="/search" active={pathname.startsWith("/search")}>
+          <NavLink href="/search" active={pathname.startsWith("/search")} transparent={transparent}>
             Search
           </NavLink>
         </div>
@@ -98,13 +154,20 @@ export function SiteHeader() {
         <div className="flex-1" />
 
         <div className="hidden items-center gap-2 md:flex">
-          <CitySelector />
-          <ThemeToggle />
+          <CitySelector transparent={transparent} />
+          <ThemeToggle
+            className={transparent ? "!text-white hover:!bg-white/15 hover:!text-white" : undefined}
+          />
           {authed ? (
-            <AccountMenu onSignOut={signOut} pathname={pathname} />
+            <AccountMenu onSignOut={signOut} pathname={pathname} transparent={transparent} />
           ) : (
             <>
-              <Button variant="ghost" size="sm" onClick={() => router.push("/login")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/login")}
+                className={transparent ? "!text-white hover:!bg-white/15 hover:!text-white" : undefined}
+              >
                 Sign in
               </Button>
               <Button size="sm" onClick={() => router.push("/register")}>
@@ -115,13 +178,20 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
-          <ThemeToggle />
+          <ThemeToggle
+            className={transparent ? "!text-white hover:!bg-white/15 hover:!text-white" : undefined}
+          />
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open menu"
             aria-expanded={drawerOpen}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-fg-muted transition-colors duration-fast ease-out hover:bg-surface-3 hover:text-fg"
+            className={cx(
+              "inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors duration-fast ease-out",
+              transparent
+                ? "text-white hover:bg-white/15 hover:text-white"
+                : "text-fg-muted hover:bg-surface-3 hover:text-fg",
+            )}
           >
             <svg
               viewBox="0 0 24 24"
@@ -150,6 +220,9 @@ export function SiteHeader() {
   );
 }
 
+/** Shared with `HeroBanner`'s own overlaid copy, so nav and banner text read as the same treatment. */
+const TEXT_SHADOW = { textShadow: "0 1px 3px rgb(0 0 0 / 0.5), 0 4px 20px rgb(0 0 0 / 0.5)" };
+
 function NestlyMark() {
   return (
     <span
@@ -169,28 +242,55 @@ function NestlyMark() {
 function NavLink({
   href,
   active,
+  transparent,
   children,
 }: {
   href: string;
   active: boolean;
+  transparent: boolean;
   children: ReactNode;
 }) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      style={transparent ? TEXT_SHADOW : undefined}
       className={cx(
-        "rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-fast ease-out",
-        active ? "bg-surface-3 text-fg" : "text-fg-muted hover:bg-surface-3 hover:text-fg",
+        "relative flex h-full items-center text-sm font-medium transition-colors duration-fast ease-out",
+        transparent
+          ? active
+            ? "text-white"
+            : "text-white/80 hover:text-white"
+          : active
+            ? "text-brand-600 dark:text-brand-400"
+            : "text-fg-muted hover:text-fg",
       )}
     >
       {children}
+      {active ? (
+        // Same indicator idiom as `Tabs` in ui.tsx — sits on the header's
+        // own bottom rule so it reads as part of it, not a floating bar.
+        <span
+          className={cx(
+            "absolute inset-x-0 -bottom-px h-0.5 rounded-full",
+            transparent ? "bg-white" : "bg-brand-600 dark:bg-brand-400",
+          )}
+        />
+      ) : null}
     </Link>
   );
 }
 
 /** Signed-in account dropdown. Closes on Escape, outside click, and route change. */
-function AccountMenu({ onSignOut, pathname }: { onSignOut: () => void; pathname: string }) {
+function AccountMenu({
+  onSignOut,
+  pathname,
+  transparent,
+}: {
+  onSignOut: () => void;
+  pathname: string;
+  transparent: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -223,7 +323,13 @@ function AccountMenu({ onSignOut, pathname }: { onSignOut: () => void; pathname:
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-sm font-medium text-fg shadow-xs transition-colors duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+        style={transparent ? TEXT_SHADOW : undefined}
+        className={cx(
+          "inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-medium transition-colors duration-fast ease-out",
+          transparent
+            ? "border border-white/30 bg-white/10 text-white hover:bg-white/20"
+            : "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
+        )}
       >
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-fg-on-brand">
           <svg
@@ -246,7 +352,8 @@ function AccountMenu({ onSignOut, pathname }: { onSignOut: () => void; pathname:
           strokeWidth="2"
           strokeLinecap="round"
           className={cx(
-            "h-3.5 w-3.5 text-fg-subtle transition-transform duration-fast",
+            "h-3.5 w-3.5 transition-transform duration-fast",
+            transparent ? "text-white/80" : "text-fg-subtle",
             open && "rotate-180",
           )}
           aria-hidden
@@ -427,18 +534,12 @@ function MobileDrawer({
             // navigations, so they must stay middle-clickable and openable in
             // a new tab.
             <div className="flex flex-col gap-2">
-              <Link
-                href="/register"
-                className="inline-flex h-10 w-full items-center justify-center rounded-lg bg-brand-600 text-sm font-medium text-fg-on-brand shadow-brand transition duration-fast ease-out hover:bg-brand-700 active:scale-[0.98]"
-              >
+              <LinkButton href="/register" fullWidth>
                 Create account
-              </Link>
-              <Link
-                href="/login"
-                className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-line bg-surface text-sm font-medium text-fg shadow-xs transition duration-fast ease-out hover:border-line-strong hover:bg-surface-2 active:scale-[0.98]"
-              >
+              </LinkButton>
+              <LinkButton href="/login" variant="secondary" fullWidth>
                 Sign in
-              </Link>
+              </LinkButton>
             </div>
           )}
         </div>

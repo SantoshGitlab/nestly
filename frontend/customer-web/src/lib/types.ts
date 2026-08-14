@@ -82,7 +82,10 @@ export interface CategorySummary {
   name: string;
   slug: string;
   iconUrl: string | null;
+  /** Category-card photo (home page tiles, categories listing tiles). */
   bannerUrl: string | null;
+  /** Full-bleed banner for the category detail page, categories listing header, and checkout — deliberately distinct art from `bannerUrl`. */
+  pageBannerUrl: string | null;
   isFeatured: boolean;
 }
 
@@ -124,6 +127,8 @@ export interface CategoryDetail {
   description: string;
   iconUrl: string | null;
   bannerUrl: string | null;
+  /** Full-bleed banner for the category detail page, categories listing header, and checkout — deliberately distinct art from `bannerUrl`. */
+  pageBannerUrl: string | null;
   /** Ungrouped services only (Appliance/Service Group catalog redesign) - a service assigned to a group appears in `serviceGroups` instead, never both. */
   services: ServiceSummary[];
   /** Active subcategories, if any (Phase 3 catalog redesign) - empty for a leaf category, unchanged from before this field existed. */

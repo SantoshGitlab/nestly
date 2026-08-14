@@ -6,9 +6,11 @@ import { TrustMarkers } from "@/components/TrustMarkers";
 export default function Home() {
   return (
     <main className="flex w-full flex-col gap-14 pb-14 sm:pb-20">
-      <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 sm:pt-12">
-        <HeroBanner />
-      </div>
+      {/* Full-bleed, edge-to-edge: sits flush under the sticky header with no
+          side padding or card chrome, unlike every other section here (which
+          is why it's outside the max-w-7xl wrapper below, matching the
+          categories band's existing full-bleed pattern). */}
+      <HeroBanner />
 
       {/* Full-bleed banded section (Resido reference's "Featured Property For
           Sale" pattern): a light brand-tinted band, centered heading/subtitle,

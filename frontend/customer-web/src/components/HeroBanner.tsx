@@ -1,7 +1,10 @@
 "use client";
 
-import { motion } from "motion/react";
+import Image from "next/image";
+import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useState } from "react";
 import { SearchBar } from "@/components/SearchBar";
+import { cx } from "@/components/ui";
 
 /**
  * Hero / primary CTA (SRS 11.1.2). Content is static for now: there is no
@@ -11,152 +14,212 @@ import { SearchBar } from "@/components/SearchBar";
  * so this deliberately does not fabricate one. Swap this component's content
  * for a data-driven one once that API exists.
  *
- * The verified-professional cluster on the right is decorative, not a data
- * claim — four categories pulled straight from the subtext copy, not a
- * fabricated stat. It exists to make "vetted professionals" felt rather than
- * just stated, which is the one deliberate flourish on this page; everything
- * else stays quiet by comparison.
+ * "Full-bleed slider" v9: true edge-to-edge (no card border/radius, lives
+ * outside `app/page.tsx`'s max-w-7xl wrapper — same full-bleed pattern the
+ * "Popular categories" band below it already uses) and the legibility
+ * treatment is a soft radial tint behind the copy plus a text-shadow on the
+ * type itself, not a flat color panel — the photo stays fully visible
+ * everywhere the text isn't sitting.
+ *
+ * `public/images/hero/banner-{1,2,3}.jpg` are pre-cropped (source: licensed
+ * stock photography, not AI-generated) to the photography-only two-thirds of
+ * each original template graphic — the source files ship with a large blank
+ * panel built in for a text-beside-photo layout that no longer applies now
+ * that copy sits directly on top of the image; using the raw files here
+ * would show that blank panel as dead space across half the banner.
+ * `object-[center_25%]` keeps each photo's subject (all three sit in the
+ * upper half of the frame) in view when a very wide viewport crops more off
+ * the top/bottom than a plain center-crop would.
+ *
+ * The headline replays a word-by-word entrance every time the slide changes
+ * (keyed by `index`, same as the image crossfade) so the caption reads as
+ * part of the slide transition, not a static layer sitting on top of it.
+ *
+ * Auto-advance respects `prefers-reduced-motion`, pauses on hover/focus, and
+ * the dots double as manual controls — a slider that only auto-plays with no
+ * way to stop it fails WCAG 2.2.2, and this app is otherwise careful about
+ * that class of thing (see globals.css's reduced-motion block).
  */
+const SLIDES = [
+  {
+    src: "/images/hero/banner-1.jpg",
+    alt: "A Nestly professional cleaning a customer's window",
+  },
+  {
+    src: "/images/hero/banner-2.jpg",
+    alt: "A Nestly professional wiping down a customer's kitchen counter",
+  },
+  {
+    src: "/images/hero/banner-3.jpg",
+    alt: "A modern kitchen tap, representing Nestly's repair and installation services",
+  },
+] as const;
+
+const SLIDE_DURATION_MS = 6000;
+const HEADLINE = "Trusted home services, booked in minutes.";
+const TEXT_SHADOW = { textShadow: "0 1px 3px rgb(0 0 0 / 0.5), 0 4px 20px rgb(0 0 0 / 0.5)" };
+
 export function HeroBanner() {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const id = setInterval(() => {
+      setIndex((current) => (current + 1) % SLIDES.length);
+    }, SLIDE_DURATION_MS);
+    return () => clearInterval(id);
+  }, [paused]);
+
   return (
-    <section className="hero-mesh relative isolate overflow-hidden rounded-3xl px-6 py-14 text-white shadow-xl sm:px-12 sm:py-20">
-      {/* Grain overlay: `mix-blend-overlay` lets it read as texture on the
-          gradient underneath rather than a visible tiled image. */}
-      <div
-        aria-hidden
-        className="texture-grain pointer-events-none absolute inset-0 -z-10 opacity-[0.05] mix-blend-overlay"
-      />
-
-      <div className="grid items-center gap-10 lg:grid-cols-[1fr_auto]">
-        {/* CSS-keyframe entrance (`animate-rise`, the same primitive every card/
-            modal in the product already uses), not the `motion` library: this
-            is the primary conversion path, so it must not depend on JS having
-            hydrated and a render loop having ticked to become visible. The
-            floating avatar cluster is decorative and can afford that dependency;
-            this text and the search box can't. */}
-        <div>
-          <p
-            className="mb-4 inline-flex animate-rise items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur-sm"
+    <section
+      // Cancels `#main`'s `pt-[4.5rem]` (reserved for `SiteHeader` now being
+      // permanently `fixed`) so the banner still starts at true y=0, flush
+      // under the header while it's in its transparent-over-photo state.
+      className="relative isolate -mt-[4.5rem] w-full overflow-hidden"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      {/* `min-h`, not a fixed `h`: the stacked copy (kicker + 3-line headline
+          + subtext + search bar) can need more room than these targets on a
+          narrow phone where the headline wraps hardest — a fixed height
+          either clipped it or forced it to overlap the header above. `min-h`
+          keeps the shorter, more balanced target height whenever content
+          fits, and only grows on the rare viewport where it doesn't. */}
+      <div className="relative min-h-[440px] w-full sm:min-h-[500px] md:min-h-[540px] lg:min-h-[580px]">
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={SLIDES[index].src}
+            className="absolute inset-0"
+            initial={{ opacity: 0, scale: 1.04 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ opacity: { duration: 1, ease: "easeInOut" }, scale: { duration: 6, ease: "linear" } }}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-accent-300" aria-hidden />
-            Vetted professionals, upfront pricing
-          </p>
+            <Image
+              src={SLIDES[index].src}
+              alt={SLIDES[index].alt}
+              fill
+              priority={index === 0}
+              sizes="100vw"
+              className="object-cover object-[center_25%]"
+            />
+          </motion.div>
+        </AnimatePresence>
 
-          <h1
-            style={{ animationDelay: "70ms" }}
-            className="max-w-2xl animate-rise text-display-md font-semibold text-balance sm:text-display-lg"
-          >
-            Trusted home services, booked in minutes.
-          </h1>
+        {/* Soft radial tint behind the copy only — the photo stays fully
+            visible at the edges instead of sitting under a flat wash. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-[radial-gradient(62%_58%_at_50%_45%,rgb(0_0_0/0.58),transparent_75%)]"
+        />
+        {/* Thin top/bottom gradients so the header and dot controls stay legible over a bright sky/wall regardless of slide. */}
+        <div aria-hidden className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/25 to-transparent" />
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/40 to-transparent" />
 
-          <p
-            style={{ animationDelay: "140ms" }}
-            className="mt-4 max-w-xl animate-rise text-[0.9375rem] leading-relaxed text-white/85 text-pretty"
-          >
-            Cleaning, repairs, salon, and more — background-checked professionals,
-            prices you see before you book, and slots that fit your day.
-          </p>
+        {/* `justify-center` only guards against the header overlap when
+            content is short enough for its overflow-around-the-center-point
+            to stay clear of the top of the box — measured broken even at
+            1440px (kicker landing at y:0, dead center of the header's own
+            0-72px band), not just on narrow phones. `justify-start` + a
+            top padding matching the header's height makes the overlap
+            geometrically impossible at every breakpoint instead of merely
+            unlikely at most of them: content always begins right after the
+            reserved zone and stacks downward, regardless of how many lines
+            the copy wraps to or how much spare height the section has. */}
+        <div className="relative z-10 mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-start gap-6 px-5 pb-10 pt-24 text-center sm:px-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={index}
+              className="flex flex-col items-center gap-6"
+              initial="hidden"
+              animate="show"
+              exit={{ opacity: 0, y: -8, transition: { duration: 0.3 } }}
+              variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+            >
+              <motion.p
+                variants={fadeUp}
+                style={TEXT_SHADOW}
+                className="flex items-start justify-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-accent-300"
+              >
+                <ShieldIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Vetted professionals &middot; Upfront pricing</span>
+              </motion.p>
 
-          <div style={{ animationDelay: "210ms" }} className="mt-8 max-w-xl animate-rise">
-            <SearchBar variant="hero" />
-          </div>
+              <h1
+                style={TEXT_SHADOW}
+                className="max-w-2xl text-display-md font-semibold leading-[1.08] text-balance text-white sm:text-display-lg lg:text-display-xl"
+              >
+                {HEADLINE.split(" ").map((word, i) => (
+                  // Margin, not a trailing space character inside the box: a
+                  // space as the last text node in an inline-block reliably
+                  // collapses at the box edge, which was gluing every word
+                  // together ("Trustedhomeservices").
+                  <motion.span key={i} variants={fadeUp} className="inline-block mr-[0.28em] last:mr-0">
+                    {word}
+                  </motion.span>
+                ))}
+              </h1>
+
+              <motion.p
+                variants={fadeUp}
+                style={TEXT_SHADOW}
+                className="max-w-lg text-[0.9375rem] leading-relaxed text-white/90 text-pretty"
+              >
+                Cleaning, repairs, salon, and more — background-checked professionals,
+                prices you see before you book, and slots that fit your day.
+              </motion.p>
+
+              <motion.div variants={fadeUp} className="w-full max-w-lg">
+                <SearchBar variant="hero" />
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        <VerifiedCluster />
+        <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 sm:bottom-8">
+          {SLIDES.map((slide, slideIndex) => (
+            <button
+              key={slide.src}
+              type="button"
+              onClick={() => setIndex(slideIndex)}
+              aria-label={`Show slide ${slideIndex + 1} of ${SLIDES.length}`}
+              aria-current={slideIndex === index}
+              className={cx(
+                "h-1.5 rounded-full transition-all duration-fast ease-out",
+                slideIndex === index ? "w-6 bg-white" : "w-1.5 bg-white/45 hover:bg-white/70",
+              )}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-const CLUSTER_CATEGORIES = [
-  { label: "Cleaning", icon: <BroomIcon /> },
-  { label: "Repairs", icon: <WrenchIcon /> },
-  { label: "Electrical", icon: <BoltIcon /> },
-  { label: "Salon", icon: <ScissorsIcon /> },
-] as const;
+const fadeUp = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+};
 
-/** Hidden below `lg`: on a phone this is decoration competing with the CTA for thumb space, not worth the cost. */
-function VerifiedCluster() {
+function ShieldIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
-    <div aria-hidden className="hidden lg:block">
-      <div className="relative h-56 w-56">
-        {CLUSTER_CATEGORIES.map((entry, index) => (
-          <motion.div
-            key={entry.label}
-            className="absolute flex flex-col items-center gap-1.5"
-            style={CLUSTER_POSITIONS[index]}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-              y: [0, -7, 0],
-            }}
-            transition={{
-              opacity: { duration: 0.5, delay: 0.35 + index * 0.08 },
-              scale: { duration: 0.5, delay: 0.35 + index * 0.08 },
-              y: { duration: 3.4 + index * 0.4, repeat: Infinity, ease: "easeInOut", delay: index * 0.3 },
-            }}
-          >
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white shadow-lg backdrop-blur-md">
-              {entry.icon}
-            </span>
-            <span className="rounded-full bg-white/95 px-2 py-0.5 text-[0.6875rem] font-medium text-brand-900 shadow-sm">
-              {entry.label}
-            </span>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const CLUSTER_POSITIONS: React.CSSProperties[] = [
-  { left: 0, top: 8 },
-  { right: 4, top: 0 },
-  { left: 24, bottom: 4 },
-  { right: 0, bottom: 20 },
-];
-
-const ICON_PROPS = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: "1.75",
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  className: "h-6 w-6",
-} as const;
-
-function BroomIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M19 3 8.5 13.5M13 15l-8 6M9 11l4 4-1.5 3.5L3 20l1.5-8.5L9 11Z" />
-    </svg>
-  );
-}
-
-function WrenchIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2Z" />
-    </svg>
-  );
-}
-
-function BoltIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
-    </svg>
-  );
-}
-
-function ScissorsIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="6" cy="6" r="2.5" />
-      <circle cx="6" cy="18" r="2.5" />
-      <path d="m20 4-12 12M8 12l12 8M8.5 8.5 12 12" />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 3l7 3v5.5c0 4.2-3 8-7 9.5-4-1.5-7-5.3-7-9.5V6l7-3Z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   );
 }
