@@ -9,6 +9,7 @@ public record CategorySummaryResponse(
     string Slug,
     string? IconUrl,
     string? BannerUrl,
+    string? PageBannerUrl,
     bool IsFeatured);
 
 public record ServiceAddOnSummaryResponse(
@@ -87,6 +88,7 @@ public record CategoryDetailResponse(
     string Description,
     string? IconUrl,
     string? BannerUrl,
+    string? PageBannerUrl,
     IReadOnlyList<ServiceSummaryResponse> Services,
     IReadOnlyList<CategorySummaryResponse> Subcategories,
     IReadOnlyList<ServiceGroupSummaryResponse> ServiceGroups);

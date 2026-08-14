@@ -62,6 +62,24 @@ public sealed class CatalogDomainEventTests
     }
 
     [Fact]
+    public void Marking_a_service_updated_raises_ServiceUpdatedEvent_with_old_and_new_category()
+    {
+        var category = new Category(Guid.NewGuid(), "Repairs3", "repairs-3-" + Guid.NewGuid(), "desc");
+        var newCategory = new Category(Guid.NewGuid(), "Repairs4", "repairs-4-" + Guid.NewGuid(), "desc");
+        var service = new Service(Guid.NewGuid(), category.Id, "Washer Repair", "washer-repair-" + Guid.NewGuid(), "desc", 300m);
+        service.ClearDomainEvents();
+
+        service.SetCategoryId(newCategory.Id);
+        service.MarkUpdated(category.Id);
+
+        var raised = service.DomainEvents.Should().ContainSingle()
+            .Which.Should().BeOfType<ServiceUpdatedEvent>().Subject;
+        raised.ServiceId.Should().Be(service.Id);
+        raised.OldCategoryId.Should().Be(category.Id);
+        raised.NewCategoryId.Should().Be(newCategory.Id);
+    }
+
+    [Fact]
     public void Creating_an_addon_raises_ServiceAddOnCreatedEvent()
     {
         var addOn = new ServiceAddOn(Guid.NewGuid(), Guid.NewGuid(), "Extra Filter", 50m);

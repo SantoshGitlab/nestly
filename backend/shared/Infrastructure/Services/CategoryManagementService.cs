@@ -45,6 +45,7 @@ public class CategoryManagementService : ICategoryManagementService
         var category = new Category(Guid.NewGuid(), request.Name, request.Slug, request.Description);
         category.SetIconUrl(request.IconUrl);
         category.SetBannerUrl(request.BannerUrl);
+        category.SetPageBannerUrl(request.PageBannerUrl);
         category.SetSortOrder(request.SortOrder);
         category.SetSeo(request.SeoTitle, request.SeoMetaDescription);
 
@@ -93,6 +94,7 @@ public class CategoryManagementService : ICategoryManagementService
         category.SetDescription(request.Description);
         category.SetIconUrl(request.IconUrl);
         category.SetBannerUrl(request.BannerUrl);
+        category.SetPageBannerUrl(request.PageBannerUrl);
         category.SetSortOrder(request.SortOrder);
         category.SetSeo(request.SeoTitle, request.SeoMetaDescription);
 
@@ -200,6 +202,7 @@ public class CategoryManagementService : ICategoryManagementService
         category.Description,
         category.IconUrl,
         category.BannerUrl,
+        category.PageBannerUrl,
         category.IsActive,
         category.IsFeatured,
         category.SortOrder,

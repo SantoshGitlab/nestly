@@ -136,6 +136,7 @@ public class ServiceManagementService : IServiceManagementService
             request.SeoTitle, request.SeoMetaDescription, request.PricingType, request.IsTaxApplicable,
             request.IsAddOnAllowed, request.IsQuantityAllowed, request.IsInspectionBased, request.IsSlotRequired,
             request.IsAddressRequired, request.IsCustomerNoteAllowed, request.CoverImageUrl, request.ServiceGroupId);
+        service.MarkUpdated(oldCategoryId);
 
         await _auditLogWriter.WriteAsync(new AuditEntry(
             "Service", service.Id.ToString(), "Updated", oldValues, Serialize(service, category.Name)));

@@ -105,6 +105,7 @@ public class CatalogSearchService : ICatalogSearchService
         category.Slug,
         category.IconUrl,
         category.BannerUrl,
+        category.PageBannerUrl,
         category.IsFeatured);
 
     private static ServiceListItemResponse ToListItem(Service service) => new(

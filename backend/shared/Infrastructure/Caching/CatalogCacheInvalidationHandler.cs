@@ -24,6 +24,7 @@ public sealed class CatalogCacheInvalidationHandler :
     INotificationHandler<DomainEventNotification<ServiceActivatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceDeactivatedEvent>>,
     INotificationHandler<DomainEventNotification<ServicePriceChangedEvent>>,
+    INotificationHandler<DomainEventNotification<ServiceUpdatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceAddOnCreatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceAddOnActivatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceAddOnDeactivatedEvent>>,
@@ -82,6 +83,24 @@ public sealed class CatalogCacheInvalidationHandler :
 
     public Task Handle(DomainEventNotification<ServicePriceChangedEvent> notification, CancellationToken cancellationToken) =>
         InvalidateService(notification.DomainEvent.ServiceId, cancellationToken);
+
+    /// <summary>
+    /// A general-field edit (name, description, cover image, inclusions,
+    /// duration, etc.) always busts the service detail cache, and the
+    /// category service-listing cache too - both the new category's (sort
+    /// order/name/featured flag changes show up there) and, if the service
+    /// was moved, the old category's as well.
+    /// </summary>
+    public async Task Handle(DomainEventNotification<ServiceUpdatedEvent> notification, CancellationToken cancellationToken)
+    {
+        await InvalidateService(notification.DomainEvent.ServiceId, cancellationToken);
+        await InvalidateServicesByCategory(notification.DomainEvent.NewCategoryId, cancellationToken);
+
+        if (notification.DomainEvent.OldCategoryId != notification.DomainEvent.NewCategoryId)
+        {
+            await InvalidateServicesByCategory(notification.DomainEvent.OldCategoryId, cancellationToken);
+        }
+    }
 
     public Task Handle(DomainEventNotification<ServiceAddOnCreatedEvent> notification, CancellationToken cancellationToken) =>
         InvalidateService(notification.DomainEvent.ServiceId, cancellationToken);

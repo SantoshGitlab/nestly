@@ -14,6 +14,7 @@ export interface CategoryResponse {
   description: string;
   iconUrl: string | null;
   bannerUrl: string | null;
+  pageBannerUrl: string | null;
   isActive: boolean;
   isFeatured: boolean;
   sortOrder: number;
@@ -29,6 +30,7 @@ export interface CategoryCreateRequest {
   description: string;
   iconUrl: string | null;
   bannerUrl: string | null;
+  pageBannerUrl: string | null;
   sortOrder: number;
   seoTitle: string | null;
   seoMetaDescription: string | null;

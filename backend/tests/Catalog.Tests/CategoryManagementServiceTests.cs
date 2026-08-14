@@ -25,6 +25,7 @@ public sealed class CategoryManagementServiceTests : IClassFixture<TestDatabase>
         Description: "Deep cleaning for your home.",
         IconUrl: "https://cdn.example.com/icon.png",
         BannerUrl: "https://cdn.example.com/banner.png",
+        PageBannerUrl: "https://cdn.example.com/page-banner.png",
         SortOrder: 1,
         SeoTitle: "Home Cleaning Services",
         SeoMetaDescription: "Book trusted home cleaning services.");
@@ -71,6 +72,7 @@ public sealed class CategoryManagementServiceTests : IClassFixture<TestDatabase>
             Description: "Updated description.",
             IconUrl: "https://cdn.example.com/icon2.png",
             BannerUrl: null,
+            PageBannerUrl: null,
             SortOrder: 5,
             SeoTitle: "Updated SEO Title",
             SeoMetaDescription: null);
@@ -161,7 +163,8 @@ public sealed class CategoryManagementServiceTests : IClassFixture<TestDatabase>
 
         var updateRequest = new CategoryUpdateRequest(
             category.Name, category.Slug, category.Description, category.IconUrl, category.BannerUrl,
-            category.SortOrder, category.SeoTitle, category.SeoMetaDescription, ParentCategoryId: category.Id);
+            category.PageBannerUrl, category.SortOrder, category.SeoTitle, category.SeoMetaDescription,
+            ParentCategoryId: category.Id);
 
         var result = await service.UpdateAsync(category.Id, updateRequest);
 
@@ -183,7 +186,8 @@ public sealed class CategoryManagementServiceTests : IClassFixture<TestDatabase>
 
         var updateRequest = new CategoryUpdateRequest(
             grandparent.Name, grandparent.Slug, grandparent.Description, grandparent.IconUrl, grandparent.BannerUrl,
-            grandparent.SortOrder, grandparent.SeoTitle, grandparent.SeoMetaDescription, ParentCategoryId: parent.Id);
+            grandparent.PageBannerUrl, grandparent.SortOrder, grandparent.SeoTitle, grandparent.SeoMetaDescription,
+            ParentCategoryId: parent.Id);
 
         var result = await service.UpdateAsync(grandparent.Id, updateRequest);
 

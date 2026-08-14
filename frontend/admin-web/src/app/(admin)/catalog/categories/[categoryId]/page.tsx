@@ -23,6 +23,7 @@ import {
 import type { CategoryResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
+import { CategoryImageField } from "../../_components/CategoryImageField";
 
 const categorySchema = z.object({
   name: z.string().min(1, "Category name is required").max(200),
@@ -34,6 +35,7 @@ const categorySchema = z.object({
   description: z.string().max(2000),
   iconUrl: z.string().max(500).optional().or(z.literal("")),
   bannerUrl: z.string().max(500).optional().or(z.literal("")),
+  pageBannerUrl: z.string().max(500).optional().or(z.literal("")),
   sortOrder: z.number().int().min(0),
   seoTitle: z.string().max(200).optional().or(z.literal("")),
   seoMetaDescription: z.string().max(500).optional().or(z.literal("")),
@@ -94,6 +96,7 @@ export default function EditCategoryPage() {
           description: categoryQuery.data.description,
           iconUrl: categoryQuery.data.iconUrl ?? "",
           bannerUrl: categoryQuery.data.bannerUrl ?? "",
+          pageBannerUrl: categoryQuery.data.pageBannerUrl ?? "",
           sortOrder: categoryQuery.data.sortOrder,
           seoTitle: categoryQuery.data.seoTitle ?? "",
           seoMetaDescription: categoryQuery.data.seoMetaDescription ?? "",
@@ -110,6 +113,7 @@ export default function EditCategoryPage() {
         description: values.description,
         iconUrl: values.iconUrl || null,
         bannerUrl: values.bannerUrl || null,
+        pageBannerUrl: values.pageBannerUrl || null,
         sortOrder: values.sortOrder,
         seoTitle: values.seoTitle || null,
         seoMetaDescription: values.seoMetaDescription || null,
@@ -234,12 +238,29 @@ export default function EditCategoryPage() {
             disabled={!canWrite}
           />
 
+          <Field
+            label="Icon URL"
+            hint="Small icon — used as a fallback for subcategory chips, not shown on the category card."
+            error={form.formState.errors.iconUrl?.message}
+            {...form.register("iconUrl")}
+            disabled={!canWrite}
+          />
+
           <FormGrid>
-            <Field label="Icon URL" error={form.formState.errors.iconUrl?.message} {...form.register("iconUrl")} disabled={!canWrite} />
-            <Field
-              label="Banner URL"
+            <CategoryImageField
+              label="Card image"
+              hint="Shown on the home page and categories listing tiles."
+              value={form.watch("bannerUrl") ?? ""}
+              onChange={(url) => form.setValue("bannerUrl", url, { shouldValidate: true })}
               error={form.formState.errors.bannerUrl?.message}
-              {...form.register("bannerUrl")}
+              disabled={!canWrite}
+            />
+            <CategoryImageField
+              label="Page banner"
+              hint="Shown on this category's page, the categories listing header, and checkout. Use a different photo from the card image above."
+              value={form.watch("pageBannerUrl") ?? ""}
+              onChange={(url) => form.setValue("pageBannerUrl", url, { shouldValidate: true })}
+              error={form.formState.errors.pageBannerUrl?.message}
               disabled={!canWrite}
             />
           </FormGrid>

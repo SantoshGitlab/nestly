@@ -144,6 +144,47 @@ public sealed class CatalogCacheInvalidationHandlerTests : IClassFixture<TestDat
         (await cache.GetAsync<string>(unrelatedKey)).Should().Be("untouched");
     }
 
+    [Fact]
+    public async Task ServiceUpdatedEvent_evicts_the_service_detail_and_its_categorys_service_list()
+    {
+        var categoryId = Guid.NewGuid();
+        var serviceId = Guid.NewGuid();
+        var serviceKey = CacheKeys.Service(serviceId);
+        var listKey = CacheKeys.ServicesByCategory(categoryId);
+        var cache = await SeededCache((serviceKey, "stale"), (listKey, "stale"));
+
+        using var context = _db.CreateContext();
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
+
+        await handler.Handle(new DomainEventNotification<ServiceUpdatedEvent>(
+            new ServiceUpdatedEvent(serviceId, categoryId, categoryId)), CancellationToken.None);
+
+        (await cache.GetAsync<string>(serviceKey)).Should().BeNull();
+        (await cache.GetAsync<string>(listKey)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ServiceUpdatedEvent_with_a_changed_category_evicts_both_the_old_and_new_categorys_service_list()
+    {
+        var oldCategoryId = Guid.NewGuid();
+        var newCategoryId = Guid.NewGuid();
+        var serviceId = Guid.NewGuid();
+        var serviceKey = CacheKeys.Service(serviceId);
+        var oldListKey = CacheKeys.ServicesByCategory(oldCategoryId);
+        var newListKey = CacheKeys.ServicesByCategory(newCategoryId);
+        var cache = await SeededCache((serviceKey, "stale"), (oldListKey, "stale"), (newListKey, "stale"));
+
+        using var context = _db.CreateContext();
+        var handler = new CatalogCacheInvalidationHandler(cache, new ServiceRepository(context), new CategoryRepository(context));
+
+        await handler.Handle(new DomainEventNotification<ServiceUpdatedEvent>(
+            new ServiceUpdatedEvent(serviceId, oldCategoryId, newCategoryId)), CancellationToken.None);
+
+        (await cache.GetAsync<string>(serviceKey)).Should().BeNull();
+        (await cache.GetAsync<string>(oldListKey)).Should().BeNull();
+        (await cache.GetAsync<string>(newListKey)).Should().BeNull();
+    }
+
     /// <summary>
     /// Regression guard: MediatR's own DI registration
     /// (Application.DependencyInjection.AddApplication) only scans the

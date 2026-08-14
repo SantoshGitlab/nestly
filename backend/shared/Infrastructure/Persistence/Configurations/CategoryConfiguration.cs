@@ -16,6 +16,7 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(x => x.Description).IsRequired().HasMaxLength(2000);
         builder.Property(x => x.IconUrl).HasMaxLength(500);
         builder.Property(x => x.BannerUrl).HasMaxLength(500);
+        builder.Property(x => x.PageBannerUrl).HasMaxLength(500);
         builder.Property(x => x.IsActive).IsRequired();
         builder.Property(x => x.IsFeatured).IsRequired();
         builder.Property(x => x.SortOrder).IsRequired();

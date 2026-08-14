@@ -14,6 +14,7 @@ import { createCategory, listCategories, setCategoryActive } from "@/lib/catalog
 import type { CategoryResponse } from "@/lib/catalog-types";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
+import { CategoryImageField } from "./_components/CategoryImageField";
 import { CatalogTabs } from "./_components/CatalogTabs";
 
 const categorySchema = z.object({
@@ -26,6 +27,7 @@ const categorySchema = z.object({
   description: z.string().max(2000),
   iconUrl: z.string().max(500).optional().or(z.literal("")),
   bannerUrl: z.string().max(500).optional().or(z.literal("")),
+  pageBannerUrl: z.string().max(500).optional().or(z.literal("")),
   sortOrder: z.number().int().min(0),
   seoTitle: z.string().max(200).optional().or(z.literal("")),
   seoMetaDescription: z.string().max(500).optional().or(z.literal("")),
@@ -88,6 +90,7 @@ export default function CatalogCategoriesPage() {
       description: "",
       iconUrl: "",
       bannerUrl: "",
+      pageBannerUrl: "",
       sortOrder: 0,
       seoTitle: "",
       seoMetaDescription: "",
@@ -116,6 +119,7 @@ export default function CatalogCategoriesPage() {
       description: values.description,
       iconUrl: values.iconUrl || null,
       bannerUrl: values.bannerUrl || null,
+      pageBannerUrl: values.pageBannerUrl || null,
       sortOrder: values.sortOrder,
       seoTitle: values.seoTitle || null,
       seoMetaDescription: values.seoMetaDescription || null,
@@ -221,9 +225,27 @@ export default function CatalogCategoriesPage() {
               onChange={(value) => form.setValue("parentCategoryId", value)}
             />
             <Textarea label="Description" error={form.formState.errors.description?.message} {...form.register("description")} />
+            <Field
+              label="Icon URL"
+              hint="Small icon — used as a fallback for subcategory chips, not shown on the category card."
+              error={form.formState.errors.iconUrl?.message}
+              {...form.register("iconUrl")}
+            />
             <FormGrid>
-              <Field label="Icon URL" error={form.formState.errors.iconUrl?.message} {...form.register("iconUrl")} />
-              <Field label="Banner URL" error={form.formState.errors.bannerUrl?.message} {...form.register("bannerUrl")} />
+              <CategoryImageField
+                label="Card image"
+                hint="Shown on the home page and categories listing tiles."
+                value={form.watch("bannerUrl") ?? ""}
+                onChange={(url) => form.setValue("bannerUrl", url, { shouldValidate: true })}
+                error={form.formState.errors.bannerUrl?.message}
+              />
+              <CategoryImageField
+                label="Page banner"
+                hint="Shown on this category's page, the categories listing header, and checkout. Use a different photo from the card image above."
+                value={form.watch("pageBannerUrl") ?? ""}
+                onChange={(url) => form.setValue("pageBannerUrl", url, { shouldValidate: true })}
+                error={form.formState.errors.pageBannerUrl?.message}
+              />
             </FormGrid>
             <FormGrid columns={3}>
               <Field

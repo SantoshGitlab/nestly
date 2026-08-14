@@ -31,8 +31,8 @@ public sealed class ServiceManagementServiceTests : IClassFixture<TestDatabase>
         var category = new Category(Guid.NewGuid(), "Cleaning", $"cleaning-{Guid.NewGuid():N}", "Cleaning services");
         await categoryRepository.AddAsync(category);
         return new CategoryResponse(category.Id, category.Name, category.Slug, category.Description,
-            category.IconUrl, category.BannerUrl, category.IsActive, category.IsFeatured, category.SortOrder,
-            category.SeoTitle, category.SeoMetaDescription);
+            category.IconUrl, category.BannerUrl, category.PageBannerUrl, category.IsActive, category.IsFeatured,
+            category.SortOrder, category.SeoTitle, category.SeoMetaDescription);
     }
 
     private static ServiceCreateRequest ValidCreateRequest(Guid categoryId, string suffix) => new(

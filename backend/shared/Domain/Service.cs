@@ -170,6 +170,15 @@ public class Service : AggregateRoot<Guid>
     public void Feature() => IsFeatured = true;
     public void Unfeature() => IsFeatured = false;
 
+    /// <summary>
+    /// Raised once by ServiceManagementService.UpdateAsync after every field
+    /// setter for a general-field edit has applied, so
+    /// CatalogCacheInvalidationHandler can evict the stale detail cache -
+    /// mirroring SetPrice's own event for price-only changes, since a plain
+    /// field edit otherwise raises nothing at all.
+    /// </summary>
+    public void MarkUpdated(Guid oldCategoryId) => RaiseDomainEvent(new ServiceUpdatedEvent(Id, oldCategoryId, CategoryId));
+
     public void Activate()
     {
         if (IsActive) return;

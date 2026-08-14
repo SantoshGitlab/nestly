@@ -10,6 +10,14 @@ public class Category : AggregateRoot<Guid>
     public string Description { get; private set; } = string.Empty;
     public string? IconUrl { get; private set; }
     public string? BannerUrl { get; private set; }
+    /// <summary>
+    /// Full-bleed banner shown on the category detail page, the categories
+    /// listing page header, and the checkout page — deliberately separate
+    /// from <see cref="BannerUrl"/> (the category-card image on the home
+    /// page / listing tiles) so admins can upload distinct art for the two
+    /// contexts rather than the same photo being stretched into both.
+    /// </summary>
+    public string? PageBannerUrl { get; private set; }
     public bool IsActive { get; private set; }
     public bool IsFeatured { get; private set; }
     public int SortOrder { get; private set; }
@@ -37,6 +45,7 @@ public class Category : AggregateRoot<Guid>
     public void SetDescription(string d) => Description = d ?? string.Empty;
     public void SetIconUrl(string? url) => IconUrl = url;
     public void SetBannerUrl(string? url) => BannerUrl = url;
+    public void SetPageBannerUrl(string? url) => PageBannerUrl = url;
     public void SetSortOrder(int sortOrder) => SortOrder = sortOrder;
     public void SetSeo(string? title, string? metaDescription)
     {

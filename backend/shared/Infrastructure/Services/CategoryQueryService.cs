@@ -108,6 +108,7 @@ public class CategoryQueryService : ICategoryQueryService
                     category.Description,
                     category.IconUrl,
                     category.BannerUrl,
+                    category.PageBannerUrl,
                     serviceResponses,
                     subcategories.Select(ToSummary).ToList(),
                     serviceGroupResponses);
@@ -171,6 +172,7 @@ public class CategoryQueryService : ICategoryQueryService
         category.Slug,
         category.IconUrl,
         category.BannerUrl,
+        category.PageBannerUrl,
         category.IsFeatured);
 
     private static ServiceAddOnSummaryResponse ToAddOnSummary(ServiceAddOn addOn) => new(
