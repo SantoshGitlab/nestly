@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
@@ -19,6 +19,7 @@ import {
   Skeleton,
   SkeletonText,
   Spinner,
+  Textarea,
   useToast,
 } from "@/components/ui";
 import { useJobStatusLive } from "@/hooks/useJobStatusLive";
@@ -29,6 +30,8 @@ import {
   acceptJob,
   completeJob,
   getCompletionVerification,
+  getCustomerRating,
+  getCustomerRatingEligibility,
   getJobDetail,
   markJobArrived,
   markJobEnRoute,
@@ -36,6 +39,7 @@ import {
   startJob,
   submitCompletionProof,
   submitCompletionVerification,
+  submitCustomerRating,
   uploadCompletionPhoto,
 } from "@/lib/jobs-api";
 import { JobStatus, jobStatusLabel } from "@/lib/jobs-types";
@@ -546,6 +550,8 @@ export default function JobDetailPage() {
           </>
         ) : null}
 
+        {job.status === JobStatus.Completed ? <RateCustomerCard jobId={jobId} /> : null}
+
         {job.status === JobStatus.Rejected ||
         job.status === JobStatus.Reassigned ||
         job.status === JobStatus.Withdrawn ? (
@@ -555,6 +561,160 @@ export default function JobDetailPage() {
         ) : null}
       </div>
     </div>
+  );
+}
+
+const RATING_HINTS = ["", "Poor", "Fair", "Good", "Great", "Excellent"] as const;
+
+/**
+ * Bidirectional reviews: the provider's private rating of the customer, the
+ * reverse direction of customer-web's booking-review flow. Never shown to
+ * the customer - admin-only, via the Customer 360 view. A separate step
+ * after Complete (not bundled into it), so it's never a blocker on finishing
+ * the job.
+ */
+function RateCustomerCard({ jobId }: { jobId: string }) {
+  const toast = useToast();
+
+  const eligibilityQuery = useQuery({
+    queryKey: ["provider-job-rating-eligibility", jobId],
+    queryFn: () => getCustomerRatingEligibility(jobId),
+  });
+  const ratingQuery = useQuery({
+    queryKey: ["provider-job-rating", jobId],
+    queryFn: () => getCustomerRating(jobId),
+  });
+
+  if (eligibilityQuery.isPending || ratingQuery.isPending) {
+    return (
+      <Card title="Rate the customer">
+        <SkeletonText lines={2} />
+      </Card>
+    );
+  }
+
+  const existing = ratingQuery.data;
+  if (existing) {
+    return (
+      <Card title="Rate the customer" description="Submitted - thanks for the feedback.">
+        <div className="flex items-center gap-3">
+          <RatingStars value={existing.rating} />
+          <span className="nums text-sm font-medium text-fg-muted">{existing.rating}/5</span>
+        </div>
+        {existing.note ? <p className="mt-3 text-sm leading-relaxed text-fg">{existing.note}</p> : null}
+      </Card>
+    );
+  }
+
+  if (eligibilityQuery.isError || !eligibilityQuery.data?.isEligible) {
+    // Not eligible (rating window closed, or something went wrong checking) -
+    // no card at all rather than a dead-end form, same as how this page
+    // hides Start once the lifecycle makes it illegal.
+    return null;
+  }
+
+  return <RateCustomerForm jobId={jobId} toast={toast} />;
+}
+
+function RateCustomerForm({
+  jobId,
+  toast,
+}: {
+  jobId: string;
+  toast: ReturnType<typeof useToast>;
+}) {
+  const queryClient = useQueryClient();
+  const [rating, setRating] = useState(0);
+  const [note, setNote] = useState("");
+  const [ratingError, setRatingError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: () => submitCustomerRating(jobId, { rating, note: note.trim() ? note.trim() : null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["provider-job-rating", jobId] });
+      toast("success", "Thanks for rating the customer.");
+    },
+  });
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (rating < 1 || rating > 5) {
+      setRatingError("Please select a rating from 1 to 5.");
+      return;
+    }
+    setRatingError(null);
+    mutation.mutate();
+  }
+
+  return (
+    <Card title="Rate the customer" description="Private - the customer never sees this.">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {mutation.isError ? (
+          <ErrorState title="Couldn't submit that rating" error={mutation.error} />
+        ) : null}
+
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-fg">Rating</span>
+          <RatingInput value={rating} onChange={setRating} />
+          {ratingError ? <p className="text-xs font-medium text-danger">{ratingError}</p> : null}
+        </div>
+
+        <Textarea
+          label="Note (optional)"
+          rows={3}
+          maxLength={500}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          hint="Only visible internally - never shown to the customer."
+        />
+
+        <Button type="submit" loading={mutation.isPending} className="self-start">
+          Submit rating
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
+function RatingInput({ value, onChange }: { value: number; onChange: (rating: number) => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div role="radiogroup" aria-label="Rating" className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={value === n}
+            aria-label={`${n} star${n === 1 ? "" : "s"}`}
+            onClick={() => onChange(n)}
+            className="rounded-lg p-1 text-3xl leading-none transition-transform duration-fast ease-out hover:scale-110 active:scale-95"
+          >
+            <span
+              aria-hidden
+              className={n <= value ? "block text-warning" : "block text-fg-subtle/40"}
+            >
+              ★
+            </span>
+          </button>
+        ))}
+      </div>
+      <span className="text-sm font-medium text-fg-muted" aria-hidden>
+        {RATING_HINTS[value] ?? ""}
+      </span>
+    </div>
+  );
+}
+
+function RatingStars({ value }: { value: number }) {
+  return (
+    <span aria-label={`${value} out of 5 stars`} className="text-xl leading-none">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span key={n} aria-hidden className={n <= value ? "text-warning" : "text-fg-subtle/40"}>
+          ★
+        </span>
+      ))}
+    </span>
   );
 }
 

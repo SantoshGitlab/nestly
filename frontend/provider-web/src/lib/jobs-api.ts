@@ -7,6 +7,8 @@
 import { API_V1, apiFetch, apiUpload } from "./api";
 import type {
   BookingCompletionProofResponse,
+  CustomerRatingEligibility,
+  CustomerRatingResponse,
   JobDetail,
   JobListItem,
   JobListParams,
@@ -15,6 +17,7 @@ import type {
   RecordProviderLocationResponse,
   SubmitCompletionProofRequest,
   SubmitCompletionVerificationRequest,
+  SubmitCustomerRatingRequest,
   UploadCompletionPhotoResponse,
 } from "./jobs-types";
 
@@ -96,6 +99,21 @@ export const uploadCompletionPhoto = (jobId: string, file: File) => {
  */
 export const recordProviderLocation = (jobId: string, request: RecordProviderLocationRequest) =>
   apiFetch<RecordProviderLocationResponse>(`${JOBS_BASE}/${jobId}/location`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+/** Bidirectional reviews: whether this job can be rated right now. */
+export const getCustomerRatingEligibility = (jobId: string) =>
+  apiFetch<CustomerRatingEligibility>(`${JOBS_BASE}/${jobId}/customer-rating/eligibility`, { authenticated: true });
+
+/** The rating already submitted for this job, if any - undefined (204) means none yet. */
+export const getCustomerRating = (jobId: string) =>
+  apiFetch<CustomerRatingResponse | undefined>(`${JOBS_BASE}/${jobId}/customer-rating`, { authenticated: true });
+
+export const submitCustomerRating = (jobId: string, request: SubmitCustomerRatingRequest) =>
+  apiFetch<CustomerRatingResponse>(`${JOBS_BASE}/${jobId}/customer-rating`, {
     method: "POST",
     authenticated: true,
     body: JSON.stringify(request),

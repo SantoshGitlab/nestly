@@ -38,6 +38,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<BookingCancellation> BookingCancellations { get; set; }
     public DbSet<BookingReschedule> BookingReschedules { get; set; }
     public DbSet<Review> Reviews { get; set; }
+    public DbSet<CustomerRating> CustomerRatings { get; set; }
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketComment> SupportTicketComments { get; set; }
     public DbSet<NotificationEvent> NotificationEvents { get; set; }

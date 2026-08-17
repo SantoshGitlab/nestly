@@ -43,6 +43,7 @@ using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reports;
 using Nestly.Application.Reschedules;
+using Nestly.Application.CustomerRatings;
 using Nestly.Application.Reviews;
 using Nestly.Application.Settings;
 using Nestly.Application.Subscriptions;
@@ -724,6 +725,12 @@ public static class DependencyInjection
         // Task 122: admin review moderation (SRS 12.15) - search/hide/unhide/
         // flag/unflag/export over the same IReviewRepository above.
         services.AddScoped<IReviewModerationService, ReviewModerationService>();
+
+        // Bidirectional reviews: the provider-side rating of the customer.
+        // Reuses ReviewPolicyOptions (already bound above) rather than a
+        // near-duplicate options class for the same submission-window policy.
+        services.AddScoped<ICustomerRatingRepository, CustomerRatingRepository>();
+        services.AddScoped<ICustomerRatingService, CustomerRatingService>();
 
         // Tasks 124a-125c: CMS - static pages, banners, and site-level FAQs
         // with draft/publish, scheduling, media, and placement (SRS 12.16;
