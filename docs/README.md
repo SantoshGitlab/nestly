@@ -23,6 +23,7 @@ Every topic has exactly **one authoritative document**.
 | [../.claude/CLAUDE.md](../.claude/CLAUDE.md) | AI behavior, workflow, reasoning and response rules |
 | [PROJECT.md](PROJECT.md) | Business domain, project vision, goals, users and modules |
 | [MARKET.md](MARKET.md) | Market context, competitive landscape, revenue-model thesis, launch strategy and the commercial gap register for the Jaipur launch market |
+| [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) | Evidence-based audit (2026-08-17) of what is actually implemented versus what ORIENTATION.md, the specs and `tasks.csv` claim |
 | [SRS.md](SRS.md) | Full Software Requirements Specification (v2) — functional, workflow, validation, RBAC, screen, API, and operational requirements |
 | [WORKFLOW.md](WORKFLOW.md) | Visual (Mermaid) workflow diagrams for project understanding — not authoritative, defers to SRS.md on conflict |
 | [UI-GUIDE.md](UI-GUIDE.md) | Screenshot-illustrated walkthrough of each app's main screens, plus first-time local setup/seed/credentials instructions — companion to WORKFLOW.md, not authoritative |
@@ -52,6 +53,7 @@ Every topic has exactly **one authoritative document**.
 | Business vision | PROJECT.md |
 | Business terminology | PROJECT.md |
 | Market and competitor analysis | MARKET.md |
+| Implementation status verification | LAUNCH-READINESS-AUDIT.md |
 | Launch market strategy | MARKET.md |
 | Revenue models and margin thesis | MARKET.md |
 | Pricing posture and go-to-market | MARKET.md |

@@ -267,17 +267,23 @@ between what exists and what §3 and §4 require.
 
 ### 5.1 Product gaps
 
+> **Corrected 2026-08-17.** This section originally listed subscription,
+> recurring bookings, completion verification, referral, in-app chat and
+> automatic provider assignment as unbuilt. That was wrong — it was written
+> against documentation that understated the codebase by roughly sixteen
+> phases. All six are implemented. See
+> [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) for the code
+> evidence. The three Critical business-model gaps below were re-verified and
+> confirmed absent.
+
 | Gap | Severity | Why it blocks the strategy |
 |---|---|---|
-| No B2B account model | Critical | The data model runs *person → booking*. No organisation, contract, site, purchase order, invoice, GST handling, net-30 billing or multi-user account hierarchy. **Every high-margin move above is unbuildable without it** — the single largest gap between where the code is and where the money is. |
-| Subscription module unbuilt | Critical | Specified in detail, zero tasks complete. The headline differentiator against every Jaipur competitor does not exist. |
-| Recurring bookings unbuilt | Critical | Same phase, same status. Without it there is no weekly-cleaning plan, no scheduled preventive AMC visit, no society service calendar. |
-| No AMC / entitlement model | Critical | An AMC is prepaid entitlement drawn down over twelve months, with scheduled preventive visits and a renewal pipeline. Related to subscription but genuinely distinct, and specified nowhere. It also has the best cash-flow profile in the catalogue. |
-| Automatic provider assignment deferred | High | Until it lands, an admin assigns every booking by hand — capping daily volume well below what a contract book generates. |
-| No WhatsApp booking channel | High | WhatsApp exists as a notification vendor, not a booking intake path. This closes off the peri-urban and non-app segments entirely. |
-| Completion verification unbuilt | High | Specified as a status-transition guard, not yet built. It is the evidence layer under any warranty claim and the main defence against no-show disputes. |
-| Referral engine unbuilt | Medium | Referral performs far better in a socially dense city with active society WhatsApp groups than in an anonymous metro — worth more in Jaipur than in Bengaluru. See [REFERRAL.md](REFERRAL.md). |
-| In-app chat unbuilt | Medium | Support responsiveness is a named Urban Company weakness. Chat is how "we actually answer" becomes demonstrable rather than claimed. |
+| No B2B account model | Critical | The data model runs *person → booking*. No organisation, contract, site, purchase order, invoice, GST handling, net-30 billing or multi-user account hierarchy — confirmed absent in `shared/Domain`. **Every high-margin move above is unbuildable without it** — and with the consumer product further along than believed, this is now the single binding engineering constraint on the revenue strategy. |
+| No AMC / entitlement model | Critical | An AMC is prepaid entitlement drawn down over twelve months, with scheduled preventive visits and a renewal pipeline. Subscription and recurring plans exist, but entitlement drawdown, preventive scheduling and the renewal pipeline do not. It has the best cash-flow profile in the catalogue. |
+| No WhatsApp booking channel | High | WhatsApp exists only as a `CustomerCommunicationPreference` notification channel, not a booking intake path. This closes off the peri-urban and non-app segments entirely. |
+| Order tracking defects open | High | Five known Phase 16 defects remain (`tasks.csv` `#291`–`#295`): at-most-once notifications that are never retried, provider photo and rating with no backing data, and a `ProviderAssigned` notification timing error. Several are customer-visible, and they sit on the SLA surface that §2.5 makes a differentiator. |
+| Test coverage uneven | Medium | 1,119 test methods, but 834 of them live in one misnamed `Catalog.Tests` project and `CustomerManagement.Tests` has 12. No suite has been executed in this environment — see the audit's §8. |
+| Subscription, recurring bookings, completion verification, referral, chat, auto-assignment | ~~Critical/High/Medium~~ **Built** | Previously listed here as unbuilt. All implemented — entities, migrations, services, endpoints, frontend pages and tests. Verified 2026-08-17. |
 
 ### 5.2 Business and operational gaps
 
@@ -305,11 +311,13 @@ Ordered by dependency, not by appetite.
 3. **Design the B2B account model** — organisation, site, contract,
    entitlement, invoice. The largest architectural addition, and it gates the
    highest-margin revenue. Start the design while the audit runs.
-4. **Ship subscription and recurring bookings.** Already specified in
-   [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md); backlog rows `#296`–
-   `#300` cover the recurring-plan schema, generation service and surfaces.
-   This is the smallest amount of code standing between Nestly and a
-   differentiated position.
+4. ~~**Ship subscription and recurring bookings.**~~ **Void — already
+   shipped.** Both are implemented end-to-end, including the Hangfire
+   occurrence-generation job. Backlog rows `#296`–`#300` duplicate delivered
+   work and should be closed after a functional check, not built. The
+   differentiator exists; the open questions are whether it works and whether
+   anyone can buy it. See
+   [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) §5.
 5. **Recruit supply in parallel, starting now.** Technician recruitment and
    verification has the longest lead time of anything here and does not depend
    on software being finished.
