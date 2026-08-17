@@ -180,45 +180,55 @@ function ListingBanner({
   const [imageFailed, setImageFailed] = useState(false);
   const showPhoto = !!bannerUrl && !imageFailed;
 
-  return (
-    <section className="relative isolate overflow-hidden px-4 py-12 sm:px-6 sm:py-16">
-      {showPhoto ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization. */}
-          <img
-            src={bannerUrl!}
-            alt=""
-            onError={() => setImageFailed(true)}
-            className="absolute inset-0 -z-20 h-full w-full object-cover"
-          />
-          <div aria-hidden className="photo-scrim absolute inset-0 -z-10" />
-        </>
-      ) : (
-        <div aria-hidden className="absolute inset-0 -z-10 bg-surface-2" />
-      )}
-
-      <div className="relative mx-auto flex w-full max-w-7xl flex-col items-start gap-4">
-        {breadcrumb(showPhoto)}
-        <h1 className={`font-display text-display-sm sm:text-display-md ${showPhoto ? "text-white" : "text-fg"}`}>
-          {title}
-        </h1>
-        {description ? (
-          <p
-            className={`max-w-2xl text-[0.9375rem] leading-relaxed text-pretty ${
-              showPhoto ? "text-white/85" : "text-fg-muted"
-            }`}
-          >
-            {description}
-          </p>
-        ) : null}
-        <span
-          className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold backdrop-blur-sm ${
-            showPhoto ? "bg-white/15 text-white" : "bg-surface text-fg shadow-xs"
+  const content = (
+    <div className="relative mx-auto flex w-full max-w-7xl flex-col items-start gap-4">
+      {breadcrumb(showPhoto)}
+      <h1 className={`font-display text-display-sm sm:text-display-md ${showPhoto ? "text-white" : "text-fg"}`}>
+        {title}
+      </h1>
+      {description ? (
+        <p
+          className={`max-w-2xl text-[0.9375rem] leading-relaxed text-pretty ${
+            showPhoto ? "text-white/85" : "text-fg-muted"
           }`}
         >
-          {serviceCount} {serviceCount === 1 ? "service" : "services"} available
-        </span>
-      </div>
+          {description}
+        </p>
+      ) : null}
+      <span
+        className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold backdrop-blur-sm ${
+          showPhoto ? "bg-white/15 text-white" : "bg-surface text-fg shadow-xs"
+        }`}
+      >
+        {serviceCount} {serviceCount === 1 ? "service" : "services"} available
+      </span>
+    </div>
+  );
+
+  if (!showPhoto) {
+    return (
+      <section className="relative isolate overflow-hidden px-4 py-12 sm:px-6 sm:py-16">
+        <div aria-hidden className="absolute inset-0 -z-10 bg-surface-2" />
+        {content}
+      </section>
+    );
+  }
+
+  return (
+    <section className="relative isolate overflow-hidden">
+      {/* Block-flow, natural height (not absolutely stretched to a text-driven
+          box) so the photo's own aspect ratio decides the banner's height -
+          object-cover inside a short auto-height section was cropping most
+          of the image away top/bottom. Text overlays on top instead. */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization. */}
+      <img
+        src={bannerUrl!}
+        alt=""
+        onError={() => setImageFailed(true)}
+        className="block w-full h-auto"
+      />
+      <div aria-hidden className="photo-scrim absolute inset-0" />
+      <div className="absolute inset-0 flex flex-col justify-end px-4 py-12 sm:px-6 sm:py-16">{content}</div>
     </section>
   );
 }
