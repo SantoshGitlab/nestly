@@ -1,263 +1,224 @@
 # LAUNCH-READINESS-AUDIT.md
 
-Evidence-based audit of what is **actually implemented** in this repository,
-versus what [ORIENTATION.md](ORIENTATION.md), the module specifications and
-`tasks.csv` claim.
+Verification of the documentation suite's status claims against the code, and
+the record of the corrections applied.
 
 ## STATUS
 
-Audit performed **2026-08-17** against commit `bcef432`, on branch
-`claude/nestly-urban-company-comparison-66095c-x1drri`.
+Audit performed **2026-08-17** against `main` at commit `e020819`.
 
-This audit was commissioned because three sources disagreed about what is
-built, and [MARKET.md](MARKET.md) §5 identified "launch readiness is not
-verifiable" as a High-severity business risk. It resolves that disagreement.
+Commissioned because [MARKET.md](MARKET.md) §5 identified *"launch readiness is
+not verifiable"* as a High-severity business risk, on the grounds that
+ORIENTATION.md, the module specifications and `tasks.csv` disagreed about what
+was built.
 
 ### What this audit can and cannot prove
 
 **Method: static code evidence.** For each module the audit checked for the
-presence and coherence of domain entities, EF Core configurations, database
-migrations, application services, API endpoints, background job registration,
-frontend pages and test files.
+presence and coherence of domain entities, EF Core configurations, migrations,
+application services, API endpoints, background job registration, frontend
+pages and test files.
 
-**The solution was not built and no tests were executed.** The .NET 8 SDK is
-not installed in this environment, and the operator instructed that it not be
-installed. Every grade below therefore means *"the code exists, is wired, and
-is internally coherent"* — **not** *"it compiles, passes its tests, or behaves
-correctly at runtime"*.
+**The solution was not built and no tests were executed** — the .NET 8 SDK is
+absent from the audit environment and the operator instructed that it not be
+installed. Every statement below about existence means *"the code is present
+and wired"*, never *"it compiles, passes, or behaves correctly"*.
 
-That distinction matters and is not a formality. This audit closes the
-question *"does this module exist at all?"* — which was genuinely open and
-answered wrongly by the documentation. It does **not** close the question
-*"does this module work?"* A build-and-test run remains a required, and now
-much cheaper, second step: see [§8](#8-what-to-do-next).
+The most recent evidence of a working build is ORIENTATION.md's 2026-08-08
+pass against commit `39cc78a`: `dotnet build` 0 errors / 0 warnings,
+`dotnet test` 1767 passing / 0 failing. That is 85 commits behind `e020819`,
+so it does not cover Phase 18.
 
 ---
 
-## 1. HEADLINE FINDING
+## 1. A CORRECTION TO THIS AUDIT'S OWN FIRST DRAFT
 
-**The documentation is drastically stale in one direction, and the backlog is
-wrong in the other.**
+The first version of this document, written earlier the same day, reported
+that ORIENTATION.md *"understates the codebase by roughly sixteen phases"* —
+that it claimed 73/221 tasks done and denied the existence of booking,
+payments, coupons, post-booking and the admin panel.
 
-- **ORIENTATION.md understates the codebase by an enormous margin.** It is
-  dated `Last verified: 2026-08-01`, claims **73 of 221 tasks done**, names
-  Phase 2 (Catalog) as the active phase at 2/26, and states plainly that there
-  is *"no catalog, serviceability, booking, payments, slots, coupons,
-  post-booking or admin panel"* and that `admin-web` is *"scaffolded only — no
-  product screens"*. **All of these statements are false.** Every one of those
-  modules exists in code, and `admin-web` has 42 pages.
+**That finding was an artifact of auditing a stale branch.** It was performed
+against commit `bcef432`, which was 85 commits behind `main`. On `main`,
+ORIENTATION.md had already been re-verified on 2026-08-08 — against a real
+build and test run — and was substantially accurate.
 
-- **The module specifications are stale in the same direction.**
-  `PRODUCT-ENHANCEMENTS.md`, `REFERRAL.md` and `NESTLY-COINS.md` all carry a
-  `STATUS: Not implemented` header. All three modules are implemented.
-
-- **The backlog overstates in one specific place.** `tasks.csv` rows
-  `#296`–`#300` (Phase 17, added 2026-08-07) scope recurring-services work as
-  `todo` that **already exists in full** from Phase 10.
-
-The practical consequence: **the earlier competitive analysis in MARKET.md
-§5.1 was built on the stale documents and materially misstates Nestly's
-product position.** Corrections are in [§7](#7-corrections-to-marketmd).
+The lesson is not incidental to this audit's subject. An audit that does not
+first confirm it is looking at the current default branch can manufacture
+exactly the class of error it was commissioned to find. The corrected findings
+below are all verified against `e020819`.
 
 ---
 
 ## 2. EVIDENCE BASE
 
-Counts taken directly from the working tree.
+Counts taken from the working tree at `e020819`.
 
 | Measure | Count |
 |---|---:|
-| EF Core migrations (excluding `.Designer.cs`) | 66 |
-| Domain files (`shared/Domain`) | 139 |
-| EF persistence configurations | 176 |
-| Application files, across 45 feature areas | 308 |
-| API controllers (consumer 27 · admin 31 · provider 8) | 66 |
-| HTTP endpoints (consumer 85 · admin 253 · provider 43) | 381 |
-| Frontend apps | 3 |
-| Frontend pages (admin 42 · customer 29 · provider 10) | 81 |
-| Test methods (`[Fact]`/`[Theory]`) across 4 test projects | 1,119 |
-| `tasks.csv` rows | 627 (567 done · 50 decomposed · 10 todo) |
+| Migration classes (`database/migrations`, excluding designers/snapshots) | 76 |
+| Domain entity classes (deriving `Entity<>`/`AggregateRoot<>`) | 93 (15 aggregate roots) |
+| EF entity configurations · `DbSet`s | 94 · 72 |
+| Application files, across 47 feature areas | 341 |
+| API controllers (consumer 27 · admin 37 · provider 9) | 73 |
+| HTTP endpoints (consumer 85 · admin 289 · provider 49) | 423 |
+| Frontend pages (admin 49 · customer 29 · provider 10) | 88 |
+| Test methods (`[Fact]`/`[Theory]` declarations) | 1,363 |
+| `tasks.csv` rows | 647 (596 done · 50 decomposed · 1 todo) |
 
-Note that `tasks.csv` has grown from the 221 rows ORIENTATION.md describes to
-627, as later phases were decomposed — the 50 `decomposed` rows are parents
-split into subtasks, not lost work.
-
----
-
-## 3. PER-MODULE VERIFICATION
-
-Grades: **Verified** — entity, persistence, service, endpoint and test
-evidence all present. **Partial** — present but with a named hole.
-**Absent** — no implementing code found.
-
-| Module | Claimed | Code evidence | Grade |
-|---|---|---|---|
-| Identity & auth | Done | 265 tests in `Identity.Tests`; auth controllers on all three APIs | **Verified** |
-| Customer & addresses | Done | Entities, `CustomerManagement.Tests`, `customer-web` profile/address pages | **Verified** |
-| Catalog & serviceability | ORIENTATION: *active, 2/26* | `Category`/`Service`/`ServiceAddOn` entities, admin + consumer controllers, `Serviceability` area, extensive tests | **Verified** — claim false |
-| Geography (city/locality/pincode) | Done | `City`, `Locality`, `Pincode`, `CategoryCityMapping`; controllers on all three APIs | **Verified** |
-| Pricing | ORIENTATION: *does not exist* | `CityPricingPolicy`, `PromotionalPrice`, price-calculation service + validator, tests | **Verified** — claim false |
-| Slots & availability | ORIENTATION: *does not exist* | `Slots` area, capacity migration, blackout/window/policy tests | **Verified** — claim false |
-| Booking core | ORIENTATION: *does not exist* | `Booking` aggregate + items/add-ons/status-history/snapshots, lifecycle, concurrency and immutability tests | **Verified** — claim false |
-| Payments, escrow, refunds, wallet | ORIENTATION: *does not exist* | `PaymentTransaction`/`PaymentAttempt`, escrow ledger, commission calculator, webhook + reconciliation tests | **Verified** — claim false |
-| Coupons | ORIENTATION: *does not exist* | `Coupon` + redemption/segment/counter entities, admin and consumer controllers, tests | **Verified** — claim false |
-| Post-booking (cancel, reschedule, review, support) | ORIENTATION: *does not exist* | Cancellation fee calculator, reschedule fee calculator, review moderation, support tickets + disputes, QA suite tests | **Verified** — claim false |
-| Admin panel | ORIENTATION: *scaffolded only* | 31 admin controllers, 253 endpoints, RBAC permission matrix, 42 `admin-web` pages | **Verified** — claim false |
-| Provider / partner (Phase 7) | In implementation | `Provider`, auth identity, availability windows, background check, earnings; `provider-api` (8 controllers) and `provider-web` (10 pages) | **Verified** |
-| Referral (Phase 9) | Spec: *Not implemented* | `Referral`, milestones, awards, program config; 7 referral test files; `refer-earn` page; permission + template seed migrations | **Verified** — spec stale |
-| Subscription (Phase 10) | Spec: *Not implemented* | `SubscriptionPlan`, `CustomerSubscription`, billing cycle; `AddSubscriptionSchema` migration; consumer + admin controllers; `subscription` page | **Verified** — spec stale |
-| Recurring bookings (Phase 10) | Spec: *Not implemented*; backlog `#296`–`#300`: *todo* | `RecurringBookingPlan`/`Occurrence`/`AddOn` entities; `AddRecurringBookingPlan` migration; Hangfire job via `ScheduleRecurringBookingJob`; 6 endpoints; `recurring-bookings` + `/new` pages; scheduler + plan tests | **Verified** — spec *and* backlog both wrong |
-| In-app chat (Phase 10) | Spec: *Not implemented* | `ChatThread`/`ChatMessage`, `AddChatSchema` + permission-seed migrations, consumer and admin controllers, SignalR hub, tests | **Verified** — spec stale |
-| Completion verification (Phase 10) | MARKET.md: *unbuilt* | `BookingCompletionProof` entity, `AddBookingCompletionProof` migration, dedicated consumer controller, support tests | **Verified** — claim false |
-| Nestly Coins (Phase 11) | Spec: *Not implemented* | `NestlyCoins` domain folder, program config, schema migration, consumer + admin controllers, 3 test files | **Verified** — spec stale |
-| Automatic provider assignment (Phase 14) | MARKET.md: *deferred* | `ProviderAutoAssignmentHandler`, matching service with route ranking, eligibility + travel-feasibility services, double-booking guard, 6 test files | **Verified** — claim false |
-| Order tracking (Phase 16) | Done, 27/32 | `BookingTracking`, provider location pings + coordinates migration, SignalR hub, Google Maps route provider, `bookings/[id]/track` page, 9 test files | **Partial** — 5 known defects open (`#291`–`#295`) |
-| **B2B / organisation model** | MARKET.md: *Critical gap* | No `Organisation`, `Tenant`, `Contract`, `Site`, `PurchaseOrder` or `Invoice` type anywhere in `shared/Domain` | **Absent** — confirmed |
-| **WhatsApp booking intake** | MARKET.md: *High gap* | WhatsApp appears only as a `CustomerCommunicationPreference` notification channel. No booking intake path | **Absent** — confirmed |
-| **AMC / entitlement model** | MARKET.md: *Critical gap* | Subscription and recurring plans exist, but no prepaid-entitlement drawdown, preventive-visit schedule or renewal pipeline | **Absent** — confirmed |
+Note on the test figure: 1,363 counts *declarations*, whereas ORIENTATION.md's
+1,767 counts *executed cases* from a real run — `[Theory]` methods expand into
+several. The two are consistent, not contradictory.
 
 ---
 
-## 4. DOCUMENTATION INTEGRITY FINDINGS
+## 3. FINDINGS
 
-Each of these is a concrete, fixable defect in the documentation suite.
+### 3.1 Confirmed accurate
 
-1. **ORIENTATION.md is ~16 phases behind the code.** Last verified
-   2026-08-01, but its content reflects a state well before that — it
-   describes Phase 2 as active while Phases 2–16 are implemented. It is
-   designated by `README.md` as *"the only document describing current
-   repository state"*, which makes it the single most load-bearing document in
-   the suite and the one most damaging when wrong.
+ORIENTATION.md's substantive claims hold. Every module it lists as live has
+code behind it: identity, catalog, serviceability, slots, booking, payments,
+wallet, coupons, cancellation/reschedule, reviews, support, notifications,
+admin panel with RBAC, provider/partner, referral, Nestly Coins, subscriptions,
+recurring bookings, chat, live tracking and completion verification.
 
-2. **Four module specifications carry false `STATUS` headers.**
-   `PRODUCT-ENHANCEMENTS.md`, `REFERRAL.md` and `NESTLY-COINS.md` say *"Not
-   implemented"* for modules that are implemented; `PROVIDER.md` says *"In
-   implementation"* for one that appears complete.
+Several of these were reported as *unbuilt* in MARKET.md's first draft. They
+are not. See [§5](#5-corrections-applied-to-marketmd).
 
-3. **`README.md`'s topic-ownership model has no status owner.** Because
-   "current state" belongs to ORIENTATION.md but each spec also carries its own
-   `STATUS` section, status is duplicated across five documents with no
-   mechanism keeping them consistent. This is the structural cause of finding
-   1 and 2, not bad luck — the suite's own CHANGE POLICY forbids exactly this
-   kind of duplication.
+### 3.2 Four specifications carried false status headers — **fixed**
 
-4. **No document records the ~60 previously-falsified completions.**
-   MARKET.md §5.2 refers to roughly sixty tasks once marked done that were
-   never implemented. That history is real and consequential, but it lives
-   only in commit history — which is why the *opposite* error (this audit's
-   finding) was not caught for two weeks.
+`PRODUCT-ENHANCEMENTS.md`, `REFERRAL.md` and `NESTLY-COINS.md` read *"Not
+implemented"*, and `PROVIDER.md` read *"In implementation"*, for modules
+delivered phases earlier. This was the one documentation defect that was
+genuinely live on `main`, and it is what misled the competitive analysis.
 
----
+Each now states the delivering phase and defers to ORIENTATION.md for status.
 
-## 5. BACKLOG INTEGRITY FINDINGS
+### 3.3 Status had no single owner — **fixed**
 
-**Rows `#296`–`#300` duplicate shipped work.** Added 2026-08-07 in commit
-`bcef432` with the rationale *"differentiation vs Urban Company: recurring/
-subscription home-local services"*, they scope:
+The structural cause of 3.2: `README.md` designated ORIENTATION.md as the only
+document describing repository state, while every module spec also carried its
+own `STATUS` section, with nothing keeping the two consistent. Duplication of
+this kind is already forbidden by the suite's own CHANGE POLICY; status was
+simply never named as a topic under it.
 
-| Row | Scopes | Already exists as |
+`README.md` now carries an explicit rule — *implementation status has exactly
+one owner* — and records why.
+
+### 3.4 Ten documents were missing from the index — **fixed**
+
+`BOOKING-FLOW-AUDIT.md`, `CATALOG-ARCHITECTURE-REVIEW.md`,
+`ENHANCEMENT-BACKLOG-2026-08-08.md`, `PHASE-12-HANDOFF.md`,
+`PHASE-16-CLOUD-BRIEF.md`, `QA-REPORT-2026-08-07.md`, `RUNBOOK-DEPLOYMENT.md`,
+`UAT-REPORT.md`, `migrations-audit.md` and `migrations-plan.md` existed in
+`docs/` but appeared nowhere in the index that claims to be the suite's entry
+point.
+
+Two of those omissions mattered a great deal: `QA-REPORT-2026-08-07.md` holds
+the current release verdict, and `ENHANCEMENT-BACKLOG-2026-08-08.md` is
+described by ORIENTATION.md as the place the next task comes from. All ten are
+now indexed.
+
+### 3.5 ORIENTATION.md's figures had drifted — **fixed**
+
+Accurate as of 2026-08-08, stale by 2026-08-17 because Phase 18 landed in
+between. Corrected:
+
+| Claim | Was | Now |
 |---|---|---|
-| 296 | Recurring booking schema and rule model | `RecurringBookingPlan`, `RecurringBookingOccurrence`, `RecurringBookingPlanAddOn`, `RecurringBookingRecurrenceFrequency` + `AddRecurringBookingPlan` migration |
-| 297 | Recurring booking generation service | `IRecurringBookingSchedulerService` + Hangfire registration in `RecurringBookingJobScheduleExtensions` |
-| 298 | Customer subscription management API and UI | `RecurringBookingPlansController` (6 endpoints) + `recurring-bookings`, `recurring-bookings/new` pages |
-| 299 | Admin recurring plan visibility | Admin subscription/plan controllers |
-| 300 | Provider-side recurring job visibility | `provider-web` jobs surface |
+| Backlog | 627 rows, 577 done, **zero** todo | 647 rows, 596 done, **1** todo |
+| Phases | "all eleven phases (0–10, plus 11)" | 0–18, plus unphased setup rows |
+| `admin-api` | 32 controllers | 37 controllers / 289 endpoints |
+| Migrations | 140 | 76 (140 counted files, including designers) |
+| Domain | 141 entities | 93 entity classes across 145 files |
 
-These five rows should be closed as already-delivered after a functional
-check, not implemented. **They were the basis for MARKET.md's
-recommendation to "ship subscription and recurring bookings" as the fastest
-path to differentiation — that recommendation is now void.** The
-differentiator already exists; the open question is whether it works, and
-whether anyone can buy it.
+### 3.6 `tasks.csv` row 302 was corrupt — **fixed**
 
-**The 10 genuinely-open rows** are `#291`–`#295` (Phase 16 tracking defects:
-unretried at-most-once notifications, provider photo/rating with no backing
-data, a `ChatHubBroadcastHandler` exception path, and a `ProviderAssigned`
-notification timing error) and `#296`–`#300` (the duplicates above). Note that
-`#291`–`#295` are real defects, several of them customer-visible.
+The `notes` field used backslash-escaped quotes (`\"420px\"`). CSV has no
+backslash escape: the field terminated early, the remainder of the note was
+parsed as the `phase` column, and the row's real phase was lost. Four scripts
+(`task_worker.py`, `task_claim.py`, `sync_autopilot_tasks.py`,
+`init_worker_project.py`) parse this file, and `admin-web` types mirror it.
 
----
+Escaping corrected to doubled quotes, the truncated note restored, and the
+phase recovered as `Phase 6 - Admin Panel` from commit `a7b3f18`. All 647 rows
+now parse.
 
-## 6. TEST COVERAGE ASSESSMENT
+### 3.7 `TASKS-SUMMARY.md` was six phases behind — **fixed**
 
-1,119 test methods is a genuinely strong number for a pre-launch product, but
-the distribution is uneven and the packaging is misleading.
+Its table stopped at Phase 11 and reported 522 rows against an actual 647.
+Regenerated with all nineteen groups and the open row called out.
 
-| Project | Tests | Files | Real scope |
-|---|---:|---:|---|
-| `Catalog.Tests` | 834 | 123 | **Misnamed.** Covers booking, payments, escrow, refunds, wallet, coupons, slots, pricing, provider matching and auto-assignment, tracking, chat, referral, subscriptions, recurring bookings, Nestly Coins, reporting, dashboard, CMS and admin workflows |
-| `Identity.Tests` | 265 | — | Identity and auth |
-| `CustomerManagement.Tests` | 12 | — | Customer management — thin relative to the module |
-| `Performance.Tests` | 8 | — | Performance smoke |
+### 3.8 Release readiness is not backlog completeness — **open**
 
-Two observations:
+The one remaining `todo` is **task 318**: execute QA phases 3 and 4 from
+`QA-REPORT-2026-08-07.md`. That report's verdict is **NO-GO for release on
+absence of evidence, not on known defects** — 587 inventoried UI features are
+runtime-unverified, and cross-service booking consistency between the three
+backends is unmeasured.
 
-- **`Catalog.Tests` is doing the work of a dozen suites under one name.** At
-  123 files it is effectively the platform's main regression suite. The name
-  actively misleads: a reader checking "is booking tested?" would look for
-  `Booking.Tests`, find nothing, and conclude no. Splitting it along module
-  lines is a mechanical, low-risk change with real navigational value.
-- **`CustomerManagement.Tests` at 12 methods is thin** for a module covering
-  profile, communication preferences and notes.
-
-**Coverage was not measured.** No test run was performed, so these are counts
-of test methods, not evidence of passing tests or of line/branch coverage.
+This is the honest answer to *"what is shippable"*: the backlog is closed, the
+code is present, the last full test run was green 85 commits ago, and nobody
+has verified the product end to end at runtime. **MARKET.md's High-severity
+"launch readiness is not verifiable" risk is therefore narrowed but not
+retired** — it is no longer a documentation problem, it is an outstanding QA
+execution.
 
 ---
 
-## 7. CORRECTIONS TO MARKET.md
+## 4. CONFIRMED GAPS (unchanged)
 
-[MARKET.md](MARKET.md) §5.1 was written against the stale documentation and
-overstates the product gap. It has been corrected in place; recorded here for
-traceability.
+Re-verified absent at `e020819`, by search across `shared/Domain`,
+`shared/Application` and all three API surfaces:
+
+- **No B2B / organisation model.** No `Organisation`, `Contract`, `Site`,
+  `PurchaseOrder` or `Invoice` type exists. The model runs *person → booking*.
+- **No AMC / entitlement model.** Subscription and recurring plans exist;
+  prepaid entitlement drawdown, preventive-visit scheduling and a renewal
+  pipeline do not.
+- **No WhatsApp booking intake.** WhatsApp appears only as a
+  `CustomerCommunicationPreference` notification channel.
+
+All six business and operational gaps in MARKET.md §5.2 also stand — unit
+economics, pricing strategy, supply acquisition, liability/insurance, GST
+posture and local ops footprint. None are code questions.
+
+---
+
+## 5. CORRECTIONS APPLIED TO MARKET.md
+
+MARKET.md §5.1 was written against the four false spec headers and overstated
+the product gap. Corrected in place; recorded here for traceability.
 
 | MARKET.md claim | Reality |
 |---|---|
-| "Subscription module unbuilt — Critical" | Built (entities, migration, controllers, page, tests) |
-| "Recurring bookings unbuilt — Critical" | Built end-to-end including the Hangfire generation job |
+| "Subscription module unbuilt — Critical" | Built (Phase 10) |
+| "Recurring bookings unbuilt — Critical" | Built (Phase 10, extended Phase 17), including the Hangfire generation job |
 | "Completion verification unbuilt — High" | Built (`BookingCompletionProof` + migration + controller) |
-| "Referral engine unbuilt — Medium" | Built (7 test files, milestones, program config) |
-| "In-app chat unbuilt — Medium" | Built (schema, hub, both APIs) |
-| "Automatic provider assignment deferred — High" | Built (matching, eligibility, travel feasibility, double-booking guard) |
+| "Referral engine unbuilt — Medium" | Built (Phase 9) |
+| "In-app chat unbuilt — Medium" | Built (Phase 10, SignalR) |
+| "Automatic provider assignment deferred — High" | Built (Phase 14) |
 
-**What survives unchanged.** The three Critical *business-model* gaps are
-confirmed absent in code: **no B2B/organisation model**, **no AMC/entitlement
-model**, **no WhatsApp booking intake**. So are all six business and
-operational gaps in §5.2 — unit economics, pricing strategy, supply
-acquisition, liability/insurance, GST posture and local ops footprint — none
-of which are code questions.
-
-**The strategic conclusion is unchanged and, if anything, strengthened.**
-MARKET.md argued the money is in contracts rather than one-off consumer jobs.
-Nestly turns out to be much closer to a shippable consumer product than the
-documents suggested — which means less consumer engineering stands between
-today and the contract thesis, and the B2B account model is now more clearly
-*the* binding constraint rather than one of several.
+**The strategic conclusion is unchanged and strengthened.** MARKET.md argued
+the money is in contracts rather than one-off consumer jobs. Nestly is far
+closer to a shippable consumer product than its own documents suggested, which
+means less consumer engineering stands between today and the contract thesis —
+and the B2B account model is now unambiguously *the* binding engineering
+constraint on the revenue strategy, rather than one of several.
 
 ---
 
-## 8. WHAT TO DO NEXT
+## 6. WHAT REMAINS
 
-Ordered by dependency.
-
-1. **Build the solution and run the four test suites.** This is the one thing
-   this audit could not do, and every grade above is provisional until it
-   happens. It requires only the .NET 8.0.422 SDK from `global.json`.
-2. **Rewrite ORIENTATION.md §2 against this audit.** It is the designated
-   state-of-the-repository document and is currently the most misleading file
-   in the suite.
-3. **Correct the four stale spec `STATUS` headers** in
-   `PRODUCT-ENHANCEMENTS.md`, `REFERRAL.md`, `NESTLY-COINS.md` and
-   `PROVIDER.md`.
-4. **Close `tasks.csv` rows `#296`–`#300`** as already-delivered, after a
-   functional check of the recurring-booking flow.
-5. **Fix the five open Phase 16 defects** (`#291`–`#295`). These are real and
-   several are customer-visible.
-6. **Give status a single owner.** Remove per-spec `STATUS` sections in favour
-   of one status table in ORIENTATION.md, or make them a one-line pointer to
-   it. Duplicated status is what produced this entire class of error.
-7. **Split `Catalog.Tests`** along module lines so test coverage is legible
-   from the project layout.
-8. **Then proceed to the B2B account model design** — with the audit now
-   showing it to be the principal remaining engineering constraint on the
-   revenue strategy.
+1. **Execute task 318** — the QA report's phases 3 and 4. Until then the
+   release verdict stands at NO-GO and no launch date is defensible.
+2. **Build and test `main` at its current head.** The last green run predates
+   Phase 18 by 85 commits. This audit could not do it.
+3. **Split `Catalog.Tests`.** At 123 files and ~1,049 declared test methods it
+   is the platform's main regression suite under a name that describes one
+   module — a reader checking "is booking tested?" would look for
+   `Booking.Tests`, find nothing, and conclude wrongly.
+4. **Re-verify `CustomerManagement.Tests`.** 12 test methods is thin for a
+   module covering profile, communication preferences and notes.
+5. **Then proceed to the B2B account model design**, now the principal
+   remaining engineering constraint on the revenue strategy.

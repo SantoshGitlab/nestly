@@ -9,13 +9,23 @@ The rest of the documentation suite describes how things *should* be built
 is the only one that describes **the current state of the repository** — so
 treat the others as the specification and this one as the map.
 
-Last verified: **2026-08-08**, against `main` at commit `39cc78a`.
+Last verified: **2026-08-17**, against `main` at commit `e020819`. The
+2026-08-08 pass against `39cc78a` remains the last one that **built and tested**
+the solution; this pass re-counted the backlog and the code surface statically
+and corrected the figures below. Nothing was rebuilt or re-run.
 
-The backlog is now **complete**: `tasks.csv` carries 627 rows, of which 577 are
-`done` and the remaining 50 are `decomposed` parent placeholders already
-satisfied by their own lettered subtasks. There are **zero `todo` rows**. All
-eleven phases (0–10, plus Phase 11 Nestly Coins) are closed. See
-TASKS-SUMMARY.md for the per-phase table.
+The backlog is **effectively complete**: `tasks.csv` carries 647 rows, of which
+596 are `done`, 50 are `decomposed` parent placeholders already satisfied by
+their own lettered subtasks, and **one is `todo`**. All nineteen phase groups
+(0–18, plus a small set of unphased early setup rows) are closed except that
+one row. See TASKS-SUMMARY.md for the per-phase table.
+
+The single open row is **task 318** — execute QA phases 3 and 4 from
+[QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md). That report's verdict is
+**NO-GO for release on absence of evidence**: 587 inventoried UI features are
+runtime-unverified and cross-service booking consistency across the three
+backends is unmeasured. Backlog completeness is therefore not the same as
+release readiness, and this row is the gap between them.
 
 Work beyond the backlog is tracked in
 **[ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md)** —
@@ -46,9 +56,10 @@ Full requirements: [SRS.md](SRS.md).
 This is the section most likely to be out of date, and the most important to
 keep honest.
 
-**Every phase in `tasks.csv` is closed.** The platform is feature-complete
-against its own backlog: three APIs, three frontends, 141 domain entities and
-140 migrations. What remains is not backlog delivery but the gap set in
+**Every phase in `tasks.csv` is closed but one row.** The platform is
+feature-complete against its own backlog: three APIs, three frontends, 93
+domain entity classes (across 145 files in `shared/Domain`) and 76 migrations.
+What remains is not backlog delivery but the gap set in
 [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) and the
 release-readiness work in [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md).
 
@@ -61,10 +72,10 @@ Verified 2026-08-08 by building and testing a clean checkout of `origin/main`
 | Area | State |
 |---|---|
 | Solution & layering | 18 projects across 3 API hosts + 4 shared libraries + 4 test projects; dependencies flow inward |
-| Backend APIs | `consumer-api` (27 controllers), `admin-api` (32), `provider-api` (8) |
+| Backend APIs | `consumer-api` (27 controllers / 85 endpoints), `admin-api` (37 / 289), `provider-api` (9 / 49) |
 | Frontends | `customer-web`, `admin-web`, `provider-web` — all three are real product apps, not scaffolds |
-| Persistence | EF Core + PostgreSQL, snake_case, configuration-by-assembly-scan, 140 migrations, replayable from an empty database (task 207) |
-| Domain | 141 entities; 15 derive from `AggregateRoot` and raise domain events |
+| Persistence | EF Core + PostgreSQL, snake_case, configuration-by-assembly-scan, 76 migrations, 94 entity configurations, 72 `DbSet`s, replayable from an empty database (task 207) |
+| Domain | 93 entity classes; 15 derive from `AggregateRoot` and raise domain events |
 | Modules live | Identity, catalog, serviceability, slots, booking, payments, wallet, coupons, cancellation/reschedule, reviews, support, notifications, admin panel + RBAC, provider/partner, referral, Nestly Coins, subscriptions, recurring bookings, chat, live tracking, completion verification |
 | Tests | 1767 across `Catalog.Tests` (1443), `Identity.Tests` (304), `CustomerManagement.Tests` (12), `Performance.Tests` (8) — SQLite-backed integration, not just unit |
 | Caching | `ICacheService` over Redis with in-process fallback — in real use (catalog, notification templates) |

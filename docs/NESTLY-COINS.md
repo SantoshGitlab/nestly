@@ -4,11 +4,16 @@ Nestly Coins (loyalty/incentive currency) module specification.
 
 ## STATUS
 
-Not implemented. Scoped as **Phase 11**, after Referral & Growth (Phase 9) and
-Product Enhancements (Phase 10). It depends only on Wallet, Booking, Customer,
-and Provider (all already built) — placed last because it is a growth/retention
-lever on top of a working marketplace, not a prerequisite for one, same
-reasoning as REFERRAL.md's phase placement.
+**Implemented.** Delivered as **Phase 11** (all backlog rows `done`). The
+coins schema, program configuration, and both the customer and admin surfaces
+are live, covered by dedicated service tests.
+
+This document is the **specification**, not a status record.
+[ORIENTATION.md](ORIENTATION.md) is the single owner of current repository
+state — consult it, not this header, for what is built.
+
+Corrected 2026-08-17: this section read *"Not implemented"* long after
+delivery. See [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md).
 
 ## PURPOSE
 

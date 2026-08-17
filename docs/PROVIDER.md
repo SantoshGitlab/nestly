@@ -4,9 +4,17 @@ Provider / Vendor module specification.
 
 ## STATUS
 
-**In implementation.** The open decisions below are resolved (task 144); the
-data model (tasks 145a-145f) and provider auth/onboarding foundation (tasks
-146a-146c) are being built against those decisions. Out of scope for Phase 1
+**Implemented.** Delivered as **Phase 7** (all backlog rows `done`), and
+extended by Phase 14 (automatic provider assignment). The data model, provider
+auth and onboarding, availability windows, background checks, earnings, the
+`provider-api` host and the `provider-web` app are all live.
+
+This document is the **specification**, not a status record.
+[ORIENTATION.md](ORIENTATION.md) is the single owner of current repository
+state — consult it, not this header, for what is built.
+
+Corrected 2026-08-17: this section read *"In implementation"* long after
+delivery. See [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md). Out of scope for Phase 1
 per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9)
 — this is the SRS's own release-phase terminology, unrelated to the
 backlog's numbered phases below.

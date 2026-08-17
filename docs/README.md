@@ -37,7 +37,15 @@ Every topic has exactly **one authoritative document**.
 | [TESTING.md](TESTING.md) | Unit, integration, API and end-to-end testing strategy |
 | [DEVOPS.md](DEVOPS.md) | Docker, CI/CD, deployment, monitoring and operations |
 | [RUNBOOK-BACKUP-RESTORE.md](RUNBOOK-BACKUP-RESTORE.md) | Tested PostgreSQL backup/restore procedure (companion to DEVOPS.md's backup requirement) |
-| [PROVIDER.md](PROVIDER.md) | Provider / Vendor module specification (Phase 7 — scheduled before launch) |
+| [RUNBOOK-DEPLOYMENT.md](RUNBOOK-DEPLOYMENT.md) | Deployment procedure (companion to DEVOPS.md) |
+| [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Release-readiness QA report — feature inventory and the current **NO-GO** verdict. Source of the one open backlog row (task 318) |
+| [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. Per ORIENTATION.md, this is where the next task comes from |
+| [UAT-REPORT.md](UAT-REPORT.md) | User acceptance testing results |
+| [BOOKING-FLOW-AUDIT.md](BOOKING-FLOW-AUDIT.md) | Point-in-time audit of the booking funnel (source of the Phase 13 defect rows) |
+| [CATALOG-ARCHITECTURE-REVIEW.md](CATALOG-ARCHITECTURE-REVIEW.md) | Point-in-time review of the catalog hierarchy (service groups, variants, add-on groups) |
+| [migrations-audit.md](migrations-audit.md) · [migrations-plan.md](migrations-plan.md) | Point-in-time migration audit and remediation plan |
+| [PHASE-12-HANDOFF.md](PHASE-12-HANDOFF.md) · [PHASE-16-CLOUD-BRIEF.md](PHASE-16-CLOUD-BRIEF.md) | Historical phase handoff notes — superseded, kept for provenance |
+| [PROVIDER.md](PROVIDER.md) | Provider / Vendor module specification (Phase 7) |
 | [REFERRAL.md](REFERRAL.md) | Referral (Refer & Earn) module specification (Phase 9) |
 | [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md) | Subscription, Recurring Bookings, In-App Chat, Completion Verification specification (Phase 10) |
 | [NESTLY-COINS.md](NESTLY-COINS.md) | Nestly Coins (reorder loyalty currency for customers and providers) specification (Phase 11) |
@@ -53,7 +61,10 @@ Every topic has exactly **one authoritative document**.
 | Business vision | PROJECT.md |
 | Business terminology | PROJECT.md |
 | Market and competitor analysis | MARKET.md |
-| Implementation status verification | LAUNCH-READINESS-AUDIT.md |
+| Implementation status ("what is built") | ORIENTATION.md |
+| Status-claim verification and audit history | LAUNCH-READINESS-AUDIT.md |
+| Release readiness / go-no-go | QA-REPORT-2026-08-07.md |
+| Spec-vs-code gap backlog | ENHANCEMENT-BACKLOG-2026-08-08.md |
 | Launch market strategy | MARKET.md |
 | Revenue models and margin thesis | MARKET.md |
 | Pricing posture and go-to-market | MARKET.md |
@@ -113,6 +124,23 @@ Every topic belongs to one document.
 Do not duplicate guidance across multiple documents.
 
 If a topic needs additional context, reference the owning document instead of repeating the content.
+
+### Implementation status has exactly one owner
+
+**[ORIENTATION.md](ORIENTATION.md) owns "what is built".** No other document
+may assert implementation status.
+
+Module specifications describe *what the module should be*, not whether it
+exists. A spec's `STATUS` section may state which phase delivered it and link
+to ORIENTATION.md — it must not carry a standing "not implemented" claim,
+because nothing keeps such a claim in sync with the code.
+
+This rule exists because it was broken. On 2026-08-17, four specifications
+(`PRODUCT-ENHANCEMENTS.md`, `REFERRAL.md`, `NESTLY-COINS.md`, `PROVIDER.md`)
+still read *"Not implemented"* for modules that had shipped phases earlier —
+which in turn caused a competitive analysis to be written against a product
+position that had not been true for weeks. See
+[LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md).
 
 ## WRITING PRINCIPLES
 

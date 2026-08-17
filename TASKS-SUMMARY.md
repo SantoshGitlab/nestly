@@ -10,13 +10,45 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 3 - Booking Core | 47 | 0 | 9 | 0 | 56 |
 | Phase 4 - Payments & Financial | 40 | 0 | 6 | 0 | 46 |
 | Phase 5 - Post-Booking | 40 | 0 | 7 | 0 | 47 |
-| Phase 6 - Admin Panel | 104 | 0 | 15 | 0 | 119 |
+| Phase 6 - Admin Panel | 106 | 0 | 15 | 0 | 121 |
 | Phase 7 - Partner | 23 | 0 | 4 | 0 | 27 |
 | Phase 8 - Hardening & Launch | 35 | 0 | 6 | 0 | 41 |
 | Phase 9 - Referral & Growth | 16 | 0 | 0 | 0 | 16 |
 | Phase 10 - Product Enhancements | 22 | 0 | 0 | 0 | 22 |
 | Phase 11 - Nestly Coins & Loyalty | 5 | 0 | 0 | 0 | 5 |
-| **Overall** | **472** | **0** | **50** | **0** | **522** |
+| Phase 12 - Premium UI & UX Overhaul | 21 | 0 | 0 | 0 | 21 |
+| Phase 13 - Booking Funnel Defects | 12 | 0 | 0 | 0 | 12 |
+| Phase 14 - Automatic Provider Assignment | 9 | 0 | 0 | 0 | 9 |
+| Phase 15 - QA Audit Defects | 13 | 0 | 0 | 0 | 13 |
+| Phase 16 - End-to-End Order Tracking | 32 | 0 | 0 | 0 | 32 |
+| Phase 17 - Recurring Services | 5 | 0 | 0 | 0 | 5 |
+| Phase 18 - Spec-Gap Closure | 17 | 1 | 0 | 0 | 18 |
+| (unphased, early setup rows) | 13 | 0 | 0 | 0 | 13 |
+| **Overall** | **596** | **1** | **50** | **0** | **647** |
+
+Last updated: 2026-08-17, regenerated from `tasks.csv` during the
+documentation-integrity pass recorded in
+[docs/LAUNCH-READINESS-AUDIT.md](docs/LAUNCH-READINESS-AUDIT.md). The previous
+table stopped at Phase 11 and reported 522 rows against an actual 647 —
+Phases 12-18 had been delivered without the summary being regenerated.
+
+The single remaining `todo` is **task 318**: execute QA phases 3 and 4 from
+`docs/QA-REPORT-2026-08-07.md`. That report's verdict is **NO-GO for release
+on absence of evidence** — 587 inventoried UI features are runtime-unverified
+and cross-service booking consistency between the three backends is
+unmeasured. The 50 `decomposed` rows remain parent placeholders already
+satisfied by their own lettered subtasks.
+
+One data-integrity fix landed in the same pass: row 302's `notes` field used
+backslash-escaped quotes (`\"420px\"`), which CSV does not support, so the
+field terminated early and its `phase` value was lost to the parser. Escaping
+corrected to doubled quotes; phase restored to `Phase 6 - Admin Panel` from
+commit `a7b3f18`. All 647 rows now parse.
+
+---
+
+## Historical notes
+
 
 Last updated: 2026-08-02, after integrating branch `tasks-199-208` (tasks
 199-203, 205, 206, 208 - already complete but sitting unmerged since
