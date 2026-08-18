@@ -44,6 +44,26 @@ import type { BookingCompletionProofResponse, CompletionChecklistAnswer } from "
 import type { LocationSharingStatus } from "@/hooks/useLocationSharing";
 
 /**
+ * Statuses whose job can actually have completion evidence to read. The
+ * backend's GET /jobs/{id}/completion-verification resolves the provider's
+ * *accepted* assignment and 404s otherwise (ProviderJobService's
+ * ResolveAcceptedAsync), and evidence only ever exists once work has started -
+ * so anything earlier than InProgress has nothing to fetch, and the
+ * non-accepted terminal states (Rejected/Reassigned/Withdrawn) 404 outright.
+ * Completed is kept in: the evidence stays readable after the job is done.
+ * Doubles as the render gate for the verification cards below, so the fetch
+ * and the UI that consumes it can never drift apart.
+ */
+const VERIFIABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
+  JobStatus.InProgress,
+  JobStatus.Completed,
+]);
+
+function hasCompletionVerification(status: JobStatus): boolean {
+  return VERIFIABLE_STATUSES.has(status);
+}
+
+/**
  * Job detail (docs/PROVIDER.md's `booking_provider_assignment` bridge table):
  * accept/reject/start/complete actions plus completion proof submission.
  * Same 501 caveat as the list page - if the backend for this surface is not
@@ -64,9 +84,14 @@ export default function JobDetailPage() {
   const [confirmDecline, setConfirmDecline] = useState(false);
 
   const query = useQuery({ queryKey: ["provider-job", jobId], queryFn: () => getJobDetail(jobId) });
+  const jobStatus = query.data?.status;
   const verificationQuery = useQuery({
     queryKey: ["provider-job-completion-verification", jobId],
     queryFn: () => getCompletionVerification(jobId),
+    // Only fetch where the endpoint can answer (see VERIFIABLE_STATUSES) -
+    // firing it for every other status just 404s. Explicit `!== undefined`
+    // because JobStatus.Assigned is 0 and would fail a truthiness check.
+    enabled: jobStatus !== undefined && hasCompletionVerification(jobStatus),
   });
 
   useJobStatusLive(jobId);
@@ -208,8 +233,7 @@ export default function JobDetailPage() {
     completeMutation.error ??
     proofMutation.error;
 
-  const showVerification =
-    job.status === JobStatus.InProgress || job.status === JobStatus.Completed;
+  const showVerification = hasCompletionVerification(job.status);
 
   return (
     <div className="animate-rise">
@@ -509,7 +533,10 @@ export default function JobDetailPage() {
             <CompletionVerificationCard
               jobId={jobId}
               existing={verificationQuery.data}
-              isLoading={verificationQuery.isPending}
+              // `isLoading`, not `isPending`: a disabled query stays "pending"
+              // forever in React Query v5, so keying the skeleton off it would
+              // hang this card if it ever rendered outside VERIFIABLE_STATUSES.
+              isLoading={verificationQuery.isLoading}
               onSubmitted={invalidate}
             />
 
