@@ -38,11 +38,13 @@ namespace Nestly.Infrastructure.Services;
 /// <para>
 /// Missing <see cref="AdminPermission"/> rows for a valid catalog code are
 /// lazily created from <see cref="AdminPermissionCatalog"/> the first time
-/// they are referenced (<see cref="ResolvePermissionsAsync"/>) - no
-/// production seed migration populates <c>admin_permission</c> yet, and the
-/// catalog is already this data's single source of truth, so mechanically
-/// upserting from it here is simpler than standing up a separate seeder for
-/// the same rows.
+/// they are referenced (<see cref="ResolvePermissionsAsync"/>), which keeps
+/// this endpoint working even against a database whose seed data predates a
+/// module. It is no longer the only thing that populates
+/// <c>admin_permission</c>, though: relying on it alone is exactly what left
+/// Super Admin without the Payments module until an operator opened this UI
+/// (task 332), so <c>AdminPermissionReconciler</c> now seeds every catalog
+/// permission at admin-api startup instead.
 /// </para>
 /// </summary>
 public class AdminRoleManagementService : IAdminRoleManagementService

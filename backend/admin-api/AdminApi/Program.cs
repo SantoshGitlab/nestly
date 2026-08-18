@@ -11,6 +11,7 @@ using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence.Seed;
 using Nestly.Infrastructure.Realtime;
 using Serilog;
 
@@ -64,6 +65,14 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// Task 332 (QA-REPORT-2026-08-18 bug #5): fills in admin_permission rows for
+// any module added since the last seed migration, and the default-role grants
+// for them, so a fresh deployment's Super Admin really does have access to
+// every module without an operator opening the permission-matrix UI once per
+// module. Idempotent, and never re-grants a permission an operator has
+// deliberately revoked - see AdminPermissionReconciler's doc comment.
+app.ReconcileAdminPermissions();
 
 // Pipeline order: correlation first so all downstream logs carry the id,
 // then exception shielding, then request logging.
