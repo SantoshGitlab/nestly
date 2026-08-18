@@ -114,22 +114,24 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
     {
         public int CallCount { get; private set; }
 
-        public Task<Result<RefundTransactionResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
-            Invoke();
+        public Task<Result<RefundOutcomeResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
+            Invoke(bookingId);
 
-        public Task<Result<RefundTransactionResponse>> InitiatePartialRefundAsync(Guid bookingId, decimal amount, string reason, RefundMethod method = RefundMethod.Gateway) =>
-            Invoke();
+        public Task<Result<RefundOutcomeResponse>> InitiatePartialRefundAsync(Guid bookingId, decimal amount, string reason, RefundMethod method = RefundMethod.Gateway) =>
+            Invoke(bookingId);
 
         public Task<Result<IReadOnlyList<RefundTransactionResponse>>> ListByBookingAsync(Guid customerId, Guid bookingId) =>
             throw new NotSupportedException("Not exercised by this stub.");
 
-        private Task<Result<RefundTransactionResponse>> Invoke()
+        private Task<Result<RefundOutcomeResponse>> Invoke(Guid bookingId)
         {
             CallCount++;
             CallCount.Should().Be(1, "a resolved dispute must never reach the refund service again");
-            return Task.FromResult(Result.Success(new RefundTransactionResponse(
-                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), RefundType.Full, RefundMethod.Gateway, 1m, RefundStatus.Refunded,
-                GatewayRefundRef: null, Reason: "test", CreatedAtUtc: DateTime.UtcNow, ProcessedAtUtc: DateTime.UtcNow)));
+            var settlement = new RefundTransactionResponse(
+                Guid.NewGuid(), bookingId, Guid.NewGuid(), RefundFundingSource.Payment, RefundType.Full, RefundMethod.Gateway,
+                1m, RefundStatus.Refunded, GatewayRefundRef: null, Reason: "test",
+                CreatedAtUtc: DateTime.UtcNow, ProcessedAtUtc: DateTime.UtcNow);
+            return Task.FromResult(Result.Success(new RefundOutcomeResponse(bookingId, settlement.Amount, [settlement])));
         }
     }
 

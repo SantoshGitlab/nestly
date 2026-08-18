@@ -122,11 +122,11 @@ public sealed class ReportingQueryServiceTests : IDisposable
         var booking = NewBooking(customer.Id, city);
         var payment = NewSuccessfulPayment(booking.Id, customer.Id, 610m);
 
-        var refunded = new RefundTransaction(Guid.NewGuid(), booking.Id, payment.Id, RefundType.Full, RefundMethod.Gateway, 610m, "Customer cancellation");
+        var refunded = RefundTransaction.ForPayment(Guid.NewGuid(), booking.Id, payment.Id, RefundType.Full, RefundMethod.Gateway, 610m, "Customer cancellation");
         refunded.MarkProcessing();
         refunded.MarkRefunded("gateway-ref-" + Guid.NewGuid());
 
-        var failed = new RefundTransaction(Guid.NewGuid(), booking.Id, payment.Id, RefundType.Full, RefundMethod.Gateway, 200m, "Gateway declined");
+        var failed = RefundTransaction.ForPayment(Guid.NewGuid(), booking.Id, payment.Id, RefundType.Full, RefundMethod.Gateway, 200m, "Gateway declined");
         failed.MarkProcessing();
         failed.MarkFailed("Gateway declined the refund.");
 

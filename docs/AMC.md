@@ -221,6 +221,15 @@ database/migrations/          AddAmcSchema
    charging anything. This is the honest MVP boundary, not a bug to be
    silently worked around — real gateway integration for AMC purchase is
    follow-up work, same status as decisions #1 and #2 above.
+   **Still open**, but the mirror-image problem on the refund side is not:
+   task `#356` made `RefundTransaction.PaymentTransactionId` nullable behind a
+   `RefundFundingSource` discriminator, so a booking settled from wallet
+   balance rather than a gateway payment can now be refunded (see
+   `RefundService`/`RefundAllocationCalculator`). That is a precedent for the
+   shape of the fix here — a nullable FK plus an explicit discriminator beats
+   fabricating a synthetic row — but not the fix itself: `PaymentTransaction.BookingId`
+   is untouched, and the commission/escrow consumers this decision names still
+   assume every transaction belongs to a booking.
 5. **RESOLVED (task `#331`) — the redeem flow now completes end-to-end.**
    Found during implementation, not before: `BookingService.CreateAsync`
    used to transition *every* new booking to `PaymentPending`, and

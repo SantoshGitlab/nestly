@@ -152,7 +152,7 @@ public sealed class DashboardQueryServiceTests : IClassFixture<TestDatabase>
             Guid.NewGuid(), cancelledBooking.Id, CancellationActor.Customer, "Change of plans",
             withinFreeCancellationWindow: true, cancellationFeeAmount: 0m, refundAmount: 610m);
 
-        var refund = new RefundTransaction(
+        var refund = RefundTransaction.ForPayment(
             Guid.NewGuid(), cancelledBooking.Id, payment.Id, RefundType.Full, RefundMethod.Gateway, 610m, "Customer cancellation");
         refund.MarkProcessing();
         refund.MarkRefunded("gateway-ref-" + Guid.NewGuid());

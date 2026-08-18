@@ -236,10 +236,17 @@ public class BookingManagementService : IBookingManagementService
             null,
             JsonSerializer.Serialize(new
             {
-                refundResult.Value.Id,
-                refundResult.Value.Amount,
-                refundResult.Value.Method,
-                refundResult.Value.Status,
+                refundResult.Value.Primary.Id,
+                Amount = refundResult.Value.TotalAmount,
+                refundResult.Value.Primary.Method,
+                refundResult.Value.Primary.Status,
+                // Task 356: a booking funded from both the gateway and the
+                // customer's wallet settles as one row per funding source, so
+                // the audited amount is the total across them and the split
+                // is spelled out rather than left to be inferred from Id.
+                Settlements = refundResult.Value.Settlements
+                    .Select(s => new { s.Id, s.FundingSource, s.Method, s.Amount })
+                    .ToList(),
                 Reason = request.Reason
             })));
         await _dbContext.SaveChangesAsync();
@@ -288,7 +295,7 @@ public class BookingManagementService : IBookingManagementService
             reschedules.Select(r => new AdminBookingRescheduleResponse(
                 r.Id, r.Actor, r.Reason, r.FromSlotDate, r.FromSlotStartTime, r.ToSlotDate, r.ToSlotStartTime, r.IsLate, r.FeeAmount, r.CreatedAtUtc)).ToList(),
             refunds.Select(r => new AdminBookingRefundResponse(
-                r.Id, r.Type, r.Method, r.Amount, r.Status, r.GatewayRefundRef, r.Reason, r.CreatedAtUtc, r.ProcessedAtUtc)).ToList(),
+                r.Id, r.FundingSource, r.Type, r.Method, r.Amount, r.Status, r.GatewayRefundRef, r.Reason, r.CreatedAtUtc, r.ProcessedAtUtc)).ToList(),
             booking.CreatedAtUtc);
     }
 

@@ -74,8 +74,15 @@ public sealed record AdminBookingRescheduleResponse(
     DateOnly FromSlotDate, TimeSpan FromSlotStartTime, DateOnly ToSlotDate, TimeSpan ToSlotStartTime,
     bool IsLate, decimal FeeAmount, DateTime CreatedAtUtc);
 
+/// <summary>
+/// One refund settlement on the booking. <paramref name="FundingSource"/>
+/// (task 356) is what <paramref name="Method"/> cannot say on its own: a
+/// Wallet method is either the customer's own checkout balance coming back or
+/// a gateway payment handed back as credit, and reconciliation needs to tell
+/// those two apart.
+/// </summary>
 public sealed record AdminBookingRefundResponse(
-    Guid Id, RefundType Type, RefundMethod Method, decimal Amount, RefundStatus Status,
+    Guid Id, RefundFundingSource FundingSource, RefundType Type, RefundMethod Method, decimal Amount, RefundStatus Status,
     string? GatewayRefundRef, string Reason, DateTime CreatedAtUtc, DateTime? ProcessedAtUtc);
 
 /// <summary>
