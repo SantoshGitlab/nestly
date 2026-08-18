@@ -13,20 +13,23 @@ This document is the **specification**, not a status record.
 [ORIENTATION.md](ORIENTATION.md) is the single owner of current repository
 state — consult it, not this header, for what is built.
 
+Automatic provider assignment — deferred by decision 1 below when this
+document was written — was subsequently delivered as its own **Phase 14**
+(`tasks.csv` 242-250); see OPEN DECISIONS — AUTOMATIC ASSIGNMENT below for
+that phase's decisions. Assignment-conflict detection and manual resolution
+followed as **Phase 19** (`tasks.csv` 321-322) — see ASSIGNMENT CONFLICTS
+below.
+
+The SRS excludes a provider-facing interface from its own Phase 1 (§4.2
+Excluded Direct End-User Interfaces, §34 Open Decision #9). That is the SRS's
+release-phase terminology and is unrelated to the backlog's numbered phases;
+in the backlog Provider is Phase 7, ahead of Hardening & Launch (Phase 8), so
+that provider work was done before launch rather than after it.
+
 Corrected 2026-08-17: this section read *"In implementation"* long after
-delivery. See [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md). Out of scope for Phase 1
-per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9)
-— this is the SRS's own release-phase terminology, unrelated to the
-backlog's numbered phases below.
-
-Automatic provider assignment — deferred by decision 1 below at the time —
-is now in implementation as its own **Phase 14** (`tasks.csv` 242-250); see
-OPEN DECISIONS — AUTOMATIC ASSIGNMENT below for that phase's decisions.
-
-In the backlog (`tasks.csv`), Provider is scheduled as **Phase 7**, ahead of
-Hardening & Launch (Phase 8) — moved there explicitly so provider/provider
-work is done before launch, not after it. No longer "deferred" in the sense
-of "after everything else"; only in the sense of "not yet built."
+delivery, and a first correction pass left contradictory remnants ("not yet
+built") in place beneath it. See
+[LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md).
 
 ## PURPOSE
 
@@ -103,8 +106,60 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 - Provider CRUD: list/create/update providers, get provider detail
 - KYC approval: approve/reject provider KYC
 - Assignment: assign provider to a booking
+- Assignment conflicts: list standing double-bookings, count them
 - Performance: get provider performance metrics
 - Payouts: run payout batch, list payouts
+
+## ASSIGNMENT CONFLICTS (tasks 321-322)
+
+"One person cannot be in two places at once" is enforced on the way in by
+`IProviderScheduleConflictService` (task 288) and backstopped by the
+`ex_booking_provider_no_double_booking` exclusion constraint. Both are **gates**:
+they answer "may this provider take this booking?" one booking at a time.
+
+Neither can answer "who is double-booked right now?" — and that question has
+real answers, because a gate only governs writes that go through it. Rows
+predating task 288, rows that lost a race, and rows written by any future
+path that bypasses the service are all standing conflicts that nothing
+surfaced. An invariant with no way to observe its own violations is only half
+an invariant.
+
+**Detection** — `IBookingAssignmentConflictService` reports conflict *groups*:
+one provider, one date, a set of two or more live assignments whose slots
+overlap. It reuses task 288's semantics exactly — half-open `[start, end)`
+overlap, "live" meaning `Assigned`/`Accepted` only — so detection and
+prevention cannot disagree about what a conflict is. Read-only; no schema
+change.
+
+Grouping is a single interval-merge walk over one provider-day's jobs ordered
+by start time, tracking the furthest end seen rather than the previous job's
+end, so a long booking containing several short ones is reported as one group
+rather than several pairs. The scan is capped (20,000 live assignments per
+query window) and returns a validation error rather than a silently truncated
+answer.
+
+**Resolution** — the admin dashboard at `/bookings/conflicts` (admin-web, a
+third `BookingsTabs` entry) lists each group with the provider, the overlapping
+window, and every booking caught in it, distinguishing an `Accepted`
+commitment from a merely offered `Assigned` one — the difference that decides
+which job it is reasonable to move.
+
+Reassignment posts to the **existing** `POST /admin/bookings/{id}/assign-provider`.
+There is deliberately no "resolve conflict" write path: a second route into
+assignment state would need its own copy of the validation, the supersede
+rules and the task 288 check. Routing through the existing endpoint also means
+the fix is checked by the invariant itself — a reassignment that would leave
+the provider still double-booked is rejected — and lands in the audit trail as
+the ordinary assignment it is.
+
+**RBAC** — the existing `bookings.read` to view, `bookings.write` to act. No
+new module: every booking listed is one the caller can already open in more
+detail through `BookingsController`, and the write is an ordinary assignment.
+Same reasoning `RecurringPlansController` records.
+
+**Status** — written 2026-08-17, **backend not compiled or tested** (no .NET
+SDK available in the authoring environment). admin-web passes `tsc --noEmit`
+and `next lint`. Treat the backend as unverified until a build runs.
 
 ## RBAC ADDITIONS
 

@@ -23,10 +23,15 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 16 - End-to-End Order Tracking | 32 | 0 | 0 | 0 | 32 |
 | Phase 17 - Recurring Services | 5 | 0 | 0 | 0 | 5 |
 | Phase 18 - Spec-Gap Closure | 17 | 1 | 0 | 0 | 18 |
+| Phase 19 - Assignment Conflict Resolution | 2 | 0 | 0 | 0 | 2 |
 | (unphased, early setup rows) | 13 | 0 | 0 | 0 | 13 |
-| **Overall** | **596** | **1** | **50** | **0** | **647** |
+| **Overall** | **598** | **1** | **50** | **0** | **649** |
 
-Last updated: 2026-08-17, regenerated from `tasks.csv` during the
+Last updated: 2026-08-17, regenerated from `tasks.csv`. Phase 19 (tasks
+321-322, assignment-conflict detection and the admin resolution dashboard) was
+added and delivered in the same pass; its backend has **not** been compiled or
+tested - see task 321's note and docs/PROVIDER.md - so treat it as written but
+unverified until a build runs. Originally regenerated during the
 documentation-integrity pass recorded in
 [docs/LAUNCH-READINESS-AUDIT.md](docs/LAUNCH-READINESS-AUDIT.md). The previous
 table stopped at Phase 11 and reported 522 rows against an actual 647 —

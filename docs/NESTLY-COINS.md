@@ -4,9 +4,9 @@ Nestly Coins (loyalty/incentive currency) module specification.
 
 ## STATUS
 
-**Implemented.** Delivered as **Phase 11** (all backlog rows `done`). The
-coins schema, program configuration, and both the customer and admin surfaces
-are live, covered by dedicated service tests.
+**Implemented.** Delivered as **Phase 11** (`tasks.csv` `#199`–`#203`, all
+backlog rows `done`). The coins schema, program configuration, and both the
+customer and admin surfaces are live, covered by dedicated service tests.
 
 This document is the **specification**, not a status record.
 [ORIENTATION.md](ORIENTATION.md) is the single owner of current repository

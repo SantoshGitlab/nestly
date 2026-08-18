@@ -496,6 +496,10 @@ public static class DependencyInjection
         // the manual admin path below and the automatic engine's eligibility
         // gate - registered before both, since both depend on it.
         services.AddScoped<IProviderScheduleConflictService, ProviderScheduleConflictService>();
+        // Task 321: the reporting counterpart to the invariant above - the
+        // gate answers "may this provider take this booking?", this answers
+        // "who is already double-booked?", which no gate can.
+        services.AddScoped<IBookingAssignmentConflictService, BookingAssignmentConflictService>();
         services.AddScoped<IBookingProviderAssignmentService, BookingProviderAssignmentService>();
         // Phase 14 (tasks 242-250): the automatic-assignment engine's
         // candidate ranking - a new writer of BookingProviderAssignment

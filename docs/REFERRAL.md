@@ -4,7 +4,7 @@ Referral (Refer & Earn) module specification.
 
 ## STATUS
 
-**Implemented.** Delivered as **Phase 9** (`tasks.csv` `#209`–`#224`, all
+**Implemented.** Delivered as **Phase 9** (`tasks.csv` `#161`–`#176`, all
 `done`). Referral codes, qualification and reward flow, milestones and awards,
 program configuration, fraud review, and the customer `refer-earn` surface are
 all live, with dedicated permission and notification-template migrations.
