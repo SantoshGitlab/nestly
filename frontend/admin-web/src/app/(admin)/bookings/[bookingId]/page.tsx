@@ -425,7 +425,7 @@ export default function BookingDetailPage() {
 
       <Card
         title="Provider assignment"
-        description="Manually assign a provider below, or the system auto-assigns the nearest eligible one when a booking reaches Awaiting Fulfilment (tasks 147, 159, 246)"
+        description="Assign a provider below, or leave it: a Confirmed booking moves to Awaiting Fulfilment automatically as its slot approaches, and the system then offers it to the nearest eligible provider (tasks 147, 159, 246, 333)"
       >
         {assignmentHistoryQuery.isPending ? (
           <SkeletonText lines={3} />

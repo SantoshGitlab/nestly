@@ -14,6 +14,28 @@ public interface IBookingRepository
 
     Task UpdateAsync(Booking booking);
 
+    /// <summary>
+    /// Task 333: throws away <paramref name="booking"/>'s unsaved changes and
+    /// stops tracking it, so a caller that mutated an aggregate and then failed
+    /// to persist it can leave the unit of work exactly as it found it.
+    ///
+    /// <para>
+    /// This exists because a persistence context batches: one unit of work
+    /// holds every aggregate loaded through it, and saving <i>any</i> of them
+    /// flushes the pending changes of <i>all</i> of them. Without this, a
+    /// booking whose own save threw would still be written by the next
+    /// booking's successful save - so a batch job's "this one failed, carry
+    /// on" would silently commit the very change it just reported as failed,
+    /// and whether it did would depend on the order rows came back in.
+    /// </para>
+    ///
+    /// <para>
+    /// Only ever correct on an aggregate whose changes are <b>meant</b> to be
+    /// abandoned; it is not a rollback of anything already written.
+    /// </para>
+    /// </summary>
+    void DiscardChanges(Booking booking);
+
     /// <summary>Loaded with its items, their add-ons, and its status history - a booking is never useful partially loaded.</summary>
     Task<Booking?> GetByIdAsync(Guid id);
 
@@ -58,6 +80,38 @@ public interface IBookingRepository
 
     /// <summary>Task 240: PaymentPending bookings created before <paramref name="olderThanUtc"/> - BookingExpirySweepJob's candidate set. Still PaymentPending only; one that already moved to Confirmed/PaymentFailed/CancelledByCustomer never matches regardless of age.</summary>
     Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc);
+
+    /// <summary>
+    /// Task 333: <see cref="BookingStatus.Confirmed"/> bookings whose slot
+    /// falls on or before <paramref name="onOrBeforeSlotDate"/> -
+    /// <c>BookingFulfilmentPromotionJob</c>'s candidate set, ordered by slot
+    /// date so the most urgent come first, and windowed by
+    /// <paramref name="skip"/>/<paramref name="take"/> so a backlog is paged
+    /// rather than loaded whole.
+    ///
+    /// <para>
+    /// The date is <b>business-local</b>, not UTC, because
+    /// <see cref="Booking.SlotDate"/> is stored that way (see
+    /// <c>IBusinessClock</c>); the caller converts once rather than this query
+    /// doing timezone arithmetic per row. It is deliberately the whole
+    /// boundary <i>day</i> rather than an exact instant: the caller owns the
+    /// hour-precision half of the window, because
+    /// <see cref="Booking.SlotStartTimeSnapshot"/> is a <c>TimeSpan</c> and
+    /// ordering comparisons on it are not translatable on both of this
+    /// project's database providers (they are on PostgreSQL's <c>interval</c>,
+    /// not on the SQLite the test suite runs). Pushing the day down and
+    /// applying the time of day in memory keeps one implementation of the rule
+    /// that works everywhere, instead of raw SQL that has to be written twice.
+    /// </para>
+    ///
+    /// <para>
+    /// Deliberately unbounded below: a booking whose slot has already started
+    /// while still <see cref="BookingStatus.Confirmed"/> has nobody assigned to
+    /// it and needs one more urgently than any future booking, not less, so it
+    /// is a candidate rather than being quietly left behind.
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrBeforeSlotDate, int skip, int take);
 
     /// <summary>
     /// Task 255: bookings for a set of ids in one round trip, for list

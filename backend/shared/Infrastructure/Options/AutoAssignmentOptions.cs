@@ -155,4 +155,56 @@ public class AutoAssignmentOptions
     /// </remarks>
     [Range(0, 200)]
     public int MaxTravelRouteLookups { get; set; } = 20;
+
+    /// <summary>
+    /// Task 333's kill switch: when false, <c>BookingFulfilmentPromotionJob</c>
+    /// promotes nothing and a <see cref="Nestly.Domain.BookingStatus.Confirmed"/>
+    /// booking only reaches <see cref="Nestly.Domain.BookingStatus.AwaitingFulfilment"/>
+    /// the way it did before this job existed - a reschedule, an assignment
+    /// rejection, or an admin acting by hand. Default true, same convention as
+    /// <see cref="Enabled"/>: on by default, an explicit override to turn off,
+    /// so a dispatch incident is one configuration change rather than a deploy.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a <b>separate</b> switch from <see cref="Enabled"/>, and
+    /// neither implies the other. <see cref="Enabled"/> governs who gets
+    /// picked; this one governs when a booking becomes pickable at all. With
+    /// this on and <see cref="Enabled"/> off, bookings still surface in the
+    /// admin's manual assignment queue as their slot approaches - which is the
+    /// pre-automation flow, not a broken one - and turning this off must not
+    /// be the only way to stop the matcher spending money on route lookups.
+    /// </remarks>
+    public bool PromotionEnabled { get; set; } = true;
+
+    /// <summary>
+    /// How long before its slot starts a <see cref="Nestly.Domain.BookingStatus.Confirmed"/>
+    /// booking is promoted to <see cref="Nestly.Domain.BookingStatus.AwaitingFulfilment"/>,
+    /// which is what puts it in front of the matching engine (decision 4,
+    /// PROVIDER.md). Twenty-four hours: late enough that the provider
+    /// availability, capacity and travel feasibility the engine reads are the
+    /// ones that will actually hold on the day, and early enough that a
+    /// booking the engine cannot place still has a full day in the manual
+    /// admin queue before the customer is expecting someone at the door.
+    /// </summary>
+    /// <remarks>
+    /// This is a window, not a schedule. It interacts with the job's cron
+    /// cadence (see <c>BookingFulfilmentPromotionJobScheduleExtensions</c>):
+    /// a booking confirmed <i>inside</i> the window - every same-day booking
+    /// is - is promoted on the next pass rather than after this lead time, so
+    /// the cadence, not this value, is what bounds the delay for those. Any
+    /// value here is safe with a cadence finer than it; a cadence coarser than
+    /// this window would silently skip bookings, which is why the two are
+    /// documented together.
+    /// </remarks>
+    [Range(1, 720)]
+    public int PromotionLeadTimeHours { get; set; } = 24;
+
+    /// <summary>
+    /// How many due bookings one promotion pass loads at a time. The sweep
+    /// pages until it stops making progress rather than loading every due
+    /// booking into memory at once, so this bounds a pass's working set, not
+    /// how much it can get through.
+    /// </summary>
+    [Range(1, 1000)]
+    public int PromotionBatchSize { get; set; } = 100;
 }

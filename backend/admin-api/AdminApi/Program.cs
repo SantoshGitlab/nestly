@@ -168,6 +168,15 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         "*/5 * * * *");
 }
 
+// Task 333: promotes Confirmed bookings to AwaitingFulfilment as their slot
+// approaches - the transition nothing performed before, and therefore the
+// trigger that makes tasks 246-248's automatic assignment engine reachable on
+// an ordinary booking rather than only after a reschedule or a rejection. Same
+// ServerEnabled-guarded registration pattern as the sweeps above; see the
+// extension's own doc comment for why the cadence is 5 minutes rather than
+// daily.
+app.ScheduleBookingFulfilmentPromotion();
+
 // Task 294: delivers customer notifications whose in-process, post-commit
 // dispatch never completed. This is the "and a retry path that does not depend
 // on the in-process handler having run" half of the rule docs/ARCHITECTURE.md

@@ -337,6 +337,60 @@ approach as the five above.
    reaches `AwaitingFulfilment` (task 246), the same status manual admin
    assignment already targets today.
 
+   **What reached that status was the hole (task 333).** This decision named
+   the trigger and task 246 wired the engine to it, but *nothing ever
+   performed* `Confirmed → AwaitingFulfilment`. `BookingLifecycle` permitted
+   the edge and no code took it: the status was reachable only via a
+   reschedule (`RescheduleService`/`Booking.Reschedule`) or an assignment
+   rejection (`BookingProviderAssignmentService`). An ordinary paid booking
+   therefore sat `Confirmed` until an admin moved it by hand, and the entire
+   automatic dispatch stack behind this decision never ran for it — while
+   admin-web's copy described automatic assignment as if it did. Found by the
+   QA sweep of 2026-08-18 ([QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md),
+   finding 6) and left as a product decision rather than assumed either way.
+
+   **Resolved: build the transition, not soften the copy.**
+   `IBookingFulfilmentPromotionJob` is a Hangfire recurring job that promotes
+   every `Confirmed` booking whose slot starts within
+   `AutoAssignmentOptions.PromotionLeadTimeHours` (default 24). It performs the
+   transition and nothing else — no assignment logic is duplicated, because
+   `ProviderAutoAssignmentHandler` already reacts to the resulting
+   `BookingStatusChangedEvent`. The two knobs that matter:
+
+   - **Lead window, 24 hours.** Late enough that the availability, capacity and
+     travel feasibility the engine reads are the ones that will still hold on
+     the day; early enough that a booking the engine *cannot* place still has a
+     full day in the manual queue (decision 5) before the customer expects
+     somebody at the door.
+   - **Cadence, every 5 minutes** (`*/5 * * * *`, matching
+     `booking-expiry-sweep` rather than the daily sweeps beside it). The window
+     and the cadence answer different questions and both have to be right: the
+     window decides how far *ahead of the slot* a booking is dispatched, the
+     cadence decides how *late* that can happen. A booking confirmed **inside**
+     the window — every same-day booking — is already overdue for dispatch the
+     moment it is paid for, so the interval is the entire delay between a
+     customer paying at 10:00 for an 11:00 slot and a provider being offered
+     the job. A daily sweep against a 24-hour window would miss those bookings
+     outright.
+
+   Killable in an incident the same way the engine is:
+   `AutoAssignmentOptions.PromotionEnabled`, read on every pass so it takes
+   effect without a restart. It is deliberately a *separate* switch from
+   `Enabled` and neither implies the other — `Enabled` governs who gets picked,
+   `PromotionEnabled` governs whether a booking becomes pickable at all. With
+   promotion on and `Enabled` off, bookings still surface in the admin's manual
+   queue as their slot approaches, which is the pre-automation flow rather than
+   a broken one.
+
+   Safety properties, since this writes to bookings unattended: it filters on
+   `Confirmed` only (never "not terminal"), so a cancelled, expired,
+   rescheduled or already-assigned booking is not a candidate at all; it pages
+   rather than loading every due booking; a booking that raced out of
+   `Confirmed` between the read and the write is refused by `BookingLifecycle`
+   and skipped rather than double-promoted; and one booking that fails is
+   logged, has its unsaved change discarded, and does not stop the pass — nor
+   get silently committed by the next booking's save.
+
 5. **No eligible candidate: unchanged manual queue, not a hard failure.** A
    booking with no provider matching skill + area + availability + capacity
    simply stays `AwaitingFulfilment` — exactly where it already sits today
