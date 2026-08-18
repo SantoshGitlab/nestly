@@ -106,6 +106,7 @@ Every topic has exactly **one authoritative document**.
 | Next.js | FRONTEND.md |
 | TypeScript | FRONTEND.md |
 | Components | FRONTEND.md |
+| Responsive / mobile-first design | FRONTEND.md |
 | Authentication | SECURITY.md |
 | Authorization | SECURITY.md |
 | Secrets management | SECURITY.md |
