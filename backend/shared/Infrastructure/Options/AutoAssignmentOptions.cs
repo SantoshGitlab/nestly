@@ -200,6 +200,40 @@ public class AutoAssignmentOptions
     public int PromotionLeadTimeHours { get; set; } = 24;
 
     /// <summary>
+    /// Task 358, the other end of <see cref="PromotionLeadTimeHours"/>: how far
+    /// into the past a slot may already have started and still be worth
+    /// promoting. A booking whose slot began within this many hours is still a
+    /// live dispatch problem - somebody can be sent, today, to a customer who is
+    /// still expecting them - and is promoted exactly as before. Anything older
+    /// is skipped. Twenty-four hours, mirroring
+    /// <see cref="PromotionLeadTimeHours"/>: one full day either side of now is
+    /// a single span an operator can hold in their head during an incident, and
+    /// a slot that started more than a day ago is a support and refund question,
+    /// not a dispatch one - no provider can be sent to yesterday.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Exists because the sweep was previously unbounded below, so the first
+    /// pass in any environment would promote the platform's entire history of
+    /// past-dated <see cref="Nestly.Domain.BookingStatus.Confirmed"/> rows into
+    /// the admin's manual queue at once - burying the handful that are genuinely
+    /// actionable under a backlog nobody can dispatch. Bounding it changes what
+    /// the queue means, not what the sweep knows: a skipped booking is left
+    /// exactly as it was found, <c>Confirmed</c>, and is still reachable by
+    /// admin search and reporting.
+    /// </para>
+    /// <para>
+    /// 0 is a meaningful setting, unlike on <see cref="PromotionLeadTimeHours"/>
+    /// (hence the range starting there rather than at 1): it means "promote only
+    /// bookings whose slot has not started yet", the strictest posture. The
+    /// ceiling matches <see cref="PromotionLeadTimeHours"/>'s at 720 hours -
+    /// past a month the setting is doing nothing this bound was added for.
+    /// </para>
+    /// </remarks>
+    [Range(0, 720)]
+    public int PromotionMaxSlotAgeHours { get; set; } = 24;
+
+    /// <summary>
     /// How many due bookings one promotion pass loads at a time. The sweep
     /// pages until it stops making progress rather than loading every due
     /// booking into memory at once, so this bounds a pass's working set, not

@@ -32,13 +32,24 @@ namespace Nestly.Infrastructure.Services;
 /// </para>
 /// <para>
 /// <b>Two halves of one window.</b> The database is asked only for the slot
-/// <i>date</i>, and the time of day is applied here. Not an oversight:
+/// <i>dates</i>, and the time of day is applied here. Not an oversight:
 /// <see cref="Booking.SlotStartTimeSnapshot"/> is a <c>TimeSpan</c>, and
 /// ordering comparisons on it translate on PostgreSQL's <c>interval</c> but
 /// not on the SQLite the test suite runs, so one query expressing the exact
 /// instant would have to be raw SQL written twice. The rule stays in one
-/// place, in plain C#; the cost is that some bookings later on the boundary
+/// place, in plain C#; the cost is that some bookings on either boundary
 /// day are read and passed over.
+/// </para>
+/// <para>
+/// <b>Bounded at both ends.</b> <see cref="AutoAssignmentOptions.PromotionLeadTimeHours"/>
+/// says how early a booking is promoted;
+/// <see cref="AutoAssignmentOptions.PromotionMaxSlotAgeHours"/> (task 358) says
+/// how late is too late. An overdue <c>Confirmed</c> booking is still the most
+/// urgent thing this job can find - nobody is assigned and the customer is
+/// expecting someone - so it stays a candidate, but only while somebody can
+/// still be sent. Without the floor, the first pass in any environment promoted
+/// every past-dated <c>Confirmed</c> row the platform had ever accumulated into
+/// the manual admin queue in one go.
 /// </para>
 /// <para>
 /// <b>Paging that terminates.</b> A promoted booking drops out of the
@@ -113,15 +124,18 @@ public class BookingFulfilmentPromotionJob : IBookingFulfilmentPromotionJob
             return 0;
         }
 
-        var cutoffLocal = _businessClock.Now.AddHours(options.PromotionLeadTimeHours);
-        var cutoffDate = DateOnly.FromDateTime(cutoffLocal);
-        var cutoffTimeOfDay = cutoffLocal.TimeOfDay;
+        var now = _businessClock.Now;
+        var cutoffLocal = now.AddHours(options.PromotionLeadTimeHours);
+        // Task 358's lower bound. Both ends are pushed down to the database as
+        // whole days and re-applied here to the hour - see IsWithinPromotionWindow.
+        var floorLocal = now.AddHours(-options.PromotionMaxSlotAgeHours);
 
-        // Rows this pass has looked at and left Confirmed - bookings later on
-        // the boundary day, plus any that failed. They stay in the candidate
-        // query, so this offset is what carries the pass past them. Promoted
-        // bookings are deliberately not counted here: they leave the query and
-        // close the gap behind them on their own.
+        // Rows this pass has looked at and left Confirmed - bookings on either
+        // boundary day that fall outside the window by time of day, plus any
+        // that failed. They stay in the candidate query, so this offset is what
+        // carries the pass past them. Promoted bookings are deliberately not
+        // counted here: they leave the query and close the gap behind them on
+        // their own.
         var skipped = 0;
         int promoted = 0, failed = 0;
 
@@ -130,7 +144,7 @@ public class BookingFulfilmentPromotionJob : IBookingFulfilmentPromotionJob
             cancellationToken.ThrowIfCancellationRequested();
 
             var candidates = await _bookingRepository.ListConfirmedDueForFulfilmentAsync(
-                cutoffDate, skipped, options.PromotionBatchSize);
+                DateOnly.FromDateTime(floorLocal), DateOnly.FromDateTime(cutoffLocal), skipped, options.PromotionBatchSize);
             if (candidates.Count == 0)
             {
                 break;
@@ -140,7 +154,7 @@ public class BookingFulfilmentPromotionJob : IBookingFulfilmentPromotionJob
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!IsWithinLeadWindow(booking, cutoffDate, cutoffTimeOfDay))
+                if (!IsWithinPromotionWindow(booking, floorLocal, cutoffLocal))
                 {
                     skipped++;
                     continue;
@@ -174,14 +188,17 @@ public class BookingFulfilmentPromotionJob : IBookingFulfilmentPromotionJob
     }
 
     /// <summary>
-    /// The precise half of the window the database could not express: a
-    /// candidate on an earlier slot date is always due, one on the boundary
-    /// date only if it starts by the cutoff time of day. Both sides are
-    /// business-local wall clock, which is the only frame in which comparing
-    /// them means anything.
+    /// The precise half of the window the database could not express. The query
+    /// filtered to the two boundary <i>days</i>; this reassembles each
+    /// candidate's actual slot start - date plus time of day - and applies both
+    /// ends of the window to the hour. Every value here is business-local wall
+    /// clock, which is the only frame in which comparing them means anything.
     /// </summary>
-    private static bool IsWithinLeadWindow(Booking booking, DateOnly cutoffDate, TimeSpan cutoffTimeOfDay) =>
-        booking.SlotDate < cutoffDate || booking.SlotStartTimeSnapshot <= cutoffTimeOfDay;
+    private static bool IsWithinPromotionWindow(Booking booking, DateTime floorLocal, DateTime cutoffLocal)
+    {
+        var slotStartLocal = booking.SlotDate.ToDateTime(TimeOnly.MinValue).Add(booking.SlotStartTimeSnapshot);
+        return slotStartLocal >= floorLocal && slotStartLocal <= cutoffLocal;
+    }
 
     /// <summary>
     /// One booking's promotion, isolated: nothing it can do stops the pass.

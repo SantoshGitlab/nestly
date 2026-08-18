@@ -192,6 +192,90 @@ public sealed class BookingFulfilmentPromotionJobTests : IDisposable
         (await ReloadAsync(justOutside.Id)).Status.Should().Be(BookingStatus.Confirmed, "09:00 is an hour past it");
     }
 
+    /// <summary>
+    /// Task 358's lower bound, the mirror of the boundary-day test above. An
+    /// overdue <see cref="BookingStatus.Confirmed"/> booking is still the most
+    /// urgent thing the sweep can find, so it stays a candidate - but only while
+    /// somebody could still be sent. Pinned against a fixed clock so the two
+    /// bookings are measured against the rule, not against the moment the test
+    /// happened to run.
+    /// </summary>
+    [Fact]
+    public async Task An_overdue_booking_inside_the_lower_bound_is_still_promoted()
+    {
+        var now = new DateTimeOffset(2026, 9, 2, 8, 0, 0, TimeSpan.Zero);
+        var customer = NewCustomer();
+
+        // Floor is 2026-09-01 08:00 at the 24-hour default, so this slot started
+        // 23 hours ago - overdue, nobody assigned, still today's problem.
+        var overdue = NewBookingAt(customer.Id, new DateTime(2026, 9, 1, 9, 0, 0), BookingStatus.Confirmed);
+        await SeedAsync(customer, overdue);
+
+        using (var context = _db.CreateContext())
+        {
+            var job = Job(new BookingRepository(context), TestServices.Clock(new FixedTimeProvider(now)));
+            (await job.PromoteDueBookingsAsync()).Should().Be(1);
+        }
+
+        (await ReloadAsync(overdue.Id)).Status.Should().Be(BookingStatus.AwaitingFulfilment,
+            "a booking whose slot started an hour inside the bound has nobody assigned and is the sweep's most urgent find");
+    }
+
+    /// <summary>
+    /// The regression task 358 was raised for: without a lower bound, the first
+    /// pass in any environment swept every past-dated Confirmed row the platform
+    /// had ever accumulated into the admin's manual queue at once.
+    /// </summary>
+    [Fact]
+    public async Task A_stale_historical_booking_past_the_lower_bound_is_left_alone()
+    {
+        var now = new DateTimeOffset(2026, 9, 2, 8, 0, 0, TimeSpan.Zero);
+        var customer = NewCustomer();
+
+        var ancient = NewBookingAt(customer.Id, new DateTime(2026, 6, 1, 9, 0, 0), BookingStatus.Confirmed);
+        await SeedAsync(customer, ancient);
+
+        using (var context = _db.CreateContext())
+        {
+            var job = Job(new BookingRepository(context), TestServices.Clock(new FixedTimeProvider(now)));
+            (await job.PromoteDueBookingsAsync()).Should().Be(0);
+        }
+
+        (await ReloadAsync(ancient.Id)).Status.Should().Be(BookingStatus.Confirmed,
+            "no provider can be dispatched to three months ago - this is a support question, not a dispatch one");
+    }
+
+    /// <summary>
+    /// The lower bound's own boundary day, pinned to the hour. Two bookings on
+    /// the same slot date, two hours apart, must fall on opposite sides of the
+    /// floor - the half of the rule the database cannot express, because the
+    /// query can only filter to whole slot <i>dates</i>
+    /// (<c>Booking.SlotStartTimeSnapshot</c> is a <c>TimeSpan</c>, whose
+    /// ordering comparisons SQLite cannot translate). If the floor ever
+    /// degraded to whole-day granularity, both other lower-bound tests here
+    /// would still pass and this one would not.
+    /// </summary>
+    [Fact]
+    public async Task On_the_lower_bounds_boundary_day_the_floor_cuts_by_time_of_day_not_by_whole_days()
+    {
+        var now = new DateTimeOffset(2026, 9, 2, 8, 0, 0, TimeSpan.Zero);
+        var customer = NewCustomer();
+
+        // Floor is 2026-09-01 08:00, so both of these share the floor's date.
+        var justInside = NewBookingAt(customer.Id, new DateTime(2026, 9, 1, 9, 0, 0), BookingStatus.Confirmed);
+        var justOutside = NewBookingAt(customer.Id, new DateTime(2026, 9, 1, 7, 0, 0), BookingStatus.Confirmed);
+        await SeedAsync(customer, justInside, justOutside);
+
+        using (var context = _db.CreateContext())
+        {
+            var job = Job(new BookingRepository(context), TestServices.Clock(new FixedTimeProvider(now)));
+            (await job.PromoteDueBookingsAsync()).Should().Be(1);
+        }
+
+        (await ReloadAsync(justInside.Id)).Status.Should().Be(BookingStatus.AwaitingFulfilment, "09:00 is inside a floor that opens at 08:00");
+        (await ReloadAsync(justOutside.Id)).Status.Should().Be(BookingStatus.Confirmed, "07:00 is an hour before it");
+    }
+
     [Theory]
     [InlineData(BookingStatus.Initiated)]
     [InlineData(BookingStatus.PaymentPending)]
@@ -262,7 +346,12 @@ public sealed class BookingFulfilmentPromotionJobTests : IDisposable
         {
             var repository = new ThrowingBookingRepository(new BookingRepository(context), poison.Id);
 
-            var promoted = await Job(repository).PromoteDueBookingsAsync();
+            // The lower bound is widened past the poison booking's day-old slot
+            // (task 358's default would skip it before it could fail) - this
+            // test is about failure isolation, and it needs the failing booking
+            // to be genuinely due and sorted first.
+            var promoted = await Job(repository, options: new AutoAssignmentOptions { PromotionMaxSlotAgeHours = 48 })
+                .PromoteDueBookingsAsync();
 
             promoted.Should().Be(1);
             repository.UpdateAttempts.Should().Be(2, "the sweep must have gone on to try the second booking");
@@ -311,8 +400,8 @@ public sealed class BookingFulfilmentPromotionJobTests : IDisposable
 
         public void DiscardChanges(Booking booking) => inner.DiscardChanges(booking);
 
-        public Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrBeforeSlotDate, int skip, int take) =>
-            inner.ListConfirmedDueForFulfilmentAsync(onOrBeforeSlotDate, skip, take);
+        public Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrAfterSlotDate, DateOnly onOrBeforeSlotDate, int skip, int take) =>
+            inner.ListConfirmedDueForFulfilmentAsync(onOrAfterSlotDate, onOrBeforeSlotDate, skip, take);
 
         public Task AddAsync(Booking booking) => inner.AddAsync(booking);
         public Task<bool> TryAddAsync(Booking booking) => inner.TryAddAsync(booking);

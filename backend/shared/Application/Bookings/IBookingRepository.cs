@@ -83,35 +83,40 @@ public interface IBookingRepository
 
     /// <summary>
     /// Task 333: <see cref="BookingStatus.Confirmed"/> bookings whose slot
-    /// falls on or before <paramref name="onOrBeforeSlotDate"/> -
+    /// falls between <paramref name="onOrAfterSlotDate"/> and
+    /// <paramref name="onOrBeforeSlotDate"/> inclusive -
     /// <c>BookingFulfilmentPromotionJob</c>'s candidate set, ordered by slot
     /// date so the most urgent come first, and windowed by
     /// <paramref name="skip"/>/<paramref name="take"/> so a backlog is paged
     /// rather than loaded whole.
     ///
     /// <para>
-    /// The date is <b>business-local</b>, not UTC, because
+    /// Both dates are <b>business-local</b>, not UTC, because
     /// <see cref="Booking.SlotDate"/> is stored that way (see
     /// <c>IBusinessClock</c>); the caller converts once rather than this query
-    /// doing timezone arithmetic per row. It is deliberately the whole
-    /// boundary <i>day</i> rather than an exact instant: the caller owns the
-    /// hour-precision half of the window, because
+    /// doing timezone arithmetic per row. They are deliberately whole boundary
+    /// <i>days</i> rather than exact instants: the caller owns the
+    /// hour-precision half of both ends of the window, because
     /// <see cref="Booking.SlotStartTimeSnapshot"/> is a <c>TimeSpan</c> and
     /// ordering comparisons on it are not translatable on both of this
     /// project's database providers (they are on PostgreSQL's <c>interval</c>,
-    /// not on the SQLite the test suite runs). Pushing the day down and
+    /// not on the SQLite the test suite runs). Pushing the days down and
     /// applying the time of day in memory keeps one implementation of the rule
     /// that works everywhere, instead of raw SQL that has to be written twice.
     /// </para>
     ///
     /// <para>
-    /// Deliberately unbounded below: a booking whose slot has already started
-    /// while still <see cref="BookingStatus.Confirmed"/> has nobody assigned to
-    /// it and needs one more urgently than any future booking, not less, so it
-    /// is a candidate rather than being quietly left behind.
+    /// Task 358: <paramref name="onOrAfterSlotDate"/> is the lower bound this
+    /// query originally lacked. A booking whose slot has already started while
+    /// still <see cref="BookingStatus.Confirmed"/> is a candidate rather than
+    /// being quietly left behind - it has nobody assigned and needs one more
+    /// urgently than any future booking - but only while somebody can still
+    /// realistically be sent. Without a floor, the first pass in any environment
+    /// swept the whole history of past-dated Confirmed rows into the manual
+    /// admin queue at once (see <c>AutoAssignmentOptions.PromotionMaxSlotAgeHours</c>).
     /// </para>
     /// </summary>
-    Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrBeforeSlotDate, int skip, int take);
+    Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrAfterSlotDate, DateOnly onOrBeforeSlotDate, int skip, int take);
 
     /// <summary>
     /// Task 255: bookings for a set of ids in one round trip, for list
