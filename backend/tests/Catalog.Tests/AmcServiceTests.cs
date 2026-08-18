@@ -397,6 +397,57 @@ public sealed class AmcServiceTests : IClassFixture<TestDatabase>
         stillUnredeemed.Value.VisitsRemaining.Should().Be(2, "entitlement is only drawn down on booking completion, not on redemption/creation");
     }
 
+    /// <summary>
+    /// Task 357: a coupon code riding along on the redemption request is
+    /// ignored end to end. <c>BookingService.CreateAsync</c> already skipped
+    /// <c>ICouponService.ReserveAsync</c> and nulled the booking's coupon
+    /// snapshot for an AMC redemption, but <c>CreateRedemptionRecordAsync</c>
+    /// had no matching guard - so the customer's per-coupon usage cap was
+    /// silently spent on a discount they never received.
+    /// </summary>
+    [Fact]
+    public async Task RedeemVisitAsync_ignores_a_coupon_on_the_request_and_writes_no_redemption_record()
+    {
+        Fixture fixture;
+        Guid contractId;
+        Guid bookingId;
+        Guid couponId = Guid.NewGuid();
+        string couponCode = "AMC" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            var plan = SeedActivePlan(context, fixture.Category.Id, visitsIncluded: 2, termMonths: 12);
+            context.Add(new Coupon(
+                couponId, couponCode, "Ignored on an AMC redemption", CouponDiscountType.Percentage, 10m,
+                maxDiscountAmount: null, minOrderAmount: 0m,
+                DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(30),
+                usageLimitTotal: null, usageLimitPerCustomer: 1,
+                applicableCategoryId: null, CouponCustomerSegment.All));
+            context.SaveChanges();
+
+            var customerService = BuildCustomerService(context, BuildBookingService(context), new FakeTimeProvider(_now));
+            var purchased = await customerService.PurchaseAsync(fixture.Customer.Id, new AmcContractPurchaseRequest(plan.Id, "Hall AC"));
+            contractId = purchased.Value.Id;
+
+            var request = new BookingSummaryRequest(
+                fixture.Service.Id, fixture.City.Id, fixture.Address.Id, fixture.Locality.Id, fixture.Window.Id,
+                fixture.SlotDate, Quantity: 1, [], CouponCode: couponCode);
+            var redeemed = await customerService.RedeemVisitAsync(fixture.Customer.Id, contractId, request);
+
+            redeemed.IsSuccess.Should().BeTrue();
+            redeemed.Value.Price.TotalPayable.Should().Be(0m, "the contract covers the visit - the coupon changes nothing");
+            bookingId = redeemed.Value.Id;
+        }
+
+        using var readContext = _db.CreateContext();
+        (await new CouponRedemptionRepository(readContext).CountByCouponAndCustomerAsync(couponId, fixture.Customer.Id))
+            .Should().Be(0, "no reservation was ever taken, so no redemption record may be written against it");
+
+        var booking = await new BookingRepository(readContext).GetByIdAsync(bookingId);
+        booking!.CouponCodeSnapshot.Should().BeNull("the coupon was never applied, so it is not part of the booking's record either");
+        booking.AmcContractId.Should().Be(contractId);
+    }
+
     [Fact]
     public async Task RedeemVisitAsync_rejects_a_contract_that_has_no_entitlement_or_term_left()
     {

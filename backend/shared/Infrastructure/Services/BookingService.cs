@@ -426,7 +426,20 @@ public class BookingService : IBookingService
                 return Result.Success(ToDetailResponse(winner, winnerAssignment?.Status, await ProviderSummaryFor(winnerAssignment)));
             }
 
-            if (summary.Coupon is not null)
+            // Task 357: the `amcContract is null` half of this condition has to
+            // match the ReserveAsync guard above exactly - the two calls are the
+            // two halves of one redemption (reserve the cap, then link the
+            // reservation to the booking), so a redemption record written
+            // without a matching reservation records a redemption that never
+            // consumed a usage slot and never discounted anything (the booking's
+            // CouponCodeSnapshot/discount are nulled for an AMC redemption too).
+            // Skipped rather than rejected: IBookingService.CreateAsync's
+            // amcContractId doc comment and docs/AMC.md both define a coupon on
+            // an AMC redemption as *ignored*, and the request reaching here is
+            // the customer's own checkout request forwarded by
+            // AmcCustomerService.RedeemVisitAsync - failing it would turn a
+            // stale coupon still sitting in the cart into a blocked redemption.
+            if (summary.Coupon is not null && amcContract is null)
             {
                 await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
             }
