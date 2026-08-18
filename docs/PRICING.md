@@ -156,15 +156,15 @@ get checked.
    city/area has its own listed price" from "your price changed based on
    when you're booking" — legal/marketing sign-off on the exact language
    customers see.
-2. **Promotional-price cadence.** How often `PromotionalPrice` campaigns run
+3. **Promotional-price cadence.** How often `PromotionalPrice` campaigns run
    and how deep they go is a marketing decision this document does not make
    — only that any promotion is shown before booking, never sprung.
-3. **Whether the quote-guarantee applies to AMC-redeemed visits.** An AMC
+4. **Whether the quote-guarantee applies to AMC-redeemed visits.** An AMC
    visit is already zero-priced at redemption ([AMC.md](AMC.md)); the
    guarantee's relevant question there is whether a provider can decline to
    perform a covered visit and demand payment instead. Needs the same
    policy answer as a paid booking, extended to a zero-price context.
-4. **GST treatment of the all-in shown price.** Whether the platform
+5. **GST treatment of the all-in shown price.** Whether the platform
    transacts as agent or principal (see the open GST posture question this
    document does not own — GST.md) changes what "all-in" legally means on
    the invoice, not just at checkout. This document assumes tax-inclusive
