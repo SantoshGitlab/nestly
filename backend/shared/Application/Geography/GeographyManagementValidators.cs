@@ -71,11 +71,28 @@ public class LocalityUpdateRequestValidator : AbstractValidator<LocalityUpdateRe
     }
 }
 
+/// <remarks>
+/// There is no matching update validator because there is no update: the only
+/// mutations <c>IGeographyManagementService</c> exposes for a pincode are
+/// create and activate/deactivate, and the latter two take an id, never a code.
+/// A master pincode's code is therefore write-once, which is what makes this
+/// the single gate the rule below has to hold.
+/// </remarks>
 public class PincodeCreateRequestValidator : AbstractValidator<PincodeCreateRequest>
 {
     public PincodeCreateRequestValidator()
     {
         RuleFor(x => x.CityId).NotEmpty();
-        RuleFor(x => x.Code).NotEmpty().MaximumLength(10);
+
+        // Task 360: was NotEmpty().MaximumLength(10), which let an admin create
+        // a master pincode no customer could ever address-match - task 334
+        // pinned customer addresses (and, before it, ProfileValidators) to
+        // ^\d{6}$, so a 10-character master row would be serviceable on paper
+        // and unreachable in practice. Same rule, same message: a user must not
+        // meet two different explanations of one rule depending on which screen
+        // they are on.
+        RuleFor(x => x.Code)
+            .NotEmpty()
+            .Matches(@"^\d{6}$").WithMessage("Pincode must be 6 digits");
     }
 }
