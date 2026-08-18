@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Nestly.Application;
 using Nestly.Application.ProviderManagement;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -35,6 +36,19 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     public BookingAssignmentConflictServiceTests(TestDatabase db) => _db = db;
 
     private static readonly DateOnly SlotDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
+
+    /// <summary>
+    /// A date isolated to one test. TestDatabase is an <see cref="IClassFixture{TFixture}"/>
+    /// - one persistent in-memory SQLite database shared by every test method
+    /// in this class, by design (see TestDatabase's own doc comment). That is
+    /// fine for tests that query a single provider/booking by id, but
+    /// BookingAssignmentConflictService.SearchAsync scans every live
+    /// assignment in a date RANGE regardless of provider - so two tests
+    /// sharing a date would see each other's conflicts. Each test below gets
+    /// its own multi-day block, far enough apart that no test's date range
+    /// (some span several days) can ever reach another's.
+    /// </summary>
+    private static DateOnly TestDate(int block) => SlotDate.AddDays(block * 10);
 
     private static readonly TimeSpan NineAm = TimeSpan.FromHours(9);
     private static readonly TimeSpan TenAm = TimeSpan.FromHours(10);
@@ -126,16 +140,17 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task Reports_two_overlapping_live_jobs_on_one_provider_as_a_single_group()
     {
+        var date = TestDate(0);
         using var context = _db.CreateContext();
         var f = Seed(context);
         var provider = AddProvider(context);
 
-        var first = AddBooking(context, f, NineAm, ElevenAm);
-        var second = AddBooking(context, f, TenAm, Noon);
+        var first = AddBooking(context, f, NineAm, ElevenAm, date);
+        var second = AddBooking(context, f, TenAm, Noon, date);
         AddLiveAssignment(context, first, provider);
         AddLiveAssignment(context, second, provider, BookingProviderAssignmentStatus.Accepted);
 
-        var result = await Build(context).SearchAsync(SlotDate, SlotDate, page: 1, pageSize: 20);
+        var result = await Build(context).SearchAsync(date, date, page: 1, pageSize: 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalCount.Should().Be(1);
@@ -143,7 +158,7 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
         var group = result.Value.Items.Single();
         group.ProviderId.Should().Be(provider.Id);
         group.ProviderDisplayName.Should().Be("Ravi's Repairs");
-        group.SlotDate.Should().Be(SlotDate);
+        group.SlotDate.Should().Be(date);
         // The span the clash lives inside, not either booking's own slot.
         group.WindowStart.Should().Be(NineAm);
         group.WindowEnd.Should().Be(Noon);
@@ -155,6 +170,7 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task Back_to_back_jobs_are_not_a_conflict()
     {
+        var date = TestDate(1);
         using var context = _db.CreateContext();
         var f = Seed(context);
         var provider = AddProvider(context);
@@ -162,10 +178,10 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
         // [09:00, 11:00) then [11:00, 13:00): they touch at an endpoint and
         // share no interior instant, so both stay legal - the same half-open
         // rule the assignment gate and the DB constraint apply.
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm), provider);
-        AddLiveAssignment(context, AddBooking(context, f, ElevenAm, OnePm), provider);
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, date), provider);
+        AddLiveAssignment(context, AddBooking(context, f, ElevenAm, OnePm, date), provider);
 
-        var result = await Build(context).SearchAsync(SlotDate, SlotDate, page: 1, pageSize: 20);
+        var result = await Build(context).SearchAsync(date, date, page: 1, pageSize: 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalCount.Should().Be(0);
@@ -174,13 +190,14 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task Overlapping_jobs_on_different_providers_are_not_a_conflict()
     {
+        var date = TestDate(2);
         using var context = _db.CreateContext();
         var f = Seed(context);
 
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm), AddProvider(context, "Alpha Services"));
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm), AddProvider(context, "Beta Services"));
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, date), AddProvider(context, "Alpha Services"));
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, date), AddProvider(context, "Beta Services"));
 
-        var result = await Build(context).SearchAsync(SlotDate, SlotDate, page: 1, pageSize: 20);
+        var result = await Build(context).SearchAsync(date, date, page: 1, pageSize: 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalCount.Should().Be(0);
@@ -189,14 +206,15 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task Same_times_on_different_dates_are_not_a_conflict()
     {
+        var date = TestDate(3);
         using var context = _db.CreateContext();
         var f = Seed(context);
         var provider = AddProvider(context);
 
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm), provider);
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, SlotDate.AddDays(1)), provider);
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, date), provider);
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, date.AddDays(1)), provider);
 
-        var result = await Build(context).SearchAsync(SlotDate, SlotDate.AddDays(2), page: 1, pageSize: 20);
+        var result = await Build(context).SearchAsync(date, date.AddDays(2), page: 1, pageSize: 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalCount.Should().Be(0);
@@ -205,20 +223,21 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task A_superseded_assignment_does_not_conflict_with_the_live_one()
     {
+        var date = TestDate(4);
         using var context = _db.CreateContext();
         var f = Seed(context);
         var provider = AddProvider(context);
 
         var stale = new BookingProviderAssignment(
-            Guid.NewGuid(), AddBooking(context, f, NineAm, ElevenAm).Id, provider.Id,
+            Guid.NewGuid(), AddBooking(context, f, NineAm, ElevenAm, date).Id, provider.Id,
             BookingAssignedByType.Admin, Guid.NewGuid(), null);
         stale.MarkReassigned(Guid.NewGuid());
         context.Add(stale);
         context.SaveChanges();
 
-        AddLiveAssignment(context, AddBooking(context, f, TenAm, Noon), provider);
+        AddLiveAssignment(context, AddBooking(context, f, TenAm, Noon, date), provider);
 
-        var result = await Build(context).SearchAsync(SlotDate, SlotDate, page: 1, pageSize: 20);
+        var result = await Build(context).SearchAsync(date, date, page: 1, pageSize: 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalCount.Should().Be(0);
@@ -227,6 +246,7 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task Three_mutually_overlapping_jobs_form_one_group_not_three_pairs()
     {
+        var date = TestDate(5);
         using var context = _db.CreateContext();
         var f = Seed(context);
         var provider = AddProvider(context);
@@ -234,11 +254,11 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
         // A long job containing two shorter ones: the walk must track the
         // furthest end seen, not the previous job's end, or the third booking
         // would start a second group.
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, OnePm), provider);
-        AddLiveAssignment(context, AddBooking(context, f, TenAm, ElevenAm), provider);
-        AddLiveAssignment(context, AddBooking(context, f, Noon, OnePm), provider);
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, OnePm, date), provider);
+        AddLiveAssignment(context, AddBooking(context, f, TenAm, ElevenAm, date), provider);
+        AddLiveAssignment(context, AddBooking(context, f, Noon, OnePm, date), provider);
 
-        var result = await Build(context).SearchAsync(SlotDate, SlotDate, page: 1, pageSize: 20);
+        var result = await Build(context).SearchAsync(date, date, page: 1, pageSize: 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalCount.Should().Be(1);
@@ -248,14 +268,15 @@ public sealed class BookingAssignmentConflictServiceTests : IClassFixture<TestDa
     [Fact]
     public async Task Count_matches_the_number_of_groups_from_the_given_date()
     {
+        var date = TestDate(6);
         using var context = _db.CreateContext();
         var f = Seed(context);
         var provider = AddProvider(context);
 
-        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm), provider);
-        AddLiveAssignment(context, AddBooking(context, f, TenAm, Noon), provider);
+        AddLiveAssignment(context, AddBooking(context, f, NineAm, ElevenAm, date), provider);
+        AddLiveAssignment(context, AddBooking(context, f, TenAm, Noon, date), provider);
 
-        var result = await Build(context).CountAsync(SlotDate);
+        var result = await Build(context).CountAsync(date);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().Be(1);

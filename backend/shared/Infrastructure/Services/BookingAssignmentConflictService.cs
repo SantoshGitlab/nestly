@@ -110,13 +110,16 @@ public class BookingAssignmentConflictService : IBookingAssignmentConflictServic
         }
 
         // Narrowed in SQL to live assignments inside the window, then compared
-        // as intervals in memory: TimeSpan comparisons do not reliably
-        // translate on the SQLite provider the test suite runs against, which
-        // is the same reason ProviderScheduleConflictService and
-        // ProviderAssignmentEligibilityService both compare in memory.
+        // and ordered as intervals in memory: TimeSpan has no total order EF
+        // can translate to SQL on the SQLite provider the test suite runs
+        // against - it does not just do so "unreliably", it throws
+        // NotSupportedException the moment a TimeSpan column reaches ORDER BY
+        // - which is why this stays unordered here and every ordering that
+        // matters (per-provider-day clustering, the final group list) happens
+        // after ToListAsync below, in memory. Same reason
+        // ProviderScheduleConflictService and ProviderAssignmentEligibilityService
+        // both compare in memory rather than in the query.
         var rows = await query
-            .OrderBy(x => x.Booking.SlotDate)
-            .ThenBy(x => x.Booking.SlotStartTimeSnapshot)
             .Select(x => new ScannedAssignment(
                 x.Assignment.Id,
                 x.Assignment.ProviderId,

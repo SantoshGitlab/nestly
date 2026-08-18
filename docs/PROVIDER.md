@@ -157,9 +157,19 @@ new module: every booking listed is one the caller can already open in more
 detail through `BookingsController`, and the write is an ordinary assignment.
 Same reasoning `RecurringPlansController` records.
 
-**Status** — written 2026-08-17, **backend not compiled or tested** (no .NET
-SDK available in the authoring environment). admin-web passes `tsc --noEmit`
-and `next lint`. Treat the backend as unverified until a build runs.
+**Status** — written 2026-08-17, fully verified 2026-08-18: `dotnet build`
+0 errors/0 warnings, full suite 1930/1930 passing (9 new tests), and
+end-to-end against a real PostgreSQL instance and a live browser session —
+a seeded conflict was detected, rendered correctly with the right
+Offered/Accepted distinction, and resolved through the dashboard's Reassign
+action, with the open-conflict count dropping from 2 to 1 in the UI. Two
+real defects surfaced only once a build actually ran: a SQL-side `ORDER BY`
+on a `TimeSpan` column (SQLite has no total order for it and throws, rather
+than merely translating "unreliably" as the surrounding comment had assumed)
+and a cross-test data leak from the shared `IClassFixture` test database
+(this service scans a date range rather than one provider, so tests needed
+isolated dates). Both fixed; see `tasks.csv` task 321's note. admin-web
+separately passes `tsc --noEmit` and `next lint`.
 
 ## RBAC ADDITIONS
 

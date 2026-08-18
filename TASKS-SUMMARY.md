@@ -27,11 +27,18 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | (unphased, early setup rows) | 13 | 0 | 0 | 0 | 13 |
 | **Overall** | **598** | **1** | **50** | **0** | **649** |
 
-Last updated: 2026-08-17, regenerated from `tasks.csv`. Phase 19 (tasks
-321-322, assignment-conflict detection and the admin resolution dashboard) was
-added and delivered in the same pass; its backend has **not** been compiled or
-tested - see task 321's note and docs/PROVIDER.md - so treat it as written but
-unverified until a build runs. Originally regenerated during the
+Last updated: 2026-08-18. Phase 19 (tasks 321-322, assignment-conflict
+detection and the admin resolution dashboard) was added 2026-08-17 and
+verified 2026-08-18: a real .NET 8 SDK was obtained, the full solution built
+clean, and the full test suite passed 1930/1930 (up from 1921, the 9 new
+conflict-detection tests). Two real defects surfaced only once a build ran -
+a SQL-side ORDER BY on a TimeSpan column, and a cross-test data leak from a
+shared test database - both fixed; see task 321's note for detail. The
+feature was further verified against a live PostgreSQL instance and a real
+browser session: a seeded conflict was detected, displayed correctly, and
+resolved through the dashboard's Reassign flow, dropping the open-conflict
+count from 2 to 1. See docs/PROVIDER.md's ASSIGNMENT CONFLICTS section.
+Originally regenerated during the
 documentation-integrity pass recorded in
 [docs/LAUNCH-READINESS-AUDIT.md](docs/LAUNCH-READINESS-AUDIT.md). The previous
 table stopped at Phase 11 and reported 522 rows against an actual 647 —
