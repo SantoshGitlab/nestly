@@ -131,7 +131,7 @@ stateDiagram-v2
     PaymentPending --> PaymentFailed
     PaymentPending --> Confirmed
     PaymentFailed --> PaymentPending: retry
-    Confirmed --> AwaitingFulfilment
+    Confirmed --> AwaitingFulfilment: scheduled, as the slot nears
     AwaitingFulfilment --> Assigned
     Assigned --> InProgress
     InProgress --> Completed

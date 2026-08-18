@@ -62,6 +62,27 @@ public class BookingRepository : IBookingRepository
         await _context.SaveChangesAsync();
     }
 
+    /// <inheritdoc/>
+    public void DiscardChanges(Booking booking)
+    {
+        // The status-history rows go first and by booking id rather than
+        // through the navigation: a transition that failed appended a fresh
+        // BookingStatusHistory the collection may not even have been loaded to
+        // hold, and detaching the parent alone would leave that orphan tracked
+        // and INSERT it on the next unrelated save.
+        foreach (var history in _context.ChangeTracker.Entries<BookingStatusHistory>()
+                     .Where(entry => entry.Entity.BookingId == booking.Id)
+                     .ToList())
+        {
+            history.State = EntityState.Detached;
+        }
+
+        // Also drops the aggregate's unpublished domain events with it, which
+        // is exactly right: nothing should react to a transition that was
+        // never persisted.
+        _context.Entry(booking).State = EntityState.Detached;
+    }
+
     public Task<Booking?> GetByIdAsync(Guid id) =>
         FullyLoaded().FirstOrDefaultAsync(b => b.Id == id);
 
@@ -229,6 +250,35 @@ public class BookingRepository : IBookingRepository
     public async Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc) =>
         await FullyLoaded()
             .Where(b => b.Status == BookingStatus.PaymentPending && b.CreatedAtUtc < olderThanUtc)
+            .ToListAsync();
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Tracked (the job transitions and saves what it loads) but deliberately
+    /// NOT <see cref="FullyLoaded"/>, unlike
+    /// <see cref="ListStalePaymentPendingAsync"/>: this query is paged, and
+    /// applying Skip/Take over two collection Includes makes the database
+    /// multiply out every add-on and history row before the window can be
+    /// applied - the exact cost documented on
+    /// <see cref="ListByCustomerPagedAsync"/>. A status transition reads
+    /// neither collection, and the fresh <see cref="BookingStatusHistory"/> row
+    /// it appends is inserted correctly without the collection being loaded
+    /// (see <c>NewOwnedChildEntityInterceptor</c>).
+    ///
+    /// <para>
+    /// <c>(status, slot_date)</c> is exactly the composite index task 333 added
+    /// to <c>booking</c>, and it serves the predicate and the ordering both.
+    /// The tie-break on <c>Id</c> is not cosmetic: <c>Skip</c> only pages
+    /// correctly over a total order, and slot date alone is not one.
+    /// </para>
+    /// </remarks>
+    public async Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrBeforeSlotDate, int skip, int take) =>
+        await _context.Bookings
+            .Where(b => b.Status == BookingStatus.Confirmed && b.SlotDate <= onOrBeforeSlotDate)
+            .OrderBy(b => b.SlotDate)
+            .ThenBy(b => b.Id)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
 
     /// <inheritdoc/>

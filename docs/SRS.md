@@ -1487,6 +1487,15 @@ Recommended base lifecycle: 1. Initiated 2. Payment Pending 3. Payment Failed 4.
 - Status history shall be stored separately.
 - Customer-visible status label may differ from internal operational status.
 - Invalid transitions must be blocked.
+- Confirmed → Awaiting Fulfilment shall happen automatically, on a schedule,
+  once the booking's slot is within a configured lead time (default 24 hours) —
+  not only when an admin acts. This is the transition that hands a booking to
+  automatic provider assignment, so leaving it manual left that engine
+  unreachable for ordinary bookings. It must be safe to re-run, must apply to
+  Confirmed bookings only, and must be disableable by configuration without a
+  deployment. Manual admin assignment remains available at any time and is
+  unaffected. See PROVIDER.md, OPEN DECISIONS — AUTOMATIC ASSIGNMENT,
+  decision 4.
 
 ## 14. PRICING, COUPON, PAYMENT, REFUND, WALLET RULES
 
