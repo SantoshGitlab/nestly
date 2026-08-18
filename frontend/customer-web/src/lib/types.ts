@@ -1081,6 +1081,79 @@ export interface MySubscriptionResponse {
 }
 
 /**
+ * AMC (Annual Maintenance Contract) shapes mirror the C# records in
+ * Nestly.Application.Amc (AmcContracts.cs) - see docs/AMC.md "API SURFACE"
+ * and AmcController (consumer-api, Phase 20).
+ */
+
+/**
+ * Mirrors Nestly.Domain.CustomerAmcContractStatus's declaration order
+ * exactly. AmcContracts.cs types this field as the raw C# enum (not
+ * `string`, unlike e.g. ServiceAddOnGroupSummaryResponse.SelectionType
+ * above), and neither consumer-api nor admin-api registers a
+ * JsonStringEnumConverter anywhere in the pipeline (verified against
+ * AmcController.cs/AmcContractsController.cs directly) - so, same as
+ * BookingStatus and every other undecorated enum in this file, this crosses
+ * the wire as its numeric ordinal.
+ */
+export enum CustomerAmcContractStatus {
+  Active = 0,
+  Exhausted = 1,
+  Expired = 2,
+  Cancelled = 3,
+}
+
+/** One browsable AMC plan - the public subset of AmcPlan, omitting admin-only bookkeeping. */
+export interface AmcPlanBrowseResponse {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  name: string;
+  description: string | null;
+  price: number;
+  termMonths: number;
+  visitsIncluded: number;
+}
+
+export interface AmcContractPurchaseRequestBody {
+  planId: string;
+  assetLabel: string;
+}
+
+/** One redeemed AMC visit's audit row, part of a contract's history. */
+export interface AmcServiceVisitResponse {
+  id: string;
+  bookingId: string;
+  consumedAtUtc: string;
+}
+
+/**
+ * "My AMC contract" - every field a holder needs to see, drawn from the
+ * contract's own snapshot at purchase time, never a live join back to the
+ * plan (docs/AMC.md's DATA MODEL section) - so an admin editing AmcPlan
+ * later never reprices or renames an existing contract out from under its
+ * holder.
+ */
+export interface MyAmcContractResponse {
+  id: string;
+  planName: string;
+  categoryName: string;
+  price: number;
+  termMonths: number;
+  visitsIncluded: number;
+  assetLabel: string;
+  status: CustomerAmcContractStatus;
+  startDateUtc: string;
+  endDateUtc: string;
+  visitsRemaining: number;
+  /** True while Active with at least one visit remaining and the term not yet ended - gates the "Redeem a visit" action. */
+  canRedeemNow: boolean;
+  createdAtUtc: string;
+  cancelledAtUtc: string | null;
+  visits: AmcServiceVisitResponse[];
+}
+
+/**
  * Completion proof shapes mirror the C# records in Nestly.Application.Bookings
  * (BookingCompletionProofContracts.cs) - see BookingCompletionProofController
  * (tasks 195-198).

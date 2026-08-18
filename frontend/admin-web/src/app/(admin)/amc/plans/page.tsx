@@ -5,41 +5,47 @@ import { useState } from "react";
 import { Button, PageHeading, useToast } from "@/components/ui";
 import { SubscriptionTabs } from "@/components/SubscriptionTabs";
 import { describeError } from "@/lib/api";
+import { listCategories } from "@/lib/catalog-api";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
-import { PlanFormModal } from "./_components/PlanFormModal";
-import { PlansTable } from "./_components/PlansTable";
+import { AmcPlanFormModal } from "../_components/AmcPlanFormModal";
+import { AmcPlansTable } from "../_components/AmcPlansTable";
 import {
-  createSubscriptionPlan,
-  listSubscriptionPlans,
-  setSubscriptionPlanActive,
-  updateSubscriptionPlan,
-  type SubscriptionPlan,
-  type SubscriptionPlanRequest,
-} from "./_lib/plans-api";
+  createAmcPlan,
+  listAmcPlans,
+  setAmcPlanActive,
+  updateAmcPlan,
+  type AmcPlanAdminResponse,
+  type AmcPlanRequest,
+} from "../_lib/amc-api";
 
-const PLANS_QUERY_KEY = ["admin-subscription-plans"] as const;
+const PLANS_QUERY_KEY = ["admin-amc-plans"] as const;
 
 /**
- * Admin CRUD for subscription plans (PRODUCT-ENHANCEMENTS.md #1, task 180):
- * price, billing cycle, benefits, and the active window.
- *
- * Mutating controls are gated on "subscription.write" exactly the way every
- * other admin module gates its own; the route itself is only reachable once
- * `AdminSidebar` has already filtered it in by "subscription.read", and the
- * API authorises every call again server-side.
+ * Admin CRUD for AMC plans (docs/AMC.md, Phase 20): category, price, term,
+ * visits included. Structured identically to `SubscriptionPlansPage` -
+ * mutating controls gated on "subscription.write" (AmcPlansController mirrors
+ * SubscriptionPlansController's own RBAC exactly, per docs/AMC.md's RBAC
+ * ADDITIONS), the route reachable once `AdminSidebar` has filtered the
+ * "Subscription Plans" entry in by "subscription.read", and the API
+ * authorises every call again server-side.
  */
-export default function SubscriptionPlansPage() {
+export default function AmcPlansPage() {
   const claims = useAdminClaims();
   const canWrite = canWriteModule(claims, "subscription");
   const queryClient = useQueryClient();
   const toast = useToast();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [editingPlan, setEditingPlan] = useState<AmcPlanAdminResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const plansQuery = useQuery({ queryKey: PLANS_QUERY_KEY, queryFn: listSubscriptionPlans });
+  const plansQuery = useQuery({ queryKey: PLANS_QUERY_KEY, queryFn: listAmcPlans });
+  const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: listCategories });
+
+  const categoryOptions = (categoriesQuery.data ?? [])
+    .filter((category) => category.isActive)
+    .map((category) => ({ value: category.id, label: category.name }));
 
   const invalidatePlans = () => queryClient.invalidateQueries({ queryKey: PLANS_QUERY_KEY });
 
@@ -50,25 +56,18 @@ export default function SubscriptionPlansPage() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: (request: SubscriptionPlanRequest) =>
-      editingPlan
-        ? updateSubscriptionPlan(editingPlan.id, request)
-        : createSubscriptionPlan(request),
+    mutationFn: (request: AmcPlanRequest) =>
+      editingPlan ? updateAmcPlan(editingPlan.id, request) : createAmcPlan(request),
     onSuccess: (_plan, request) => {
       void invalidatePlans();
       toast("success", editingPlan ? `${request.name} updated.` : `${request.name} created.`);
       closeForm();
     },
-    // Keeps the dialog open with everything the admin typed still in it.
     onError: (error) => setFormError(describeError(error)),
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      setSubscriptionPlanActive(id, isActive),
-    // The list is the only source of truth for `isActive`, so it must be
-    // refetched — without this the row kept showing its previous state until
-    // the next full page load.
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setAmcPlanActive(id, isActive),
     onSuccess: () => void invalidatePlans(),
   });
 
@@ -78,7 +77,7 @@ export default function SubscriptionPlansPage() {
     setFormOpen(true);
   };
 
-  const openEdit = (plan: SubscriptionPlan) => {
+  const openEdit = (plan: AmcPlanAdminResponse) => {
     setEditingPlan(plan);
     setFormError(null);
     setFormOpen(true);
@@ -94,13 +93,13 @@ export default function SubscriptionPlansPage() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeading
         title="Subscription Plans"
-        subtitle="Price, billing cycle and benefits for the Nestly Plus tiers (PRODUCT-ENHANCEMENTS.md #1)."
+        subtitle="AMC plans: prepaid entitlement to a fixed number of service visits for one appliance, over a fixed term (docs/AMC.md)."
         actions={newPlanButton}
       />
 
       <SubscriptionTabs />
 
-      <PlansTable
+      <AmcPlansTable
         plans={plansQuery.data}
         isLoading={plansQuery.isPending}
         isFetching={plansQuery.isFetching}
@@ -114,9 +113,10 @@ export default function SubscriptionPlansPage() {
         emptyAction={newPlanButton}
       />
 
-      <PlanFormModal
+      <AmcPlanFormModal
         open={formOpen}
         plan={editingPlan}
+        categoryOptions={categoryOptions}
         isSubmitting={saveMutation.isPending}
         submitError={formError}
         onSubmit={(request) => saveMutation.mutate(request)}

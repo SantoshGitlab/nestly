@@ -20,7 +20,7 @@ import { Pagination, formatDate } from "@/components/data-table";
 import { describeError } from "@/lib/api";
 import { assignProviderToBooking, getEligibleProviders } from "@/lib/providers-api";
 import { useAdminClaims } from "@/lib/use-admin-claims";
-import { BookingsTabs } from "../_components/BookingsTabs";
+import { BookingsTabs } from "@/components/BookingsTabs";
 import {
   ASSIGNED_BY_LABELS,
   ASSIGNMENT_STATUS_LABELS,

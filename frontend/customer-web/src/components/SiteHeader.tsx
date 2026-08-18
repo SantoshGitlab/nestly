@@ -51,6 +51,7 @@ const ACCOUNT_LINKS = [
   { href: "/addresses", label: "Addresses" },
   { href: "/wallet", label: "Wallet" },
   { href: "/subscription", label: "Nestly Plus" },
+  { href: "/amc", label: "AMC Plans" },
   { href: "/refer-earn", label: "Refer & Earn" },
   { href: "/support", label: "Support" },
   { href: "/profile", label: "Profile" },
