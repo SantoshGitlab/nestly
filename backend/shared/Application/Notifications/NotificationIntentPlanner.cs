@@ -53,7 +53,11 @@ public static class NotificationIntentPlanner
         [nameof(SupportTicketStatusChangedEvent)] = typeof(SupportTicketStatusChangedEvent),
         [nameof(SubscriptionRenewedEvent)] = typeof(SubscriptionRenewedEvent),
         [nameof(SubscriptionExpiringSoonEvent)] = typeof(SubscriptionExpiringSoonEvent),
-        [nameof(SubscriptionPaymentFailedEvent)] = typeof(SubscriptionPaymentFailedEvent)
+        [nameof(SubscriptionPaymentFailedEvent)] = typeof(SubscriptionPaymentFailedEvent),
+        [nameof(AmcContractPurchasedEvent)] = typeof(AmcContractPurchasedEvent),
+        [nameof(AmcVisitRedeemedEvent)] = typeof(AmcVisitRedeemedEvent),
+        [nameof(AmcContractExpiringSoonEvent)] = typeof(AmcContractExpiringSoonEvent),
+        [nameof(AmcContractExhaustedEvent)] = typeof(AmcContractExhaustedEvent)
     };
 
     /// <summary>
@@ -88,6 +92,11 @@ public static class NotificationIntentPlanner
         SubscriptionRenewedEvent => [NotificationEventType.SubscriptionRenewed],
         SubscriptionExpiringSoonEvent => [NotificationEventType.SubscriptionExpiringSoon],
         SubscriptionPaymentFailedEvent => [NotificationEventType.SubscriptionPaymentFailed],
+
+        AmcContractPurchasedEvent => [NotificationEventType.AmcContractPurchased],
+        AmcVisitRedeemedEvent => [NotificationEventType.AmcVisitRedeemed],
+        AmcContractExpiringSoonEvent => [NotificationEventType.AmcContractExpiringSoon],
+        AmcContractExhaustedEvent => [NotificationEventType.AmcContractExhausted],
 
         _ => []
     };

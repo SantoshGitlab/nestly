@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Amc;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.AdminRoleManagement;
@@ -674,6 +675,16 @@ public static class DependencyInjection
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 
+        // Phase 20 AMC module (docs/AMC.md, tasks 323-330): plan catalog,
+        // purchased contracts, and entitlement redemption - a thin layer over
+        // the existing IBookingService orchestration, the same shape as the
+        // Subscription registrations above.
+        services.AddScoped<IAmcPlanRepository, AmcPlanRepository>();
+        services.AddScoped<ICustomerAmcContractRepository, CustomerAmcContractRepository>();
+        services.AddScoped<IAmcServiceVisitRepository, AmcServiceVisitRepository>();
+        services.AddScoped<IAmcCustomerService, AmcCustomerService>();
+        services.AddScoped<IAmcAdminService, AmcAdminService>();
+
         // Tasks 184-186: recurring booking plans. IRecurringBookingPlanService
         // depends on the existing IBookingSummaryService/IBookingService
         // (registered above) - the create/pause/cancel API and the scheduler
@@ -799,6 +810,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationTriggerHandler, ChatNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, SupportTicketNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, SubscriptionNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, AmcNotificationTriggerHandler>();
 
         // Task 126a-d: admin CRUD, preview and change audit over the template
         // store above (SRS 12.17).

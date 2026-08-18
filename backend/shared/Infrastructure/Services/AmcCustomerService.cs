@@ -88,7 +88,7 @@ public class AmcCustomerService : IAmcCustomerService
         if (contracts.Count == 0)
         {
             IReadOnlyList<MyAmcContractResponse> empty = Array.Empty<MyAmcContractResponse>();
-            return empty;
+            return Result<IReadOnlyList<MyAmcContractResponse>>.Success(empty);
         }
 
         var categoryNames = await CategoryNamesAsync(contracts.Select(c => c.CategoryIdSnapshot));
@@ -101,7 +101,7 @@ public class AmcCustomerService : IAmcCustomerService
         }
 
         IReadOnlyList<MyAmcContractResponse> result = responses;
-        return result;
+        return Result<IReadOnlyList<MyAmcContractResponse>>.Success(result);
     }
 
     public async Task<Result<MyAmcContractResponse>> GetMyContractAsync(Guid customerId, Guid contractId)
