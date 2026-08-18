@@ -282,7 +282,7 @@ between what exists and what §3 and §4 require.
 | No B2B account model | Critical | The data model runs *person → booking*. No organisation, contract, site, purchase order, invoice, GST handling, net-30 billing or multi-user account hierarchy — confirmed absent in `shared/Domain`. **Every high-margin move above is unbuildable without it** — and with the consumer product further along than believed, this is now the single binding engineering constraint on the revenue strategy. |
 | No AMC / entitlement model | Critical → **in progress** | An AMC is prepaid entitlement drawn down over twelve months, with scheduled preventive visits and a renewal pipeline. Domain model, migration and specification now exist ([AMC.md](AMC.md), Phase 20, `tasks.csv` #323–#330) — application services, API surface and both frontends remain open. See [AMC.md](AMC.md) STATUS and ORIENTATION.md for current build state, not this row. |
 | No WhatsApp booking channel | High | WhatsApp exists only as a `CustomerCommunicationPreference` notification channel, not a booking intake path. This closes off the peri-urban and non-app segments entirely. |
-| Release readiness unverified | High | The backlog is closed, but `tasks.csv` task 318 remains open: [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) returns **NO-GO for release on absence of evidence** — 587 inventoried UI features are runtime-unverified and cross-service booking consistency is unmeasured. No launch date is defensible until this is executed. |
+| Release readiness unverified | High → **executed, CONDITIONAL GO** | `tasks.csv` task 318 is done: [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md) ran the full browser walkthrough and cross-service consistency check that QA-REPORT-2026-08-07.md's NO-GO was withheld pending — a real customer booking verified matching field-for-field across all three services. Verdict is **conditional**: two confirmed defects (`tasks.csv` #332, #334) should be fixed and one design question (#333) answered before launch; none require redesign. |
 | Test coverage uneven | Medium | 1,363 declared test methods (1,767 executed cases at the last green run), but the bulk live in one misnamed `Catalog.Tests` project while `CustomerManagement.Tests` has 12. The last full build-and-test run predates Phase 18 by 85 commits. |
 | Subscription, recurring bookings, completion verification, referral, chat, auto-assignment | ~~Critical/High/Medium~~ **Built** | Previously listed here as unbuilt. All implemented — entities, migrations, services, endpoints, frontend pages and tests. Verified 2026-08-17. |
 
@@ -296,7 +296,7 @@ between what exists and what §3 and §4 require.
 | No liability / insurance model | High → **recommendation drafted** | Urban Company covers damage. One broken marble floor without cover is an existential trust event for a new brand, and it is the first question a society secretary asks. A coverage-shape recommendation now exists — [INSURANCE.md](INSURANCE.md) — pending legal/insurance sign-off; no actual coverage exists yet. |
 | GST and contracting posture undecided | High → **recommendation drafted** | Whether Nestly transacts as agent (commission) or principal (resells the service) changes GST treatment, invoice format and contract structure. B2B customers cannot be invoiced until this is settled. The decision is framed — [GST.md](GST.md) — pending CA/tax counsel determination; still undecided. |
 | No local ops footprint | Medium | A Jaipur ops lead and a small stores point for consumables and spares are what make same-day SLAs physically possible — and a local human to escalate to is precisely what Urban Company cannot offer here. |
-| Launch readiness is not verifiable | High → **narrowed** | Audited 2026-08-17: the documentation defects behind this risk are fixed (see [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md)), and the code surface is confirmed present. What remains is not a documentation problem but an outstanding QA execution — task 318, carrying a **NO-GO** verdict on absence of runtime evidence. Still a business risk; no longer an unknown one. |
+| Launch readiness is not verifiable | High → **resolved 2026-08-18** | Audited 2026-08-17 (documentation defects fixed, code surface confirmed present — [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md)) and executed 2026-08-18 (task 318 run to completion — [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md), CONDITIONAL GO). Launch readiness is now a known, bounded list of fixes (`tasks.csv` #332–#336), not an absence of evidence. |
 
 ---
 
@@ -304,23 +304,28 @@ between what exists and what §3 and §4 require.
 
 Ordered by dependency, not by appetite.
 
-1. ~~**Audit what actually works.**~~ **Done 2026-08-17** — see
-   [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md). The documentation
-   defects are fixed and the code surface is confirmed. What replaces this
-   step is **task 318**: execute QA phases 3 and 4, which carry the standing
-   **NO-GO** verdict. That is now the gate on any launch date.
-2. **Build the costed unit-economics model.** A spreadsheet, not code. It
-   determines the take rate, the technician offer, and whether the contract
-   thesis survives contact with real numbers.
+1. ~~**Audit what actually works.**~~ **Done 2026-08-17**, then ~~**execute
+   task 318**~~ **done 2026-08-18** — see
+   [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) and
+   [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md) (CONDITIONAL GO). The
+   gate on launch is now the bounded fix list `tasks.csv` #332–#336, not an
+   unexecuted audit.
+2. ~~**Build the costed unit-economics model.**~~ **Drafted 2026-08-18** —
+   [assets/nestly-unit-economics.xlsx](assets/nestly-unit-economics.xlsx).
+   It determines the take rate, the technician offer, and whether the
+   contract thesis survives contact with real numbers — pending a first
+   open-in-Excel confirmation and real business-input review before its
+   figures are load-bearing.
 3. **Design the B2B account model** — organisation, site, contract,
    entitlement, invoice. The largest architectural addition, and it gates the
    highest-margin revenue. Start the design while the audit runs.
 4. ~~**Ship subscription and recurring bookings.**~~ **Void — already
    shipped.** Both are implemented end-to-end, including the Hangfire
    occurrence-generation job. Backlog rows `#296`–`#300` duplicate delivered
-   work and are now closed on `main`. The differentiator exists; the open
-   questions are whether it works at runtime (task 318) and whether anyone can
-   buy it. See [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) §5.
+   work and are now closed on `main`. The differentiator exists and works at
+   runtime (confirmed by task 318 — [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md));
+   the open question is now only whether anyone can buy it. See
+   [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) §5.
 5. **Recruit supply in parallel, starting now.** Technician recruitment and
    verification has the longest lead time of anything here and does not depend
    on software being finished.

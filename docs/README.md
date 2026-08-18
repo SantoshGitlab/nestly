@@ -38,7 +38,8 @@ Every topic has exactly **one authoritative document**.
 | [DEVOPS.md](DEVOPS.md) | Docker, CI/CD, deployment, monitoring and operations |
 | [RUNBOOK-BACKUP-RESTORE.md](RUNBOOK-BACKUP-RESTORE.md) | Tested PostgreSQL backup/restore procedure (companion to DEVOPS.md's backup requirement) |
 | [RUNBOOK-DEPLOYMENT.md](RUNBOOK-DEPLOYMENT.md) | Deployment procedure (companion to DEVOPS.md) |
-| [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Release-readiness QA report — feature inventory and the current **NO-GO** verdict. Source of the one open backlog row (task 318) |
+| [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Feature inventory and static findings S1–S11 (still open). Its release verdict is **superseded by QA-REPORT-2026-08-18.md** — kept for the inventory and static findings only |
+| [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md) | Execution of QA phases 3–4 (task 318): full browser walkthrough and cross-service consistency check, with a **CONDITIONAL GO** verdict and a consolidated bug list |
 | [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. Per ORIENTATION.md, this is where the next task comes from |
 | [UAT-REPORT.md](UAT-REPORT.md) | User acceptance testing results |
 | [BOOKING-FLOW-AUDIT.md](BOOKING-FLOW-AUDIT.md) | Point-in-time audit of the booking funnel (source of the Phase 13 defect rows) |
@@ -69,7 +70,7 @@ Every topic has exactly **one authoritative document**.
 | Market and competitor analysis | MARKET.md |
 | Implementation status ("what is built") | ORIENTATION.md |
 | Status-claim verification and audit history | LAUNCH-READINESS-AUDIT.md |
-| Release readiness / go-no-go | QA-REPORT-2026-08-07.md |
+| Release readiness / go-no-go | QA-REPORT-2026-08-18.md |
 | Spec-vs-code gap backlog | ENHANCEMENT-BACKLOG-2026-08-08.md |
 | Launch market strategy | MARKET.md |
 | Revenue models and margin thesis | MARKET.md |
