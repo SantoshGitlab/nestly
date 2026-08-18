@@ -50,6 +50,10 @@ Every topic has exactly **one authoritative document**.
 | [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md) | Subscription, Recurring Bookings, In-App Chat, Completion Verification specification (Phase 10) |
 | [NESTLY-COINS.md](NESTLY-COINS.md) | Nestly Coins (reorder loyalty currency for customers and providers) specification (Phase 11) |
 | [AMC.md](AMC.md) | Annual Maintenance Contract module specification: prepaid entitlement drawdown, redemption, renewal pipeline (Phase 20) |
+| [PRICING.md](PRICING.md) | Pricing strategy recommendation: all-in transparent pricing, no surge, quote-guarantee mechanics (pending business sign-off) |
+| [SUPPLY.md](SUPPLY.md) | Technician supply acquisition plan recommendation: sourcing, vetting pipeline, commercial offer, retention (pending ops sign-off) |
+| [INSURANCE.md](INSURANCE.md) | Liability/insurance posture recommendation: property damage and technician injury coverage shape (pending legal sign-off) |
+| [GST.md](GST.md) | GST and contracting posture recommendation: agent vs. principal model and its invoicing consequences (pending CA/tax counsel sign-off) |
 | [TRACKING.md](TRACKING.md) | End-to-end order tracking (Phase 16) — state machine, location ingest, ETA pipeline, tracking hub, and the Google Maps configuration surface |
 | [tasks.csv](tasks.csv) | Development backlog — phased tasks, priorities and dependencies |
 | [archive/](archive/) | Original Word-format versions of these documents (historical) |
@@ -68,7 +72,7 @@ Every topic has exactly **one authoritative document**.
 | Spec-vs-code gap backlog | ENHANCEMENT-BACKLOG-2026-08-08.md |
 | Launch market strategy | MARKET.md |
 | Revenue models and margin thesis | MARKET.md |
-| Pricing posture and go-to-market | MARKET.md |
+| Pricing posture and go-to-market | MARKET.md (strategic rationale) · PRICING.md (mechanics and policy) |
 | Functional requirements | SRS.md |
 | Booking lifecycle and workflows | SRS.md |
 | RBAC requirements | SRS.md |
@@ -117,6 +121,10 @@ Every topic has exactly **one authoritative document**.
 | ETA / routing pipeline | TRACKING.md |
 | Google Maps API key management | TRACKING.md |
 | AMC / entitlement contracts | AMC.md |
+| Pricing mechanics and quote-guarantee policy | PRICING.md |
+| Technician supply acquisition and vetting | SUPPLY.md |
+| Liability and insurance coverage posture | INSURANCE.md |
+| GST and contracting model (agent vs. principal) | GST.md |
 | Development backlog | tasks.csv |
 
 ## OWNERSHIP RULES
