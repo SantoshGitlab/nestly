@@ -193,31 +193,15 @@ public sealed class AmcServiceTests : IClassFixture<TestDatabase>
 
     /// <summary>
     /// Same end state as <see cref="CompleteBookingAsync"/>, but for a
-    /// zero-priced AMC redemption booking: skips the payment/webhook step
-    /// entirely and moves straight from PaymentPending to Confirmed (a valid
-    /// direct <see cref="BookingLifecycle"/> transition - it is exactly what
-    /// <c>PaymentWebhookService</c> itself does on a successful callback).
-    ///
-    /// <b>Real gap found while writing this suite, not something to paper
-    /// over:</b> <see cref="PaymentTransaction"/>'s constructor throws
-    /// <see cref="ArgumentOutOfRangeException"/> for a non-positive amount,
-    /// and nothing else in the existing payment pipeline advances a booking
-    /// out of PaymentPending. docs/AMC.md states the redemption booking is
-    /// zero-priced and reuses <c>IBookingService.CreateAsync</c> "unchanged",
-    /// but as things stand today a zero-priced booking - AMC's redemption
-    /// booking being the first caller ever to produce one - cannot go
-    /// through <c>PaymentService.CreateOrderAsync</c> at all, so it can never
-    /// reach Confirmed, and therefore never Completed, through the real
-    /// production path either. That is an architectural gap in the shared
-    /// payment pipeline this phase does not own and must not silently patch;
-    /// see this session's final report/commit message for the recommended
-    /// follow-up (a zero-total fast path in <c>BookingService</c>/
-    /// <c>PaymentService</c>, analogous to how a wallet/coupon could one day
-    /// fully cover a price). This test bypasses only the broken step so it
-    /// can still verify what IS this phase's job: that
-    /// <see cref="AmcVisitOnBookingCompletionHandler"/> correctly draws down
-    /// entitlement once a redemption booking - however it gets there -
-    /// reaches Completed.
+    /// zero-priced AMC redemption booking: there is no payment/webhook step
+    /// to drive at all, because task 331 gave a booking with nothing payable
+    /// its own confirmation path - <c>BookingService.CreateAsync</c> confirms
+    /// it on creation rather than parking it in PaymentPending, where
+    /// <see cref="PaymentTransaction"/>'s non-positive-amount guard would have
+    /// stranded it forever. So this helper starts from the Confirmed state the
+    /// real production path already left the booking in, and only walks the
+    /// fulfilment half a provider would drive, to get to the Completed
+    /// transition <see cref="AmcVisitOnBookingCompletionHandler"/> reacts to.
     /// </summary>
     private static async Task CompleteZeroPricedAmcBookingAsync(TestDatabase db, Guid bookingId)
     {
@@ -225,7 +209,7 @@ public sealed class AmcServiceTests : IClassFixture<TestDatabase>
         var bookingRepository = new BookingRepository(lifecycleContext);
         var booking = await bookingRepository.GetByIdAsync(bookingId);
         booking!.TotalPayableSnapshot.Should().Be(0m, "this helper is only valid for a zero-priced AMC redemption booking");
-        booking.TransitionTo(BookingStatus.Confirmed);
+        booking.Status.Should().Be(BookingStatus.Confirmed, "task 331 confirms a zero-payable booking at creation - no payment step to simulate");
         booking.TransitionTo(BookingStatus.AwaitingFulfilment);
         booking.TransitionTo(BookingStatus.Assigned);
         booking.TransitionTo(BookingStatus.InProgress);
@@ -397,10 +381,17 @@ public sealed class AmcServiceTests : IClassFixture<TestDatabase>
 
         redeemed.IsSuccess.Should().BeTrue();
         redeemed.Value.Price.TotalPayable.Should().Be(0m, "the visit is prepaid via entitlement, not charged again");
+        redeemed.Value.Status.Should().Be(
+            BookingStatus.Confirmed,
+            "task 331: nothing is payable, so the booking is confirmed on creation instead of waiting for a payment that can never be made");
 
         using var readContext = _db.CreateContext();
         var booking = await new BookingRepository(readContext).GetByIdAsync(redeemed.Value.Id);
         booking!.AmcContractId.Should().Be(purchased.Value.Id);
+        booking.Status.Should().Be(BookingStatus.Confirmed);
+        booking.StatusHistory.Should().NotContain(
+            h => h.ToStatus == BookingStatus.PaymentPending,
+            "a redemption booking never awaits a payment");
 
         var stillUnredeemed = await customerService.GetMyContractAsync(fixture.Customer.Id, purchased.Value.Id);
         stillUnredeemed.Value.VisitsRemaining.Should().Be(2, "entitlement is only drawn down on booking completion, not on redemption/creation");

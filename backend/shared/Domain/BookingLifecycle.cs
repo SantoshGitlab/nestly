@@ -10,7 +10,14 @@ public static class BookingLifecycle
 {
     private static readonly Dictionary<BookingStatus, BookingStatus[]> Transitions = new()
     {
-        [BookingStatus.Initiated] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer],
+        // Confirmed added (task 331): a booking with nothing payable - an AMC
+        // entitlement redemption (docs/AMC.md), a fully wallet-covered
+        // checkout, a discount that takes the total to zero - is confirmed
+        // straight from Initiated by BookingService.CreateAsync. It never
+        // awaits a payment that will never be asked for, and PaymentPending
+        // was a dead end for it: PaymentTransaction rejects a non-positive
+        // amount, so nothing could ever move it on to Confirmed.
+        [BookingStatus.Initiated] = [BookingStatus.PaymentPending, BookingStatus.Confirmed, BookingStatus.CancelledByCustomer],
         [BookingStatus.PaymentPending] = [BookingStatus.Confirmed, BookingStatus.PaymentFailed, BookingStatus.CancelledByCustomer, BookingStatus.Expired],
         [BookingStatus.PaymentFailed] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
         [BookingStatus.Confirmed] = [BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],

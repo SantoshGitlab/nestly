@@ -20,6 +20,15 @@ public class BookingService : IBookingService
     /// <summary>Recorded on the auto-transition to PaymentPending, since there is no real payment gateway integration yet to explain it instead (Phase 4).</summary>
     private const string NoPaymentGatewayReason = "No payment gateway integrated yet - booking moves directly to awaiting payment.";
 
+    /// <summary>
+    /// Task 331: recorded on the auto-transition to Confirmed taken by a
+    /// booking with nothing payable, so the one thing a booking-payment
+    /// mapping would otherwise have explained - why this booking was never
+    /// charged - stays on the record, in the booking's own status timeline,
+    /// for anyone reading it later.
+    /// </summary>
+    private const string NothingPayableReason = "Nothing payable on this booking - confirmed without a payment.";
+
     /// <summary>Task 137b: the specific error code SlotAvailabilityService.ReserveSlotAsync returns when a slot has no remaining per-day capacity.</summary>
     private const string SlotCapacityReachedErrorCode = "Booking.SlotCapacityReached";
 
@@ -371,7 +380,27 @@ public class BookingService : IBookingService
                 }
             }
 
-            booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+            // Task 331: a booking with nothing left to pay is confirmed here
+            // and never enters PaymentPending. Stated as "is anything
+            // payable", not "is this an AMC redemption", because three
+            // different features already produce a zero payable - AMC
+            // entitlement (finalPayable forced to zero above), wallet credit
+            // covering the whole remainder, and a coupon/subscription
+            // discount that takes the total to zero (BookingSummaryService
+            // floors each at zero) - and none of them has, or should need,
+            // its own confirmation path. PaymentPending is not merely
+            // unnecessary for these: it is a dead end, since
+            // PaymentTransaction rejects a non-positive amount and
+            // PaymentService therefore cannot produce the gateway round trip
+            // that would confirm them.
+            if (finalPayable <= 0)
+            {
+                booking.TransitionTo(BookingStatus.Confirmed, NothingPayableReason);
+            }
+            else
+            {
+                booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+            }
 
             if (!await _bookingRepository.TryAddAsync(booking))
             {
