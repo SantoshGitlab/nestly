@@ -699,7 +699,7 @@ function CompletionVerificationCard({
   onSubmitted,
 }: {
   jobId: string;
-  existing: BookingCompletionProofResponse | undefined;
+  existing: BookingCompletionProofResponse | null | undefined;
   isLoading: boolean;
   onSubmitted: () => void;
 }) {

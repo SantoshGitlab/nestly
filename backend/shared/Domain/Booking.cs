@@ -110,6 +110,17 @@ public class Booking : AggregateRoot<Guid>
     /// </summary>
     public Guid? RecurringBookingPlanId { get; private set; }
 
+    /// <summary>
+    /// docs/AMC.md: the <see cref="CustomerAmcContract"/> a visit-redemption
+    /// booking was created against, or null for an ordinary booking. A REAL
+    /// foreign key, for the identical reason <see cref="RecurringBookingPlanId"/>
+    /// is one rather than traceability-only like <see cref="SubscriptionId"/>:
+    /// a contract is never hard-deleted, only moved to a terminal status and
+    /// kept, so a Restrict FK here can never block a legitimate operation and
+    /// guarantees the join the admin AMC report makes is never dangling.
+    /// </summary>
+    public Guid? AmcContractId { get; private set; }
+
     /// <summary>Task 241: the client-minted key from POST /bookings' idempotencyKey - see BookingService.CreateAsync. Null for callers that don't supply one (e.g. RecurringBookingSchedulerService), which simply get no dedup protection. BookingConfiguration puts a unique index on (CustomerId, IdempotencyKey); Postgres treats every NULL as distinct from every other, so only two of the same customer's rows sharing the same non-null key ever collide.</summary>
     public string? IdempotencyKey { get; private set; }
 
@@ -147,7 +158,8 @@ public class Booking : AggregateRoot<Guid>
         decimal? subscriptionDiscountAmount = null,
         string? idempotencyKey = null,
         Guid? recurringBookingPlanId = null,
-        decimal? walletCreditApplied = null)
+        decimal? walletCreditApplied = null,
+        Guid? amcContractId = null)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -199,6 +211,7 @@ public class Booking : AggregateRoot<Guid>
 
         IdempotencyKey = idempotencyKey;
         RecurringBookingPlanId = recurringBookingPlanId;
+        AmcContractId = amcContractId;
 
         Status = BookingStatus.Initiated;
         CreatedAtUtc = DateTime.UtcNow;

@@ -21,7 +21,23 @@ public interface IBookingService
     /// of gaining its own creation path just to set one column - every other
     /// caller (the customer's own "Book now") passes nothing and is unaffected.
     /// </param>
-    Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null);
+    /// <param name="amcContractId">
+    /// docs/AMC.md: set only by <c>IAmcCustomerService.RedeemVisitAsync</c>
+    /// when a customer redeems entitlement against an active
+    /// <see cref="Nestly.Domain.CustomerAmcContract"/>. When set, the booking's
+    /// final payable is forced to zero and any coupon/subscription discount
+    /// the request would otherwise have picked up is ignored - the contract
+    /// already fully covers the visit, and stacking a second discount on top
+    /// of a prepaid entitlement is not a combination this module supports.
+    /// Optional for the identical reason <paramref name="recurringBookingPlanId"/>
+    /// is: every other caller (a customer's own "Book now", the recurring
+    /// scheduler) passes nothing and is unaffected.
+    /// </param>
+    Task<Result<BookingDetailResponse>> CreateAsync(
+        Guid customerId,
+        BookingSummaryRequest request,
+        Guid? recurringBookingPlanId = null,
+        Guid? amcContractId = null);
 
     /// <summary>Paged, newest first (task 301-follow-up), same page-1/size-20 defaults the admin booking search already uses, so a long-tenured customer's history no longer loads and renders as one unbounded page.</summary>
     Task<Result<BookingListResponse>> ListAsync(Guid customerId, BookingStatusBucket? bucket, int page = 1, int pageSize = 20);

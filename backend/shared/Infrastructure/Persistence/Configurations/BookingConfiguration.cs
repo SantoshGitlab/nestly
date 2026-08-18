@@ -98,6 +98,14 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .HasForeignKey(x => x.RecurringBookingPlanId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // docs/AMC.md: same reasoning as RecurringBookingPlanId above - a
+        // real FK, since a CustomerAmcContract is never hard-deleted.
+        builder.Property(x => x.AmcContractId);
+        builder.HasOne<CustomerAmcContract>()
+            .WithMany()
+            .HasForeignKey(x => x.AmcContractId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(x => x.Items)
             .WithOne()
             .HasForeignKey(x => x.BookingId)

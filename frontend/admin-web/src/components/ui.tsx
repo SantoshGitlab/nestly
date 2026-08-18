@@ -347,9 +347,20 @@ function FieldShell({
   );
 }
 
-/** Derives a stable id from the field name so label/control always agree. */
-function controlId(explicit: string | undefined, name: string | undefined, label: string): string {
-  return explicit ?? `field-${name ?? label.toLowerCase().replace(/\s+/g, "-")}`;
+/**
+ * Derives a stable id from the field name so label/control always agree.
+ *
+ * Falls back to `reactId` (each caller's own `useId()`) rather than a
+ * label-derived slug: two controls with the same visible label (e.g. two
+ * "Reason" fields in different cards on one page, as bookings/[bookingId]
+ * has for cancel vs. refund) used to collide on the same `field-reason` id,
+ * producing duplicate DOM ids and an ambiguous `label[for]` association.
+ * `useId()` is per-component-instance and therefore always unique, while
+ * still leaving an explicit `id`/`name` free to opt into a predictable,
+ * human-readable id where one is actually wanted (CSS hooks, e2e selectors).
+ */
+function controlId(explicit: string | undefined, name: string | undefined, reactId: string): string {
+  return explicit ?? (name ? `field-${name}` : reactId);
 }
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -368,7 +379,8 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
   { label, error, hint, leading, id, className = "", ...props },
   ref,
 ) {
-  const inputId = controlId(id, props.name, label);
+  const reactId = useId();
+  const inputId = controlId(id, props.name, reactId);
 
   const input = (
     <input
@@ -419,7 +431,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   { label, error, hint, id, rows = 3, className = "", ...props },
   ref,
 ) {
-  const textareaId = controlId(id, props.name, label);
+  const reactId = useId();
+  const textareaId = controlId(id, props.name, reactId);
 
   return (
     <FieldShell
@@ -465,7 +478,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   { label, error, hint, id, options, placeholder, className = "", ...props },
   ref,
 ) {
-  const selectId = controlId(id, props.name, label);
+  const reactId = useId();
+  const selectId = controlId(id, props.name, reactId);
 
   return (
     <FieldShell id={selectId} label={label} hint={hint} error={error} required={props.required}>
@@ -517,7 +531,8 @@ export const Checkbox = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement> & { label: string }
 >(function Checkbox({ label, ...props }, ref) {
-  const inputId = controlId(props.id, props.name, `checkbox-${label}`);
+  const reactId = useId();
+  const inputId = controlId(props.id, props.name, reactId);
   return (
     <label htmlFor={inputId} className="flex cursor-pointer items-center gap-2.5 text-sm text-fg">
       <input
