@@ -5,7 +5,12 @@ service coverage for a specific appliance or asset.
 
 ## STATUS
 
-**Implementation in progress**, started 2026-08-18. Scoped as **Phase 20**
+**Implementation in progress**, started 2026-08-18. Domain model, migration,
+application services, both API surfaces, both frontends, notification
+wiring and a test suite (28 tests, `dotnet test` 1958/1958 passing) are now
+built — but see OPEN DECISIONS #5: the redeem flow is **not yet operable
+end-to-end**, a payment-pipeline limitation discovered mid-implementation,
+not a defect in this module's own code. Scoped as **Phase 20**
 (`tasks.csv` `#323`–`#330`). Identified as a Critical gap in
 [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) §4 and
 [MARKET.md](MARKET.md) §5.1: Subscription and Recurring Bookings exist, but
@@ -216,6 +221,33 @@ database/migrations/          AddAmcSchema
    charging anything. This is the honest MVP boundary, not a bug to be
    silently worked around — real gateway integration for AMC purchase is
    follow-up work, same status as decisions #1 and #2 above.
+5. **The redeem flow cannot complete end-to-end yet — found during
+   implementation, not before.** `IAmcCustomerService.RedeemVisitAsync`
+   creates a zero-priced booking via `IBookingService.CreateAsync` exactly
+   as designed, and `AmcVisitOnBookingCompletionHandler` correctly decrements
+   entitlement the moment that booking reaches `Completed` — both pieces are
+   built and tested. But `BookingService.CreateAsync` unconditionally
+   transitions every new booking to `PaymentPending`
+   (`BookingService.cs`'s `NoPaymentGatewayReason` transition), and
+   `PaymentTransaction`'s constructor rejects a non-positive `amount` — so a
+   zero-priced booking has no way to leave `PaymentPending` through the
+   existing payment pipeline (`PaymentService.CreateOrderAsync` →
+   `PaymentWebhookService` → `Confirmed`). Nothing in the current codebase
+   special-cases a zero-payable booking (wallet-fully-covered bookings would
+   hit the identical wall, if that combination is even reachable today — not
+   verified here, out of this phase's scope to check). **This means: today,
+   an AMC redemption booking is created correctly but gets permanently stuck
+   in `PaymentPending`** — the entitlement-decrement code path is real and
+   tested (verified in isolation by advancing a test booking to `Confirmed`
+   directly), but nothing in production can currently get a real redemption
+   booking to `Confirmed` to trigger it. Fixing this is a shared
+   payment-pipeline change (letting `BookingService` skip `PaymentPending`
+   for a zero-payable booking, or teaching `PaymentTransaction`/
+   `PaymentService` to record a zero-amount "no charge needed" transaction)
+   — bigger than this phase and affecting more than AMC, so it is named here
+   rather than patched narrowly. **Until this is fixed, AMC entitlement
+   redemption does not work for a real customer**, regardless of what the
+   rest of this document describes as built.
 
 ## NEXT STEPS
 

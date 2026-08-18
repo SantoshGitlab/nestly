@@ -54,6 +54,7 @@ Every topic has exactly **one authoritative document**.
 | [SUPPLY.md](SUPPLY.md) | Technician supply acquisition plan recommendation: sourcing, vetting pipeline, commercial offer, retention (pending ops sign-off) |
 | [INSURANCE.md](INSURANCE.md) | Liability/insurance posture recommendation: property damage and technician injury coverage shape (pending legal sign-off) |
 | [GST.md](GST.md) | GST and contracting posture recommendation: agent vs. principal model and its invoicing consequences (pending CA/tax counsel sign-off) |
+| [assets/nestly-unit-economics.xlsx](assets/nestly-unit-economics.xlsx) | Costed per-revenue-type unit-economics model (Assumptions, Revenue Streams, Summary) referenced by MARKET.md §3 — formulas hand-verified, not yet confirmed by opening in Excel/LibreOffice (see its Read Me tab) |
 | [TRACKING.md](TRACKING.md) | End-to-end order tracking (Phase 16) — state machine, location ingest, ETA pipeline, tracking hub, and the Google Maps configuration surface |
 | [tasks.csv](tasks.csv) | Development backlog — phased tasks, priorities and dependencies |
 | [archive/](archive/) | Original Word-format versions of these documents (historical) |
