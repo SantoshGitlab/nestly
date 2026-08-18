@@ -17,11 +17,32 @@ import type {
  * component here contains a hex code or a raw `neutral-*`/`black/10` class.
  * Restyling the product happens in the token layer, not here.
  *
- * This file is replicated verbatim across customer-web, admin-web and
- * provider-web (the three apps are independent Next projects with no shared
- * package), so it is a deliberate superset: an app that never renders a
- * `Table` still ships the identical file, and the three stay in step by being
- * literally the same bytes. Changing it in one app means porting to all three.
+ * This file is copied across customer-web, admin-web and provider-web (the
+ * three apps are independent Next projects with no shared package), so it is
+ * a deliberate superset: an app that never renders a `Table` still ships the
+ * component. Changing a primitive means porting the change to all three.
+ *
+ * The three are NOT byte-identical, and have not been since customer-web grew
+ * UI the other two never needed. This comment used to claim they were, which
+ * sent a reader looking for a drift bug that was really a deliberate feature
+ * (tasks.csv 336, 362). The truth: admin-web and provider-web ARE byte-
+ * identical to each other; customer-web is that same file plus five intended
+ * additions, listed here so nobody "restores" them by syncing the files:
+ *
+ *   1. `hideLabel` on `FieldShell`/`Field` - renders the label `sr-only`, for
+ *      the inline coupon-code field.
+ *   2. `LinkButton` - a `next/link` anchor sharing `BUTTON_VARIANTS` and
+ *      `BUTTON_SIZES`, so a navigation control can look like a button without
+ *      pretending to be one.
+ *   3. A `danger-soft` entry in `BUTTON_VARIANTS`.
+ *   4. `Modal` portals to `document.body` via `createPortal` - a
+ *      `backdrop-blur-md` ancestor makes `fixed inset-0` position against that
+ *      ancestor rather than the viewport.
+ *   5. The imports those four need: `next/link`, `createPortal`,
+ *      `AnchorHTMLAttributes`.
+ *
+ * Porting one of those INTO another app is fine. Deleting it from customer-web
+ * to make a diff come out clean is not.
  */
 
 /** Joins conditional class names, dropping falsy entries. */
