@@ -272,9 +272,11 @@ public class BookingRepository : IBookingRepository
     /// correctly over a total order, and slot date alone is not one.
     /// </para>
     /// </remarks>
-    public async Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrBeforeSlotDate, int skip, int take) =>
+    public async Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrAfterSlotDate, DateOnly onOrBeforeSlotDate, int skip, int take) =>
         await _context.Bookings
-            .Where(b => b.Status == BookingStatus.Confirmed && b.SlotDate <= onOrBeforeSlotDate)
+            .Where(b => b.Status == BookingStatus.Confirmed
+                && b.SlotDate >= onOrAfterSlotDate
+                && b.SlotDate <= onOrBeforeSlotDate)
             .OrderBy(b => b.SlotDate)
             .ThenBy(b => b.Id)
             .Skip(skip)

@@ -4,7 +4,32 @@ namespace Nestly.Domain.Events;
 
 public sealed record BookingCreatedEvent(Guid BookingId, Guid CustomerId) : DomainEvent;
 
-public sealed record BookingStatusChangedEvent(Guid BookingId, BookingStatus FromStatus, BookingStatus ToStatus) : DomainEvent;
+/// <param name="AnythingPayable">
+/// Task 359: whether this booking ever had anything to charge for
+/// (<see cref="Booking.TotalPayableSnapshot"/> greater than zero). Carried on
+/// the event rather than looked up, because
+/// <c>NotificationIntentPlanner</c> answers "which messages does this event
+/// owe?" inside <c>SavingChanges</c>, where it cannot read - and because a
+/// payload swept months later must plan the same way it did at commit time.
+/// <para>
+/// Only <see cref="BookingStatus.Confirmed"/> reads it, to decide whether the
+/// transition owes a "payment successful" message as well as a "booking
+/// confirmed" one. Task 331 made a zero-payable booking (an AMC entitlement
+/// redemption, a fully wallet-covered checkout, a discount that takes the
+/// total to zero) reach Confirmed with no payment behind it at all, at which
+/// point the payment message is simply untrue.
+/// </para>
+/// <para>
+/// Defaults to true so every existing construction site - and every
+/// <c>NotificationIntent</c> payload written before this parameter existed,
+/// which deserializes it as missing - keeps exactly the behaviour it had.
+/// </para>
+/// </param>
+public sealed record BookingStatusChangedEvent(
+    Guid BookingId,
+    BookingStatus FromStatus,
+    BookingStatus ToStatus,
+    bool AnythingPayable = true) : DomainEvent;
 
 /// <summary>
 /// The provider a booking is being fulfilled by was swapped for a different
