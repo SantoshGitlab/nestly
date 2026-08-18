@@ -8,10 +8,10 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
   AuthShell,
-  OtpField,
   ResendRow,
   useResendCountdown,
 } from "@/components/auth-ui";
+import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, Checkbox, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CustomerSummary } from "@/lib/types";
@@ -209,7 +209,7 @@ function RegisterScreen() {
           {error ? <Alert>{error}</Alert> : null}
           {notice ? <Alert tone="info">{notice}</Alert> : null}
 
-          <OtpField
+          <OtpInput
             error={detailsForm.formState.errors.otpCode?.message}
             {...detailsForm.register("otpCode")}
           />

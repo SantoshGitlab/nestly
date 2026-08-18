@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { AuthShell, OtpField, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { AuthShell, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 
@@ -122,7 +123,7 @@ export default function ForgotPasswordPage() {
           {error ? <Alert>{error}</Alert> : null}
           {notice ? <Alert tone="info">{notice}</Alert> : null}
 
-          <OtpField
+          <OtpInput
             error={resetForm.formState.errors.otpCode?.message}
             {...resetForm.register("otpCode")}
           />
