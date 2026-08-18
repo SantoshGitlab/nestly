@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Identity;
+using Nestly.Application.Notifications;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
@@ -254,6 +255,70 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
         notifications.Should().Contain(n => n.EventType == NotificationEventType.BookingConfirmed);
         notifications.Should().Contain(n => n.EventType == NotificationEventType.PaymentSuccess);
         notifications.Should().OnlyContain(n => n.Status == NotificationDeliveryStatus.Sent);
+    }
+
+    /// <summary>
+    /// Task 359, the counterpart to the test above. Task 331 gave a booking
+    /// with nothing payable - an AMC entitlement redemption, a fully
+    /// wallet-covered checkout, a discount that takes the total to zero - its
+    /// own path straight to Confirmed with no payment behind it. Keyed on
+    /// status alone, that transition owed the customer a "your payment was
+    /// successful" message describing a charge that never happened.
+    ///
+    /// <para>
+    /// Driven from a real <see cref="Booking"/> rather than a hand-built event,
+    /// so it covers the whole chain the fix runs through: the price snapshot,
+    /// the event the transition raises, and the plan drawn from it.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(659)]
+    public void A_confirmed_booking_owes_a_payment_message_only_when_something_was_actually_charged(int totalPayable)
+    {
+        var address = new AddressSnapshot("Home", "221B Baker Street", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Asha Rao", "9876543210");
+        var slot = new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+        var price = new PriceSnapshot(500m, 1, 500m, 0m, 50m, 550m, 18m, 99m, 10m, totalPayable);
+        var booking = new Booking(Guid.NewGuid(), Guid.NewGuid(), new CustomerSnapshot("Asha Rao", "9876543210"), null, address, slot, price);
+
+        booking.ClearDomainEvents();
+        booking.TransitionTo(BookingStatus.Confirmed);
+
+        var statusChanged = booking.DomainEvents.OfType<BookingStatusChangedEvent>().Single();
+        statusChanged.AnythingPayable.Should().Be(totalPayable > 0);
+
+        var planned = NotificationIntentPlanner.Plan(statusChanged);
+
+        planned.Should().Contain(
+            NotificationEventType.BookingConfirmed,
+            "the booking is confirmed either way - that is the fact the customer needs");
+        planned.Should().HaveCount(
+            totalPayable > 0 ? 2 : 1,
+            "a zero-payable booking is owed the confirmation and nothing else");
+
+        if (totalPayable > 0)
+        {
+            planned.Should().Contain(NotificationEventType.PaymentSuccess);
+        }
+        else
+        {
+            planned.Should().NotContain(
+                NotificationEventType.PaymentSuccess,
+                "nothing was ever charged, so there is no payment to report as successful");
+        }
+    }
+
+    /// <summary>
+    /// The status-keyed table itself is untouched by task 359 - the
+    /// "was anything charged" question is about the booking, not the status,
+    /// and every other consumer of this mapping must keep seeing Confirmed's
+    /// full pair.
+    /// </summary>
+    [Fact]
+    public void The_shared_status_table_still_maps_Confirmed_to_both_messages()
+    {
+        NotificationIntentPlanner.EventTypesFor(BookingStatus.Confirmed).Should().BeEquivalentTo(
+            [NotificationEventType.BookingConfirmed, NotificationEventType.PaymentSuccess]);
     }
 
     [Fact]

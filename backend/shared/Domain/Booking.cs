@@ -327,7 +327,10 @@ public class Booking : AggregateRoot<Guid>
         var previousStatus = Status;
         Status = newStatus;
         RecordStatusHistory(previousStatus, newStatus, reason);
-        RaiseDomainEvent(new BookingStatusChangedEvent(Id, previousStatus, newStatus));
+        // Task 359: the "was anything ever charged for this?" fact travels with
+        // the event, because the notification planner that needs it is pure by
+        // construction and cannot read the booking back.
+        RaiseDomainEvent(new BookingStatusChangedEvent(Id, previousStatus, newStatus, TotalPayableSnapshot > 0m));
         RaiseTrackingEvent(newStatus);
     }
 

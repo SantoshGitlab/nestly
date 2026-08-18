@@ -183,7 +183,14 @@ public sealed class BookingNotificationTriggerHandler :
         // that raised this event. A copy of the switch here that drifted by
         // one status would either strand rows nothing resolves or send
         // messages nothing recorded, and neither shows up as a failing test.
-        var eventTypes = NotificationIntentPlanner.EventTypesFor(domainEvent.ToStatus);
+        //
+        // Task 359: through Plan, not EventTypesFor. The intent writer plans
+        // from the whole event, and Confirmed's message pair now depends on
+        // more than the status (a zero-payable booking is owed no "payment
+        // successful"), so asking the status-only table here would send a
+        // message no intent row was ever written for - exactly the drift the
+        // planner exists to prevent.
+        var eventTypes = NotificationIntentPlanner.Plan(domainEvent);
 
         if (eventTypes.Count == 0)
         {
