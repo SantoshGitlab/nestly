@@ -65,11 +65,23 @@ export const refundBooking = (bookingId: string, request: AdminRefundRequest) =>
     body: JSON.stringify(request),
   });
 
-/** Completion proof (photos + checklist) for a booking, if any (tasks 195-198 dispute review). */
-export const getBookingCompletionProof = (bookingId: string) =>
-  apiFetch<BookingCompletionProofResponse | undefined>(`${BOOKINGS_BASE}/${bookingId}/completion-proof`, {
-    authenticated: true,
-  });
+/**
+ * Completion proof (photos + checklist) for a booking, if any (tasks 195-198
+ * dispute review). Normalised to `null` rather than letting apiFetch's
+ * `undefined` leak out: the endpoint answers 204 until the provider has
+ * submitted proof, and React Query rejects an `undefined` resolution
+ * ("Query data cannot be undefined"), which put the proof card into an error
+ * state on every booking that simply has no proof yet.
+ */
+export const getBookingCompletionProof = async (
+  bookingId: string,
+): Promise<BookingCompletionProofResponse | null> => {
+  const result = await apiFetch<BookingCompletionProofResponse | undefined>(
+    `${BOOKINGS_BASE}/${bookingId}/completion-proof`,
+    { authenticated: true },
+  );
+  return result ?? null;
+};
 
 /** Live tracking snapshot for the ops view (task 284). Rejects with a 404 ApiError - see AdminBookingTrackingResponse's doc comment - when there is no live data to show; the caller renders that as a plain state, not an error. */
 export const getBookingTracking = (bookingId: string) =>
