@@ -1,4 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nestly Provider">
+  <!--
+    Full-bleed on purpose (task 368): this file is the source the PNG icon
+    set beside it is rasterized from, and an app icon must not round its own
+    corners. iOS masks an apple-touch-icon to its own squircle and fills any
+    transparency it finds outside that mask with black, so the rounded
+    rectangle this used to draw produced black corners on a home screen.
+    Android applies its own adaptive-icon shape for the same reason. Both
+    platforms want a square, edge-to-edge, fully opaque icon and do the
+    rounding themselves.
+
+    Unlike customer-web's icon, the glyph here fills most of the canvas
+    rather than sitting inside a centered ~40% safe zone, so this mark is NOT
+    safe to crop to a circle - which is why manifest.json declares it for the
+    "any" purpose only and never "maskable". Shrinking the glyph to make it
+    maskable is a design decision, not a mechanical one; it is deliberately
+    not made here.
+  -->
   <defs>
     <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#6538CD" />
@@ -6,7 +23,7 @@
       <stop offset="100%" stop-color="#A594F6" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#g)" />
+  <rect width="512" height="512" fill="url(#g)" />
   <path
     d="M110 246 256 132l146 114v154a20 20 0 0 1-20 20h-84v-106H190v106h-84a20 20 0 0 1-20-20Z"
     fill="#ffffff"
