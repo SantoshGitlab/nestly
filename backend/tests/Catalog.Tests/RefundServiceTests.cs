@@ -175,7 +175,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(orderContext);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway));
+                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway),
+                new AlwaysEligibleProviderSearchStub());
             var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
             gatewayOrderId = order.Value.GatewayOrderId;
         }

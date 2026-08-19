@@ -408,6 +408,75 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
     }
 
     /// <summary>
+    /// The gap the generic status endpoint used to have: nothing stopped an
+    /// admin moving a booking straight to "Professional Assigned" with no
+    /// provider anywhere in the picture (no <see cref="Booking.AssignedProviderId"/>,
+    /// no <c>BookingProviderAssignment</c> row) - <see cref="BookingLifecycle"/>
+    /// only checks the state-machine shape, not whether a real provider
+    /// exists. This is what closes it.
+    /// </summary>
+    [Fact]
+    public async Task UpdateStatusAsync_rejects_Assigned_when_no_provider_is_actually_assigned()
+    {
+        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
+
+        using (var context = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        using var context2 = _db.CreateContext();
+        var service = BuildBookingManagementService(context2);
+        var result = await service.UpdateStatusAsync(
+            bookingId, Guid.NewGuid(), new AdminBookingStatusUpdateRequest(BookingStatus.Assigned, "Marking assigned"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Booking.NoProviderAssigned");
+
+        using var readContext = _db.CreateContext();
+        var reloaded = await new BookingRepository(readContext).GetByIdAsync(bookingId);
+        reloaded!.Status.Should().Be(
+            BookingStatus.AwaitingFulfilment, "a rejected transition must not have moved the booking at all");
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_accepts_Assigned_once_a_provider_is_actually_assigned()
+    {
+        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
+
+        using (var context = _db.CreateContext())
+        {
+            // AssignedProviderId is a real foreign key - a fabricated Guid
+            // fails the constraint, so this needs an actual Provider row even
+            // though nothing here cares who they are.
+            var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+9198" + Guid.NewGuid().ToString("N")[..8]);
+            context.Add(provider);
+            context.SaveChanges();
+
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            // AssignProvider, not the assign-provider endpoint/service: this
+            // test is about UpdateStatusAsync's own guard reading
+            // AssignedProviderId, not about the assignment flow itself (that
+            // has its own coverage elsewhere).
+            booking.AssignProvider(provider.Id);
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        using var context2 = _db.CreateContext();
+        var service = BuildBookingManagementService(context2);
+        var result = await service.UpdateStatusAsync(
+            bookingId, Guid.NewGuid(), new AdminBookingStatusUpdateRequest(BookingStatus.Assigned, "Marking assigned"));
+
+        result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "Assigned should succeed once a provider is actually on the booking");
+        result.Value.Status.Should().Be(BookingStatus.Assigned);
+    }
+
+    /// <summary>
     /// Seeds a real, already-successful <see cref="PaymentTransaction"/> for
     /// the booking directly (skipping the gateway order/webhook round trip
     /// <see cref="FinancialQaSuiteTests"/> exercises elsewhere - not what

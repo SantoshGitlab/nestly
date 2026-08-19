@@ -289,6 +289,28 @@ export interface ModerateReviewRequestBody {
   note: string | null;
 }
 
+/**
+ * Bidirectional reviews: the ratings providers have left about this customer
+ * (admin-only - never shown to the customer). Mirrors
+ * Nestly.Application.Customers.CustomerProviderRatingsResponse.
+ * `averageRating`/`ratingCount` are null/0 when the customer has no ratings
+ * yet, same "no rating" vs "rated 0" distinction the provider side uses.
+ */
+export interface CustomerProviderRating {
+  id: string;
+  bookingId: string;
+  rating: number;
+  note: string | null;
+  providerDisplayName: string;
+  createdAtUtc: string;
+}
+
+export interface CustomerProviderRatings {
+  averageRating: number | null;
+  ratingCount: number;
+  recent: CustomerProviderRating[];
+}
+
 /** The customer 360 view (SRS 12.4.2, task 101b). */
 export interface CustomerDetail {
   id: string;
@@ -309,4 +331,5 @@ export interface CustomerDetail {
   coupons: CustomerCouponUsage[];
   supportTickets: CustomerSupportTicket[];
   notes: CustomerNote[];
+  providerRatings: CustomerProviderRatings;
 }

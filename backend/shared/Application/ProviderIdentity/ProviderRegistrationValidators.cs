@@ -36,6 +36,11 @@ public class RegisterProviderRequestValidator : AbstractValidator<RegisterProvid
             .EmailAddress().WithMessage("Email must be a valid email address")
             .When(x => !string.IsNullOrWhiteSpace(x.Email));
 
+        RuleFor(x => x.Password)
+            .MinimumLength(8).WithMessage("Password must be at least 8 characters")
+            .MaximumLength(128).WithMessage("Password must be at most 128 characters")
+            .When(x => !string.IsNullOrEmpty(x.Password));
+
         RuleFor(x => x.ConsentAccepted)
             .Equal(true).WithMessage("Consent to Terms & Privacy is required");
     }

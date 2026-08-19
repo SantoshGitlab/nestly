@@ -3,15 +3,17 @@ using Nestly.BuildingBlocks.Results;
 namespace Nestly.Application.ProviderIdentity;
 
 /// <summary>
-/// Login, session issuance, refresh, and logout for providers. OTP-only -
-/// unlike <c>ICustomerLoginService</c> there is no password login, matching
-/// PROVIDER.md's API surface.
+/// Login, session issuance, refresh, and logout for providers. Task 372
+/// added email+password login alongside OTP, mirroring
+/// <c>ICustomerLoginService</c> exactly.
 /// </summary>
 public interface IProviderLoginService
 {
     Task<Result> RequestOtpAsync(RequestProviderLoginOtpRequest request);
 
     Task<Result<ProviderLoginResponse>> LoginWithOtpAsync(LoginProviderWithOtpRequest request);
+
+    Task<Result<ProviderLoginResponse>> LoginWithPasswordAsync(LoginProviderWithPasswordRequest request);
 
     Task<Result<ProviderLoginResponse>> RefreshAsync(RefreshProviderTokenRequest request);
 

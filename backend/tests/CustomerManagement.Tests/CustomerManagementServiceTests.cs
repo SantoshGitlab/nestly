@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Nestly.Application;
+using Nestly.Application.CustomerRatings;
 using Nestly.Application.Customers;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -31,7 +32,8 @@ public class CustomerManagementServiceTests : IDisposable
             new CouponRedemptionRepository(context),
             new CouponRepository(context),
             new SupportTicketRepository(context),
-            new CustomerNoteRepository(context));
+            new CustomerNoteRepository(context),
+            new CustomerRatingRepository(context));
 
     private static Customer NewCustomer(string name, string mobile, CustomerStatus status = CustomerStatus.Active, string? city = null, string? email = null) =>
         new(Guid.NewGuid(), mobile, name, status, email: email, city: city);

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { PageBanner } from "@/components/PageBanner";
 import { PriceCalculator } from "@/components/PriceCalculator";
 import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
@@ -12,7 +12,6 @@ import { STICKY_BAR_SPACER, StickyActionBar } from "@/components/patterns";
 import { Alert, Button, LinkButton, Skeleton, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { getServiceVisual } from "@/lib/serviceVisuals";
 import type { ServiceDetail } from "@/lib/types";
 
 /**
@@ -53,137 +52,126 @@ export default function ServiceDetailPage() {
   const service = query.data;
 
   return (
-    <main
-      className={cx(
-        "mx-auto w-full max-w-7xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
-        STICKY_BAR_SPACER,
-      )}
-    >
-      <nav aria-label="Breadcrumb" className="mb-5 text-sm">
-        <ol className="flex flex-wrap items-center gap-1.5 text-fg-muted">
-          <li>
-            <Link href="/categories" className="hover:text-fg">
-              Categories
-            </Link>
-          </li>
-          <li aria-hidden>/</li>
-          <li>
-            <Link href={`/categories/${service.categorySlug}`} className="hover:text-fg">
-              {service.categoryName}
-            </Link>
-          </li>
-          <li aria-hidden>/</li>
-          <li className="font-medium text-fg" aria-current="page">
-            {service.name}
-          </li>
-        </ol>
-      </nav>
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title={service.name}
+        description={service.description}
+        imageUrl={service.coverImageUrl}
+        breadcrumb={<Breadcrumb categoryName={service.categoryName} categorySlug={service.categorySlug} serviceName={service.name} />}
+      />
 
-      <ServiceHero name={service.name} coverImageUrl={service.coverImageUrl} />
+      <div className={cx("mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14", STICKY_BAR_SPACER)}>
+        <div className="grid gap-8 md:grid-cols-[1fr_20rem]">
+          <div className="flex min-w-0 flex-col gap-8">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <InclusionList
+                headingId="inclusions-heading"
+                title="What's included"
+                body={service.inclusions}
+                tone="included"
+              />
+              <InclusionList
+                headingId="exclusions-heading"
+                title="What's not included"
+                body={service.exclusions}
+                tone="excluded"
+              />
+            </div>
 
-      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
-        <div className="flex min-w-0 flex-col gap-8">
-          <div>
-            <h1 className="text-display-sm font-semibold text-fg">{service.name}</h1>
-            <p className="mt-3 leading-relaxed text-fg-muted text-pretty">{service.description}</p>
+            {service.cancellationPolicy || service.reschedulePolicy ? (
+              <section aria-labelledby="policies-heading">
+                <h2
+                  id="policies-heading"
+                  className="mb-3 text-lg font-semibold tracking-tight text-fg"
+                >
+                  Cancellation &amp; rescheduling
+                </h2>
+                <ul className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted">
+                  {service.cancellationPolicy ? <li>{service.cancellationPolicy}</li> : null}
+                  {service.reschedulePolicy ? <li>{service.reschedulePolicy}</li> : null}
+                </ul>
+              </section>
+            ) : null}
+
+            <ServiceFaqs faqs={service.faqs} />
+
+            <ReviewsSummary slug={service.slug} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <InclusionList
-              headingId="inclusions-heading"
-              title="What's included"
-              body={service.inclusions}
-              tone="included"
+          <aside className="flex flex-col gap-4 md:sticky md:top-20 md:self-start">
+            <PriceCalculator
+              serviceId={service.id}
+              addOns={service.addOns}
+              cityId={city ? city.id : null}
+              variants={service.variants}
+              addOnGroups={service.addOnGroups}
             />
-            <InclusionList
-              headingId="exclusions-heading"
-              title="What's not included"
-              body={service.exclusions}
-              tone="excluded"
-            />
-          </div>
+            <ServiceAvailability serviceId={service.id} />
 
-          {service.cancellationPolicy || service.reschedulePolicy ? (
-            <section aria-labelledby="policies-heading">
-              <h2
-                id="policies-heading"
-                className="mb-3 text-lg font-semibold tracking-tight text-fg"
-              >
-                Cancellation &amp; rescheduling
-              </h2>
-              <ul className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 text-sm leading-relaxed text-fg-muted">
-                {service.cancellationPolicy ? <li>{service.cancellationPolicy}</li> : null}
-                {service.reschedulePolicy ? <li>{service.reschedulePolicy}</li> : null}
-              </ul>
-            </section>
-          ) : null}
-
-          <ServiceFaqs faqs={service.faqs} />
-
-          <ReviewsSummary slug={service.slug} />
+            {/* StickyActionBar: below `md`, `aside`'s own `md:sticky` doesn't
+                apply (single-column grid), so without this "Book now" - the
+                actual start of the booking funnel per task #344 - sat at the
+                bottom of a page that can run description + two inclusion
+                lists + policies + FAQs + reviews deep, exactly the
+                "primary CTA requires scrolling to find" gap docs/FRONTEND.md's
+                RESPONSIVE DESIGN policy calls out. `md:` collapses back to a
+                plain inline block, unchanged from before. LinkButton, not
+                <Link><Button/></Link>: nesting a button inside an anchor is
+                invalid HTML and gives assistive tech two nested interactive
+                elements for one action. */}
+            <StickyActionBar>
+              <LinkButton href={`/booking/summary?serviceSlug=${service.slug}`} size="lg" fullWidth>
+                Book now
+              </LinkButton>
+            </StickyActionBar>
+          </aside>
         </div>
-
-        <aside className="flex flex-col gap-4 md:sticky md:top-20 md:self-start">
-          <PriceCalculator
-            serviceId={service.id}
-            addOns={service.addOns}
-            cityId={city ? city.id : null}
-            variants={service.variants}
-            addOnGroups={service.addOnGroups}
-          />
-          <ServiceAvailability serviceId={service.id} />
-
-          {/* StickyActionBar: below `md`, `aside`'s own `md:sticky` doesn't
-              apply (single-column grid), so without this "Book now" - the
-              actual start of the booking funnel per task #344 - sat at the
-              bottom of a page that can run description + two inclusion
-              lists + policies + FAQs + reviews deep, exactly the
-              "primary CTA requires scrolling to find" gap docs/FRONTEND.md's
-              RESPONSIVE DESIGN policy calls out. `md:` collapses back to a
-              plain inline block, unchanged from before. LinkButton, not
-              <Link><Button/></Link>: nesting a button inside an anchor is
-              invalid HTML and gives assistive tech two nested interactive
-              elements for one action. */}
-          <StickyActionBar>
-            <LinkButton href={`/booking/summary?serviceSlug=${service.slug}`} size="lg" fullWidth>
-              Book now
-            </LinkButton>
-          </StickyActionBar>
-        </aside>
       </div>
     </main>
   );
 }
 
-/** Admin-supplied photo when present (see ServiceCard for the same pattern); otherwise the icon-on-gradient fallback from src/lib/serviceVisuals.tsx. */
-function ServiceHero({ name, coverImageUrl }: { name: string; coverImageUrl?: string | null }) {
-  const { icon: Icon, gradient } = getServiceVisual(name);
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = coverImageUrl && !imageFailed;
-
+/**
+ * Breadcrumb for the full-bleed `PageBanner` (see `categories/[slug]/page.tsx`'s
+ * own `Breadcrumb` for the pattern this mirrors) - white text over the
+ * banner's scrim rather than the default `text-fg-muted` a plain-background
+ * breadcrumb uses.
+ */
+function Breadcrumb({
+  categoryName,
+  categorySlug,
+  serviceName,
+}: {
+  categoryName: string;
+  categorySlug: string;
+  serviceName: string;
+}) {
   return (
-    <div
-      aria-hidden
-      className="relative h-48 overflow-hidden rounded-2xl shadow-sm sm:h-64"
-    >
-      {showImage ? (
-        // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
-        <img
-          src={coverImageUrl}
-          alt=""
-          onError={() => setImageFailed(true)}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <div
-          className={`flex h-full items-center justify-center bg-gradient-to-br ${gradient} text-white/90`}
-        >
-          <span className="scale-[2]">
-            <Icon />
-          </span>
-        </div>
-      )}
-    </div>
+    <nav aria-label="Breadcrumb" className="text-sm">
+      <ol className="flex flex-wrap items-center gap-1.5 text-white/70">
+        <li>
+          <Link href="/" className="hover:text-white">
+            Home
+          </Link>
+        </li>
+        <li aria-hidden>/</li>
+        <li>
+          <Link href="/categories" className="hover:text-white">
+            Categories
+          </Link>
+        </li>
+        <li aria-hidden>/</li>
+        <li>
+          <Link href={`/categories/${categorySlug}`} className="hover:text-white">
+            {categoryName}
+          </Link>
+        </li>
+        <li aria-hidden>/</li>
+        <li className="truncate font-medium text-white" aria-current="page">
+          {serviceName}
+        </li>
+      </ol>
+    </nav>
   );
 }
 
@@ -236,29 +224,27 @@ function InclusionList({
   );
 }
 
-/** Mirrors the loaded layout so the two columns don't jump into place. */
+/** Mirrors the loaded page's frame (full-bleed banner + content) so nothing jumps when it resolves - same pattern as `CategoryDetailSkeleton`. */
 function ServiceDetailSkeleton() {
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
-      <Skeleton className="h-4 w-72" />
-      <Skeleton className="mt-5 h-36 rounded-2xl sm:h-44" />
-      <div className="mt-8 grid gap-8 md:grid-cols-[1fr_20rem]">
-        <div className="flex flex-col gap-6">
-          <Skeleton className="h-9 w-3/4" />
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
+    <main className="flex w-full flex-col">
+      {/* Mirrors PageBanner's real height so the page doesn't jump when it resolves. */}
+      <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="grid gap-8 md:grid-cols-[1fr_20rem]">
+          <div className="flex flex-col gap-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Skeleton className="h-28 rounded-2xl" />
+              <Skeleton className="h-28 rounded-2xl" />
+            </div>
+            <Skeleton className="h-40 rounded-2xl" />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Skeleton className="h-28 rounded-2xl" />
-            <Skeleton className="h-28 rounded-2xl" />
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-56 rounded-2xl" />
+            <Skeleton className="h-40 rounded-2xl" />
+            <Skeleton className="h-12 rounded-lg" />
           </div>
-          <Skeleton className="h-40 rounded-2xl" />
-        </div>
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-56 rounded-2xl" />
-          <Skeleton className="h-40 rounded-2xl" />
-          <Skeleton className="h-12 rounded-lg" />
         </div>
       </div>
     </main>

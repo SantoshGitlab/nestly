@@ -58,7 +58,7 @@ export function PageBanner({
         {breadcrumb}
         <h1
           className={cx(
-            "font-bold text-white",
+            "font-semibold text-white",
             size === "compact" ? "text-xl sm:text-display-sm" : "text-display-sm sm:text-display-md",
           )}
         >

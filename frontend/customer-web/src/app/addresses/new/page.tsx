@@ -7,8 +7,9 @@ import { Suspense, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AddressForm, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
-import { STICKY_BAR_SPACER } from "@/components/patterns";
-import { Card, PageHeading, cx } from "@/components/ui";
+import { BannerBreadcrumb, STICKY_BAR_SPACER, ScreenSkeleton } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
+import { Card, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { safeRedirectTarget } from "@/lib/auth";
 import type { CustomerAddress } from "@/lib/types";
@@ -17,9 +18,18 @@ export default function NewAddressPage() {
   // Suspense boundary required around useSearchParams (used below to resume
   // wherever this form was opened from, e.g. mid-booking review, instead of
   // always landing on the standalone address book) - same requirement/
-  // pattern as booking/summary/page.tsx and login/page.tsx.
+  // pattern as booking/summary/page.tsx and login/page.tsx. Sized fallback
+  // (not `null`) so the form doesn't flash in blank, matching support/new's
+  // equivalent boundary.
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col">
+          <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+          <ScreenSkeleton cards={1} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+        </main>
+      }
+    >
       <RequireAuth>
         <NewAddress />
       </RequireAuth>
@@ -58,17 +68,18 @@ function NewAddress() {
   });
 
   return (
-    <main
-      className={cx(
-        "mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
-        STICKY_BAR_SPACER,
-      )}
-    >
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title="Add an address"
-        subtitle="Your first address automatically becomes your default."
+        description="Your first address automatically becomes your default."
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "Address book", href: "/addresses" }, { label: "Add an address" }]}
+          />
+        }
       />
 
+      <div className={cx("mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14", STICKY_BAR_SPACER)}>
       <Card title="Address details">
         <AddressForm
           submitLabel="Save address"
@@ -83,6 +94,7 @@ function NewAddress() {
           {returnTo ? "Back to your booking" : "Back to address book"}
         </Link>
       </p>
+      </div>
     </main>
   );
 }

@@ -154,7 +154,8 @@ public sealed class PaymentReconciliationTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(context);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                BuildWebhookService(paymentRepository, bookingRepository, context, gateway));
+                BuildWebhookService(paymentRepository, bookingRepository, context, gateway),
+                new AlwaysEligibleProviderSearchStub());
 
             await paymentService.CreateOrderAsync(pending.CustomerId, new CreatePaymentOrderRequest(pending.BookingId, null));
             var succeededOrder = await paymentService.CreateOrderAsync(succeeded.CustomerId, new CreatePaymentOrderRequest(succeeded.BookingId, null));

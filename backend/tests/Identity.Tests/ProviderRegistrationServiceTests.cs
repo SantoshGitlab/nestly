@@ -1,9 +1,11 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Moq;
 using Nestly.Application.ProviderIdentity;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -34,8 +36,12 @@ public class ProviderRegistrationServiceTests : IDisposable
             .ReturnsAsync(Result.Success());
     }
 
-    private ProviderRegistrationService CreateService(NestlyDbContext context) =>
-        new(new ProviderRepository(context), new ProviderAuthIdentityRepository(context), _otpService.Object);
+    private ProviderRegistrationService CreateService(NestlyDbContext context, ProviderAccountOptions? options = null) =>
+        new(
+            new ProviderRepository(context),
+            new ProviderAuthIdentityRepository(context),
+            _otpService.Object,
+            Options.Create(options ?? new ProviderAccountOptions()));
 
     private static RegisterProviderRequest ValidRequest(string mobile = Mobile) => new(
         mobile, OtpCode, "Ravi Kumar", "Ravi's Repairs", "ravi@example.com", ConsentAccepted: true);
@@ -120,6 +126,83 @@ public class ProviderRegistrationServiceTests : IDisposable
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("ProviderRegistration.MobileAlreadyRegistered");
+    }
+
+    // ---- Task 372: optional email+password capture at registration ----
+
+    [Fact]
+    public async Task RegisterAsync_with_a_password_creates_an_additional_email_password_identity()
+    {
+        await using var context = _database.CreateContext();
+        var request = ValidRequest() with { Password = "a-strong-password" };
+
+        var result = await CreateService(context).RegisterAsync(request);
+
+        result.IsSuccess.Should().BeTrue();
+        var identities = await context.Set<ProviderAuthIdentity>().ToListAsync();
+        identities.Should().Contain(i => i.Provider == AuthProviderType.MobileOtp && i.Identifier == Mobile);
+        identities.Should().Contain(i =>
+            i.Provider == AuthProviderType.EmailPassword && i.Identifier == "ravi@example.com" && i.PasswordHash != null);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_without_a_password_creates_only_the_mobile_identity()
+    {
+        await using var context = _database.CreateContext();
+        var result = await CreateService(context).RegisterAsync(ValidRequest());
+
+        result.IsSuccess.Should().BeTrue();
+        var identities = await context.Set<ProviderAuthIdentity>().ToListAsync();
+        identities.Should().ContainSingle();
+        identities.Single().Provider.Should().Be(AuthProviderType.MobileOtp);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_rejects_a_password_without_an_email()
+    {
+        await using var context = _database.CreateContext();
+        var request = ValidRequest() with { Email = null, Password = "a-strong-password" };
+
+        var result = await CreateService(context).RegisterAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderRegistration.EmailRequiredForPassword");
+        (await context.Set<Provider>().CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_rejects_a_password_when_password_auth_is_disabled()
+    {
+        await using var context = _database.CreateContext();
+        var request = ValidRequest() with { Password = "a-strong-password" };
+        var options = new ProviderAccountOptions { PasswordAuthEnabled = false };
+
+        var result = await CreateService(context, options).RegisterAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderRegistration.PasswordAuthDisabled");
+        (await context.Set<Provider>().CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_rejects_an_email_already_registered_to_another_provider()
+    {
+        await using (var context = _database.CreateContext())
+        {
+            await CreateService(context).RegisterAsync(ValidRequest());
+        }
+
+        await using var secondContext = _database.CreateContext();
+        _otpService
+            .Setup(o => o.ValidateAsync("+919876500000", OtpCode, OtpPurpose.Registration))
+            .ReturnsAsync(Result.Success());
+        var request = ValidRequest(mobile: "+919876500000") with { Password = "a-strong-password" };
+
+        var result = await CreateService(secondContext).RegisterAsync(request);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderRegistration.EmailAlreadyRegistered");
+        (await secondContext.Set<Provider>().CountAsync()).Should().Be(1);
     }
 
     public void Dispose() => _database.Dispose();

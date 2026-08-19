@@ -180,7 +180,8 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(orderContext);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway));
+                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway),
+                new AlwaysEligibleProviderSearchStub());
             var order = await paymentService.CreateOrderAsync(customer.Id, new CreatePaymentOrderRequest(bookingId, null));
             gatewayOrderId = order.Value.GatewayOrderId;
         }

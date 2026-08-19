@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChatWidget } from "@/components/ChatWidget";
-import { Timeline } from "@/components/patterns";
+import { BannerBreadcrumb, Timeline } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { TrackingMap } from "@/components/TrackingMap";
 import { Alert, Button, Card, LinkButton, PageHeading, Skeleton, cx } from "@/components/ui";
@@ -68,7 +69,7 @@ function TrackScreen() {
 
   if (bookingQuery.isError || !bookingQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load this booking"
@@ -88,7 +89,7 @@ function TrackScreen() {
 
   if (!trackable) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Not trackable right now" subtitle={booking.service.name} />
         <div className="mt-6">
           <Alert tone="info" title={booking.statusLabel}>
@@ -107,9 +108,18 @@ function TrackScreen() {
   const tracking = trackingQuery.data;
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <PageHeading title="Tracking your booking" subtitle={booking.service.name} />
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Tracking your booking"
+        description={booking.service.name}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: "Tracking" }]}
+          />
+        }
+      />
 
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-10 sm:px-6 sm:py-14">
       <TrackingMap
         providerLocation={
           tracking?.providerLocation
@@ -155,6 +165,7 @@ function TrackScreen() {
       >
         Back to booking details
       </Link>
+      </div>
     </main>
   );
 }
@@ -306,12 +317,14 @@ function formatMinutes(seconds: number): string {
  */
 function TrackingScreenSkeleton() {
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10" aria-hidden>
-      <Skeleton className="h-8 w-56" />
-      <Skeleton className="h-48 rounded-2xl" />
-      <Skeleton className="h-20 rounded-2xl" />
-      <Skeleton className="h-16 rounded-2xl" />
-      <Skeleton className="h-24 rounded-2xl" />
+    <main className="flex w-full flex-col" aria-hidden>
+      <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" />
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-10 sm:px-6 sm:py-14">
+        <Skeleton className="h-48 rounded-2xl" />
+        <Skeleton className="h-20 rounded-2xl" />
+        <Skeleton className="h-16 rounded-2xl" />
+        <Skeleton className="h-24 rounded-2xl" />
+      </div>
     </main>
   );
 }

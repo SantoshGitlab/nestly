@@ -8,12 +8,14 @@ import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
+  BannerBreadcrumb,
   DetailList,
   DetailRow,
   ScreenSkeleton,
   formatInstant,
   inr,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Button, Card, PageHeading, Textarea } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -102,12 +104,17 @@ function CancelBookingScreen() {
   });
 
   if (policyQuery.isPending) {
-    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (policyQuery.isError || !policyQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6">
         <PageHeading title="Cancel booking" />
         <Alert
           tone="error"
@@ -129,7 +136,7 @@ function CancelBookingScreen() {
   if (cancelMutation.isSuccess) {
     const outcome = cancelMutation.data;
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="mb-7 flex animate-rise flex-col items-center gap-3 text-center">
           <span
             className="flex h-12 w-12 items-center justify-center rounded-full bg-info-soft text-info ring-8 ring-info/10"
@@ -191,7 +198,7 @@ function CancelBookingScreen() {
 
   if (!policy.isEligible) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Cancel booking" />
         <Alert tone="warning" title="This booking can't be cancelled">
           {policy.ineligibilityReason ??
@@ -210,12 +217,18 @@ function CancelBookingScreen() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title="Cancel booking"
-        subtitle="Review what you'll get back before confirming — this can't be undone."
+        description="Review what you'll get back before confirming — this can't be undone."
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: "Cancel booking" }]}
+          />
+        }
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex flex-col gap-6">
         <Card title="Cancellation policy">
           <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3">
@@ -296,6 +309,7 @@ function CancelBookingScreen() {
             </p>
           </form>
         </Card>
+      </div>
       </div>
     </main>
   );

@@ -9,8 +9,16 @@ public interface ICategoryRepository : IRepository<Category>
     /// <summary>Whether any category (other than <paramref name="excludeId"/>, when updating) already uses this slug.</summary>
     Task<bool> ExistsBySlugAsync(string slug, Guid? excludeId = null);
 
-    /// <summary>Active categories with an active mapping to the given city (SRS 12.9.2), ordered for display.</summary>
-    Task<IReadOnlyList<Category>> ListServiceableInCityAsync(Guid cityId);
+    /// <summary>
+    /// Active categories with an active mapping to the given city (SRS
+    /// 12.9.2), ordered for display. When <paramref name="pincodeId"/> is
+    /// given, further narrowed to categories with at least one active
+    /// service actually serviceable at that pincode (SRS 11.1.3 "filtered by
+    /// selected city/serviceability") - the city mapping alone only says the
+    /// category launched in the city, not that any of its services reach
+    /// this specific area yet.
+    /// </summary>
+    Task<IReadOnlyList<Category>> ListServiceableInCityAsync(Guid cityId, Guid? pincodeId = null);
 
     /// <summary>
     /// Active categories whose name contains the query, case-insensitively

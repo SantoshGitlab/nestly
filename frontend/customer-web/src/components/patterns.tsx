@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { Fragment } from "react";
 import type { ReactNode } from "react";
-import { Badge, Skeleton, cx } from "@/components/ui";
+import { ACCOUNT_LINKS } from "@/components/SiteHeader";
+import { Badge, Card, Skeleton, cx } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import { SPRING } from "@/components/motion";
 import { motion } from "motion/react";
@@ -681,6 +684,65 @@ export function StickyActionBar({ children }: { children: ReactNode }) {
 
 /** Bottom padding a page needs so `StickyActionBar` never covers its last row. */
 export const STICKY_BAR_SPACER = "pb-40 md:pb-10";
+
+/**
+ * Breadcrumb for a full-bleed `PageBanner` header - white text over the
+ * banner's scrim, the same markup shape `categories/[slug]` and
+ * `services/[slug]` each hand-rolled locally before this existed. The last
+ * item (no `href`) renders as the current page, matching every other
+ * breadcrumb in the app.
+ */
+export function BannerBreadcrumb({ items }: { items: { label: string; href?: string }[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="text-sm">
+      <ol className="flex flex-wrap items-center gap-1.5 text-white/70">
+        {items.map((item, index) => (
+          <Fragment key={item.label}>
+            {index > 0 ? <li aria-hidden>/</li> : null}
+            <li>
+              {item.href ? (
+                <Link href={item.href} className="hover:text-white">
+                  {item.label}
+                </Link>
+              ) : (
+                <span className="truncate font-medium text-white" aria-current="page">
+                  {item.label}
+                </span>
+              )}
+            </li>
+          </Fragment>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * Sidebar navigation card for the account section's 8/4 page layouts
+ * (profile, bookings, ...): the same destinations `SiteHeader`'s own
+ * account menu offers, reused rather than kept as a second, driftable copy.
+ * `currentHref` drops that one entry - a link to the page it's already
+ * rendered on serves nothing.
+ */
+export function AccountQuickLinksCard({ currentHref }: { currentHref: string }) {
+  const links = ACCOUNT_LINKS.filter((link) => link.href !== currentHref);
+
+  return (
+    <Card title="Manage your account">
+      <nav aria-label="Account sections" className="-mx-2 flex flex-col">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="rounded-lg px-2 py-2 text-sm text-fg-muted transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-fg"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </nav>
+    </Card>
+  );
+}
 
 /** Label/value row for the description lists on the detail and account screens. */
 export function DetailRow({

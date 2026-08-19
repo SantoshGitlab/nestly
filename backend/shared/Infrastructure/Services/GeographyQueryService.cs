@@ -26,4 +26,12 @@ public class GeographyQueryService : IGeographyQueryService
         var localities = await _repository.SearchActiveLocalitiesAsync(cityId, search);
         return Result.Success(localities);
     }
+
+    public async Task<Result<PincodeLookupResponse>> ResolvePincodeAsync(string pincodeCode)
+    {
+        var location = await _repository.ResolvePincodeLocationAsync(pincodeCode);
+        return location is null
+            ? Error.NotFound("Geography.PincodeNotFound", "The specified pincode does not exist.")
+            : Result.Success(location);
+    }
 }

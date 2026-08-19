@@ -59,6 +59,10 @@ export const requestProviderLoginOtp = (mobile: string) =>
 export const verifyProviderLoginOtp = (mobile: string, otpCode: string) =>
   crossOriginFetch<CrossOriginSession>(PROVIDER_API_BASE_URL, "/api/v1/auth/login/otp/verify", { mobile, otpCode });
 
+/** Task 372: provider email+password login, alongside the OTP path above. */
+export const loginProviderWithPassword = (email: string, password: string) =>
+  crossOriginFetch<CrossOriginSession>(PROVIDER_API_BASE_URL, "/api/v1/auth/login/password", { email, password });
+
 /**
  * Hands the browser off to the target app's own origin with the session in
  * the URL fragment, not a query string or path segment - fragments are

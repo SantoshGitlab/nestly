@@ -10,6 +10,7 @@ import { LocalitySelector } from "@/components/LocalitySelector";
 import { PageBanner } from "@/components/PageBanner";
 import {
   AddOnGroupSelector,
+  BannerBreadcrumb,
   BookingProgress,
   FrequencyPicker,
   OPTION_ROW,
@@ -33,7 +34,6 @@ import {
   EmptyState,
   Field,
   LinkButton,
-  PageHeading,
   Skeleton,
   cx,
 } from "@/components/ui";
@@ -79,7 +79,14 @@ const MAX_QUANTITY = 10;
  */
 export default function BookingSummaryPage() {
   return (
-    <Suspense fallback={<ScreenSkeleton cards={4} />}>
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col">
+          <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+          <ScreenSkeleton cards={4} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+        </main>
+      }
+    >
       <RequireAuth>
         <BookingSummaryScreen />
       </RequireAuth>
@@ -606,7 +613,7 @@ function BookingSummaryScreen() {
 
   if (!serviceSlug) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <EmptyState
           title="No service selected"
           description="Choose a service first and we'll bring you straight back here to review it."
@@ -617,12 +624,17 @@ function BookingSummaryScreen() {
   }
 
   if (serviceQuery.isPending) {
-    return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={4} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (serviceQuery.isError || !service) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <Alert
           tone="error"
           title="Couldn't load this service"
@@ -651,21 +663,30 @@ function BookingSummaryScreen() {
   const addNewAddressHref = `/addresses/new?returnTo=${encodeURIComponent(`/booking/summary?serviceSlug=${service.slug}`)}`;
 
   return (
-    <main
-      className={cx(
-        "mx-auto grid w-full max-w-4xl animate-rise gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_22rem]",
-        STICKY_BAR_SPACER,
-      )}
-    >
-      <div className="flex min-w-0 flex-col gap-6 md:col-start-1">
-        {categoryQuery.data?.pageBannerUrl ? (
-          <PageBanner title={service.categoryName} imageUrl={categoryQuery.data.pageBannerUrl} size="compact" />
-        ) : null}
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Review your booking"
+        description={service.name}
+        imageUrl={categoryQuery.data?.pageBannerUrl}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[
+              { label: "Home", href: "/" },
+              { label: service.categoryName, href: `/categories/${service.categorySlug}` },
+              { label: "Review your booking" },
+            ]}
+          />
+        }
+      />
 
-        <div>
-          <BookingProgress current={0} />
-          <PageHeading title="Review your booking" subtitle={service.name} />
-        </div>
+      <div
+        className={cx(
+          "mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1fr_22rem]",
+          STICKY_BAR_SPACER,
+        )}
+      >
+      <div className="flex min-w-0 flex-col gap-6 md:col-start-1">
+        <BookingProgress current={0} />
 
         {/* A booking from this draft already exists and is awaiting payment -
             offer it back rather than letting the customer unknowingly create a
@@ -1103,6 +1124,7 @@ function BookingSummaryScreen() {
           Schedule for later without booking now
         </LinkButton>
       </aside>
+      </div>
     </main>
   );
 }

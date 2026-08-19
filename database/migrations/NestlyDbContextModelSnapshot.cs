@@ -2217,6 +2217,54 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("customer_otp", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.CustomerRating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer")
+                        .HasColumnName("rating");
+
+                    b.HasKey("Id")
+                        .HasName("pk_customer_rating");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_customer_rating_booking_id");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("ix_customer_rating_customer_id");
+
+                    b.HasIndex("ProviderId")
+                        .HasDatabaseName("ix_customer_rating_provider_id");
+
+                    b.ToTable("customer_rating", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.CustomerSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3958,6 +4006,12 @@ namespace Nestly.Infrastructure.Migrations
                     b.Property<Guid>("AddressId")
                         .HasColumnType("uuid")
                         .HasColumnName("address_id");
+
+                    b.Property<bool>("ApplyWalletCredit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("apply_wallet_credit");
 
                     b.Property<Guid>("CityId")
                         .HasColumnType("uuid")
@@ -5937,6 +5991,30 @@ namespace Nestly.Infrastructure.Migrations
                         .HasForeignKey("PaymentTransactionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_customer_amc_contract_payment_transactions_payment_transact");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CustomerRating", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_rating_booking_booking_id");
+
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_rating_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.Provider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_rating_providers_provider_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.CustomerSubscription", b =>

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.ProviderIdentity;
@@ -10,9 +11,10 @@ using Nestly.Infrastructure.Options;
 namespace Nestly.Infrastructure.Services;
 
 /// <summary>
-/// Provider OTP login, session issuance, refresh, and logout (task 146b),
-/// structurally mirroring <see cref="CustomerLoginService"/>. No password
-/// login path - PROVIDER.md's API surface lists only OTP for providers.
+/// Provider login, session issuance, refresh, and logout (task 146b),
+/// structurally mirroring <see cref="CustomerLoginService"/>. Task 372 added
+/// email+password login alongside OTP, closing the gap PROVIDER.md's
+/// original API surface (OTP-only) left.
 ///
 /// Unlike <see cref="CustomerLoginService.IssueSessionAsync"/> (which only
 /// allows <c>CustomerStatus.Active</c>), a session is issued for both
@@ -26,14 +28,17 @@ namespace Nestly.Infrastructure.Services;
 public class ProviderLoginService : IProviderLoginService
 {
     private readonly IProviderRepository _providerRepository;
+    private readonly IProviderAuthIdentityRepository _authIdentityRepository;
     private readonly IProviderSessionRepository _sessionRepository;
     private readonly IProviderLoginAttemptRepository _loginAttemptRepository;
     private readonly IProviderOtpService _otpService;
     private readonly IProviderTokenService _tokenService;
     private readonly ProviderAccountOptions _accountOptions;
+    private readonly PasswordHasher<Provider> _passwordHasher = new();
 
     public ProviderLoginService(
         IProviderRepository providerRepository,
+        IProviderAuthIdentityRepository authIdentityRepository,
         IProviderSessionRepository sessionRepository,
         IProviderLoginAttemptRepository loginAttemptRepository,
         IProviderOtpService otpService,
@@ -41,6 +46,7 @@ public class ProviderLoginService : IProviderLoginService
         IOptions<ProviderAccountOptions> accountOptions)
     {
         _providerRepository = providerRepository;
+        _authIdentityRepository = authIdentityRepository;
         _sessionRepository = sessionRepository;
         _loginAttemptRepository = loginAttemptRepository;
         _otpService = otpService;
@@ -84,6 +90,39 @@ public class ProviderLoginService : IProviderLoginService
         }
 
         await RecordAttemptAsync(request.Mobile, succeeded: true);
+        return await IssueSessionAsync(provider);
+    }
+
+    public async Task<Result<ProviderLoginResponse>> LoginWithPasswordAsync(LoginProviderWithPasswordRequest request)
+    {
+        var lockout = await CheckLockoutAsync(request.Email);
+        if (lockout is not null)
+        {
+            return Result.Failure<ProviderLoginResponse>(lockout);
+        }
+
+        var identity = await _authIdentityRepository.GetByProviderAsync(AuthProviderType.EmailPassword, request.Email);
+        if (identity is null || identity.PasswordHash is null)
+        {
+            await RecordAttemptAsync(request.Email, succeeded: false);
+            return Result.Failure<ProviderLoginResponse>(Error.Unauthorized("ProviderLogin.InvalidCredentials", "Invalid email or password."));
+        }
+
+        var provider = await _providerRepository.GetByIdAsync(identity.ProviderId);
+        if (provider is null)
+        {
+            await RecordAttemptAsync(request.Email, succeeded: false);
+            return Result.Failure<ProviderLoginResponse>(Error.Unauthorized("ProviderLogin.InvalidCredentials", "Invalid email or password."));
+        }
+
+        var verification = _passwordHasher.VerifyHashedPassword(provider, identity.PasswordHash, request.Password);
+        if (verification == PasswordVerificationResult.Failed)
+        {
+            await RecordAttemptAsync(request.Email, succeeded: false);
+            return Result.Failure<ProviderLoginResponse>(Error.Unauthorized("ProviderLogin.InvalidCredentials", "Invalid email or password."));
+        }
+
+        await RecordAttemptAsync(request.Email, succeeded: true);
         return await IssueSessionAsync(provider);
     }
 

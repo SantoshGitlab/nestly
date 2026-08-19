@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -50,6 +51,7 @@ public class ProviderLoginServiceTests : IDisposable
     private ProviderLoginService CreateService(NestlyDbContext context, ProviderAccountOptions options) =>
         new(
             new ProviderRepository(context),
+            new ProviderAuthIdentityRepository(context),
             new ProviderSessionRepository(context),
             new ProviderLoginAttemptRepository(context),
             _otpService.Object,
@@ -205,6 +207,88 @@ public class ProviderLoginServiceTests : IDisposable
         {
             var afterLogout = await CreateService(context, options).RefreshAsync(new RefreshProviderTokenRequest(refreshToken));
             afterLogout.IsFailure.Should().BeTrue();
+        }
+    }
+
+    // ---- Task 372: email+password login ----
+
+    private const string Email = "ravi@example.com";
+    private const string CorrectPassword = "correct-password-value";
+
+    private void SeedPasswordIdentity()
+    {
+        using var context = _database.CreateContext();
+        var provider = context.Set<Provider>().Single(p => p.Id == _providerId);
+        var identity = new ProviderAuthIdentity(
+            Guid.NewGuid(), provider.Id, AuthProviderType.EmailPassword, Email, isPrimary: false);
+        identity.SetPasswordHash(new PasswordHasher<Provider>().HashPassword(provider, CorrectPassword));
+        context.Add(identity);
+        context.SaveChanges();
+    }
+
+    [Fact]
+    public async Task LoginWithPasswordAsync_succeeds_with_the_correct_email_and_password()
+    {
+        SeedPasswordIdentity();
+
+        await using var context = _database.CreateContext();
+        var result = await CreateService(context, OptionsWith(5))
+            .LoginWithPasswordAsync(new LoginProviderWithPasswordRequest(Email, CorrectPassword));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AccessToken.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task LoginWithPasswordAsync_rejects_a_wrong_password()
+    {
+        SeedPasswordIdentity();
+
+        await using var context = _database.CreateContext();
+        var result = await CreateService(context, OptionsWith(5))
+            .LoginWithPasswordAsync(new LoginProviderWithPasswordRequest(Email, "wrong-password"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderLogin.InvalidCredentials");
+    }
+
+    [Fact]
+    public async Task LoginWithPasswordAsync_rejects_an_unknown_email_with_the_same_error_as_a_wrong_password()
+    {
+        SeedPasswordIdentity();
+
+        await using var context = _database.CreateContext();
+        var unknown = await CreateService(context, OptionsWith(5))
+            .LoginWithPasswordAsync(new LoginProviderWithPasswordRequest("nobody@example.com", "whatever"));
+        var wrongPassword = await CreateService(context, OptionsWith(5))
+            .LoginWithPasswordAsync(new LoginProviderWithPasswordRequest(Email, "wrong-password"));
+
+        // Distinguishable errors would turn the login form into an
+        // account-enumeration oracle (mirrors LoginThrottlingTests).
+        unknown.Error.Code.Should().Be(wrongPassword.Error.Code);
+        unknown.Error.Message.Should().Be(wrongPassword.Error.Message);
+    }
+
+    [Fact]
+    public async Task LoginWithPasswordAsync_locks_out_after_repeated_failures_same_as_OTP_login()
+    {
+        SeedPasswordIdentity();
+        var options = OptionsWith(3);
+
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            await using var context = _database.CreateContext();
+            var result = await CreateService(context, options)
+                .LoginWithPasswordAsync(new LoginProviderWithPasswordRequest(Email, "wrong-password"));
+            result.Error.Code.Should().Be("ProviderLogin.InvalidCredentials");
+        }
+
+        await using (var context = _database.CreateContext())
+        {
+            var locked = await CreateService(context, options)
+                .LoginWithPasswordAsync(new LoginProviderWithPasswordRequest(Email, CorrectPassword));
+            locked.IsFailure.Should().BeTrue();
+            locked.Error.Code.Should().Be("ProviderLogin.AccountLocked");
         }
     }
 

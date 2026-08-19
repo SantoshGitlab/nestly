@@ -159,7 +159,9 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
             var paymentRepository = new PaymentTransactionRepository(context);
             var bookingRepository = new BookingRepository(context);
             var webhookService = BuildWebhookService(paymentRepository, bookingRepository, context, gateway);
-            var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
+            var paymentService = new PaymentService(
+                paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
+                new AlwaysEligibleProviderSearchStub());
 
             var first = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
             firstOrderId = first.Value.GatewayOrderId;
@@ -278,7 +280,8 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
             var bookingRepository = new BookingRepository(orderContext);
             var paymentService = new PaymentService(
                 paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway));
+                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway),
+                new AlwaysEligibleProviderSearchStub());
             var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
             gatewayOrderId = order.Value.GatewayOrderId;
         }

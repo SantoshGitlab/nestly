@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { AuthShell, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { AuthShell, ResendRow, Segmented, useResendCountdown } from "@/components/auth-ui";
 import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, Field } from "@/components/ui";
 import { describeError, describeLoginError } from "@/lib/api";
-import { requestLoginOtp, verifyLoginOtp } from "@/lib/auth-api";
+import { loginWithPassword, requestLoginOtp, verifyLoginOtp } from "@/lib/auth-api";
 import { isAuthenticated, storeSession, subscribeToAuthChanges } from "@/lib/auth";
 import type { ProviderLoginResponse } from "@/lib/types";
 
@@ -42,12 +42,23 @@ const otpSchema = z.object({
 });
 type OtpFormValues = z.infer<typeof otpSchema>;
 
+const passwordSchema = z.object({
+  email: z.email("Enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+type PasswordFormValues = z.infer<typeof passwordSchema>;
+
+type SignInMode = "otp" | "password";
+
+const SIGN_IN_MODES = [
+  { value: "otp" as const, label: "Mobile OTP" },
+  { value: "password" as const, label: "Email & password" },
+];
+
 /**
- * Provider sign-in (docs/PROVIDER.md's OTP-based auth): mobile number entry
- * requests an OTP, then the provider enters that code to obtain a session.
- * Two independent forms rather than one, one per step - it keeps each
- * step's validation and submit handler simple instead of one form juggling
- * two very different "what does submit do here" meanings.
+ * Provider sign-in. Task 372 added an email+password mode alongside the
+ * original OTP-only flow (docs/PROVIDER.md), mirroring customer-web's own
+ * OTP/password toggle exactly.
  *
  * This page is deliberately retained (task #206) even though customer-web's
  * unified /login can also authenticate a provider: a bookmarked or directly
@@ -56,12 +67,8 @@ type OtpFormValues = z.infer<typeof otpSchema>;
  */
 export default function ProviderLoginPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"mobile" | "otp">("mobile");
-  const [mobile, setMobile] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<SignInMode>("otp");
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [isResending, setIsResending] = useState(false);
-  const resend = useResendCountdown();
 
   // Already signed in (e.g. back-button to /login with a live session) -
   // send straight to the jobs list instead of showing the form again.
@@ -81,9 +88,79 @@ export default function ProviderLoginPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("registered") === "1") {
-      setInfoMessage("Registration submitted. Enter your mobile number to sign in.");
+      setInfoMessage("Registration submitted. Sign in below to continue.");
     }
   }, []);
+
+  const [devSigningIn, setDevSigningIn] = useState(false);
+  const [devError, setDevError] = useState<string | null>(null);
+  const devSignIn = async () => {
+    setDevError(null);
+    setDevSigningIn(true);
+    try {
+      const response = await fetch("/api/dev-login", { method: "POST" });
+      if (!response.ok) {
+        throw new Error("Dev sign-in failed. Is provider-api running with DevAuth configured?");
+      }
+      const session = (await response.json()) as ProviderLoginResponse;
+      storeSession(session);
+      router.push("/jobs");
+    } catch (err) {
+      setDevError(describeError(err));
+    } finally {
+      setDevSigningIn(false);
+    }
+  };
+
+  return (
+    <AuthShell
+      title="Provider sign in"
+      subtitle="Sign in to manage your jobs and profile."
+      footer={
+        <>
+          New provider?{" "}
+          <Link
+            href="/register"
+            className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+          >
+            Register here
+          </Link>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        {infoMessage ? <Alert tone="info">{infoMessage}</Alert> : null}
+        {devError ? <Alert>{devError}</Alert> : null}
+
+        <Segmented name="sign-in-mode" label="Sign-in method" options={SIGN_IN_MODES} value={mode} onChange={setMode} />
+
+        {mode === "otp" ? <OtpLogin /> : <PasswordLogin />}
+
+        {DEV_AUTH_ENABLED ? (
+          <Button
+            type="button"
+            variant="ghost"
+            fullWidth
+            loading={devSigningIn}
+            onClick={devSignIn}
+            className="border border-dashed border-amber-500 text-amber-600 dark:text-amber-400"
+          >
+            Dev sign in (test provider) — local only, skips OTP
+          </Button>
+        ) : null}
+      </div>
+    </AuthShell>
+  );
+}
+
+function OtpLogin() {
+  const router = useRouter();
+  const [step, setStep] = useState<"mobile" | "otp">("mobile");
+  const [mobile, setMobile] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const resend = useResendCountdown();
 
   const mobileForm = useForm<MobileFormValues>({
     resolver: zodResolver(mobileSchema),
@@ -100,7 +177,7 @@ export default function ProviderLoginPage() {
     try {
       await requestLoginOtp({ mobile: values.mobile });
       setMobile(values.mobile);
-      setInfoMessage(`We sent a verification code to ${values.mobile}.`);
+      setNotice(`We sent a verification code to ${values.mobile}.`);
       setStep("otp");
       otpForm.reset({ otpCode: "" });
       resend.start();
@@ -127,7 +204,7 @@ export default function ProviderLoginPage() {
     setIsResending(true);
     try {
       await requestLoginOtp({ mobile });
-      setInfoMessage(`We sent a new verification code to ${mobile}.`);
+      setNotice(`We sent a new verification code to ${mobile}.`);
       resend.start();
     } catch (err) {
       setError(describeError(err));
@@ -139,106 +216,105 @@ export default function ProviderLoginPage() {
   const changeNumber = () => {
     setStep("mobile");
     setError(null);
-    setInfoMessage(null);
+    setNotice(null);
     otpForm.reset({ otpCode: "" });
   };
 
-  const [devSigningIn, setDevSigningIn] = useState(false);
-  const devSignIn = async () => {
+  if (step === "mobile") {
+    return (
+      <form onSubmit={requestOtp} className="flex flex-col gap-4" noValidate>
+        {error ? <Alert>{error}</Alert> : null}
+        <Field
+          label="Mobile number"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          autoFocus
+          placeholder="+919876543210"
+          error={mobileForm.formState.errors.mobile?.message}
+          {...mobileForm.register("mobile")}
+        />
+        <Button type="submit" size="lg" fullWidth loading={mobileForm.formState.isSubmitting}>
+          Send verification code
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={verifyOtp} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      {notice ? <Alert tone="info">{notice}</Alert> : null}
+
+      <OtpInput
+        autoFocus
+        error={otpForm.formState.errors.otpCode?.message}
+        {...otpForm.register("otpCode")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={otpForm.formState.isSubmitting}>
+        Sign in
+      </Button>
+
+      <ResendRow
+        remaining={resend.remaining}
+        canResend={resend.canResend}
+        onResend={resendOtp}
+        pending={isResending}
+      />
+
+      <Button type="button" variant="ghost" fullWidth onClick={changeNumber}>
+        Use a different number
+      </Button>
+    </form>
+  );
+}
+
+function PasswordLogin() {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+
+  const form = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
-    setDevSigningIn(true);
     try {
-      const response = await fetch("/api/dev-login", { method: "POST" });
-      if (!response.ok) {
-        throw new Error("Dev sign-in failed. Is provider-api running with DevAuth configured?");
-      }
-      const session = (await response.json()) as ProviderLoginResponse;
+      const session = await loginWithPassword(values);
       storeSession(session);
       router.push("/jobs");
     } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setDevSigningIn(false);
+      setError(describeLoginError(err));
     }
-  };
+  });
 
   return (
-    <AuthShell
-      title="Provider sign in"
-      subtitle={
-        step === "mobile"
-          ? "Sign in with your registered mobile number."
-          : `Enter the 6-digit code we sent to ${mobile}.`
-      }
-      footer={
-        <>
-          New provider?{" "}
-          <Link
-            href="/register"
-            className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
-          >
-            Register here
-          </Link>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        {error ? <Alert>{error}</Alert> : null}
-        {infoMessage && !error ? <Alert tone="info">{infoMessage}</Alert> : null}
-
-        {step === "mobile" ? (
-          <form onSubmit={requestOtp} className="flex flex-col gap-4" noValidate>
-            <Field
-              label="Mobile number"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              autoFocus
-              placeholder="+919876543210"
-              error={mobileForm.formState.errors.mobile?.message}
-              {...mobileForm.register("mobile")}
-            />
-            <Button type="submit" size="lg" fullWidth loading={mobileForm.formState.isSubmitting}>
-              Send verification code
-            </Button>
-          </form>
-        ) : (
-          <form onSubmit={verifyOtp} className="flex flex-col gap-4" noValidate>
-            <OtpInput
-              autoFocus
-              error={otpForm.formState.errors.otpCode?.message}
-              {...otpForm.register("otpCode")}
-            />
-            <Button type="submit" size="lg" fullWidth loading={otpForm.formState.isSubmitting}>
-              Sign in
-            </Button>
-
-            <ResendRow
-              remaining={resend.remaining}
-              canResend={resend.canResend}
-              onResend={resendOtp}
-              pending={isResending}
-            />
-
-            <Button type="button" variant="ghost" fullWidth onClick={changeNumber}>
-              Use a different number
-            </Button>
-          </form>
-        )}
-
-        {DEV_AUTH_ENABLED ? (
-          <Button
-            type="button"
-            variant="ghost"
-            fullWidth
-            loading={devSigningIn}
-            onClick={devSignIn}
-            className="border border-dashed border-amber-500 text-amber-600 dark:text-amber-400"
-          >
-            Dev sign in (test provider) — local only, skips OTP
-          </Button>
-        ) : null}
-      </div>
-    </AuthShell>
+    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      <Field
+        label="Email"
+        type="email"
+        autoComplete="email"
+        error={form.formState.errors.email?.message}
+        {...form.register("email")}
+      />
+      <Field
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        error={form.formState.errors.password?.message}
+        {...form.register("password")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
+        Sign in
+      </Button>
+      <Link
+        href="/forgot-password"
+        className="text-center text-sm text-fg-muted underline-offset-4 hover:text-fg hover:underline"
+      >
+        Forgot your password?
+      </Link>
+    </form>
   );
 }

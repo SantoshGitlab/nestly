@@ -18,13 +18,17 @@ public class CategoriesController : ControllerBase
         _categoryQueryService = categoryQueryService;
     }
 
-    /// <summary>List active categories serviceable in a city (SRS 11.1).</summary>
+    /// <summary>
+    /// List active categories serviceable in a city (SRS 11.1), optionally
+    /// narrowed to a specific pincode when the customer has picked an area
+    /// rather than just a city (SRS 11.1.3).
+    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<CategorySummaryResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> List([FromQuery] Guid cityId)
+    public async Task<IActionResult> List([FromQuery] Guid cityId, [FromQuery] Guid? pincodeId)
     {
-        var result = await _categoryQueryService.ListServiceableInCityAsync(cityId);
+        var result = await _categoryQueryService.ListServiceableInCityAsync(cityId, pincodeId);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

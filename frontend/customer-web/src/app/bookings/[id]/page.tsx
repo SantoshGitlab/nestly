@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
+  BannerBreadcrumb,
   BookingStatusBadge,
   DetailList,
   DetailRow,
@@ -17,8 +18,9 @@ import {
   providerAssignmentLabel,
   providerAssignmentTone,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Badge, Button, Card, LinkButton, PageHeading, Skeleton, cx } from "@/components/ui";
+import { Alert, Badge, Button, Card, LinkButton, Skeleton, cx } from "@/components/ui";
 import { isBookingTrackable, useBookingTracking } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import {
@@ -79,12 +81,17 @@ function BookingDetailScreen() {
   useBookingTracking(query.data && isBookingTrackable(query.data.status) ? id : undefined);
 
   if (query.isPending) {
-    return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={4} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (query.isError || !query.data) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load this booking"
@@ -104,17 +111,23 @@ function BookingDetailScreen() {
   const isClosed = CLOSED_STATUSES.includes(booking.status);
 
   return (
-    <main className="mx-auto grid w-full max-w-4xl gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_20rem]">
-      <div className="flex min-w-0 flex-col gap-6">
-        {/* The heading is the service name and the subtitle carries the
-            booking id as one text node - both are addressed by name in the
-            E2E suite, so neither shape changes. */}
-        <PageHeading
-          title={booking.service.name}
-          subtitle={`Booking ID: ${booking.id}`}
-          actions={<BookingStatusBadge status={booking.status} label={booking.statusLabel} />}
-        />
+    <main className="flex w-full flex-col animate-rise">
+      {/* The title is the service name and the description carries the
+          booking id as one text node - both are addressed by name in the
+          E2E suite, so neither shape changes. */}
+      <PageBanner
+        title={booking.service.name}
+        description={`Booking ID: ${booking.id}`}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: booking.service.name }]}
+          />
+        }
+        badge={<BookingStatusBadge status={booking.status} label={booking.statusLabel} />}
+      />
 
+      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1fr_20rem]">
+      <div className="flex min-w-0 flex-col gap-6">
         <StatusSummaryCard booking={booking} />
 
         <Card title="Slot">
@@ -176,6 +189,7 @@ function BookingDetailScreen() {
       <aside className="flex flex-col gap-4 md:sticky md:top-20 md:self-start">
         <ActionCtas booking={booking} isClosed={isClosed} />
       </aside>
+      </div>
     </main>
   );
 }

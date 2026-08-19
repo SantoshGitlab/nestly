@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import {
+  BannerBreadcrumb,
   DetailList,
   DetailRow,
   ScreenSkeleton,
@@ -12,6 +13,7 @@ import {
   formatInstantDate,
   inr,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -20,7 +22,6 @@ import {
   Card,
   LinkButton,
   Modal,
-  PageHeading,
   useToast,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
@@ -78,12 +79,17 @@ function ContractDetailScreen() {
   });
 
   if (query.isPending) {
-    return <ScreenSkeleton cards={3} className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col" aria-hidden>
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" />
+        <ScreenSkeleton cards={3} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load this contract"
@@ -105,13 +111,19 @@ function ContractDetailScreen() {
     contract.status === CustomerAmcContractStatus.Exhausted;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title={contract.assetLabel}
-        subtitle={`${contract.planName} · ${contract.categoryName}`}
-        actions={<Badge tone={statusTone(contract.status)}>{statusLabel(contract.status)}</Badge>}
+        description={`${contract.planName} · ${contract.categoryName}`}
+        badge={<Badge tone={statusTone(contract.status)}>{statusLabel(contract.status)}</Badge>}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My AMC contracts", href: "/amc" }, { label: contract.assetLabel }]}
+          />
+        }
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex flex-col gap-6">
         <Card title="Cover" description="What this contract includes.">
           <DetailList>
@@ -235,6 +247,7 @@ function ContractDetailScreen() {
           time from the AMC plans page.
         </p>
       </Modal>
+      </div>
     </main>
   );
 }
