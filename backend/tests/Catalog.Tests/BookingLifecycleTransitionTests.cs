@@ -28,6 +28,13 @@ namespace Nestly.Catalog.Tests;
 /// <item>The Assigned -&gt; ProviderEnRoute -&gt; ProviderArrived -&gt;
 /// InProgress tracking chain (task 264), which runs alongside the original
 /// Assigned -&gt; InProgress edge rather than replacing it.</item>
+/// <item>Initiated -&gt; Confirmed (task 331) - a booking with nothing payable
+/// (an AMC entitlement redemption, a fully wallet-covered checkout, a discount
+/// taking the total to zero) is confirmed by <c>BookingService.CreateAsync</c>
+/// without ever awaiting a payment. It has to be its own edge rather than a
+/// hop through PaymentPending: that state promises a payment that will never
+/// be asked for, and is a dead end for such a booking, since
+/// <c>PaymentTransaction</c> rejects a non-positive amount.</item>
 /// </list>
 /// </summary>
 public sealed class BookingLifecycleTransitionTests
@@ -35,7 +42,7 @@ public sealed class BookingLifecycleTransitionTests
     private static readonly IReadOnlyDictionary<BookingStatus, BookingStatus[]> ExpectedTransitions =
         new Dictionary<BookingStatus, BookingStatus[]>
         {
-            [BookingStatus.Initiated] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer],
+            [BookingStatus.Initiated] = [BookingStatus.PaymentPending, BookingStatus.Confirmed, BookingStatus.CancelledByCustomer],
             [BookingStatus.PaymentPending] = [BookingStatus.Confirmed, BookingStatus.PaymentFailed, BookingStatus.CancelledByCustomer, BookingStatus.Expired],
             [BookingStatus.PaymentFailed] = [BookingStatus.PaymentPending, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
             [BookingStatus.Confirmed] = [BookingStatus.AwaitingFulfilment, BookingStatus.Rescheduled, BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin],
@@ -117,6 +124,30 @@ public sealed class BookingLifecycleTransitionTests
         // Unlike CancelledByCustomer/CancelledByAdmin, an expired booking never
         // captured a payment - there is deliberately no RefundPending path.
         BookingLifecycle.IsValidTransition(BookingStatus.Expired, BookingStatus.RefundPending).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Task 331: the zero-payable walk - Initiated straight to Confirmed and
+    /// on through fulfilment, never touching PaymentPending. This is the path
+    /// an AMC redemption booking takes end to end; before task 331 it stopped
+    /// dead at PaymentPending, which no zero-amount payment could ever leave.
+    /// </summary>
+    [Fact]
+    public void A_booking_with_nothing_payable_reaches_Completed_without_ever_entering_PaymentPending()
+    {
+        var booking = NewBooking();
+
+        booking.TransitionTo(BookingStatus.Confirmed, "Nothing payable on this booking - confirmed without a payment.");
+        booking.TransitionTo(BookingStatus.AwaitingFulfilment);
+        booking.TransitionTo(BookingStatus.Assigned);
+        booking.TransitionTo(BookingStatus.InProgress);
+        booking.TransitionTo(BookingStatus.Completed);
+
+        booking.Status.Should().Be(BookingStatus.Completed);
+        booking.StatusHistory.Select(h => h.ToStatus).Should().Equal(
+            BookingStatus.Initiated, BookingStatus.Confirmed, BookingStatus.AwaitingFulfilment,
+            BookingStatus.Assigned, BookingStatus.InProgress, BookingStatus.Completed);
+        booking.StatusHistory[1].Reason.Should().Be("Nothing payable on this booking - confirmed without a payment.");
     }
 
     // --- Full lifecycle walks through the real aggregate, not just the static table ---

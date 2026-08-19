@@ -658,6 +658,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
+        services.AddScoped<IBookingFulfilmentPromotionJob, BookingFulfilmentPromotionJob>();
         services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
         services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
         services.AddScoped<INestlyCoinsAdminService, NestlyCoinsAdminService>();

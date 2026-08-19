@@ -22,6 +22,15 @@ namespace Nestly.Infrastructure.Services;
 /// a provider on completion - is released back out in the same transaction,
 /// without changing how the refund itself is actually paid out (still
 /// <see cref="IWalletService"/> or the gateway, exactly as before).
+///
+/// Task 356: a booking is refundable up to what it was actually funded with,
+/// which is its gateway payment PLUS whatever wallet balance it consumed at
+/// checkout - not the payment alone. Either half can be zero: a booking whose
+/// wallet balance covered the whole price is confirmed with no
+/// PaymentTransaction at all (task 331), and until this change had no refund
+/// path whatsoever. Each half settles as its own <see cref="RefundTransaction"/>
+/// (see <see cref="RefundFundingSource"/>), so both show up in the customer's
+/// refund history rather than the wallet half moving invisibly.
 /// </summary>
 public class RefundService : IRefundService
 {
@@ -56,14 +65,14 @@ public class RefundService : IRefundService
         _context = context;
     }
 
-    public Task<Result<RefundTransactionResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
+    public Task<Result<RefundOutcomeResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
         InitiateAsync(bookingId, RefundType.Full, requestedAmount: null, reason, method);
 
-    public Task<Result<RefundTransactionResponse>> InitiatePartialRefundAsync(Guid bookingId, decimal amount, string reason, RefundMethod method = RefundMethod.Gateway)
+    public Task<Result<RefundOutcomeResponse>> InitiatePartialRefundAsync(Guid bookingId, decimal amount, string reason, RefundMethod method = RefundMethod.Gateway)
     {
         if (amount <= 0)
         {
-            return Task.FromResult(Result.Failure<RefundTransactionResponse>(Error.Validation("Refund.InvalidAmount", "Refund amount must be positive.")));
+            return Task.FromResult(Result.Failure<RefundOutcomeResponse>(Error.Validation("Refund.InvalidAmount", "Refund amount must be positive.")));
         }
 
         return InitiateAsync(bookingId, RefundType.Partial, amount, reason, method);
@@ -82,7 +91,7 @@ public class RefundService : IRefundService
         return Result.Success(response);
     }
 
-    private async Task<Result<RefundTransactionResponse>> InitiateAsync(
+    private async Task<Result<RefundOutcomeResponse>> InitiateAsync(
         Guid bookingId, RefundType type, decimal? requestedAmount, string reason, RefundMethod method)
     {
         var booking = await _bookingRepository.GetByIdAsync(bookingId);
@@ -99,36 +108,59 @@ public class RefundService : IRefundService
         }
 
         var payment = await _paymentRepository.GetByBookingIdAsync(bookingId);
-        if (payment is null || payment.Status != PaymentTransactionStatus.Success)
+        decimal paymentSettledAmount = payment is { Status: PaymentTransactionStatus.Success } ? payment.Amount : 0m;
+        decimal walletCreditApplied = booking.WalletCreditAppliedSnapshot ?? 0m;
+
+        if (paymentSettledAmount <= 0 && walletCreditApplied <= 0)
         {
-            return Error.Business("Refund.NoSuccessfulPayment", "This booking has no successful payment to refund.");
+            // Nothing was ever collected for this booking - no successful
+            // payment and no wallet balance spent on it. A 100%-off coupon,
+            // a subscription free visit and an AMC entitlement redemption all
+            // land here (task 331 confirms them without charging anything):
+            // there is genuinely nothing to hand back, which is a clean
+            // business refusal rather than the missing capability this same
+            // error used to report for a wallet-covered booking.
+            return Error.Business("Refund.NoSuccessfulPayment", "This booking has no payment or wallet credit to refund.");
         }
 
-        var priorRefunds = await _refundRepository.ListByPaymentTransactionAsync(payment.Id);
-        decimal alreadyRefunded = priorRefunds.Where(r => r.Status != RefundStatus.Failed).Sum(r => r.Amount);
-        decimal remaining = payment.Amount - alreadyRefunded;
+        var priorRefunds = await _refundRepository.ListByBookingAsync(bookingId);
+        var remaining = RefundAllocationCalculator.ComputeRemaining(paymentSettledAmount, walletCreditApplied, priorRefunds);
 
         decimal amount;
         if (type == RefundType.Full)
         {
-            if (remaining <= 0)
+            if (remaining.Total <= 0)
             {
-                return Error.Business("Refund.NothingToRefund", "This payment has already been fully refunded.");
+                return Error.Business("Refund.NothingToRefund", "This booking has already been fully refunded.");
             }
 
-            amount = remaining;
+            amount = remaining.Total;
         }
         else
         {
             amount = requestedAmount!.Value;
-            if (amount > remaining)
+            if (amount > remaining.Total)
             {
-                return Error.Validation("Refund.ExceedsRemainingBalance", $"Only {remaining} remains refundable on this payment.");
+                return Error.Validation("Refund.ExceedsRemainingBalance", $"Only {remaining.Total} remains refundable on this booking.");
             }
         }
 
-        var refund = new RefundTransaction(Guid.NewGuid(), bookingId, payment.Id, type, method, amount, reason);
-        refund.MarkProcessing();
+        var allocation = RefundAllocationCalculator.Allocate(amount, remaining);
+        var settlements = new List<RefundTransaction>(capacity: 2);
+        if (allocation.FromPayment > 0)
+        {
+            settlements.Add(RefundTransaction.ForPayment(Guid.NewGuid(), bookingId, payment!.Id, type, method, allocation.FromPayment, reason));
+        }
+
+        if (allocation.FromWallet > 0)
+        {
+            settlements.Add(RefundTransaction.ForWalletCredit(Guid.NewGuid(), bookingId, type, allocation.FromWallet, reason));
+        }
+
+        foreach (var settlement in settlements)
+        {
+            settlement.MarkProcessing();
+        }
 
         await using var dbTransaction = await _context.Database.BeginTransactionAsync();
         try
@@ -138,53 +170,35 @@ public class RefundService : IRefundService
                 booking.TransitionTo(BookingStatus.RefundPending, reason);
             }
 
-            if (method == RefundMethod.Wallet)
+            foreach (var settlement in settlements)
             {
-                await _walletService.CreditAsync(booking.CustomerId, amount, WalletSourceType.Refund, refund.Id, reason);
-                refund.MarkRefunded(gatewayRefundRef: null);
-            }
-            else
-            {
-                var successfulAttempt = payment.Attempts.First(a => a.Status == PaymentAttemptStatus.Success);
-                var gatewayResult = await _gateway.RefundAsync(
-                    new GatewayRefundRequest(successfulAttempt.GatewayPaymentRef!, amount, payment.Currency, bookingId.ToString("N")));
-                refund.MarkRefunded(gatewayResult.GatewayRefundId);
+                await SettleAsync(settlement, booking, payment, reason);
             }
 
-            if (alreadyRefunded + amount >= payment.Amount)
+            if (amount >= remaining.Total)
             {
                 booking.TransitionTo(BookingStatus.Refunded, "Refund completed.");
-
-                // Task 310: a booking that consumed wallet balance at
-                // checkout gets it back once the payment side is fully
-                // settled - the customer never received the service that
-                // balance was spent on. Deliberately different from how a
-                // Coupon's redemption is treated: RedemptionCount is never
-                // decremented on any refund (see CouponService), since a
-                // coupon spends the merchant's inventory of a promotional
-                // offer, not the customer's own money - clawing it back has
-                // no customer-facing harm to undo. Wallet credit is real
-                // money the customer will otherwise simply never see again,
-                // so it gets the explicit reversal a coupon doesn't need.
-                // Scoped to a FULL settlement only (this branch) - a partial
-                // refund leaves the booking's wallet spend exactly where a
-                // coupon's discount is left on the same partial refund: not
-                // prorated back.
-                if (booking.WalletCreditAppliedSnapshot is > 0)
-                {
-                    await _walletService.CreditAsync(
-                        booking.CustomerId, booking.WalletCreditAppliedSnapshot.Value, WalletSourceType.BookingWalletCreditReversal,
-                        booking.Id, "Wallet credit reversed - booking fully refunded");
-                }
             }
 
-            await _refundRepository.AddAsync(refund);
+            foreach (var settlement in settlements)
+            {
+                await _refundRepository.AddAsync(settlement);
+            }
+
             await _bookingRepository.UpdateAsync(booking);
 
             // Task 158: release this refund's amount back out of escrow -
             // a no-op if the booking's hold was already released to its
-            // provider on completion before this refund was issued.
-            await _escrowService.ReleaseForRefundAsync(bookingId, refund.Id, amount);
+            // provider on completion before this refund was issued. Only the
+            // payment-funded settlement releases anything: escrow only ever
+            // held the gateway payment (see EscrowService.HoldAsync), so
+            // counting the wallet-funded half here would release a hold that
+            // still belongs to money nobody has refunded yet.
+            var paymentSettlement = settlements.SingleOrDefault(r => r.FundingSource == RefundFundingSource.Payment);
+            if (paymentSettlement is not null)
+            {
+                await _escrowService.ReleaseForRefundAsync(bookingId, paymentSettlement.Id, paymentSettlement.Amount);
+            }
 
             await dbTransaction.CommitAsync();
         }
@@ -194,10 +208,46 @@ public class RefundService : IRefundService
             throw;
         }
 
-        return Result.Success(ToResponse(refund));
+        return Result.Success(new RefundOutcomeResponse(bookingId, amount, settlements.Select(ToResponse).ToList()));
+    }
+
+    /// <summary>
+    /// Actually moves one settlement's money and marks it Refunded. A
+    /// wallet-FUNDED settlement is the reversal of what the customer spent at
+    /// checkout, tagged <see cref="WalletSourceType.BookingWalletCreditReversal"/>
+    /// so their ledger still tells them apart from a gateway payment that was
+    /// refunded into the wallet as goodwill (<see cref="WalletSourceType.Refund"/>) -
+    /// the same distinction <see cref="WalletSourceType.ReferralCreditExpiry"/>
+    /// keeps from <see cref="WalletSourceType.ReferralReward"/>. Both reference
+    /// their own refund row as the source event (SRS 14.5), which is what keeps
+    /// the append-only ledger traceable when a booking is refunded in more
+    /// than one instalment.
+    /// </summary>
+    private async Task SettleAsync(RefundTransaction settlement, Booking booking, PaymentTransaction? payment, string reason)
+    {
+        if (settlement.FundingSource == RefundFundingSource.Wallet)
+        {
+            await _walletService.CreditAsync(
+                booking.CustomerId, settlement.Amount, WalletSourceType.BookingWalletCreditReversal, settlement.Id,
+                "Wallet credit reversed - booking refunded");
+            settlement.MarkRefunded(gatewayRefundRef: null);
+            return;
+        }
+
+        if (settlement.Method == RefundMethod.Wallet)
+        {
+            await _walletService.CreditAsync(booking.CustomerId, settlement.Amount, WalletSourceType.Refund, settlement.Id, reason);
+            settlement.MarkRefunded(gatewayRefundRef: null);
+            return;
+        }
+
+        var successfulAttempt = payment!.Attempts.First(a => a.Status == PaymentAttemptStatus.Success);
+        var gatewayResult = await _gateway.RefundAsync(
+            new GatewayRefundRequest(successfulAttempt.GatewayPaymentRef!, settlement.Amount, payment.Currency, booking.Id.ToString("N")));
+        settlement.MarkRefunded(gatewayResult.GatewayRefundId);
     }
 
     private static RefundTransactionResponse ToResponse(RefundTransaction refund) => new(
-        refund.Id, refund.BookingId, refund.PaymentTransactionId, refund.Type, refund.Method,
+        refund.Id, refund.BookingId, refund.PaymentTransactionId, refund.FundingSource, refund.Type, refund.Method,
         refund.Amount, refund.Status, refund.GatewayRefundRef, refund.Reason, refund.CreatedAtUtc, refund.ProcessedAtUtc);
 }

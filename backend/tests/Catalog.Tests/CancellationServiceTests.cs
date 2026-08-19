@@ -102,8 +102,16 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total, DateTime SlotStartUtc);
 
-    /// <summary>A freshly created, fully paid booking (Confirmed) with its slot <paramref name="hoursFromNow"/> away - never cancelled.</summary>
-    private async Task<Fixture> SeedPaidBookingAsync(IPaymentGateway gateway, double hoursFromNow, decimal servicePrice = 1000m)
+    /// <summary>
+    /// A freshly created, fully paid booking (Confirmed) with its slot
+    /// <paramref name="hoursFromNow"/> away - never cancelled.
+    /// <paramref name="walletCreditToApply"/> funds part (or all) of it from
+    /// the customer's wallet instead of the gateway; when it covers the whole
+    /// price there is no gateway round trip at all, because task 331 confirms
+    /// such a booking without a payment.
+    /// </summary>
+    private async Task<Fixture> SeedPaidBookingAsync(
+        IPaymentGateway gateway, double hoursFromNow, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];
@@ -143,11 +151,26 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             context.SlotWindowRules.Add(rule);
             context.SaveChanges();
 
-            var request = new BookingSummaryRequest(service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, []);
+            if (walletCreditToApply > 0)
+            {
+                await new WalletService(new WalletLedgerRepository(context), context)
+                    .CreditAsync(customer.Id, walletCreditToApply, WalletSourceType.PromotionalCredit, null, "Test wallet credit");
+            }
+
+            var request = new BookingSummaryRequest(
+                service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, [],
+                ApplyWalletCredit: walletCreditToApply > 0);
             var created = await BuildBookingService(context).CreateAsync(customer.Id, request);
             created.IsSuccess.Should().BeTrue();
             bookingId = created.Value.Id;
             total = created.Value.Price.TotalPayable;
+        }
+
+        if (total <= 0)
+        {
+            return new Fixture(
+                customer, bookingId, total,
+                futureDate.ToDateTime(TimeOnly.MinValue).Add(slotStart).AddHours(-hoursFromNow));
         }
 
         string gatewayOrderId;
@@ -235,6 +258,81 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         result.Value.WithinFreeCancellationWindow.Should().BeFalse();
         result.Value.CancellationFeeAmount.Should().Be(200m);
         result.Value.RefundAmount.Should().Be(800m);
+    }
+
+    /// <summary>
+    /// Task 356: the fee is a percentage of what the customer actually paid,
+    /// which for a part-wallet booking is the gateway payment PLUS the wallet
+    /// balance it consumed. Reading the payment alone (the behaviour before
+    /// this task) charged 20% of 700 instead of 20% of 1000, and then left
+    /// the wallet's 300 unrefunded entirely, because the payment side was
+    /// never "fully settled".
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_of_a_part_wallet_part_gateway_booking_charges_the_fee_on_both_and_refunds_both()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 1, servicePrice: 1000m, walletCreditToApply: 300m);
+        fixture.Total.Should().Be(700m, "the wallet covered 300 of the 1000 at checkout");
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc);
+        var policy = new CancellationPolicyOptions { FreeCancellationWindowHours = 4m, LateCancellationFeePercentage = 20m };
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildCancellationService(context, gateway, timeProvider, policy)
+                .CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Too late but trying anyway"));
+
+            result.IsSuccess.Should().BeTrue();
+            result.Value.CancellationFeeAmount.Should().Be(200m, "20% of the 1000 the customer actually funded, not of the 700 that went through the gateway");
+            result.Value.RefundAmount.Should().Be(800m);
+            result.Value.RefundMethod.Should().Be(RefundMethod.Gateway, "the cancellation record links the payment-funded settlement");
+        }
+
+        using var readContext = _db.CreateContext();
+        var refunds = await new RefundTransactionRepository(readContext).ListByBookingAsync(fixture.BookingId);
+        refunds.Should().HaveCount(2, "one settlement per funding source");
+        refunds.Sum(r => r.Amount).Should().Be(800m);
+        refunds.Single(r => r.FundingSource == RefundFundingSource.Payment).Amount.Should().Be(700m);
+        refunds.Single(r => r.FundingSource == RefundFundingSource.Wallet).Amount.Should().Be(100m);
+
+        (await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id))
+            .Value.Balance.Should().Be(100m, "the fee is withheld from the wallet-funded portion last");
+    }
+
+    /// <summary>
+    /// Task 356: the booking task 331 made reachable - wallet balance covered
+    /// the whole price, so there is no payment at all. Cancelling it inside
+    /// the free window has to give the customer their balance back; before
+    /// this task the refund attempt failed with Refund.NoSuccessfulPayment
+    /// and took the whole cancellation down with it.
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_of_a_fully_wallet_covered_booking_refunds_the_balance_it_consumed()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m, walletCreditToApply: 1500m);
+        fixture.Total.Should().Be(0m, "the wallet covered the entire price");
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc);
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildCancellationService(context, gateway, timeProvider)
+                .CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Change of plans"));
+
+            result.IsSuccess.Should().BeTrue();
+            result.Value.CancellationFeeAmount.Should().Be(0m);
+            result.Value.RefundAmount.Should().Be(1000m, "the wallet balance the booking consumed is what stands to be refunded");
+            result.Value.RefundMethod.Should().Be(RefundMethod.Wallet);
+            result.Value.BookingStatus.Should().Be(BookingStatus.Refunded);
+        }
+
+        using var readContext = _db.CreateContext();
+        (await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id))
+            .Value.Balance.Should().Be(1500m);
+
+        var record = await new BookingCancellationRepository(readContext).GetByBookingIdAsync(fixture.BookingId);
+        record!.RefundTransactionId.Should().NotBeNull("the customer's cancellation history has to show the refund it produced");
+        record.RefundMethod.Should().Be(RefundMethod.Wallet);
     }
 
     [Fact]

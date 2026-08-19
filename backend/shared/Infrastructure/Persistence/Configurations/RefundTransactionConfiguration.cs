@@ -17,12 +17,16 @@ public class RefundTransactionConfiguration : IEntityTypeConfiguration<RefundTra
             .HasForeignKey(x => x.BookingId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.Property(x => x.PaymentTransactionId).IsRequired();
+        // Nullable since task 356: a refund of the wallet balance a booking
+        // consumed at checkout has no gateway payment to reference - see
+        // RefundFundingSource, which is the discriminator that says so
+        // explicitly rather than leaving the null to be interpreted.
         builder.HasOne<PaymentTransaction>()
             .WithMany()
             .HasForeignKey(x => x.PaymentTransactionId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Property(x => x.FundingSource).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Type).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Method).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Amount).IsRequired().HasPrecision(12, 2);

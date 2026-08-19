@@ -20,6 +20,15 @@ public class BookingService : IBookingService
     /// <summary>Recorded on the auto-transition to PaymentPending, since there is no real payment gateway integration yet to explain it instead (Phase 4).</summary>
     private const string NoPaymentGatewayReason = "No payment gateway integrated yet - booking moves directly to awaiting payment.";
 
+    /// <summary>
+    /// Task 331: recorded on the auto-transition to Confirmed taken by a
+    /// booking with nothing payable, so the one thing a booking-payment
+    /// mapping would otherwise have explained - why this booking was never
+    /// charged - stays on the record, in the booking's own status timeline,
+    /// for anyone reading it later.
+    /// </summary>
+    private const string NothingPayableReason = "Nothing payable on this booking - confirmed without a payment.";
+
     /// <summary>Task 137b: the specific error code SlotAvailabilityService.ReserveSlotAsync returns when a slot has no remaining per-day capacity.</summary>
     private const string SlotCapacityReachedErrorCode = "Booking.SlotCapacityReached";
 
@@ -371,7 +380,27 @@ public class BookingService : IBookingService
                 }
             }
 
-            booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+            // Task 331: a booking with nothing left to pay is confirmed here
+            // and never enters PaymentPending. Stated as "is anything
+            // payable", not "is this an AMC redemption", because three
+            // different features already produce a zero payable - AMC
+            // entitlement (finalPayable forced to zero above), wallet credit
+            // covering the whole remainder, and a coupon/subscription
+            // discount that takes the total to zero (BookingSummaryService
+            // floors each at zero) - and none of them has, or should need,
+            // its own confirmation path. PaymentPending is not merely
+            // unnecessary for these: it is a dead end, since
+            // PaymentTransaction rejects a non-positive amount and
+            // PaymentService therefore cannot produce the gateway round trip
+            // that would confirm them.
+            if (finalPayable <= 0)
+            {
+                booking.TransitionTo(BookingStatus.Confirmed, NothingPayableReason);
+            }
+            else
+            {
+                booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+            }
 
             if (!await _bookingRepository.TryAddAsync(booking))
             {
@@ -397,7 +426,20 @@ public class BookingService : IBookingService
                 return Result.Success(ToDetailResponse(winner, winnerAssignment?.Status, await ProviderSummaryFor(winnerAssignment)));
             }
 
-            if (summary.Coupon is not null)
+            // Task 357: the `amcContract is null` half of this condition has to
+            // match the ReserveAsync guard above exactly - the two calls are the
+            // two halves of one redemption (reserve the cap, then link the
+            // reservation to the booking), so a redemption record written
+            // without a matching reservation records a redemption that never
+            // consumed a usage slot and never discounted anything (the booking's
+            // CouponCodeSnapshot/discount are nulled for an AMC redemption too).
+            // Skipped rather than rejected: IBookingService.CreateAsync's
+            // amcContractId doc comment and docs/AMC.md both define a coupon on
+            // an AMC redemption as *ignored*, and the request reaching here is
+            // the customer's own checkout request forwarded by
+            // AmcCustomerService.RedeemVisitAsync - failing it would turn a
+            // stale coupon still sitting in the cart into a blocked redemption.
+            if (summary.Coupon is not null && amcContract is null)
             {
                 await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
             }

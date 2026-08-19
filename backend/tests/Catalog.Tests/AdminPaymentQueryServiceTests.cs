@@ -262,7 +262,7 @@ public sealed class AdminPaymentQueryServiceTests : IClassFixture<TestDatabase>
             // A refund raised against the now-succeeded transaction - seeded
             // directly (RefundService's own workflow is covered by
             // RefundServiceTests) so this test only exercises the read side.
-            var refund = new RefundTransaction(
+            var refund = RefundTransaction.ForPayment(
                 Guid.NewGuid(), seeded.BookingId, transactionId, RefundType.Partial, RefundMethod.Wallet, 100m, "Partial cancellation");
             await new RefundTransactionRepository(context).AddAsync(refund);
         }

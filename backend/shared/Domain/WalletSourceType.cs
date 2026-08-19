@@ -34,6 +34,14 @@ public enum WalletSourceType
     /// <summary>Debited when a customer applies wallet balance at checkout (SRS 11.7.2, task 310). SourceReferenceId is the Booking's id.</summary>
     BookingWalletCredit,
 
-    /// <summary>Credited back when a booking that consumed wallet balance is fully refunded (task 310) - the wallet-side counterpart of the reversal RefundService already performs for the escrow hold. SourceReferenceId is the same Booking's id.</summary>
+    /// <summary>
+    /// Credited back when a booking that consumed wallet balance is refunded
+    /// (task 310) - the wallet-side counterpart of the reversal RefundService
+    /// already performs for the escrow hold. SourceReferenceId is the
+    /// wallet-funded <see cref="RefundTransaction"/> that reversed it (task
+    /// 356; it was the Booking's id while the reversal was an untracked side
+    /// effect of fully refunding the payment, which could not say WHICH of a
+    /// booking's refunds handed the balance back).
+    /// </summary>
     BookingWalletCreditReversal
 }

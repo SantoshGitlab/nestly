@@ -12,6 +12,18 @@ public interface IBookingService
     /// 59) and moves it straight to PaymentPending - there is no payment
     /// gateway yet (Phase 4), so "created" and "awaiting payment" are the
     /// same moment for now.
+    ///
+    /// <para>
+    /// Task 331: the one exception is a booking with nothing payable - an AMC
+    /// entitlement redemption (<paramref name="amcContractId"/>), a fully
+    /// wallet-covered checkout, or a discount that takes the total to zero.
+    /// That booking is created straight into
+    /// <see cref="BookingStatus.Confirmed"/> and never enters PaymentPending,
+    /// which for it is a dead end: <see cref="Nestly.Domain.PaymentTransaction"/>
+    /// rejects a non-positive amount, so <c>IPaymentService</c> has no order to
+    /// create and nothing could ever move it on. Callers that assume "a new
+    /// booking is awaiting payment" must read the returned status instead.
+    /// </para>
     /// </summary>
     /// <param name="recurringBookingPlanId">
     /// Task 297: set only by <c>IRecurringBookingSchedulerService</c> when it

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260818182509_AddBookingStatusSlotDateIndex")]
+    partial class AddBookingStatusSlotDateIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4369,12 +4372,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
 
-                    b.Property<string>("FundingSource")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("funding_source");
-
                     b.Property<string>("GatewayRefundRef")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -4386,7 +4383,7 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("method");
 
-                    b.Property<Guid?>("PaymentTransactionId")
+                    b.Property<Guid>("PaymentTransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_transaction_id");
 
@@ -6278,6 +6275,7 @@ namespace Nestly.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("PaymentTransactionId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
                         .HasConstraintName("fk_refund_transaction_payment_transaction_payment_transaction_");
                 });
 
