@@ -36,18 +36,23 @@ public class CategoryQueryService : ICategoryQueryService
         _cache = cache;
     }
 
-    public async Task<Result<IReadOnlyList<CategorySummaryResponse>>> ListServiceableInCityAsync(Guid cityId)
+    public async Task<Result<IReadOnlyList<CategorySummaryResponse>>> ListServiceableInCityAsync(Guid cityId, Guid? pincodeId = null)
     {
         if (!await _serviceabilityRepository.CityExistsAsync(cityId))
         {
             return Error.NotFound("Catalog.CityNotFound", "The specified city does not exist.");
         }
 
+        if (pincodeId is not null && !await _serviceabilityRepository.PincodeExistsAsync(pincodeId.Value))
+        {
+            return Error.NotFound("Catalog.PincodeNotFound", "The specified pincode does not exist.");
+        }
+
         IReadOnlyList<CategorySummaryResponse> response = await _cache.GetOrCreateAsync(
-            CacheKeys.CategoriesInCity(cityId),
+            CacheKeys.CategoriesInCity(cityId, pincodeId),
             async _ =>
             {
-                var categories = await _categoryRepository.ListServiceableInCityAsync(cityId);
+                var categories = await _categoryRepository.ListServiceableInCityAsync(cityId, pincodeId);
                 return (IReadOnlyList<CategorySummaryResponse>)categories.Select(ToSummary).ToList();
             },
             ListTtl);

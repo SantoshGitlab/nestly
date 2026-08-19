@@ -66,8 +66,16 @@ public static class CacheKeys
     /// trade for a browse-page listing; add precise invalidation if it
     /// becomes a measured problem.
     /// </summary>
-    public static string CategoriesInCity(Guid cityId) =>
-        Compose(Areas.Catalog, "city", cityId.ToString("D"), "categories");
+    /// <summary>
+    /// <paramref name="pincodeId"/> is folded into the key (not just cached
+    /// per-city and filtered client-side): the same city, area-narrowed and
+    /// not, are genuinely different result sets and must not collide on one
+    /// cache entry.
+    /// </summary>
+    public static string CategoriesInCity(Guid cityId, Guid? pincodeId = null) =>
+        pincodeId is null
+            ? Compose(Areas.Catalog, "city", cityId.ToString("D"), "categories")
+            : Compose(Areas.Catalog, "city", cityId.ToString("D"), "pincode", pincodeId.Value.ToString("D"), "categories");
 
     /// <summary>Whether a category is serviceable in a city (SRS 12.9.2).</summary>
     public static string CategoryServiceability(Guid categoryId, Guid cityId) =>

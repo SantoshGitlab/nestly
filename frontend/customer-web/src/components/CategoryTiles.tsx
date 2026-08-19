@@ -18,7 +18,7 @@ import type { CategorySummary } from "@/lib/types";
  * city/serviceability where applicable").
  */
 export function CategoryTiles() {
-  const { city } = useSelectedCity();
+  const { city, locality } = useSelectedCity();
 
   // `undefined` means the persisted city is still being read; showing the
   // "pick a city" prompt here would flash it at every customer who already has one.
@@ -30,7 +30,7 @@ export function CategoryTiles() {
     return <NoCitySelectedPrompt />;
   }
 
-  return <CityCategoryGrid cityId={city.id} />;
+  return <CityCategoryGrid cityId={city.id} pincodeId={locality?.pincodeId} />;
 }
 
 function NoCitySelectedPrompt() {
@@ -58,11 +58,14 @@ function NoCitySelectedPrompt() {
   );
 }
 
-function CityCategoryGrid({ cityId }: { cityId: string }) {
+function CityCategoryGrid({ cityId, pincodeId }: { cityId: string; pincodeId?: string }) {
   const [showAll, setShowAll] = useState(false);
   const query = useQuery({
-    queryKey: ["categories", cityId],
-    queryFn: () => apiFetch<CategorySummary[]>(`${API_V1}/categories?cityId=${cityId}`),
+    queryKey: ["categories", cityId, pincodeId],
+    queryFn: () =>
+      apiFetch<CategorySummary[]>(
+        `${API_V1}/categories?cityId=${cityId}${pincodeId ? `&pincodeId=${pincodeId}` : ""}`,
+      ),
   });
 
   if (query.isPending) {
@@ -89,7 +92,11 @@ function CityCategoryGrid({ cityId }: { cityId: string }) {
     return (
       <EmptyState
         title="No services here yet"
-        description="We're not live in your city yet — try another city, or check back soon."
+        description={
+          pincodeId
+            ? "We're not live in this area yet — try the whole city, or another area, or check back soon."
+            : "We're not live in your city yet — try another city, or check back soon."
+        }
         action={<CitySelector />}
       />
     );

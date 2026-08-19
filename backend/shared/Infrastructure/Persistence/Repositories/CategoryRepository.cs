@@ -65,15 +65,29 @@ public class CategoryRepository : ICategoryRepository
     // there is no reason to pay for EF Core's change-tracking snapshot on a
     // possibly-large result set.
 
-    public async Task<IReadOnlyList<Category>> ListServiceableInCityAsync(Guid cityId)
+    public async Task<IReadOnlyList<Category>> ListServiceableInCityAsync(Guid cityId, Guid? pincodeId = null)
     {
         var categoryIds = _context.Set<CategoryCityMapping>()
             .Where(m => m.CityId == cityId && m.IsActive)
             .Select(m => m.CategoryId);
 
-        return await _context.Set<Category>()
+        var query = _context.Set<Category>()
             .AsNoTracking()
-            .Where(c => c.IsActive && categoryIds.Contains(c.Id))
+            .Where(c => c.IsActive && categoryIds.Contains(c.Id));
+
+        if (pincodeId is not null)
+        {
+            var categoryIdsInPincode = _context.Set<ServicePincodeMapping>()
+                .Where(m => m.PincodeId == pincodeId && m.IsActive)
+                .Join(_context.Set<Service>(), m => m.ServiceId, s => s.Id, (m, s) => new { s.CategoryId, s.IsActive })
+                .Where(s => s.IsActive)
+                .Select(s => s.CategoryId)
+                .Distinct();
+
+            query = query.Where(c => categoryIdsInPincode.Contains(c.Id));
+        }
+
+        return await query
             .OrderBy(c => c.SortOrder)
             .ThenBy(c => c.Name)
             .ToListAsync();
