@@ -11,9 +11,8 @@ namespace Nestly.ProviderApi.Controllers;
 
 /// <summary>
 /// Provider authentication (task 146a/146b, PROVIDER.md API surface "Auth").
-/// OTP-only — there is no password login for providers, so this is
-/// structurally simpler than consumer-api's <c>AuthController</c>, which it
-/// otherwise mirrors.
+/// Task 372 added email+password login/registration/reset alongside OTP,
+/// mirroring consumer-api's <c>AuthController</c> in full.
 /// </summary>
 [ApiController]
 [ApiVersion(1)]
@@ -22,31 +21,43 @@ public class AuthController : ControllerBase
 {
     private readonly IProviderRegistrationService _registrationService;
     private readonly IProviderLoginService _loginService;
+    private readonly IProviderPasswordResetService _passwordResetService;
     private readonly IValidator<RequestProviderRegistrationOtpRequest> _registrationOtpValidator;
     private readonly IValidator<RegisterProviderRequest> _registerValidator;
     private readonly IValidator<RequestProviderLoginOtpRequest> _loginOtpValidator;
     private readonly IValidator<LoginProviderWithOtpRequest> _loginWithOtpValidator;
+    private readonly IValidator<LoginProviderWithPasswordRequest> _loginWithPasswordValidator;
     private readonly IValidator<RefreshProviderTokenRequest> _refreshValidator;
     private readonly IValidator<LogoutProviderRequest> _logoutValidator;
+    private readonly IValidator<ForgotProviderPasswordRequest> _forgotPasswordValidator;
+    private readonly IValidator<ResetProviderPasswordRequest> _resetPasswordValidator;
 
     public AuthController(
         IProviderRegistrationService registrationService,
         IProviderLoginService loginService,
+        IProviderPasswordResetService passwordResetService,
         IValidator<RequestProviderRegistrationOtpRequest> registrationOtpValidator,
         IValidator<RegisterProviderRequest> registerValidator,
         IValidator<RequestProviderLoginOtpRequest> loginOtpValidator,
         IValidator<LoginProviderWithOtpRequest> loginWithOtpValidator,
+        IValidator<LoginProviderWithPasswordRequest> loginWithPasswordValidator,
         IValidator<RefreshProviderTokenRequest> refreshValidator,
-        IValidator<LogoutProviderRequest> logoutValidator)
+        IValidator<LogoutProviderRequest> logoutValidator,
+        IValidator<ForgotProviderPasswordRequest> forgotPasswordValidator,
+        IValidator<ResetProviderPasswordRequest> resetPasswordValidator)
     {
         _registrationService = registrationService;
         _loginService = loginService;
+        _passwordResetService = passwordResetService;
         _registrationOtpValidator = registrationOtpValidator;
         _registerValidator = registerValidator;
         _loginOtpValidator = loginOtpValidator;
         _loginWithOtpValidator = loginWithOtpValidator;
+        _loginWithPasswordValidator = loginWithPasswordValidator;
         _refreshValidator = refreshValidator;
         _logoutValidator = logoutValidator;
+        _forgotPasswordValidator = forgotPasswordValidator;
+        _resetPasswordValidator = resetPasswordValidator;
     }
 
     /// <summary>Step 1: send a registration OTP to a mobile number.</summary>
@@ -120,6 +131,24 @@ public class AuthController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>Login via email + password, when password auth is enabled (task 372).</summary>
+    [EnableRateLimiting("login")]
+    [HttpPost("login/password")]
+    [ProducesResponseType(typeof(ProviderLoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LoginWithPassword([FromBody] LoginProviderWithPasswordRequest request)
+    {
+        var validation = await _loginWithPasswordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _loginService.LoginWithPasswordAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Exchange a still-valid refresh token for a new access+refresh pair (rotation).</summary>
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(ProviderLoginResponse), StatusCodes.Status200OK)]
@@ -150,6 +179,44 @@ public class AuthController : ControllerBase
         }
 
         var result = await _loginService.LogoutAsync(request);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Step 1 of the reset flow (task 372). Always 200 — see
+    /// <see cref="IProviderPasswordResetService.RequestResetAsync"/> for why
+    /// an unknown address is not reported as such.
+    /// </summary>
+    [EnableRateLimiting("otp")]
+    [HttpPost("password/forgot")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotProviderPasswordRequest request)
+    {
+        var validation = await _forgotPasswordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _passwordResetService.RequestResetAsync(request);
+        return result.IsSuccess ? Ok() : result.ToProblemResult();
+    }
+
+    /// <summary>Step 2: set the new password once the OTP verifies (task 372).</summary>
+    [EnableRateLimiting("login")]
+    [HttpPost("password/reset")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetProviderPasswordRequest request)
+    {
+        var validation = await _resetPasswordValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _passwordResetService.ResetAsync(request);
         return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 

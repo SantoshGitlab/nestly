@@ -8,6 +8,9 @@ public interface IProviderRepository : IRepository<Provider>
     Task<bool> ExistsByPhoneAsync(string phone);
     Task<Provider?> GetByPhoneAsync(string phone);
 
+    /// <summary>Task 372: email-uniqueness check for provider registration, mirroring <c>ICustomerRepository.ExistsByEmailAsync</c>.</summary>
+    Task<bool> ExistsByEmailAsync(string email);
+
     /// <summary>Search/filter with pagination for the admin provider list (task 150a) - mirrors <c>ICustomerRepository.SearchAsync</c>.</summary>
     Task<ProviderSearchResult> SearchAsync(ProviderSearchFilter filter);
 

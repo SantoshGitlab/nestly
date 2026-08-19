@@ -22,6 +22,7 @@ import {
   ADMIN_WEB_URL,
   PROVIDER_WEB_URL,
   loginAdmin,
+  loginProviderWithPassword,
   redirectWithSession,
   requestProviderLoginOtp,
   verifyProviderLoginOtp,
@@ -381,8 +382,75 @@ function AdminLoginUnified() {
   );
 }
 
-/** Provider sign-in from the unified entry point - calls provider-api directly, then hands off to provider-web's own origin. */
+/**
+ * Provider sign-in from the unified entry point - calls provider-api
+ * directly, then hands off to provider-web's own origin. Task 372 added a
+ * sign-in-mode toggle here too, mirroring the Customer branch's own
+ * OTP/password toggle above.
+ */
 function ProviderLoginUnified() {
+  const [mode, setMode] = useState<Mode>("otp");
+
+  return (
+    <>
+      <Segmented
+        name="provider-sign-in-mode"
+        label="Sign-in method"
+        options={SIGN_IN_MODES}
+        value={mode}
+        onChange={setMode}
+      />
+      {mode === "otp" ? <ProviderOtpLoginUnified /> : <ProviderPasswordLoginUnified />}
+    </>
+  );
+}
+
+function ProviderPasswordLoginUnified() {
+  const [error, setError] = useState<string | null>(null);
+
+  const form = useForm<z.infer<typeof passwordSchema>>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    setError(null);
+    try {
+      const session = await loginProviderWithPassword(values.email, values.password);
+      redirectWithSession(PROVIDER_WEB_URL, "/jobs", session);
+    } catch (err) {
+      setError(describeError(err));
+    }
+  });
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {error ? <Alert>{error}</Alert> : null}
+      <Field
+        label="Email"
+        type="email"
+        autoComplete="email"
+        error={form.formState.errors.email?.message}
+        {...form.register("email")}
+      />
+      <Field
+        label="Password"
+        type="password"
+        autoComplete="current-password"
+        error={form.formState.errors.password?.message}
+        {...form.register("password")}
+      />
+      <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
+        Sign in
+      </Button>
+      <p className="text-center text-xs text-fg-subtle">
+        You&apos;ll be taken to the provider portal on its own address.
+      </p>
+    </form>
+  );
+}
+
+function ProviderOtpLoginUnified() {
   const [step, setStep] = useState<"request" | "verify">("request");
   const [mobile, setMobile] = useState("");
   const [error, setError] = useState<string | null>(null);

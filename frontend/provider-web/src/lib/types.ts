@@ -83,11 +83,31 @@ export interface RegisterProviderRequest {
   displayName: string;
   email?: string;
   consentAccepted: boolean;
+  /** Optional — task 372. Requires `email` to also be set; creates an additional email+password auth identity alongside the always-present mobile identity. */
+  password?: string;
 }
 
 export interface VerifyLoginOtpRequest {
   mobile: string;
   otpCode: string;
+}
+
+/** Task 372: email+password login, mirroring customer-web's LoginWithPasswordRequestBody. */
+export interface LoginWithPasswordRequest {
+  email: string;
+  password: string;
+}
+
+/** Task 372: step 1 of the forgot-password flow. */
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+/** Task 372: step 2 — the OTP was sent to the mobile number on file, not the email. */
+export interface ResetPasswordRequest {
+  email: string;
+  otpCode: string;
+  newPassword: string;
 }
 
 export interface RefreshSessionRequest {

@@ -5,12 +5,15 @@
  */
 import { API_V1, apiFetch } from "./api";
 import type {
+  ForgotPasswordRequest,
+  LoginWithPasswordRequest,
   LogoutRequest,
   ProviderLoginResponse,
   ProviderProfile,
   RefreshSessionRequest,
   RegisterProviderRequest,
   RequestOtpRequest,
+  ResetPasswordRequest,
   VerifyLoginOtpRequest,
 } from "./types";
 
@@ -36,6 +39,27 @@ export const requestLoginOtp = (request: RequestOtpRequest) =>
 
 export const verifyLoginOtp = (request: VerifyLoginOtpRequest) =>
   apiFetch<ProviderLoginResponse>(`${AUTH_BASE}/login/otp/verify`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+/** Task 372: email+password login, when password auth is enabled. */
+export const loginWithPassword = (request: LoginWithPasswordRequest) =>
+  apiFetch<ProviderLoginResponse>(`${AUTH_BASE}/login/password`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+/** Task 372, step 1: request a reset code (sent to the mobile number on file). */
+export const requestPasswordReset = (request: ForgotPasswordRequest) =>
+  apiFetch<void>(`${AUTH_BASE}/password/forgot`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+/** Task 372, step 2: set the new password once the code verifies. */
+export const resetPassword = (request: ResetPasswordRequest) =>
+  apiFetch<void>(`${AUTH_BASE}/password/reset`, {
     method: "POST",
     body: JSON.stringify(request),
   });

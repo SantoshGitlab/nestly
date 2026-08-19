@@ -26,6 +26,15 @@ public class LoginProviderWithOtpRequestValidator : AbstractValidator<LoginProvi
     }
 }
 
+public class LoginProviderWithPasswordRequestValidator : AbstractValidator<LoginProviderWithPasswordRequest>
+{
+    public LoginProviderWithPasswordRequestValidator()
+    {
+        RuleFor(x => x.Email).NotEmpty().EmailAddress();
+        RuleFor(x => x.Password).NotEmpty().MaximumLength(128);
+    }
+}
+
 public class RefreshProviderTokenRequestValidator : AbstractValidator<RefreshProviderTokenRequest>
 {
     public RefreshProviderTokenRequestValidator()

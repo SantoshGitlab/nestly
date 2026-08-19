@@ -21,19 +21,30 @@ const mobileSchema = z.object({
 });
 type MobileFormValues = z.infer<typeof mobileSchema>;
 
-const detailsSchema = z.object({
-  otpCode: z
-    .string()
-    .min(4, "Enter the code you received")
-    .max(8, "Enter the code you received")
-    .regex(/^[0-9]+$/, "The code is numeric"),
-  legalName: z.string().min(1, "Legal name is required").max(200),
-  displayName: z.string().min(1, "Display name is required").max(100),
-  email: z.union([z.email("Enter a valid email address"), z.literal("")]),
-  consentAccepted: z.literal(true, {
-    error: "You must accept the terms to register.",
-  }),
-});
+const detailsSchema = z
+  .object({
+    otpCode: z
+      .string()
+      .min(4, "Enter the code you received")
+      .max(8, "Enter the code you received")
+      .regex(/^[0-9]+$/, "The code is numeric"),
+    legalName: z.string().min(1, "Legal name is required").max(200),
+    displayName: z.string().min(1, "Display name is required").max(100),
+    email: z.union([z.email("Enter a valid email address"), z.literal("")]),
+    password: z.union([
+      z.string().min(8, "Password must be at least 8 characters"),
+      z.literal(""),
+    ]),
+    consentAccepted: z.literal(true, {
+      error: "You must accept the terms to register.",
+    }),
+  })
+  // The server rejects a password without an email
+  // (ProviderRegistration.EmailRequiredForPassword); say so before the round trip.
+  .refine((v) => v.password === "" || v.email !== "", {
+    path: ["email"],
+    message: "Email is required when you set a password",
+  });
 type DetailsFormValues = z.infer<typeof detailsSchema>;
 
 /**
@@ -64,6 +75,7 @@ export default function ProviderRegisterPage() {
       legalName: "",
       displayName: "",
       email: "",
+      password: "",
       // Deliberately false: pre-ticking a consent box records an agreement the
       // provider never gave, and would make the schema's z.literal(true) rule
       // unreachable.
@@ -93,6 +105,7 @@ export default function ProviderRegisterPage() {
         legalName: values.legalName,
         displayName: values.displayName,
         email: values.email === "" ? undefined : values.email,
+        password: values.password === "" ? undefined : values.password,
         consentAccepted: values.consentAccepted,
       });
       router.push("/login?registered=1");
@@ -200,8 +213,17 @@ export default function ProviderRegisterPage() {
                 type="email"
                 inputMode="email"
                 autoComplete="email"
+                hint="Needed only if you want to sign in with a password."
                 error={detailsForm.formState.errors.email?.message}
                 {...detailsForm.register("email")}
+              />
+              <Field
+                label="Password (optional)"
+                type="password"
+                autoComplete="new-password"
+                hint="At least 8 characters."
+                error={detailsForm.formState.errors.password?.message}
+                {...detailsForm.register("password")}
               />
 
               <div className="flex flex-col gap-1.5">

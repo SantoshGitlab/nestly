@@ -472,6 +472,7 @@ public static class DependencyInjection
         services.AddScoped<IProviderTokenService, ProviderTokenService>();
         services.AddScoped<IProviderRegistrationService, ProviderRegistrationService>();
         services.AddScoped<IProviderLoginService, ProviderLoginService>();
+        services.AddScoped<IProviderPasswordResetService, ProviderPasswordResetService>();
         services.AddScoped<IProviderKycService, ProviderKycService>();
 
         // Task 149a: profile/service-area/skill management, reading and

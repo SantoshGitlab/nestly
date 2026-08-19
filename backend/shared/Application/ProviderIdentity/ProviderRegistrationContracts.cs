@@ -5,9 +5,10 @@ public record RequestProviderRegistrationOtpRequest(string Mobile);
 
 /// <summary>
 /// Step 2 of provider registration: the OTP proves ownership of the mobile
-/// number (mirrors <c>RegisterCustomerRequest</c>). Unlike customer
-/// registration, there is no optional email+password mode - PROVIDER.md's API
-/// surface lists only OTP-based auth for providers.
+/// number (mirrors <c>RegisterCustomerRequest</c>). Task 372 added the same
+/// optional email+password mode customer registration already had - when
+/// <see cref="Password"/> is supplied, an additional email+password auth
+/// identity is created alongside the always-present mobile identity.
 /// </summary>
 public record RegisterProviderRequest(
     string Mobile,
@@ -15,7 +16,8 @@ public record RegisterProviderRequest(
     string LegalName,
     string DisplayName,
     string? Email,
-    bool ConsentAccepted);
+    bool ConsentAccepted,
+    string? Password = null);
 
 /// <summary>Never includes anything auth-sensitive.</summary>
 public record ProviderSummaryResponse(
