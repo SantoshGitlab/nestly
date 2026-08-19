@@ -90,6 +90,189 @@ jobs:
         run: |
           if [ -f package.json ]; then npm run build --if-present; fi
 
+  lighthouse-mobile:
+    # Task #350: mobile Core Web Vitals budget gate for customer-web's top 3
+    # funnel pages (home, service detail, checkout). A regression here fails
+    # the build, same as the other jobs in this file.
+    #
+    # WHAT THIS DOES AND DOES NOT MEASURE (read before trusting this gate):
+    # Home, service detail and checkout all fetch live data from consumer-api
+    # at render time — auditing them against mocked/stubbed responses would
+    # risk a budget that "passes" a page that actually 500s or renders empty
+    # against the real API, which defeats the point of a regression gate. So
+    # this job stands up a real consumer-api + admin-api + Postgres (mirroring
+    # the `backend` job's service containers) and seeds one real
+    # category/service/address/customer session through those APIs — reusing
+    # `e2e/setup/seed-catalog.ts`, the same seeding the 140a-140d Playwright
+    # E2E suite already uses, not a new/duplicate seeding path — before
+    # building and starting customer-web against it. Checkout
+    # (`/booking/summary`) is behind the app's client-side auth guard, so a
+    # `puppeteerScript` (`frontend/customer-web/lighthouse/auth-setup.js`)
+    # seeds a real logged-in session (from that same seed step's real
+    # POST /auth/login/password call) before each audit.
+    # What this still does NOT cover: production network topology (CDN,
+    # regional latency), a warm cache / repeat-visit scenario, or realistic
+    # concurrent load on consumer-api — it is one cold page load per URL
+    # against a lightly-loaded single-instance API on the same runner.
+    # See `frontend/customer-web/lighthouserc.js`'s header comment for the
+    # metric definitions (in particular: INP has no lab equivalent in a
+    # plain navigation audit, so Total Blocking Time is budgeted as its
+    # documented proxy — this is not a mislabeled INP number).
+    name: Mobile perf budget (customer-web)
+    runs-on: ubuntu-latest
+    needs: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # Matches docker-compose.yml / appsettings.Development.json's
+          # baked-in dev defaults exactly, so consumer-api/admin-api need no
+          # ConnectionStrings override below (deliberately not reusing the
+          # `backend` job's nestly_test/nestly_test credentials — this job
+          # runs the apps themselves, in Development mode, the same way
+          # e2e/README.md's manual setup does).
+          POSTGRES_DB: nestly
+          POSTGRES_USER: nestly
+          POSTGRES_PASSWORD: nestly_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nestly -d nestly"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/customer-web/package-lock.json
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+
+      - name: Restore backend
+        run: dotnet restore Nestly.sln
+
+      - name: Build backend
+        run: dotnet build Nestly.sln --no-restore --configuration Release
+
+      - name: Apply database migrations
+        run: |
+          dotnet tool restore
+          bash database/scripts/apply-migrations.sh
+
+      - name: Seed dev admin + customer accounts
+        run: |
+          psql "postgresql://nestly:nestly_dev@localhost:5432/nestly" -f database/seed/dev-admin-seed.sql
+          psql "postgresql://nestly:nestly_dev@localhost:5432/nestly" -f database/seed/dev-customer-seed.sql
+
+      - name: Start consumer-api and admin-api
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          set -e
+          dotnet run --project backend/consumer-api/ConsumerApi --no-build --configuration Release --urls http://localhost:5257 > consumer-api.log 2>&1 &
+          dotnet run --project backend/admin-api/AdminApi --no-build --configuration Release --urls http://localhost:5177 > admin-api.log 2>&1 &
+
+          for url in http://localhost:5257/health/ready http://localhost:5177/health/ready; do
+            echo "Waiting for $url ..."
+            for i in $(seq 1 60); do
+              if curl -sf "$url" >/dev/null; then
+                echo "$url is ready"
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "$url did not become ready in time"
+                cat consumer-api.log admin-api.log
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Install customer-web dependencies
+        working-directory: frontend/customer-web
+        run: npm ci
+
+      - name: Seed catalog fixture (real service slug + customer session)
+        working-directory: frontend/customer-web
+        run: npm run seed:ci
+
+      - name: Read seeded fixture into env
+        working-directory: frontend/customer-web
+        run: |
+          node -e "
+            const f = require('./e2e/setup/fixture.json');
+            const fs = require('fs');
+            fs.appendFileSync(process.env.GITHUB_ENV,
+              \`LHCI_SERVICE_SLUG=\${f.serviceSlug}\n\` +
+              \`LHCI_CUSTOMER_TOKEN=\${f.customerAccessToken}\n\`
+            );
+          "
+          # Access tokens are short-lived; give the LHCI collect run (three
+          # runs per URL) comfortable headroom rather than the real expiry.
+          echo "LHCI_CUSTOMER_TOKEN_EXPIRES=$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - name: Build customer-web
+        working-directory: frontend/customer-web
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:5257
+        run: npm run build
+
+      - name: Start customer-web
+        working-directory: frontend/customer-web
+        run: |
+          set -e
+          npm run start -- -p 3000 > customer-web.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/ >/dev/null; then
+              echo "customer-web is ready"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "customer-web did not become ready in time"
+              cat customer-web.log
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run Lighthouse mobile budget
+        working-directory: frontend/customer-web
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: npx lhci autorun --config=lighthouserc.js
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: frontend/customer-web/lhci-reports
+          retention-days: 14
+          if-no-files-found: ignore
+
   docker:
     name: Docker image build
     runs-on: ubuntu-latest
