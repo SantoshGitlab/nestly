@@ -294,7 +294,26 @@ public class RescheduleService : IRescheduleService
         {
             if (conflict is null)
             {
-                booking.TransitionTo(BookingStatus.Assigned, "Reschedule kept the assigned professional; the new slot is still free for them.");
+                // Only announce the status when the booking is not already
+                // sitting on it. Booking.Reschedule leaves it at
+                // AwaitingFulfilment, and the UpdateAsync above dispatches
+                // that BookingStatusChangedEvent to ProviderAutoAssignmentHandler,
+                // which runs in-process and synchronously - so by the time
+                // this method is reached the booking has frequently already
+                // been promoted to Assigned by the auto-assigner (that is
+                // also why AssignedProviderId is set at all). BookingLifecycle
+                // deliberately has no Assigned -> Assigned self-edge, so
+                // re-announcing it throws InvalidOperationException - which
+                // the catch below does not handle (it is scoped to
+                // DbUpdateException) and which therefore escaped as a 500,
+                // breaking the guarantee ExecuteRescheduleAsync states above:
+                // only "keep the same professional" may fail, never the
+                // reschedule itself. Leaving it Assigned is exactly the
+                // intended end state either way.
+                if (booking.Status != BookingStatus.Assigned)
+                {
+                    booking.TransitionTo(BookingStatus.Assigned, "Reschedule kept the assigned professional; the new slot is still free for them.");
+                }
             }
             else
             {

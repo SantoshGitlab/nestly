@@ -9,8 +9,10 @@ using Nestly.Application.Reschedules;
 using Nestly.Application.Serviceability;
 using Nestly.Application.Slots;
 using Nestly.Domain;
+using Nestly.Domain.Events;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
+using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
 
@@ -479,6 +481,109 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
         activeAssignment.Should().NotBeNull();
         activeAssignment!.ProviderId.Should().Be(providerId);
         activeAssignment.Status.Should().Be(BookingProviderAssignmentStatus.Assigned, "the original assignment row survives untouched when the reschedule keeps the same provider");
+    }
+
+    /// <summary>
+    /// The same "keep the professional" path as the test above, but with the
+    /// domain-event dispatch that the production API processes actually have
+    /// wired up. Booking.Reschedule leaves the booking at AwaitingFulfilment,
+    /// and saving that dispatches BookingStatusChangedEvent to
+    /// ProviderAutoAssignmentHandler, which is an in-process handler and
+    /// promotes the booking straight back to Assigned before RescheduleService
+    /// gets to reconcile the assignment. The test above never saw that because
+    /// a bare test context dispatches nothing, so the reconcile always found
+    /// AwaitingFulfilment and its unconditional TransitionTo(Assigned) was
+    /// legal. In the real stack it was not: BookingLifecycle has no
+    /// Assigned -> Assigned self-edge, so it threw InvalidOperationException,
+    /// which is not a DbUpdateException and so escaped the reconcile's catch
+    /// as an HTTP 500 - with the slot move already persisted and the old slot
+    /// never released. <see cref="PromoteToAssignedPublisher"/> stands in for
+    /// the auto-assigner so this stays a fast SQLite test.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmRescheduleAsync_succeeds_when_auto_assignment_already_promoted_the_booking_back_to_Assigned()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, 2001m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddDays(-5));
+
+        Guid providerId;
+        using (var context = _db.CreateContext())
+        {
+            providerId = SeedProvider(context).Id;
+            await AssignProviderAsync(context, fixture.BookingId, providerId);
+        }
+
+        var autoAssigner = new PromoteToAssignedPublisher(fixture.BookingId);
+        using (var context = _db.CreateContext(new DomainEventDispatchInterceptor(autoAssigner)))
+        {
+            autoAssigner.Context = context;
+
+            var result = await BuildRescheduleService(context, timeProvider).ConfirmRescheduleAsync(
+                fixture.Customer.Id, fixture.BookingId,
+                new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Need a different day"));
+
+            autoAssigner.Promoted.Should().BeTrue("the test is only meaningful if the stand-in auto-assigner actually ran");
+            result.IsSuccess.Should().BeTrue("the reschedule must not fail just because the auto-assigner already restored the Assigned status");
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+
+        booking!.Status.Should().Be(BookingStatus.Assigned);
+        booking.AssignedProviderId.Should().Be(providerId);
+        booking.SlotDate.Should().Be(fixture.NewSlotDate, "the slot move must still have been applied");
+    }
+
+    /// <summary>
+    /// Stands in for ProviderAutoAssignmentHandler: the moment the booking
+    /// under test lands on AwaitingFulfilment, promote it straight back to
+    /// Assigned, which is exactly what the real handler does in-process when
+    /// an eligible provider exists. Guarded so the promotion's own
+    /// BookingStatusChangedEvent does not re-enter.
+    /// </summary>
+    private sealed class PromoteToAssignedPublisher : MediatR.IPublisher
+    {
+        private readonly Guid _bookingId;
+
+        public PromoteToAssignedPublisher(Guid bookingId) => _bookingId = bookingId;
+
+        /// <summary>Set once the context exists - the interceptor has to be constructed before it.</summary>
+        public NestlyDbContext? Context { get; set; }
+
+        public bool Promoted { get; private set; }
+
+        public Task Publish(object notification, CancellationToken cancellationToken = default) =>
+            Publish((MediatR.INotification)notification, cancellationToken);
+
+        public Task Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)
+            where TNotification : MediatR.INotification
+        {
+            if (Promoted
+                || notification is not DomainEventNotification<BookingStatusChangedEvent> statusChanged
+                || statusChanged.DomainEvent.BookingId != _bookingId
+                || statusChanged.DomainEvent.ToStatus != BookingStatus.AwaitingFulfilment)
+            {
+                return Task.CompletedTask;
+            }
+
+            // The real handler assigns a provider and transitions the booking;
+            // AssignedProviderId is already set here (Booking.Reschedule does
+            // not clear it), so only the status promotion is reproduced - and
+            // on the tracked instance, because that is the very object
+            // RescheduleService goes on to reconcile.
+            var booking = Context!.ChangeTracker.Entries<Booking>()
+                .Select(entry => entry.Entity)
+                .SingleOrDefault(candidate => candidate.Id == _bookingId);
+            if (booking is null || booking.Status != BookingStatus.AwaitingFulfilment)
+            {
+                return Task.CompletedTask;
+            }
+
+            Promoted = true;
+            booking.TransitionTo(BookingStatus.Assigned, "Auto-assigned after reschedule (test stand-in).");
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>
