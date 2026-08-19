@@ -221,3 +221,52 @@ returns `null` on `/jobs/{id}` (`isJobDetailPath`,
 bottom tabs on a task-focused detail screen. The authenticated layout's main
 content padding is route-aware to match (`STICKY_BAR_SPACER` on job detail,
 the tab bar's `pb-24` everywhere else).
+
+---
+
+## Safe-area audit (#351)
+
+Cross-app follow-up confirming finding 1 above is still correct as shipped,
+plus a sweep for anything finding 1 didn't cover. Method: same as the rest
+of this audit — static read, targeted greps for `fixed`/`sticky` and
+`env(safe-area-inset-*)` across `frontend/provider-web/src`, no dev
+server/browser used.
+
+- **`app/layout.tsx`'s `viewportFit: "cover"`** (finding 1) — re-verified
+  present and unchanged; `ProviderTabBar`'s
+  `pb-[env(safe-area-inset-bottom)]` and `ui.tsx`'s `Modal` bottom-sheet
+  both still depend on it. **Confirmed correct, no change.**
+- **`app/(provider)/layout.tsx`'s shared `sticky top-0` ancestor**
+  (wrapping `OfflineBanner` + `ProviderHeader`) had no top-safe-area padding
+  — this app is a standalone-installable PWA (`manifest.json`'s `display:
+  "standalone"`), and whichever of the two children renders first (the
+  banner only when offline, the header otherwise) is genuinely the topmost
+  element on the page, with nothing else above it to be covered by browser
+  chrome in that mode. **Fixed** — added `pt-[env(safe-area-inset-top)]` to
+  the shared ancestor `<div>` itself, not to `OfflineBanner`/`ProviderHeader`
+  individually: since it's `sticky` (in normal document flow, not `fixed`),
+  the padding naturally reflows `<main>` below it with no compensating
+  spacer needed elsewhere — and a single ancestor padding avoids
+  double-padding when both children are stacked and visible together
+  (offline case).
+- **`components/auth-ui.tsx`'s `AuthShell`** renders `OfflineBanner` alone
+  (no `ProviderHeader` sibling on the auth screens) — same top-edge exposure
+  as above, but no existing wrapper to attach the padding to. **Fixed** —
+  added a thin wrapper `<div className="pt-[env(safe-area-inset-top)]">`
+  around `<OfflineBanner />` there, kept out of `OfflineBanner.tsx` itself so
+  the component doesn't double-pad when it's the child of `layout.tsx`'s
+  own already-padded ancestor.
+- **`ui.tsx`'s toast container** (`fixed inset-x-0 bottom-0`) — not named in
+  the original brief but surfaced by the `fixed`/`sticky` grep sweep. Same
+  finding as customer-web/admin-web: flat `p-4` at the true bottom edge, no
+  protection from the iPhone home-indicator area (non-zero even outside
+  standalone mode). **Fixed** — added
+  `supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))]`.
+- **`components/patterns.tsx`'s `StickyActionBar`, `ui.tsx`'s `Modal`
+  bottom-sheet, `ProviderSidebar.tsx`'s `ProviderTabBar`** — already correct
+  before this task. **Verified, no change.**
+- Baseline `width=device-width, initial-scale=1` viewport meta — verified by
+  reading Next.js 14.2.35's own `createDefaultViewport`/`mergeViewport`
+  source (`node_modules/next/dist/lib/metadata/`): Next merges these
+  defaults into the resolved viewport regardless of what the `viewport`
+  export sets, so this needed no change in any of the three apps.

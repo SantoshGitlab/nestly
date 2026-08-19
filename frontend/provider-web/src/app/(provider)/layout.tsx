@@ -77,8 +77,16 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
       <div className="flex min-h-screen flex-col bg-bg">
         {/* One sticky ancestor for both rows, not two independent
             `sticky top-0` siblings - see OfflineBanner's header comment for
-            why that distinction matters once the page is scrolled. */}
-        <div className="sticky top-0 z-40">
+            why that distinction matters once the page is scrolled.
+            Task #351: `pt-[env(safe-area-inset-top)]` lives here, on the
+            shared ancestor, rather than on `OfflineBanner`/`ProviderHeader`
+            individually - whichever of the two is topmost varies (the
+            banner only when offline), and this app installs as a standalone
+            PWA (manifest.json's `display: "standalone"`), so whichever one
+            is first needs the same clearance from a notch/punch-hole
+            camera. A single ancestor padding handles both without double-
+            padding when both are stacked and visible together. */}
+        <div className="sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
           <OfflineBanner />
           <ProviderHeader claims={claims} />
         </div>

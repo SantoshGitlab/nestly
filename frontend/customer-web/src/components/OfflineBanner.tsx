@@ -48,7 +48,11 @@ export function OfflineBanner() {
   if (!offline || dismissed) return null;
 
   return (
-    <div className="fixed inset-x-0 top-[4.5rem] z-30 px-4 pt-2 sm:px-6">
+    // Task #351: `top-[4.5rem]` tracked `SiteHeader`'s fixed height so this
+    // sits flush below it; that header now grows by
+    // `env(safe-area-inset-top)` on a notched phone, so this offset must
+    // grow by the same amount to stay flush rather than overlapping it.
+    <div className="fixed inset-x-0 top-[calc(4.5rem+env(safe-area-inset-top))] z-30 px-4 pt-2 sm:px-6">
       <div className="mx-auto w-full max-w-7xl">
         <Alert
           tone="warning"

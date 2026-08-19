@@ -136,3 +136,54 @@ all of them.
   not exhaustively walked screen-by-screen (out of the four priority
   routes); nothing wide-fixed (`min-w-[…]`) turned up in the grep sweep
   across `src/app/(admin)/**`, so no further action taken.
+
+## Safe-area audit (#351)
+
+Cross-app follow-up. Method: same as the rest of this audit — static read,
+targeted greps for `fixed`/`sticky` and `env(safe-area-inset-*)` across
+`frontend/admin-web/src`, no dev server/browser used.
+
+- **`app/layout.tsx`'s `viewport` export had no `viewportFit: "cover"`.**
+  admin-web added no bottom nav/sticky CTA this phase (desk-first per
+  policy, confirmed by this same audit's "Navigation" section above), but
+  `ui.tsx`'s `Modal` still carries a bottom-sheet mobile state with
+  `env(safe-area-inset-bottom)` padding from earlier this phase, which
+  needed this to actually take effect on a phone-width admin session.
+  **Fixed** — added `viewportFit: "cover"`, matching the pattern already
+  shipped in provider-web/customer-web.
+- **`components/AdminHeader.tsx`** (`sticky top-0`) and the mobile sidebar
+  drawer (`app/(admin)/layout.tsx`, `fixed inset-0 lg:hidden` wrapping
+  `AdminSidebar`) both sit at the true top edge. **Judgment call: no
+  `safe-area-inset-top` added to either.** admin-web has no
+  `public/manifest.json` (confirmed absent — grep for `manifest` in
+  `app/layout.tsx` and `ls public/` both come back empty), so it cannot
+  launch in standalone/full-bleed display mode; "Add to Home Screen" on iOS
+  without a manifest or `apple-mobile-web-app-capable` meta opens as a
+  normal Safari tab with its own chrome above the page, which already covers
+  a notch/punch-hole camera. Regular in-tab browsing is the only context
+  this app runs in, so there is no scenario where these top-edge elements
+  render under a notch. `AdminSidebar`'s own content (`nav`, `overflow-y-auto`,
+  `p-4`) has no header/footer row of its own pinned outside the scrollable
+  area, so even a hypothetical standalone mode would have nothing to fix
+  there beyond the drawer wrapper.
+- **`components/data-table.tsx`'s `sticky top-0`** (table header, gated on
+  `maxHeight`) — sticky *inside* a bounded, independently-scrollable table
+  container, not at the true viewport edge. **Judgment call: no change** —
+  matches the task's own example of a sticky element that doesn't need
+  safe-area padding.
+- **`ui.tsx`'s toast container** (`fixed inset-x-0 bottom-0`) — flat `p-4`
+  at the true bottom edge. Unlike the top inset, the bottom inset is
+  non-zero on iPhone X+ even in an ordinary browser tab (accounts for the
+  home-indicator gesture area, not just standalone mode), so this applies
+  regardless of admin-web having no manifest. **Fixed** — added
+  `supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))]`,
+  matching the same fix made in customer-web and provider-web.
+- **`ui.tsx`'s `Modal` bottom-sheet** — already correct
+  (`pb-[env(safe-area-inset-bottom)]`, from earlier this phase). **Verified,
+  no change** — now actually takes effect once `viewportFit: "cover"`
+  activates it on a phone-width session.
+- Baseline `width=device-width, initial-scale=1` viewport meta — verified by
+  reading Next.js 14.2.35's own `createDefaultViewport`/`mergeViewport`
+  source (`node_modules/next/dist/lib/metadata/`): Next merges these
+  defaults into the resolved viewport regardless of what the `viewport`
+  export sets, so this needed no change.

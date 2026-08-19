@@ -45,6 +45,15 @@ export const viewport = {
     { media: "(prefers-color-scheme: light)", color: "#fafafc" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0b10" },
   ],
+  // Task #351 audit finding (same root cause as provider-web's #338 note):
+  // without this, `env(safe-area-inset-*)` resolves to 0 on iOS regardless
+  // of how many components reference it - it only activates once the
+  // viewport opts into drawing under the notch/home indicator. `BottomTabBar`,
+  // `StickyActionBar` (#345) and `Modal`'s bottom-sheet padding, plus
+  // `SiteHeader`'s own top-safe-area padding added alongside this, were all
+  // silently inert without it; also what makes this a correct home-screen
+  // PWA (#354) on a notched phone (manifest.json's `display: "standalone"`).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -82,8 +91,18 @@ export default function RootLayout({
                 `pb-20` clears `BottomTabBar`, fixed below `md` on every route
                 that doesn't already carry its own much larger
                 `STICKY_BAR_SPACER` for a `StickyActionBar` — same spacer
-                relationship as that constant documents, one level up. */}
-            <div id="main" className="pt-[4.5rem] pb-20 md:pb-0">
+                relationship as that constant documents, one level up.
+                Task #351: `calc(4.5rem+env(safe-area-inset-top))` matches
+                `SiteHeader`'s own added `pt-[env(safe-area-inset-top)]` — on
+                a notched phone in standalone-PWA mode the header is taller
+                than 4.5rem, so this spacer must grow by the same amount or
+                the page's first content would render under it. Resolves to
+                the original plain `4.5rem` on every non-notched/non-standalone
+                context, where the inset is 0. */}
+            <div
+              id="main"
+              className="pt-[calc(4.5rem+env(safe-area-inset-top))] pb-20 md:pb-0"
+            >
               {children}
             </div>
             <BottomTabBar />

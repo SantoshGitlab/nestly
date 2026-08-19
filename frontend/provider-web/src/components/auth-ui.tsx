@@ -36,8 +36,18 @@ export function AuthShell({
           laid out (and vertically centered) alongside the card instead of
           sitting above it. No other `sticky` element competes for `top: 0`
           on these screens, so it needs no coordinating wrapper (contrast
-          `AuthenticatedLayout`, which has one). */}
-      <OfflineBanner />
+          `AuthenticatedLayout`, which has one) - except this thin one for
+          task #351: `OfflineBanner` is the sole `sticky top-0` element here,
+          so unlike `AuthenticatedLayout`'s shared ancestor it could take the
+          top-safe-area padding directly, but a wrapper keeps that concern
+          out of the shared component (which is also used inside
+          `AuthenticatedLayout`'s own ancestor, where the padding must NOT
+          also live on `OfflineBanner` itself - see that file's header
+          comment - to avoid double-padding when both it and
+          `ProviderHeader` are stacked and visible together there). */}
+      <div className="pt-[env(safe-area-inset-top)]">
+        <OfflineBanner />
+      </div>
       <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
         {/* Decorative brand wash. Sits behind everything and is inert to AT. */}
         <div

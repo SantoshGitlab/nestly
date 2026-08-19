@@ -214,3 +214,68 @@ verification that *was* run — `npm run lint` / `npx tsc --noEmit`). Anything
 above stated as "fixed" changed the source in the direction the finding
 describes, but has not been visually confirmed at a real 375/390/430px
 viewport in a browser.
+
+## Safe-area audit (#351)
+
+Cross-app follow-up to finding 1 in provider-web's audit (same root cause).
+Method: same as that pass — static read plus targeted greps for
+`fixed`/`sticky` positioning and `env(safe-area-inset-*)` usage across
+`frontend/customer-web/src`, no dev server or browser used.
+
+- **`app/layout.tsx`'s `viewport` export had no `viewportFit: "cover"`.**
+  Same bug as provider-web's finding 1: `manifest.json` sets `display:
+  "standalone"` (task #354), but without `viewport-fit=cover` in the viewport
+  meta tag, iOS never opts the page into drawing under the notch/home
+  indicator, so every `env(safe-area-inset-*)` reference below — already
+  correct on its own — was resolving to `0`. **Fixed** — added
+  `viewportFit: "cover"`, matching provider-web's existing pattern.
+- **`components/SiteHeader.tsx`'s main bar is `fixed inset-x-0 top-0`** —
+  the true top edge, and (unlike admin-web's/provider-web's headers, which
+  are `sticky`) genuinely renders full-bleed in standalone-PWA mode with
+  nothing above it. **Fixed** — added `pt-[env(safe-area-inset-top)]` to the
+  header itself; propagated the resulting height change through the three
+  places that hard-coded its old fixed height (`app/layout.tsx`'s `#main`
+  spacer, `HeroBanner.tsx`'s cancelling negative margin, and
+  `OfflineBanner.tsx`'s `top-[4.5rem]` offset), all now
+  `calc(4.5rem+env(safe-area-inset-top))` so they stay in sync. Resolves to
+  the original plain `4.5rem` wherever the inset is `0` (every non-notched
+  device and every non-standalone context), so this is a no-op change outside
+  the scenario it targets.
+- **`SiteHeader.tsx`'s mobile menu drawer** (`role="dialog"`, `absolute
+  inset-y-0 right-0`) spans the full physical viewport height when open, with
+  a `shrink-0` close-button row pinned at its top and a `shrink-0` sign-in/
+  out CTA row pinned at its bottom — both genuinely at the screen edges, not
+  inside the scrollable middle section. **Fixed** — added
+  `pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]` to the
+  panel's own outer container (not the fixed-height header/footer rows
+  directly, so they don't get squeezed) so the flex column absorbs the extra
+  space instead.
+- **`BottomTabBar.tsx`, `patterns.tsx`'s `StickyActionBar`, `ui.tsx`'s
+  `Modal` bottom-sheet** — already correct
+  (`env(safe-area-inset-bottom)`/`max(...)` clamps present before this task).
+  **Verified, no change.**
+- **`ui.tsx`'s toast container** (`fixed inset-x-0 bottom-0`) — not in the
+  task's named list but surfaced by the `fixed`/`sticky` grep sweep. Sits at
+  the true bottom edge with a flat `p-4`, so a toast could land directly over
+  the iPhone home-indicator gesture area — this inset is non-zero even in an
+  ordinary browser tab (not only standalone-PWA mode), unlike the top inset,
+  so this was worth fixing regardless of `viewportFit`. **Fixed** — added
+  `supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))]`,
+  keeping the existing 1rem as a floor.
+- **`OfflineBanner.tsx`** — `fixed inset-x-0 top-[4.5rem]`, sitting below the
+  header rather than at the true top edge itself. **Judgment call: no
+  `safe-area-inset-top` needed on the banner itself** — only its numeric
+  offset needed updating to track the header's new (possibly taller) height,
+  which the `calc()` change above already covers.
+- **`app/services/[slug]/page.tsx`, `booking/summary/page.tsx`,
+  `booking/payment/[id]/page.tsx`, `bookings/[id]/page.tsx`'s `aside`
+  elements** (`md:sticky md:top-20`) — sticky only from `md` up, and `top-20`
+  is an offset below the header, not the true viewport edge. **Judgment
+  call: no change** — matches the task's own example of a sticky element
+  that doesn't need safe-area padding.
+- Baseline `width=device-width, initial-scale=1` viewport meta — verified by
+  reading Next.js 14.2.35's own `createDefaultViewport`/`mergeViewport`
+  source (`node_modules/next/dist/lib/metadata/`) rather than assuming: Next
+  merges these defaults into the resolved viewport regardless of what the
+  `viewport` export sets, so this was already correct with no code change
+  needed.

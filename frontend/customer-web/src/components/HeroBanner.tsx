@@ -75,10 +75,12 @@ export function HeroBanner() {
 
   return (
     <section
-      // Cancels `#main`'s `pt-[4.5rem]` (reserved for `SiteHeader` now being
-      // permanently `fixed`) so the banner still starts at true y=0, flush
-      // under the header while it's in its transparent-over-photo state.
-      className="relative isolate -mt-[4.5rem] w-full overflow-hidden"
+      // Cancels `#main`'s `pt-[calc(4.5rem+env(safe-area-inset-top))]`
+      // (reserved for `SiteHeader` now being permanently `fixed`, grown by
+      // the top safe-area inset per task #351) so the banner still starts at
+      // true y=0, flush under the header while it's in its
+      // transparent-over-photo state.
+      className="relative isolate -mt-[calc(4.5rem+env(safe-area-inset-top))] w-full overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}

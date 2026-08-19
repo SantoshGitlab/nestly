@@ -1203,7 +1203,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={push}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end"
+        className={cx(
+          "pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end",
+          // Task #351: fixed at the true bottom edge, so a toast can land
+          // directly over the home-indicator area on iPhone X+ - this is
+          // nonzero even in an ordinary browser tab (not just standalone
+          // PWA mode), unlike the top inset. `max()` keeps the existing 1rem
+          // (`p-4`) as a floor on devices with no inset.
+          "supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))]",
+        )}
         // Polite: a toast confirms something the user just did, so it must not
         // interrupt whatever they are reading or typing next.
         aria-live="polite"

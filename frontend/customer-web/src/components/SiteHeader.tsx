@@ -112,7 +112,16 @@ export function SiteHeader() {
   return (
     <header
       className={cx(
-        "fixed inset-x-0 top-0 z-40 transition-[background-color,border-color,backdrop-filter] duration-300",
+        // Task #351: permanently `fixed` at the true top edge, and this app
+        // installs as a standalone PWA (manifest.json's `display:
+        // "standalone"`) - on a notched/punch-hole phone in that mode there
+        // is no browser chrome above it, so the bar itself must clear the
+        // notch. `pt-[env(safe-area-inset-top)]` grows the header by the
+        // inset instead of the nav row shrinking under it; `#main`'s
+        // `pt-[4.5rem]`, `HeroBanner`'s cancelling `-mt-[4.5rem]`, and
+        // `OfflineBanner`'s `top-[4.5rem]` all account for the same grown
+        // height so nothing sits under (or is clipped by) the taller bar.
+        "fixed inset-x-0 top-0 z-40 pt-[env(safe-area-inset-top)] transition-[background-color,border-color,backdrop-filter] duration-300",
         transparent
           ? "border-b border-transparent bg-transparent"
           : "border-b border-line/70 bg-surface/85 backdrop-blur-md",
@@ -475,7 +484,15 @@ function MobileDrawer({
         aria-modal="true"
         aria-label="Menu"
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 flex w-[min(20rem,85vw)] animate-rise flex-col border-l border-line bg-surface outline-none"
+        // Task #351: `inset-y-0` spans the full physical viewport height, so
+        // both the close button in the `shrink-0` header row below and the
+        // sign-in/out CTA in the `shrink-0` footer row are genuinely at the
+        // top/bottom screen edges - not inside the scrollable middle
+        // section, which is the case the audit's guidance says to leave
+        // alone. Padding on this outer flex container (rather than on the
+        // fixed-height `h-16` header row) lets the flex column absorb the
+        // extra space instead of squeezing that row's own height.
+        className="absolute inset-y-0 right-0 flex w-[min(20rem,85vw)] animate-rise flex-col border-l border-line bg-surface pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] outline-none"
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-4">
           <span className="text-sm font-semibold text-fg">Menu</span>
