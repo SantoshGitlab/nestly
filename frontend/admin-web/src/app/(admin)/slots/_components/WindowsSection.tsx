@@ -319,7 +319,13 @@ export function WindowsSection({ canWrite }: { canWrite: boolean }) {
             {activeMutationError ? <Alert>{describeError(activeMutationError)}</Alert> : null}
 
             <FormGrid columns={3}>
+              {/* Explicit id: this page renders four sections at once (Windows,
+                  Blackouts, Cutoffs, Overrides), each with its own "cityId"-named
+                  field - without an id, Field/controlId's `field-${name}` fallback
+                  collides across all four, duplicating `id="field-cityId"` on the
+                  same page and breaking label/input association. */}
               <Select
+                id="window-cityId"
                 label="City"
                 required
                 placeholder="Select a city…"

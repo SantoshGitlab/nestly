@@ -606,14 +606,23 @@ export default function EditServicePage() {
               <Alert>{describeError(editingVariantId ? updateVariantMutation.error : createVariantMutation.error)}</Alert>
             ) : null}
             <p className="text-sm font-medium text-fg">{editingVariantId ? "Edit variant" : "Add variant"}</p>
+            {/* Explicit ids: this sub-form's field `name`s ("name", "price",
+                "durationMinutes", "sortOrder") are the same as the service-level
+                form's above, and Field/controlId falls back to `field-${name}`
+                when no id is given - without these, the two forms rendered on
+                one page duplicate the same DOM id, which breaks label/input
+                association (and, in the wild, autofill and getElementById-based
+                tooling) for whichever field the browser doesn't pick first. */}
             <FormGrid columns={3}>
               <Field
+                id="variant-name"
                 label="Name"
                 required
                 error={variantForm.formState.errors.name?.message}
                 {...variantForm.register("name")}
               />
               <Field
+                id="variant-price"
                 label="Price"
                 type="number"
                 step="0.01"
@@ -623,6 +632,7 @@ export default function EditServicePage() {
                 {...variantForm.register("price", { valueAsNumber: true })}
               />
               <Field
+                id="variant-durationMinutes"
                 label="Duration (minutes)"
                 type="number"
                 required
@@ -638,6 +648,7 @@ export default function EditServicePage() {
                 {...variantForm.register("inclusionsOverride")}
               />
               <Field
+                id="variant-sortOrder"
                 label="Sort order"
                 type="number"
                 error={variantForm.formState.errors.sortOrder?.message}

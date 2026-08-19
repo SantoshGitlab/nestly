@@ -178,7 +178,11 @@ export function BlackoutsSection({ canWrite }: { canWrite: boolean }) {
             {createMutation.isError ? <Alert>{describeError(createMutation.error)}</Alert> : null}
 
             <FormGrid columns={3}>
+              {/* Explicit id: see WindowsSection's matching comment - four
+                  sections on this page each register a "cityId" field, and
+                  without an id all four collide on `id="field-cityId"`. */}
               <Select
+                id="blackout-cityId"
                 label="City"
                 required
                 placeholder="Select a city…"
@@ -209,7 +213,10 @@ export function BlackoutsSection({ canWrite }: { canWrite: boolean }) {
                 options={typeOptions}
                 {...form.register("type")}
               />
+              {/* Explicit id: OverridesSection also has a "reason" field on
+                  this same page, colliding on `id="field-reason"` otherwise. */}
               <Field
+                id="blackout-reason"
                 label="Reason"
                 hint="Optional — shown to admins only."
                 error={form.formState.errors.reason?.message}

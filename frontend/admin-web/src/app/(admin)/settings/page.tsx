@@ -16,6 +16,8 @@ import { Alert, Button, Card, CheckboxField, Field, PageHeading, Skeleton, useTo
 import { FormActions, FormGrid } from "@/components/data-table";
 import { SectionError } from "@/components/screen-states";
 import { apiFetch, describeError } from "@/lib/api";
+import { canWriteModule } from "@/lib/permissions";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import type {
   AllSystemSettingsResponse,
   BookingSettings,
@@ -166,6 +168,7 @@ function SettingsGroupCard<T extends FieldValues>({
   schema,
   defaultValues,
   onSaved,
+  canWrite,
   children,
 }: {
   title: string;
@@ -174,6 +177,8 @@ function SettingsGroupCard<T extends FieldValues>({
   schema: z.ZodType<T>;
   defaultValues: T;
   onSaved: (value: T) => void;
+  /** Gates every field and the submit button - settings.write, checked once at the page level. */
+  canWrite: boolean;
   children: (form: UseFormReturn<T>) => ReactNode;
 }) {
   const toast = useToast();
@@ -207,15 +212,28 @@ function SettingsGroupCard<T extends FieldValues>({
   });
 
   return (
-    <Card title={title} description={description}>
+    <Card
+      title={title}
+      description={canWrite ? description : "Read-only — you do not hold settings write access."}
+    >
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         {error ? <Alert>{error}</Alert> : null}
-        <FormGrid columns={2}>{children(form)}</FormGrid>
-        <FormActions>
-          <Button type="submit" loading={form.formState.isSubmitting}>
-            Save changes
-          </Button>
-        </FormActions>
+        {/* A native <fieldset disabled> cascades to every descendant input/
+            select/button in one place, rather than threading a `disabled`
+            prop into each of the seven groups' own differently-shaped field
+            lists (plain Fields, Controller-wrapped nullable fields, toggle
+            rows) - this page previously had no write-gating at all, unlike
+            every other module screen in this app. */}
+        <fieldset disabled={!canWrite} className="contents">
+          <FormGrid columns={2}>{children(form)}</FormGrid>
+          {canWrite ? (
+            <FormActions>
+              <Button type="submit" loading={form.formState.isSubmitting}>
+                Save changes
+              </Button>
+            </FormActions>
+          ) : null}
+        </fieldset>
       </form>
     </Card>
   );
@@ -228,7 +246,7 @@ const bookingSchema = z.object({
   allowSameDayBooking: z.boolean(),
 });
 
-function BookingSettingsSection({ initial, queryClient }: { initial: BookingSettings; queryClient: QueryClient }) {
+function BookingSettingsSection({ initial, queryClient, canWrite }: { initial: BookingSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<BookingSettings>
       title="Booking rules"
@@ -237,6 +255,7 @@ function BookingSettingsSection({ initial, queryClient }: { initial: BookingSett
       schema={bookingSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "booking", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -278,7 +297,7 @@ const slotSchema = z.object({
   allowOverbooking: z.boolean(),
 });
 
-function SlotSettingsSection({ initial, queryClient }: { initial: SlotSettings; queryClient: QueryClient }) {
+function SlotSettingsSection({ initial, queryClient, canWrite }: { initial: SlotSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<SlotSettings>
       title="Slot rules"
@@ -287,6 +306,7 @@ function SlotSettingsSection({ initial, queryClient }: { initial: SlotSettings; 
       schema={slotSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "slot", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -333,7 +353,7 @@ const cancellationSchema = z.object({
   allowAdminOverride: z.boolean(),
 });
 
-function CancellationSettingsSection({ initial, queryClient }: { initial: CancellationSettings; queryClient: QueryClient }) {
+function CancellationSettingsSection({ initial, queryClient, canWrite }: { initial: CancellationSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<CancellationSettings>
       title="Cancellation policy"
@@ -342,6 +362,7 @@ function CancellationSettingsSection({ initial, queryClient }: { initial: Cancel
       schema={cancellationSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "cancellation", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -379,7 +400,7 @@ const rescheduleSchema = z.object({
   lateRescheduleFeePercentage: z.number().min(0).max(100),
 });
 
-function RescheduleSettingsSection({ initial, queryClient }: { initial: RescheduleSettings; queryClient: QueryClient }) {
+function RescheduleSettingsSection({ initial, queryClient, canWrite }: { initial: RescheduleSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<RescheduleSettings>
       title="Reschedule policy"
@@ -388,6 +409,7 @@ function RescheduleSettingsSection({ initial, queryClient }: { initial: Reschedu
       schema={rescheduleSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "reschedule", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -430,7 +452,7 @@ const taxSchema = z.object({
   taxInclusivePricing: z.boolean(),
 });
 
-function TaxSettingsSection({ initial, queryClient }: { initial: TaxSettings; queryClient: QueryClient }) {
+function TaxSettingsSection({ initial, queryClient, canWrite }: { initial: TaxSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<TaxSettings>
       title="Tax settings"
@@ -439,6 +461,7 @@ function TaxSettingsSection({ initial, queryClient }: { initial: TaxSettings; qu
       schema={taxSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "tax", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -474,7 +497,7 @@ const walletSchema = z.object({
   allowWalletTopUp: z.boolean(),
 });
 
-function WalletSettingsSection({ initial, queryClient }: { initial: WalletSettings; queryClient: QueryClient }) {
+function WalletSettingsSection({ initial, queryClient, canWrite }: { initial: WalletSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<WalletSettings>
       title="Wallet settings"
@@ -483,6 +506,7 @@ function WalletSettingsSection({ initial, queryClient }: { initial: WalletSettin
       schema={walletSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "wallet", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -525,7 +549,7 @@ const couponSchema = z.object({
   couponsEnabled: z.boolean(),
 });
 
-function CouponSettingsSection({ initial, queryClient }: { initial: CouponSettings; queryClient: QueryClient }) {
+function CouponSettingsSection({ initial, queryClient, canWrite }: { initial: CouponSettings; queryClient: QueryClient; canWrite: boolean }) {
   return (
     <SettingsGroupCard<CouponSettings>
       title="Coupon settings"
@@ -534,6 +558,7 @@ function CouponSettingsSection({ initial, queryClient }: { initial: CouponSettin
       schema={couponSchema}
       defaultValues={initial}
       onSaved={(value) => updateSettingsCache(queryClient, "coupon", value)}
+      canWrite={canWrite}
     >
       {(form) => (
         <>
@@ -600,6 +625,8 @@ function SettingsCardSkeleton({ fields = 4 }: { fields?: number }) {
 
 export default function SystemSettingsPage() {
   const queryClient = useQueryClient();
+  const claims = useAdminClaims();
+  const canWrite = canWriteModule(claims, "settings");
   const { data, isPending, isError, error, refetch } = useAllSettings();
 
   return (
@@ -621,13 +648,13 @@ export default function SystemSettingsPage() {
         <SectionError error={error} onRetry={() => void refetch()} />
       ) : (
         <>
-          <BookingSettingsSection initial={data.booking} queryClient={queryClient} />
-          <SlotSettingsSection initial={data.slot} queryClient={queryClient} />
-          <CancellationSettingsSection initial={data.cancellation} queryClient={queryClient} />
-          <RescheduleSettingsSection initial={data.reschedule} queryClient={queryClient} />
-          <TaxSettingsSection initial={data.tax} queryClient={queryClient} />
-          <WalletSettingsSection initial={data.wallet} queryClient={queryClient} />
-          <CouponSettingsSection initial={data.coupon} queryClient={queryClient} />
+          <BookingSettingsSection initial={data.booking} queryClient={queryClient} canWrite={canWrite} />
+          <SlotSettingsSection initial={data.slot} queryClient={queryClient} canWrite={canWrite} />
+          <CancellationSettingsSection initial={data.cancellation} queryClient={queryClient} canWrite={canWrite} />
+          <RescheduleSettingsSection initial={data.reschedule} queryClient={queryClient} canWrite={canWrite} />
+          <TaxSettingsSection initial={data.tax} queryClient={queryClient} canWrite={canWrite} />
+          <WalletSettingsSection initial={data.wallet} queryClient={queryClient} canWrite={canWrite} />
+          <CouponSettingsSection initial={data.coupon} queryClient={queryClient} canWrite={canWrite} />
         </>
       )}
     </div>

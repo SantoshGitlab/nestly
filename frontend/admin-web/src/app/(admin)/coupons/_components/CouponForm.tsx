@@ -3,7 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Field, Select } from "@/components/ui";
 import { FormActions, FormGrid } from "@/components/data-table";
@@ -79,6 +80,61 @@ function emptyStringToNull(value: string): number | null {
 
 function nullableNumberToInputValue(value: number | null): string {
   return value === null || value === undefined ? "" : String(value);
+}
+
+/**
+ * Nullable numeric field (an optional cap/limit that means "unlimited" when
+ * unset), as a `Controller`-bound field rather than the plain
+ * `register(name, { setValueAs })` + manual `defaultValue` combination this
+ * form used before.
+ *
+ * `setValueAs` only runs inside the `onChange` handler `register` generates
+ * - it transforms a value the admin actively types, but a field they never
+ * touch keeps whatever the DOM `defaultValue` rendered it with (`""`, per
+ * `nullableNumberToInputValue(null)`), and react-hook-form reads that raw
+ * string at submit time. `z.number().positive().nullable()` rejects `""` as
+ * neither a valid number nor `null`, so submitting the form without first
+ * touching an untouched-but-legitimately-blank "Max discount cap"/"Global
+ * usage limit" field failed with a confusing "must be positive" error on a
+ * field the admin never edited - exactly the bug `NullableNumberField` in
+ * `app/(admin)/settings/page.tsx` was already written to fix for that
+ * screen's own nullable caps; this is the same fix applied here.
+ */
+function NullableNumberField({
+  form,
+  name,
+  label,
+  hint,
+  min,
+  leading,
+}: {
+  form: UseFormReturn<CouponFormValues>;
+  name: "maxDiscountAmount" | "usageLimitTotal";
+  label: string;
+  hint?: string;
+  min?: number;
+  leading?: string;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field, fieldState }) => (
+        <Field
+          label={label}
+          type="number"
+          step={leading ? "0.01" : undefined}
+          min={min}
+          leading={leading}
+          hint={hint}
+          value={nullableNumberToInputValue(field.value)}
+          onChange={(event) => field.onChange(emptyStringToNull(event.target.value))}
+          onBlur={field.onBlur}
+          error={fieldState.error?.message}
+        />
+      )}
+    />
+  );
 }
 
 function defaultValuesFor(coupon: CouponAdminResponse | null): CouponFormValues {
@@ -235,16 +291,13 @@ export function CouponForm({
           error={form.formState.errors.discountValue?.message}
           {...form.register("discountValue", { valueAsNumber: true })}
         />
-        <Field
+        <NullableNumberField
+          form={form}
+          name="maxDiscountAmount"
           label="Max discount cap"
-          type="number"
-          step="0.01"
           min={0}
           leading="₹"
           hint={isPercentage ? "Optional — caps a percentage discount." : "Optional."}
-          error={form.formState.errors.maxDiscountAmount?.message}
-          {...form.register("maxDiscountAmount", { setValueAs: emptyStringToNull })}
-          defaultValue={nullableNumberToInputValue(form.getValues("maxDiscountAmount"))}
         />
       </FormGrid>
 
@@ -276,14 +329,12 @@ export function CouponForm({
       </FormGrid>
 
       <FormGrid columns={3}>
-        <Field
+        <NullableNumberField
+          form={form}
+          name="usageLimitTotal"
           label="Global usage limit"
-          type="number"
           min={1}
           hint="Optional — leave empty for unlimited."
-          error={form.formState.errors.usageLimitTotal?.message}
-          {...form.register("usageLimitTotal", { setValueAs: emptyStringToNull })}
-          defaultValue={nullableNumberToInputValue(form.getValues("usageLimitTotal"))}
         />
         <Field
           label="Per-customer usage limit"

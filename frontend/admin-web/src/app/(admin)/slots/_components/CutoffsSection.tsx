@@ -132,7 +132,11 @@ export function CutoffsSection({ canWrite }: { canWrite: boolean }) {
             {upsertMutation.isError ? <Alert>{describeError(upsertMutation.error)}</Alert> : null}
 
             <FormGrid columns={3}>
+              {/* Explicit id: see WindowsSection's matching comment - four
+                  sections on this page each register a "cityId" field, and
+                  without an id all four collide on `id="field-cityId"`. */}
               <Select
+                id="cutoff-cityId"
                 label="City"
                 required
                 placeholder="Select a city…"

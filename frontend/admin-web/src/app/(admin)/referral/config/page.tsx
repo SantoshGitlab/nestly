@@ -3,7 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 import { FormActions, FormGrid, formatCurrency, formatDate } from "@/components/data-table";
 import { EntityTable } from "@/components/entity-table";
@@ -66,6 +67,56 @@ const configSchema = z.object({
   isActive: z.boolean(),
 });
 type ConfigFormValues = z.infer<typeof configSchema>;
+
+/**
+ * Nullable numeric field (a cap that means "unlimited" when unset), as a
+ * `Controller`-bound field rather than `register(name, { setValueAs })` +
+ * a manual `defaultValue` prop.
+ *
+ * `setValueAs` only runs inside the `onChange` handler `register` generates
+ * - it transforms a value the admin actively types, but a field they never
+ * touch keeps whatever the DOM `defaultValue` rendered it with (`""`, per
+ * `nullableNumberToInputValue(null)`), and react-hook-form reads that raw
+ * string at submit time. `z.number().positive().nullable()` rejects `""` as
+ * neither a valid number nor `null`, so saving this config without first
+ * touching an untouched-but-legitimately-blank "Max referrals per customer"
+ * field ("Leave blank for unlimited") failed with "The cap must be at least
+ * 1" on a field the admin never edited - the same bug already fixed for
+ * `app/(admin)/settings/page.tsx`'s own nullable caps and
+ * `coupons/_components/CouponForm.tsx`'s max-discount/usage-limit fields;
+ * this is that identical fix applied here.
+ */
+function NullableNumberField({
+  form,
+  label,
+  hint,
+  disabled,
+}: {
+  form: UseFormReturn<ConfigFormValues>;
+  label: string;
+  hint?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name="maxReferralsPerCustomer"
+      render={({ field, fieldState }) => (
+        <Field
+          label={label}
+          type="number"
+          min={1}
+          hint={hint}
+          disabled={disabled}
+          value={nullableNumberToInputValue(field.value)}
+          onChange={(event) => field.onChange(emptyStringToNull(event.target.value))}
+          onBlur={field.onBlur}
+          error={fieldState.error?.message}
+        />
+      )}
+    />
+  );
+}
 
 const milestoneSchema = z.object({
   thresholdCount: z.number().int("Whole referrals only").positive("Threshold must be at least 1"),
@@ -261,15 +312,11 @@ function ConfigForm({ config, canWrite }: { config: ReferralProgramConfig; canWr
             error={form.formState.errors.referralExpiryDays?.message}
             {...form.register("referralExpiryDays", { valueAsNumber: true })}
           />
-          <Field
+          <NullableNumberField
+            form={form}
             label="Max referrals per customer"
-            type="number"
-            min={1}
             hint="Leave blank for unlimited."
             disabled={!canWrite}
-            error={form.formState.errors.maxReferralsPerCustomer?.message}
-            {...form.register("maxReferralsPerCustomer", { setValueAs: emptyStringToNull })}
-            defaultValue={nullableNumberToInputValue(config.maxReferralsPerCustomer)}
           />
         </FormGrid>
 

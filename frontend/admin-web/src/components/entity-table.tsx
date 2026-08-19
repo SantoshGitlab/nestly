@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { ActiveBadge, ConfirmDialog, DataTable } from "@/components/data-table";
@@ -118,10 +118,32 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
    * did — meant `loading` was never true and the `toggleError` every caller
    * passes could never render: a failed suspend dismissed the dialog and left
    * the row looking active with no explanation anywhere on screen.
+   *
+   * `confirmed` (a React state update) and `togglingId` reflecting the
+   * mutation's new pending state (driven by the caller's own `useMutation`,
+   * an external store) are not guaranteed to land in the same commit -
+   * `onConfirm` sets `confirmed` and calls the caller's `mutate()` in the
+   * same click handler, but react-query's own pending notification can
+   * arrive a render later. Without `hasStartedRef`, the effect below saw
+   * `confirmed = true` and `isSuspending` still `false` (the mutation
+   * hadn't visibly started yet) and read that exactly like "finished with
+   * no error", closing the dialog immediately - before the request had even
+   * gone out, let alone failed. A fast-failing mutation (a 4xx/5xx that
+   * returns quickly) hit this on effectively every attempt, silently
+   * dropping the failure with no dialog, no error, no explanation. The ref
+   * makes the "no error, so close" branch wait for a render where the
+   * mutation was actually observed pending first.
    */
+  const hasStartedRef = useRef(false);
+
   useEffect(() => {
-    if (!confirmed || isSuspending) return;
+    if (isSuspending) hasStartedRef.current = true;
+  }, [isSuspending]);
+
+  useEffect(() => {
+    if (!confirmed || isSuspending || !hasStartedRef.current) return;
     setConfirmed(false);
+    hasStartedRef.current = false;
     if (!toggleError) setPendingSuspend(null);
   }, [confirmed, isSuspending, toggleError]);
 

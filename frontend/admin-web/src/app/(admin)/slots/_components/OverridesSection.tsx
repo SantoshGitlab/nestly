@@ -221,7 +221,11 @@ export function OverridesSection({ canWrite }: { canWrite: boolean }) {
             ) : null}
 
             <FormGrid columns={3}>
+              {/* Explicit id: see WindowsSection's matching comment - four
+                  sections on this page each register a "cityId" field, and
+                  without an id all four collide on `id="field-cityId"`. */}
               <Select
+                id="override-cityId"
                 label="City"
                 required
                 placeholder="Select a city…"
@@ -261,7 +265,10 @@ export function OverridesSection({ canWrite }: { canWrite: boolean }) {
                 options={[{ value: "", label: "Any service" }, ...serviceOptions]}
                 {...form.register("serviceId")}
               />
+              {/* Explicit id: BlackoutsSection also has a "reason" field on
+                  this same page, colliding on `id="field-reason"` otherwise. */}
               <Field
+                id="override-reason"
                 label="Reason"
                 required
                 hint="Recorded against the override for audit."
