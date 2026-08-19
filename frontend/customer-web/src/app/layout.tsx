@@ -32,10 +32,12 @@ export const metadata: Metadata = {
   },
   description:
     "Cleaning, repairs, salon and more — vetted professionals, upfront pricing, and slots that fit your day.",
-  // Add-to-Home-Screen / standalone install (task #354). See
-  // public/manifest.json's own comment-equivalent (JSON has none) for why
-  // its icon is a hand-authored SVG rather than the usual PNG set - no
-  // rasterizing tool was available to generate one from this environment.
+  // Add-to-Home-Screen / standalone install (task #354). The icon set is
+  // hand-authored SVG (public/icons/icon.svg) plus PNGs rasterized from it by
+  // scripts/generate-pwa-icons.sh - task #368 added the PNGs, which #354 could
+  // not because no rasterizer was available in that session's environment.
+  // The apple-touch-icon iOS needs is src/app/apple-icon.png, Next's own file
+  // convention, so no <link> is hand-written here.
   manifest: "/manifest.json",
 };
 

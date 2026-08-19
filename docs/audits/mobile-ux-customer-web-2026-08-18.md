@@ -103,8 +103,21 @@ it; open findings say why they were left for a follow-up.
   and redesigning `LedgerRow` as a card is a real UI decision, not a
   mechanical fix; flagging for a follow-up ticket rather than guessing at a
   layout.
-- `app/refer-earn/page.tsx:346-353` — a 2-column `Friend`/`Status` table,
-  much lower risk of overflow; not touched, noted for the same follow-up.
+- `app/refer-earn/page.tsx:346-353` — a `Friend`/`Status`/`Reward` table
+  (three columns, not the two this line originally said), but a much lower
+  risk of overflow than the ledger: only one column is numeric and the status
+  is a short badge. Not touched, still noted for a follow-up.
+
+> **Update, tasks 365 and 373 — this whole finding is now closed.** Both
+> tables collapse to a card list below `md` (768px, this app's own
+> mobile/desktop split) and render the existing table at `md` and up, one
+> visible at a time, CSS-only. The layout decision the audit declined to guess
+> at: the amount holds the right of the entry's own line rather than becoming
+> a label:value pair, because it is what a customer opens either screen for.
+> The wallet ledger labels "Balance after", its one value that means nothing
+> without a header; `refer-earn` labels nothing, since its status badge names
+> itself. `365` did the ledger, `373` did `refer-earn` in the same shape
+> rather than inventing a second one.
 
 ### Booking funnel (`booking/summary`, `booking/payment/[id]`, `booking/success/[id]`)
 

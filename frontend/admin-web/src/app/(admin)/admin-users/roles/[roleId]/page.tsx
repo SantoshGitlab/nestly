@@ -6,8 +6,9 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Breadcrumbs, ConfirmDialog, FormActions, FormGrid } from "@/components/data-table";
-import { DetailError, DetailSkeleton, SectionError } from "@/components/screen-states";
+import { Breadcrumbs, ConfirmDialog, DataTable, FormActions, FormGrid } from "@/components/data-table";
+import type { DataTableColumn } from "@/components/data-table";
+import { DetailError, DetailSkeleton } from "@/components/screen-states";
 import { Alert, Button, Card, Checkbox, Field, PageHeading, Textarea, useToast } from "@/components/ui";
 import {
   getAdminPermissionCatalog,
@@ -42,6 +43,70 @@ function buildModuleRows(catalog: AdminPermissionCatalogEntry[]): ModuleRow[] {
     byModule.set(entry.module, row);
   }
   return Array.from(byModule.values()).sort((a, b) => a.module.localeCompare(b.module));
+}
+
+/**
+ * The matrix's three columns (task 367). Built per render rather than at
+ * module scope because every cell is a live control bound to the current
+ * selection - `columns` is not static data here the way it is on a read-only
+ * list screen.
+ *
+ * No column carries `sortValue`: `buildModuleRows` already returns the
+ * catalog in the only order that makes sense for a grid you read down, and a
+ * sortable Read/Write column would offer to reorder modules by checkbox
+ * state, which is not a question anyone asks of a permission matrix.
+ */
+function buildPermissionColumns(
+  selectedCodes: Set<string>,
+  canWrite: boolean,
+  toggleRead: (row: ModuleRow, checked: boolean) => void,
+  toggleWrite: (row: ModuleRow, checked: boolean) => void,
+): DataTableColumn<ModuleRow>[] {
+  return [
+    {
+      key: "module",
+      header: "Module",
+      cell: (row) => <span className="font-medium capitalize text-fg">{row.module}</span>,
+    },
+    {
+      key: "read",
+      header: "Read",
+      cell: (row) => (
+        <Checkbox
+          // No visible label text on purpose. Both layouts already name this
+          // control beside it - the "Read" column header in the `<table>`, the
+          // "READ" <dt> in the card DataTable collapses to below `lg` - so a
+          // word on the checkbox itself printed "Read" twice on every one of
+          // the 44 rows once this screen moved onto the shared component. A
+          // bare checkbox under a labelled header is the conventional
+          // permission-matrix shape anyway.
+          label=""
+          // The accessible name has to carry what the visible layout carries
+          // positionally, and it cannot be just "Read": that would leave 22
+          // identically-named controls in a screen reader's form-controls
+          // list, disambiguated only by a row header the card layout does not
+          // have (there the module is a sibling <dd>, not a header).
+          aria-label={`Read ${row.module}`}
+          checked={selectedCodes.has(row.readCode)}
+          disabled={!canWrite || selectedCodes.has(row.writeCode)}
+          onChange={(event) => toggleRead(row, event.target.checked)}
+        />
+      ),
+    },
+    {
+      key: "write",
+      header: "Write",
+      cell: (row) => (
+        <Checkbox
+          label=""
+          aria-label={`Write ${row.module}`}
+          checked={selectedCodes.has(row.writeCode)}
+          disabled={!canWrite}
+          onChange={(event) => toggleWrite(row, event.target.checked)}
+        />
+      ),
+    },
+  ];
 }
 
 /**
@@ -140,6 +205,8 @@ export default function AdminRoleDetailPage() {
     });
   };
 
+  const permissionColumns = buildPermissionColumns(selectedCodes, canWrite, toggleRead, toggleWrite);
+
   const breadcrumbs = [
     { label: "Admin users", href: "/admin-users" },
     { label: "Roles", href: "/admin-users/roles" },
@@ -210,69 +277,56 @@ export default function AdminRoleDetailPage() {
         </form>
       </Card>
 
-      <Card
+      {/*
+       * Task 367: the shared DataTable, not a hand-rolled `<table>`. This was
+       * the last table in admin-web bypassing it, and the one that therefore
+       * did not inherit task 348's card collapse below `lg` - it did not
+       * break at the 768px tablet floor (three narrow columns), but being the
+       * single exception meant any future table fix would have to be made
+       * twice. The card/list layout, loading skeleton, error and empty states
+       * below all come from the component; nothing here re-implements them.
+       */}
+      <DataTable<ModuleRow>
         title="Permission matrix"
         description="Which modules this role can view (Read) or change (Write). Write always implies Read."
-      >
-        <div className="flex flex-col gap-4">
-          {permissionsMutation.isError && !confirmSavePermissions ? (
-            <Alert>{describeError(permissionsMutation.error)}</Alert>
-          ) : null}
-          {catalogQuery.error ? (
-            <SectionError error={catalogQuery.error} onRetry={() => catalogQuery.refetch()}>
-              The permission catalog could not be loaded, so the matrix cannot be edited right now.{" "}
-              {describeError(catalogQuery.error)}
-            </SectionError>
-          ) : null}
-
-          <div className="overflow-x-auto rounded-xl border border-line">
-            <table className="w-full min-w-[480px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-line bg-surface-2 text-left">
-                  <th className="px-4 py-2.5 font-medium text-fg-muted">Module</th>
-                  <th className="px-4 py-2.5 font-medium text-fg-muted">Read</th>
-                  <th className="px-4 py-2.5 font-medium text-fg-muted">Write</th>
-                </tr>
-              </thead>
-              <tbody>
-                {moduleRows.map((row) => (
-                  <tr key={row.module} className="border-b border-line last:border-0">
-                    <td className="px-4 py-2.5 font-medium text-fg capitalize">{row.module}</td>
-                    <td className="px-4 py-2.5">
-                      <Checkbox
-                        label="Read"
-                        checked={selectedCodes.has(row.readCode)}
-                        disabled={!canWrite || selectedCodes.has(row.writeCode)}
-                        onChange={(event) => toggleRead(row, event.target.checked)}
-                      />
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Checkbox
-                        label="Write"
-                        checked={selectedCodes.has(row.writeCode)}
-                        disabled={!canWrite}
-                        onChange={(event) => toggleWrite(row, event.target.checked)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {canWrite ? (
-            <FormActions>
-              <Button
-                type="button"
-                disabled={!hasChanges}
-                onClick={() => setConfirmSavePermissions(true)}
-              >
-                Save permissions
-              </Button>
-            </FormActions>
-          ) : null}
-        </div>
-      </Card>
+        columns={permissionColumns}
+        rows={moduleRows}
+        rowKey={(row) => row.module}
+        isLoading={catalogQuery.isPending}
+        error={catalogQuery.error}
+        errorMessage={
+          catalogQuery.error
+            ? `The permission catalog could not be loaded, so the matrix cannot be edited right now. ${describeError(catalogQuery.error)}`
+            : null
+        }
+        onRetry={() => catalogQuery.refetch()}
+        caption="Every admin module, with this role's Read and Write grant on each"
+        minWidth="480px"
+        skeletonRows={8}
+        // Fixed-length and short: the catalog is every module the platform
+        // has, so there is nothing for a density preference to help with.
+        hideDensityToggle
+        emptyTitle="No permission modules"
+        emptyDescription="The permission catalog came back empty, so there is nothing to grant here."
+        footer={
+          canWrite ? (
+            <div className="flex flex-col gap-4">
+              {permissionsMutation.isError && !confirmSavePermissions ? (
+                <Alert>{describeError(permissionsMutation.error)}</Alert>
+              ) : null}
+              <FormActions>
+                <Button
+                  type="button"
+                  disabled={!hasChanges}
+                  onClick={() => setConfirmSavePermissions(true)}
+                >
+                  Save permissions
+                </Button>
+              </FormActions>
+            </div>
+          ) : null
+        }
+      />
 
       <ConfirmDialog
         open={confirmSavePermissions}

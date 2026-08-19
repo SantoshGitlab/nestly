@@ -196,7 +196,7 @@ public class RescheduleService : IRescheduleService
             }
         }
 
-        decimal payableAmount = await ResolvePayableAmountAsync(booking.Id);
+        decimal payableAmount = await ResolvePayableAmountAsync(booking);
         // The snapshot is a business wall-clock time; lifting it to a real
         // instant is what makes "how long until the slot" comparable with UTC
         // now (see IBusinessClock) - subtracting the two directly skewed every
@@ -383,18 +383,39 @@ public class RescheduleService : IRescheduleService
         return new RescheduleEligibilityResponse(true, null, reschedulesUsed, _policy.MaxReschedulesPerBooking, _policy.MinHoursBeforeSlot);
     }
 
-    /// <summary>What remains on the booking's payment - 0 if it was never paid for or already fully refunded (same rule CancellationService uses).</summary>
-    private async Task<decimal> ResolvePayableAmountAsync(Guid bookingId)
+    /// <summary>
+    /// What the booking is still funded by, and therefore the base the
+    /// late-reschedule fee percentage applies against - 0 if it was never
+    /// funded at all (a 100%-off coupon, a free subscription visit, an AMC
+    /// redemption) or has already been fully refunded.
+    ///
+    /// <para>
+    /// Task 364: this is the gateway payment PLUS the wallet balance the
+    /// booking consumed at checkout, computed by the same
+    /// <see cref="RefundAllocationCalculator"/> <c>CancellationService</c>
+    /// charges its fee against and <c>RefundService</c> allocates against, so
+    /// no two of the three can compute a fee off a different base. Reading
+    /// only the gateway payment (as this did before) understated a part-wallet
+    /// booking's recorded late-reschedule fee by exactly the wallet-funded
+    /// share, and zeroed it outright on a fully wallet-covered booking, which
+    /// has no <see cref="PaymentTransaction"/> at all (task 331).
+    /// </para>
+    ///
+    /// <para>
+    /// Prior refunds are listed by booking rather than by payment transaction:
+    /// task 356 made a wallet-funded refund a row with no
+    /// <c>PaymentTransactionId</c>, so the by-payment query cannot see one and
+    /// would count wallet money already returned as still refundable.
+    /// </para>
+    /// </summary>
+    private async Task<decimal> ResolvePayableAmountAsync(Booking booking)
     {
-        var payment = await _paymentRepository.GetByBookingIdAsync(bookingId);
-        if (payment is null || payment.Status != PaymentTransactionStatus.Success)
-        {
-            return 0m;
-        }
+        var payment = await _paymentRepository.GetByBookingIdAsync(booking.Id);
+        decimal paymentSettledAmount = payment is { Status: PaymentTransactionStatus.Success } ? payment.Amount : 0m;
+        var priorRefunds = await _refundTransactionRepository.ListByBookingAsync(booking.Id);
 
-        var priorRefunds = await _refundTransactionRepository.ListByPaymentTransactionAsync(payment.Id);
-        decimal alreadyRefunded = priorRefunds.Where(r => r.Status != RefundStatus.Failed).Sum(r => r.Amount);
-        decimal remaining = payment.Amount - alreadyRefunded;
-        return remaining > 0 ? remaining : 0m;
+        return RefundAllocationCalculator
+            .ComputeRemaining(paymentSettledAmount, booking.WalletCreditAppliedSnapshot ?? 0m, priorRefunds)
+            .Total;
     }
 }

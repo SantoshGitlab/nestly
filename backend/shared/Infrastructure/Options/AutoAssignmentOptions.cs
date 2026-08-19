@@ -21,6 +21,18 @@ public class AutoAssignmentOptions
     /// ops disable a misbehaving first-release auto-dispatch engine in
     /// production without a deploy, purely via configuration.
     /// </summary>
+    /// <remarks>
+    /// Task 363: <c>ProviderAutoAssignmentHandler</c> is an in-process
+    /// notification handler, so it runs in whichever API process raised the
+    /// transition to <see cref="Nestly.Domain.BookingStatus.AwaitingFulfilment"/>
+    /// - consumer-api on a reschedule that needs reassignment, provider-api on
+    /// an assignment rejection, admin-api on the promotion sweep. This switch
+    /// is therefore materialised in all three APIs' <c>appsettings.json</c>:
+    /// turning it off in one process only would leave the matcher live in the
+    /// other two. The <see cref="PromotionEnabled"/> group is the opposite
+    /// case and is admin-api-only for the same kind of reason - see it.
+    /// <c>AutoAssignmentConfigurationReachTests</c> pins both.
+    /// </remarks>
     public bool Enabled { get; set; } = true;
 
     /// <summary>
@@ -173,6 +185,15 @@ public class AutoAssignmentOptions
     /// admin's manual assignment queue as their slot approaches - which is the
     /// pre-automation flow, not a broken one - and turning this off must not
     /// be the only way to stop the matcher spending money on route lookups.
+    /// </para>
+    /// <para>
+    /// Unlike <see cref="Enabled"/>, this and the three other
+    /// <c>Promotion*</c> settings are materialised in admin-api's
+    /// <c>appsettings.json</c> only: <c>BookingFulfilmentPromotionJob</c> is
+    /// scheduled from admin-api's <c>Program.cs</c> alone, so writing them
+    /// into consumer-api or provider-api would hand ops a knob that silently
+    /// does nothing (task 361/363).
+    /// </para>
     /// </remarks>
     public bool PromotionEnabled { get; set; } = true;
 

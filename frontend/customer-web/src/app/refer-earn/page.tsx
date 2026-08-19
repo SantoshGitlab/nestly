@@ -297,6 +297,9 @@ function StatsRow({ query }: { query: UseQueryResult<ReferralSummaryResponse> })
 /* History                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/** Shared by the card list and the table so the two can never describe themselves differently to a screen reader. */
+const HISTORY_CAPTION = "Everyone who signed up with your code, and what each one has earned you.";
+
 function HistoryCard({ query }: { query: UseQueryResult<ReferralHistoryItemResponse[]> }) {
   if (query.isPending) {
     return (
@@ -346,50 +349,96 @@ function HistoryCard({ query }: { query: UseQueryResult<ReferralHistoryItemRespo
 
   return (
     <Card title="Referral history" flush>
-      <Table>
-        <caption className="sr-only">
-          Everyone who signed up with your code, and what each one has earned you.
-        </caption>
-        <THead>
-          <TR>
-            <TH>Friend</TH>
-            <TH>Status</TH>
-            <TH numeric>Reward</TH>
-          </TR>
-        </THead>
-        <TBody>
-          {query.data.map((item) => (
-            <TR key={item.id}>
-              <TD>
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="font-medium text-fg">{item.refereeName}</span>
-                  <span className="nums text-xs text-fg-subtle">
-                    Signed up {formatInstantDate(item.registeredAtUtc)}
-                    {item.qualifiedAtUtc
-                      ? ` · Qualified ${formatInstantDate(item.qualifiedAtUtc)}`
-                      : ""}
-                  </span>
-                </div>
-              </TD>
-              <TD>
-                <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
-              </TD>
-              <TD numeric>
-                {/* `!= null` rather than truthiness: a genuine ₹0.00 reward is
-                    a real, recorded outcome and should not render as a dash. */}
-                {item.rewardEarned != null ? (
-                  <span className="font-semibold text-success">+{inr(item.rewardEarned)}</span>
-                ) : (
-                  <span className="text-fg-subtle" aria-label="No reward yet">
-                    —
-                  </span>
-                )}
-              </TD>
+      {/*
+       * Task 373, the other half of the finding task 365 closed for the
+       * wallet ledger: three columns, one of them numeric, is what
+       * docs/FRONTEND.md RESPONSIVE DESIGN asks to collapse rather than let
+       * scroll sideways on a phone. Deliberately the same shape as
+       * wallet/page.tsx rather than a second invention - each row renders
+       * twice, exactly one visible at a time, CSS-only, breaking at `md`
+       * (this app's own mobile/desktop split).
+       */}
+      <ul aria-label={HISTORY_CAPTION} className="divide-y divide-line md:hidden">
+        {query.data.map((item) => (
+          <HistoryCardRow key={item.id} item={item} />
+        ))}
+      </ul>
+
+      <div className="hidden md:block">
+        <Table>
+          <caption className="sr-only">{HISTORY_CAPTION}</caption>
+          <THead>
+            <TR>
+              <TH>Friend</TH>
+              <TH>Status</TH>
+              <TH numeric>Reward</TH>
             </TR>
-          ))}
-        </TBody>
-      </Table>
+          </THead>
+          <TBody>
+            {query.data.map((item) => (
+              <TR key={item.id}>
+                <TD>
+                  <HistoryIdentity item={item} />
+                </TD>
+                <TD>
+                  <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+                </TD>
+                <TD numeric>
+                  <HistoryReward item={item} />
+                </TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </div>
     </Card>
+  );
+}
+
+/** Who signed up, and when. Identical in both layouts; only its surroundings differ. */
+function HistoryIdentity({ item }: { item: ReferralHistoryItemResponse }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="font-medium text-fg">{item.refereeName}</span>
+      <span className="nums text-xs text-fg-subtle">
+        Signed up {formatInstantDate(item.registeredAtUtc)}
+        {item.qualifiedAtUtc ? ` · Qualified ${formatInstantDate(item.qualifiedAtUtc)}` : ""}
+      </span>
+    </div>
+  );
+}
+
+/** Shared so the two layouts can never disagree about what a referral earned. */
+function HistoryReward({ item }: { item: ReferralHistoryItemResponse }) {
+  // `!= null` rather than truthiness: a genuine ₹0.00 reward is a real,
+  // recorded outcome and should not render as a dash.
+  return item.rewardEarned != null ? (
+    <span className="font-semibold text-success">+{inr(item.rewardEarned)}</span>
+  ) : (
+    <span className="text-fg-subtle" aria-label="No reward yet">
+      —
+    </span>
+  );
+}
+
+/**
+ * The below-`md` card. Same arrangement as the wallet ledger's: the status
+ * badge leads, the amount holds the right of the entry's own line, and
+ * nothing carries a visible column label - with only three fields, and one of
+ * them a badge that names itself, a label:value stack would add words without
+ * adding meaning.
+ */
+function HistoryCardRow({ item }: { item: ReferralHistoryItemResponse }) {
+  return (
+    <li className="flex items-start justify-between gap-3 px-4 py-3.5">
+      <div className="flex min-w-0 flex-col items-start gap-1.5">
+        <Badge tone={statusTone(item.status)}>{statusLabel(item.status)}</Badge>
+        <HistoryIdentity item={item} />
+      </div>
+      <span className="shrink-0 text-right text-sm">
+        <HistoryReward item={item} />
+      </span>
+    </li>
   );
 }
 

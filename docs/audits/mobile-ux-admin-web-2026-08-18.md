@@ -123,6 +123,11 @@ all of them.
   floor — **OK, no fix needed.** Noted for #348 as the one inconsistency:
   it doesn't use the shared primitive, but it doesn't need the card
   treatment either since it never forces scroll at 768px.
+  **Update, task 367 — migrated to `DataTable` anyway.** The audit's reading
+  holds (it never broke at 768px, and this changed no behaviour that was
+  broken); what closed it was the inconsistency itself, since being the one
+  exception meant every future table fix had to be made twice. Every
+  admin-web table now goes through one already-responsive primitive.
 
 ## Findings not fixed here, with why
 

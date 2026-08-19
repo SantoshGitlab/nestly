@@ -2,9 +2,16 @@
   <!--
     App-icon rendering of the same mark as SiteHeader.tsx's NestlyMark /
     auth-ui.tsx's AuthShell logo (house glyph on the brand gradient), traced
-    to the brand-gradient stops in tailwind.config.ts / globals.css
-    (--brand-700/--brand-500/--brand-400) rather than referencing the CSS
-    custom properties, which a standalone SVG file has no cascade to resolve.
+    to the brand-gradient stops in tailwind.config.ts / globals.css (the
+    brand-700, brand-500 and brand-400 custom properties) rather than
+    referencing those properties by name, which a standalone SVG file has no
+    cascade to resolve.
+
+    Those names are written without their leading dashes on purpose: this is
+    an XML comment, and a literal double hyphen inside one is a
+    well-formedness error, not a stylistic issue. It made this file fail to
+    parse in every XML-strict SVG consumer - which is all of them - so the
+    icon it defines rendered nowhere at all (found and fixed by task 368).
 
     Full-bleed background with the glyph kept well inside a centered safe
     zone (~42% of the canvas) so this single file is valid for both the

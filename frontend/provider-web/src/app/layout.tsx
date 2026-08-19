@@ -22,7 +22,10 @@ export const metadata: Metadata = {
     template: "%s · Nestly Provider",
   },
   description: "Nestly provider portal.",
-  // Task #354: Add-to-Home-Screen support. See public/manifest.json.
+  // Task #354: Add-to-Home-Screen support. See public/manifest.json, and
+  // scripts/generate-pwa-icons.sh for how its PNGs are rasterized from
+  // public/icon.svg (task #368). iOS reads src/app/apple-icon.png instead,
+  // via Next's file convention - it never looks at the manifest's icons.
   manifest: "/manifest.json",
 };
 
