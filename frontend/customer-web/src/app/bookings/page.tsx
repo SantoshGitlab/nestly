@@ -250,12 +250,19 @@ function LastBookingCard() {
     enabled: !!latest,
   });
 
+  // No review yet -> 204 -> apiFetch resolves undefined. Normalised to null
+  // here rather than left as undefined: TanStack Query treats a query
+  // function returning undefined as an error ("Query data cannot be
+  // undefined") since undefined is its own internal "no data yet" sentinel -
+  // same fix as bookings/[id]/review/page.tsx's reviewQuery for the identical
+  // endpoint (found here during QA sweep: this card hit the same crash on
+  // every booking that doesn't have a review yet).
   const reviewQuery = useQuery({
     queryKey: ["booking-review", latest?.id],
-    queryFn: () =>
-      apiFetch<ReviewResponse | undefined>(`${API_V1}/bookings/${latest!.id}/review`, {
+    queryFn: async () =>
+      (await apiFetch<ReviewResponse | undefined>(`${API_V1}/bookings/${latest!.id}/review`, {
         authenticated: true,
-      }),
+      })) ?? null,
     enabled: !!latest,
   });
 
