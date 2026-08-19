@@ -1,5 +1,6 @@
 using Nestly.Application.Bookings;
 using Nestly.Application.Payments;
+using Nestly.Application.ProviderManagement;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -21,19 +22,22 @@ public class PaymentService : IPaymentService
     private readonly IPaymentGateway _gateway;
     private readonly ISandboxPaymentSimulator _simulator;
     private readonly IPaymentWebhookService _webhookService;
+    private readonly IEligibleProviderSearchService _eligibleProviderSearchService;
 
     public PaymentService(
         IPaymentTransactionRepository paymentRepository,
         IBookingRepository bookingRepository,
         IPaymentGateway gateway,
         ISandboxPaymentSimulator simulator,
-        IPaymentWebhookService webhookService)
+        IPaymentWebhookService webhookService,
+        IEligibleProviderSearchService eligibleProviderSearchService)
     {
         _paymentRepository = paymentRepository;
         _bookingRepository = bookingRepository;
         _gateway = gateway;
         _simulator = simulator;
         _webhookService = webhookService;
+        _eligibleProviderSearchService = eligibleProviderSearchService;
     }
 
     public async Task<Result<PaymentOrderResponse>> CreateOrderAsync(Guid customerId, CreatePaymentOrderRequest request)
@@ -66,6 +70,25 @@ public class PaymentService : IPaymentService
 
             case PaymentTransactionStatus.Cancelled:
                 return Error.Business("Payment.TransactionCancelled", "This booking's payment was cancelled and can no longer be retried.");
+        }
+
+        // Gate payment on real fulfillability, not just slot capacity: a slot
+        // window can have open capacity while zero providers can actually
+        // take the job (skill, service area, availability, standing load and
+        // travel feasibility all have to line up - see
+        // ProviderAssignmentEligibilityService). Charging for a booking that
+        // is unassignable on arrival would otherwise only surface as a
+        // problem once an admin's manual queue - or auto-assignment - later
+        // finds nobody, well after the customer has paid. Checked here,
+        // immediately before minting a gateway order, rather than earlier at
+        // booking creation: eligibility (especially travel feasibility) can
+        // shift in the time between browsing a slot and reaching payment, and
+        // this is the last moment before money is actually at stake.
+        if (!await HasEligibleProviderAsync(booking.Id))
+        {
+            return Error.Business(
+                "Payment.NoProviderAvailable",
+                "No service professional is currently available for this date and time. Please choose a different slot.");
         }
 
         var gatewayResult = await _gateway.CreateOrderAsync(
@@ -127,6 +150,24 @@ public class PaymentService : IPaymentService
         }
 
         return Result.Success(ToOrderResponse(transaction, transaction.LatestAttempt!));
+    }
+
+    /// <summary>
+    /// Stops at the first candidate that passes the full eligibility gate
+    /// (schedule conflict, availability, capacity, travel feasibility) rather
+    /// than materialising the ranked list - existence is all this needs, and
+    /// <see cref="IEligibleProviderSearchService"/> is lazy specifically so a
+    /// caller that stops early never pays for the billed route lookups behind
+    /// the candidates it didn't look at.
+    /// </summary>
+    private async Task<bool> HasEligibleProviderAsync(Guid bookingId)
+    {
+        await foreach (var _ in _eligibleProviderSearchService.FindEligibleAsync(bookingId))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public async Task<Result> SimulateAsync(Guid customerId, SimulatePaymentRequest request)

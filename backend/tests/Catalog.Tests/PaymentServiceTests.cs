@@ -88,12 +88,57 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
-        return new PaymentService(paymentRepository, bookingRepository, gateway, simulator, webhookService);
+        return new PaymentService(
+            paymentRepository, bookingRepository, gateway, simulator, webhookService, BuildEligibleProviderSearchService(context));
+    }
+
+    // The real SandboxRouteEstimateProvider, not a stub - see
+    // ProviderAutoAssignmentHandlerTests' identical helper for why: no HTTP,
+    // no key, deterministic, and every fixture booking's address/provider
+    // pair here is close enough that travel feasibility never actually
+    // refuses anyone on distance.
+    private static EligibleProviderSearchService BuildEligibleProviderSearchService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
+        new(
+            new ProviderMatchingService(
+                new BookingRepository(context),
+                context,
+                new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
+                Options.Create(new AutoAssignmentOptions())),
+            BuildEligibilityService(context));
+
+    private static ProviderAssignmentEligibilityService BuildEligibilityService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
+        new BookingRepository(context),
+        new ProviderAvailabilityWindowRepository(context),
+        new ProviderBlackoutDateRepository(context),
+        new ProviderCapacityRepository(context),
+        new ProviderScheduleConflictService(context),
+        TravelFeasibilityFactory.Sandbox(context),
+        context);
+
+    private static Provider AddActiveEligibleProvider(
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, Guid categoryId, Guid cityId, DayOfWeek dayOfWeek, decimal lat, decimal lng)
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+9198" + Guid.NewGuid().ToString("N")[..8]);
+        provider.ChangeStatus(ProviderStatus.Active);
+        provider.UpdateLocation(lat, lng);
+        context.Add(provider);
+        context.Add(new ProviderSkillMapping(Guid.NewGuid(), provider.Id, categoryId));
+        context.Add(new ProviderServiceArea(Guid.NewGuid(), provider.Id, cityId));
+        context.Add(new ProviderAvailabilityWindow(Guid.NewGuid(), provider.Id, dayOfWeek, TimeSpan.FromHours(8), TimeSpan.FromHours(18)));
+        return provider;
     }
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
-    private async Task<Fixture> SeedBookingAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context)
+    /// <summary>
+    /// <paramref name="seedEligibleProvider"/> defaults to true so every
+    /// existing caller keeps getting a booking that can actually reach
+    /// payment - the CreateOrderAsync eligibility gate (Payment.NoProviderAvailable)
+    /// would otherwise reject all of them, since none seeded a provider before
+    /// that gate existed. Pass false for the one test that means to cover the
+    /// gate itself.
+    /// </summary>
+    private async Task<Fixture> SeedBookingAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, bool seedEligibleProvider = true)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];
@@ -124,6 +169,15 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
         context.ServicePincodeMappings.Add(new ServicePincodeMapping(Guid.NewGuid(), service.Id, pincode.Id));
         context.SlotWindows.Add(window);
         context.SlotWindowRules.Add(rule);
+
+        if (seedEligibleProvider)
+        {
+            // Same coordinates as the address above: a zero-length leg, so
+            // travel feasibility never has grounds to refuse this provider
+            // (see TravelFeasibilityFactory.Sandbox's doc comment).
+            AddActiveEligibleProvider(context, category.Id, city.Id, futureDate.DayOfWeek, 12.9716m, 77.5946m);
+        }
+
         context.SaveChanges();
 
         var request = new BookingSummaryRequest(service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, []);
@@ -326,7 +380,9 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
             paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
-        var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
+        var paymentService = new PaymentService(
+            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
+            BuildEligibleProviderSearchService(context));
 
         return (paymentService, webhookService);
     }
@@ -354,5 +410,33 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Payment.BookingNotPayable");
+    }
+
+    /// <summary>
+    /// The gate that blocks payment on an unfulfillable booking: capacity can
+    /// leave a slot open while zero providers actually match it on skill,
+    /// service area, availability or capacity - and this must refuse the
+    /// gateway order rather than let the customer pay for something nobody
+    /// can be assigned to.
+    /// </summary>
+    [Fact]
+    public async Task CreateOrderAsync_fails_with_NoProviderAvailable_when_no_eligible_provider_exists()
+    {
+        Fixture fixture;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = await SeedBookingAsync(seedContext, seedEligibleProvider: false);
+        }
+
+        using var context = _db.CreateContext();
+        var result = await BuildPaymentService(context, BuildGateway()).CreateOrderAsync(
+            fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, IdempotencyKey: null));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Payment.NoProviderAvailable");
+
+        using var readContext = _db.CreateContext();
+        var transaction = await new PaymentTransactionRepository(readContext).GetByBookingIdAsync(fixture.BookingId);
+        transaction.Should().BeNull("no gateway order - and so no payment transaction - should ever be created for an unfulfillable booking");
     }
 }

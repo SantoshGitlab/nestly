@@ -160,7 +160,9 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var webhookService = BuildWebhookService(context, gateway, commissionService);
-        var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
+        var paymentService = new PaymentService(
+            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
+            new AlwaysEligibleProviderSearchStub());
 
         var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
         string payload = PaymentWebhookPayload.Build(order.Value.GatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus);
@@ -208,7 +210,9 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var webhookService = BuildWebhookService(context, gateway, commissionService);
-        var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
+        var paymentService = new PaymentService(
+            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
+            new AlwaysEligibleProviderSearchStub());
 
         var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
         string payload = PaymentWebhookPayload.Build(order.Value.GatewayOrderId, "ref", PaymentWebhookPayload.SuccessStatus);

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import {
+  BannerBreadcrumb,
   BookingProgress,
   BookingStatusBadge,
   DetailList,
@@ -16,9 +17,10 @@ import {
   formatTimeRange,
   inr,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, PageHeading, Skeleton, Spinner, cx } from "@/components/ui";
-import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { Alert, Button, Card, Skeleton, Spinner, cx } from "@/components/ui";
+import { API_V1, apiFetch, describeError, errorCode } from "@/lib/api";
 import { clearDraft } from "@/lib/booking-draft";
 import { BookingStatus } from "@/lib/types";
 import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } from "@/lib/types";
@@ -35,7 +37,14 @@ import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } 
  */
 export default function BookingPaymentPage() {
   return (
-    <Suspense fallback={<ScreenSkeleton cards={2} />}>
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col">
+          <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+          <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+        </main>
+      }
+    >
       <RequireAuth>
         <BookingPaymentScreen />
       </RequireAuth>
@@ -178,12 +187,17 @@ function BookingPaymentScreen() {
   };
 
   if (bookingQuery.isPending) {
-    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (bookingQuery.isError || !booking) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load this booking"
@@ -201,7 +215,7 @@ function BookingPaymentScreen() {
 
   if (isConfirmed) {
     return (
-      <main className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-12 text-sm text-fg-muted sm:px-6">
+      <main className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-12 text-sm text-fg-muted sm:px-6">
         <Spinner />
         Taking you to your confirmation…
       </main>
@@ -211,17 +225,25 @@ function BookingPaymentScreen() {
   const amount = orderQuery.data?.amount ?? booking.price.totalPayable;
 
   return (
-    <main
-      className={cx(
-        "mx-auto grid w-full max-w-4xl animate-rise gap-6 px-4 py-8 sm:px-6 sm:py-10 md:grid-cols-[1fr_22rem]",
-        STICKY_BAR_SPACER,
-      )}
-    >
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Confirm and pay"
+        description={booking.service.name}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: "Confirm and pay" }]}
+          />
+        }
+      />
+
+      <div
+        className={cx(
+          "mx-auto grid w-full max-w-7xl gap-6 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[1fr_22rem]",
+          STICKY_BAR_SPACER,
+        )}
+      >
       <div className="flex min-w-0 flex-col gap-6">
-        <div>
-          <BookingProgress current={1} />
-          <PageHeading title="Confirm and pay" subtitle={booking.service.name} />
-        </div>
+        <BookingProgress current={1} />
 
         <Card title="Booking">
           <DetailList>
@@ -268,17 +290,42 @@ function BookingPaymentScreen() {
           </Card>
         ) : orderQuery.isError ? (
           <Card title="Payment">
-            <Alert
-              tone="error"
-              title="Couldn't start the payment"
-              action={
-                <Button size="sm" variant="secondary" onClick={handleRetry}>
-                  Try again
-                </Button>
-              }
-            >
-              {describeError(orderQuery.error)}
-            </Alert>
+            {errorCode(orderQuery.error) === "Payment.NoProviderAvailable" ? (
+              // Retrying would just re-run the identical check against the
+              // identical slot and fail the same way - the customer needs a
+              // different slot, not another attempt at this one.
+              <Alert
+                tone="error"
+                title="No one's available for this slot"
+                action={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      router.push(
+                        `/booking/summary${serviceSlug ? `?serviceSlug=${serviceSlug}` : ""}`,
+                      )
+                    }
+                  >
+                    Choose another slot
+                  </Button>
+                }
+              >
+                {describeError(orderQuery.error)}
+              </Alert>
+            ) : (
+              <Alert
+                tone="error"
+                title="Couldn't start the payment"
+                action={
+                  <Button size="sm" variant="secondary" onClick={handleRetry}>
+                    Try again
+                  </Button>
+                }
+              >
+                {describeError(orderQuery.error)}
+              </Alert>
+            )}
           </Card>
         ) : paymentFailed ? (
           <Card title="Payment failed">
@@ -353,6 +400,7 @@ function BookingPaymentScreen() {
           </StickyActionBar>
         ) : null}
       </aside>
+      </div>
     </main>
   );
 }
