@@ -36,7 +36,8 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
         // persists a booking; GetSummaryAsync only validates and prices.
         var summaryRequest = new BookingSummaryRequest(
             request.ServiceId, request.CityId, request.AddressId, request.LocalityId,
-            request.SlotWindowId, request.StartDate, request.Quantity, request.AddOns);
+            request.SlotWindowId, request.StartDate, request.Quantity, request.AddOns,
+            ApplyWalletCredit: request.ApplyWalletCredit);
 
         var summaryResult = await _bookingSummaryService.GetSummaryAsync(customerId, summaryRequest);
         if (summaryResult.IsFailure)
@@ -52,7 +53,8 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
                 request.AddressId, request.SlotWindowId, request.Quantity, request.Frequency,
                 request.RecurrenceDayOfWeek, request.RecurrenceDayOfMonth, request.StartDate,
                 request.EndDate, request.OccurrenceCount,
-                request.AddOns.Select(a => (a.AddOnId, a.Quantity)).ToList());
+                request.AddOns.Select(a => (a.AddOnId, a.Quantity)).ToList(),
+                request.ApplyWalletCredit);
         }
         catch (ArgumentException ex)
         {
@@ -169,7 +171,7 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
         (await _serviceRepository.GetByIdAsync(serviceId))?.Name ?? string.Empty;
 
     private static RecurringBookingPlanResponse ToResponse(RecurringBookingPlan plan, string serviceName) => new(
-        plan.Id, plan.ServiceId, serviceName, plan.AddressId, plan.SlotWindowId, plan.Quantity,
+        plan.Id, plan.ServiceId, serviceName, plan.AddressId, plan.SlotWindowId, plan.Quantity, plan.ApplyWalletCredit,
         plan.Frequency, plan.RecurrenceDayOfWeek, plan.RecurrenceDayOfMonth, plan.StartDate, plan.EndDate,
         plan.OccurrenceCount, plan.CompletedOccurrenceCount, plan.NextOccurrenceDate, plan.Status, plan.CreatedAtUtc);
 }

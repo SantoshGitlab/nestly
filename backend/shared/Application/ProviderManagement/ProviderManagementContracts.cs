@@ -4,12 +4,13 @@ namespace Nestly.Application.ProviderManagement;
 
 // ---- CRUD (task 150a) ----
 
-/// <summary>Search/filter criteria for the admin provider list (mirrors <c>CustomerSearchFilter</c>).</summary>
+/// <summary>Search/filter criteria for the admin provider list (mirrors <c>CustomerSearchFilter</c>). <see cref="CityId"/> matches a provider with an active <see cref="ProviderServiceArea"/> covering that city (task 371) - ops finding "which providers serve city X" without opening every provider's detail page.</summary>
 public sealed record ProviderSearchFilter(
     string? Name,
     string? Phone,
     ProviderStatus? Status,
     ProviderOnboardingStatus? OnboardingStatus,
+    Guid? CityId,
     int Page,
     int PageSize);
 
@@ -20,9 +21,11 @@ public sealed record ProviderSearchRequest(
     string? Phone,
     ProviderStatus? Status,
     ProviderOnboardingStatus? OnboardingStatus,
+    Guid? CityId = null,
     int Page = 1,
     int PageSize = 20);
 
+/// <summary><see cref="ServiceCities"/> (task 371) names the cities this provider has an active <see cref="ProviderServiceArea"/> for, alphabetically - empty if the provider has not configured any service areas yet.</summary>
 public sealed record ProviderSummaryResponse(
     Guid Id,
     string LegalName,
@@ -31,7 +34,8 @@ public sealed record ProviderSummaryResponse(
     string? Email,
     ProviderStatus Status,
     ProviderOnboardingStatus OnboardingStatus,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    IReadOnlyList<string> ServiceCities);
 
 public sealed record ProviderSearchResponse(IReadOnlyList<ProviderSummaryResponse> Items, int TotalCount, int Page, int PageSize);
 

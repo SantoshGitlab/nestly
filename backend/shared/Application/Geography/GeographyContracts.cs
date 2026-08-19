@@ -9,3 +9,6 @@ public record CityResponse(Guid Id, string Name, string StateName);
 /// locality by name/pincode text rather than needing to already know its id.
 /// </summary>
 public record LocalityResponse(Guid Id, string Name, string ZoneName, string PincodeCode, Guid PincodeId);
+
+/// <summary>The city/state a pincode resolves to, for autofilling an address form once the customer enters a pincode (task 369).</summary>
+public record PincodeLookupResponse(Guid CityId, string CityName, string StateName);

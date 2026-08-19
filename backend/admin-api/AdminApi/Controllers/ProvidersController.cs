@@ -86,10 +86,11 @@ public class ProvidersController : ControllerBase
         [FromQuery] string? phone,
         [FromQuery] ProviderStatus? status,
         [FromQuery] ProviderOnboardingStatus? onboardingStatus,
+        [FromQuery] Guid? cityId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var request = new ProviderSearchRequest(name, phone, status, onboardingStatus, page, pageSize);
+        var request = new ProviderSearchRequest(name, phone, status, onboardingStatus, cityId, page, pageSize);
         var validation = await _searchValidator.ValidateAsync(request);
         if (!validation.IsValid)
         {

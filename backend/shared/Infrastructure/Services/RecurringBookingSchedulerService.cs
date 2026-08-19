@@ -158,9 +158,12 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
         }
 
         var addOns = plan.AddOns.Select(a => new AddOnSelection(a.AddOnId, a.Quantity)).ToList();
+        // ApplyWalletCredit reuses the plan's own choice (task 370) - there
+        // is no per-occurrence UI moment to ask the customer again, unlike
+        // an ad-hoc booking's checkbox.
         var request = new BookingSummaryRequest(
             plan.ServiceId, plan.CityId, plan.AddressId, plan.LocalityId, plan.SlotWindowId,
-            occurrenceDate, plan.Quantity, addOns);
+            occurrenceDate, plan.Quantity, addOns, ApplyWalletCredit: plan.ApplyWalletCredit);
 
         // Task 297: the plan id goes in through the orchestration's own
         // parameter, so the occurrence is a plan booking from its very first

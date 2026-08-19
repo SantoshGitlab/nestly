@@ -236,6 +236,13 @@ export interface ServiceabilityResult {
   isServiceable: boolean;
 }
 
+/** GET /geography/pincodes/{code} — resolves a pincode to its city/state for address-form autofill (task 369). */
+export interface PincodeLookup {
+  cityId: string;
+  cityName: string;
+  stateName: string;
+}
+
 export interface SlotOption {
   slotWindowId: string;
   name: string;
@@ -629,6 +636,8 @@ export interface CreateRecurringBookingPlanRequestBody {
   endDate: string | null;
   occurrenceCount: number | null;
   addOns: AddOnSelection[];
+  /** Whether every occurrence this plan generates should apply the customer's wallet balance (task 370). Defaults to false server-side if omitted. */
+  applyWalletCredit?: boolean;
 }
 
 export interface RecurringBookingPlanResponse {
@@ -638,6 +647,7 @@ export interface RecurringBookingPlanResponse {
   addressId: string;
   slotWindowId: string;
   quantity: number;
+  applyWalletCredit: boolean;
   frequency: RecurringBookingRecurrenceFrequency;
   recurrenceDayOfWeek: number | null;
   recurrenceDayOfMonth: number | null;

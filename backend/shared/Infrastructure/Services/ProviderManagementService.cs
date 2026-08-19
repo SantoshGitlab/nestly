@@ -16,6 +16,7 @@ public class ProviderManagementService : IProviderManagementService
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly IProviderEarningLedgerRepository _earningLedgerRepository;
     private readonly IProviderCapacityRepository _capacityRepository;
+    private readonly IProviderServiceAreaRepository _serviceAreaRepository;
 
     public ProviderManagementService(
         IProviderRepository providerRepository,
@@ -24,7 +25,8 @@ public class ProviderManagementService : IProviderManagementService
         IBookingRepository bookingRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderEarningLedgerRepository earningLedgerRepository,
-        IProviderCapacityRepository capacityRepository)
+        IProviderCapacityRepository capacityRepository,
+        IProviderServiceAreaRepository serviceAreaRepository)
     {
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
@@ -33,15 +35,23 @@ public class ProviderManagementService : IProviderManagementService
         _assignmentRepository = assignmentRepository;
         _earningLedgerRepository = earningLedgerRepository;
         _capacityRepository = capacityRepository;
+        _serviceAreaRepository = serviceAreaRepository;
     }
 
     public async Task<Result<ProviderSearchResponse>> SearchAsync(ProviderSearchRequest request)
     {
-        var filter = new ProviderSearchFilter(request.Name, request.Phone, request.Status, request.OnboardingStatus, request.Page, request.PageSize);
+        var filter = new ProviderSearchFilter(
+            request.Name, request.Phone, request.Status, request.OnboardingStatus, request.CityId, request.Page, request.PageSize);
         var result = await _providerRepository.SearchAsync(filter);
 
+        // Batched per page rather than per row (task 371) - one query for
+        // however many providers this page holds, not N.
+        var serviceCitiesByProvider = await _serviceAreaRepository.ListActiveCityNamesByProviderAsync(
+            result.Rows.Select(p => p.Id).ToList());
+
         var items = result.Rows.Select(p => new ProviderSummaryResponse(
-            p.Id, p.LegalName, p.DisplayName, p.Phone, p.Email, p.Status, p.OnboardingStatus, p.CreatedAt)).ToList();
+            p.Id, p.LegalName, p.DisplayName, p.Phone, p.Email, p.Status, p.OnboardingStatus, p.CreatedAt,
+            serviceCitiesByProvider.GetValueOrDefault(p.Id, []))).ToList();
 
         return new ProviderSearchResponse(items, result.TotalCount, request.Page, request.PageSize);
     }
