@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  BannerBreadcrumb,
   DetailList,
   DetailRow,
   ScreenSkeleton,
@@ -10,6 +11,7 @@ import {
   inr,
 } from "@/components/patterns";
 import { Reveal, RevealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -18,7 +20,6 @@ import {
   Card,
   EmptyState,
   Modal,
-  PageHeading,
   Skeleton,
   useToast,
 } from "@/components/ui";
@@ -113,12 +114,17 @@ function SubscriptionScreen() {
   });
 
   if (query.isPending) {
-    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col" aria-hidden>
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" />
+        <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load your subscription"
@@ -172,19 +178,15 @@ function MySubscriptionView({ subscription }: { subscription: MySubscriptionResp
   });
 
   return (
-    // max-w-3xl, not max-w-2xl: matches both this page's own loading skeleton
-    // (line ~116, sized for the sibling PlanSelectionView's 2-col plan grid)
-    // and the other single-column "my X" account pages at this width
-    // (bookings, recurring-bookings, support, refer-earn, wallet) — was 2xl,
-    // which visibly narrowed on every load once the skeleton resolved into
-    // this view.
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title="My subscription"
-        subtitle="Your Nestly membership and remaining benefits."
-        actions={<Badge tone={statusTone(subscription.status)}>{statusLabel(subscription.status)}</Badge>}
+        description="Your Nestly membership and remaining benefits."
+        badge={<Badge tone={statusTone(subscription.status)}>{statusLabel(subscription.status)}</Badge>}
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "My subscription" }]} />}
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex flex-col gap-6">
         {subscription.status === CustomerSubscriptionStatus.PaymentFailed ? (
           <Alert tone="warning" title="We couldn't take your last payment">
@@ -311,6 +313,7 @@ function MySubscriptionView({ subscription }: { subscription: MySubscriptionResp
           </p>
         </div>
       </Modal>
+      </div>
     </main>
   );
 }
@@ -359,12 +362,14 @@ function PlanSelectionView() {
   const pendingPlanId = subscribeMutation.isPending ? subscribeMutation.variables : null;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title="Nestly Plus"
-        subtitle="Subscribe for free visits and a standing discount on every booking."
+        description="Subscribe for free visits and a standing discount on every booking."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Nestly Plus" }]} />}
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       {error ? (
         <div className="mb-6">
           <Alert tone="error" title="Couldn't start your subscription">
@@ -421,6 +426,7 @@ function PlanSelectionView() {
           ))}
         </Reveal>
       )}
+      </div>
     </main>
   );
 }

@@ -6,9 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { ScreenSkeleton } from "@/components/patterns";
+import { BannerBreadcrumb, ScreenSkeleton } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
-import { Alert, Button, Card, Field, PageHeading, Select, Textarea } from "@/components/ui";
+import { Alert, Button, Card, Field, Select, Textarea } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import {
   BOOKING_REQUIRED_CATEGORIES,
@@ -93,7 +94,12 @@ export default function NewSupportTicketPage() {
     // A skeleton rather than an empty <main>: the fallback used to render a
     // blank page the exact height of nothing, so the form arrived as a jump.
     <Suspense
-      fallback={<ScreenSkeleton cards={1} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />}
+      fallback={
+        <main className="flex w-full flex-col">
+          <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+          <ScreenSkeleton cards={1} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+        </main>
+      }
     >
       <RequireAuth>
         <NewSupportTicketScreen />
@@ -202,9 +208,18 @@ function NewSupportTicketScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading title="Raise an issue" subtitle="Tell us what's wrong and we'll take a look." />
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Raise an issue"
+        description="Tell us what's wrong and we'll take a look."
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "Support tickets", href: "/support" }, { label: "Raise an issue" }]}
+          />
+        }
+      />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <Card title="New ticket">
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           {createMutation.isError ? (
@@ -264,6 +279,7 @@ function NewSupportTicketScreen() {
           </Button>
         </form>
       </Card>
+      </div>
     </main>
   );
 }

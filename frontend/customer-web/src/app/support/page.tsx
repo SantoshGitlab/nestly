@@ -1,8 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { formatInstant, supportStatusTone } from "@/components/patterns";
+import { BannerBreadcrumb, formatInstant, supportStatusTone } from "@/components/patterns";
 import { MotionLink, Reveal, RevealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -10,7 +11,6 @@ import {
   Button,
   EmptyState,
   LinkButton,
-  PageHeading,
   Skeleton,
 } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -34,15 +34,20 @@ function SupportTicketsScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col">
+      <PageBanner
         title="Support tickets"
-        subtitle="Everything you've raised with us, and where each one stands."
-        // LinkButton, not `<Link><Button/></Link>`: a button inside an
-        // anchor is invalid HTML and exposes two nested controls for one
-        // action, which is the exact shape the booking detail screen fixed.
-        actions={<RaiseIssueLink />}
+        description="Everything you've raised with us, and where each one stands."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Support tickets" }]} />}
       />
+
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+      <div className="mb-6">
+        {/* LinkButton, not `<Link><Button/></Link>`: a button inside an
+            anchor is invalid HTML and exposes two nested controls for one
+            action, which is the exact shape the booking detail screen fixed. */}
+        <RaiseIssueLink />
+      </div>
 
       {query.isPending ? (
         <ul className="flex list-none flex-col gap-3" aria-hidden>
@@ -82,6 +87,7 @@ function SupportTicketsScreen() {
           ))}
         </Reveal>
       )}
+      </div>
     </main>
   );
 }

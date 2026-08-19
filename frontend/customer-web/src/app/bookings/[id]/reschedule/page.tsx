@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
-import { STICKY_BAR_SPACER, ScreenSkeleton, StickyActionBar } from "@/components/patterns";
+import { BannerBreadcrumb, STICKY_BAR_SPACER, ScreenSkeleton, StickyActionBar } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, PageHeading, Skeleton, Textarea, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
@@ -78,12 +79,17 @@ function RescheduleBookingScreen() {
   });
 
   if (eligibilityQuery.isPending) {
-    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (eligibilityQuery.isError || !eligibilityQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Reschedule booking" />
         <Alert
           tone="error"
@@ -104,7 +110,7 @@ function RescheduleBookingScreen() {
 
   if (!eligibility.isEligible) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Reschedule booking" />
         <Alert tone="warning" title="This booking can't be rescheduled">
           {eligibility.ineligibilityReason ?? "Rescheduling isn't available for this booking."}
@@ -136,17 +142,18 @@ function RescheduleBookingScreen() {
   };
 
   return (
-    <main
-      className={cx(
-        "mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
-        STICKY_BAR_SPACER,
-      )}
-    >
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title="Reschedule booking"
-        subtitle={`Reschedules used: ${eligibility.reschedulesUsed} of ${eligibility.maxReschedulesPerBooking}`}
+        description={`Reschedules used: ${eligibility.reschedulesUsed} of ${eligibility.maxReschedulesPerBooking}`}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: "Reschedule" }]}
+          />
+        }
       />
 
+      <div className={cx("mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14", STICKY_BAR_SPACER)}>
       <div className="flex flex-col gap-6">
         <Alert tone="info">
           Your booking stays live until you confirm — pick a new window below and nothing changes
@@ -220,6 +227,7 @@ function RescheduleBookingScreen() {
             {rescheduleMutation.isPending ? "Moving your booking, please wait." : ""}
           </p>
         </StickyActionBar>
+      </div>
       </div>
     </main>
   );

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  BannerBreadcrumb,
   DetailList,
   DetailRow,
   formatCalendarDate,
@@ -10,6 +11,7 @@ import {
   recurringPlanStatusTone,
 } from "@/components/patterns";
 import { Reveal, RevealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -19,7 +21,6 @@ import {
   EmptyState,
   LinkButton,
   Modal,
-  PageHeading,
   Skeleton,
 } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -54,12 +55,14 @@ function RecurringBookingsScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col">
+      <PageBanner
         title="Recurring bookings"
-        subtitle="Manage your standing service schedules."
+        description="Manage your standing service schedules."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Recurring bookings" }]} />}
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       {query.isPending ? (
         <ul className="flex flex-col gap-4" aria-hidden>
           {[0, 1].map((row) => (
@@ -95,6 +98,7 @@ function RecurringBookingsScreen() {
           ))}
         </Reveal>
       )}
+      </div>
     </main>
   );
 }

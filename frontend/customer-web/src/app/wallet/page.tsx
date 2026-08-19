@@ -2,7 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { formatInstant, inr } from "@/components/patterns";
+import { BannerBreadcrumb, formatInstant, inr } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -18,7 +19,6 @@ import {
   THead,
   TR,
   Table,
-  PageHeading,
   cx,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
@@ -106,12 +106,18 @@ function WalletScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading title="Wallet" subtitle="Your Nestly wallet balance and transaction history." />
+    <main className="flex w-full flex-col">
+      <PageBanner
+        title="Wallet"
+        description="Your Nestly wallet balance and transaction history."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Wallet" }]} />}
+      />
 
-      <div className="flex animate-rise flex-col gap-6">
-        <BalanceCard query={balanceQuery} />
-        <LedgerCard query={ledgerQuery} />
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="flex animate-rise flex-col gap-6">
+          <BalanceCard query={balanceQuery} />
+          <LedgerCard query={ledgerQuery} />
+        </div>
       </div>
     </main>
   );

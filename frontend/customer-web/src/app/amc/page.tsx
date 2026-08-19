@@ -3,11 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
+  BannerBreadcrumb,
   ScreenSkeleton,
   formatInstantDate,
   inr,
 } from "@/components/patterns";
 import { Reveal, RevealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -16,7 +18,6 @@ import {
   Card,
   EmptyState,
   LinkButton,
-  PageHeading,
 } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import { describeError } from "@/lib/api";
@@ -70,21 +71,31 @@ function AmcContractsScreen() {
     queryFn: listMyAmcContracts,
   });
 
+  if (query.isPending) {
+    return (
+      <main className="flex w-full flex-col" aria-hidden>
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" />
+        <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col">
+      <PageBanner
         title="My AMC contracts"
-        subtitle="Prepaid service cover for your appliances — buy once, redeem visits any time within the term."
-        actions={
-          <LinkButton href="/amc/new" size="sm">
-            Buy an AMC plan
-          </LinkButton>
-        }
+        description="Prepaid service cover for your appliances — buy once, redeem visits any time within the term."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "My AMC contracts" }]} />}
       />
 
-      {query.isPending ? (
-        <ScreenSkeleton cards={2} />
-      ) : query.isError ? (
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+      <div className="mb-6">
+        <LinkButton href="/amc/new" size="sm">
+          Buy an AMC plan
+        </LinkButton>
+      </div>
+
+      {query.isError ? (
         <Alert
           tone="error"
           title="Couldn't load your AMC contracts"
@@ -111,6 +122,7 @@ function AmcContractsScreen() {
           ))}
         </Reveal>
       )}
+      </div>
     </main>
   );
 }

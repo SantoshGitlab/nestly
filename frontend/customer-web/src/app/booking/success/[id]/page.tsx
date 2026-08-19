@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import type { ReactNode } from "react";
 import {
+  BannerBreadcrumb,
   BookingProgress,
   BookingStatusBadge,
   DetailList,
@@ -14,6 +15,7 @@ import {
   formatCalendarDate,
   formatTimeRange,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, LinkButton } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -27,7 +29,14 @@ import type { BookingDetail, ServiceDetail } from "@/lib/types";
  */
 export default function BookingSuccessPage() {
   return (
-    <Suspense fallback={<ScreenSkeleton cards={2} />}>
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col">
+          <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+          <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+        </main>
+      }
+    >
       <RequireAuth>
         <BookingSuccessScreen />
       </RequireAuth>
@@ -55,12 +64,17 @@ function BookingSuccessScreen() {
   });
 
   if (bookingQuery.isPending) {
-    return <ScreenSkeleton cards={2} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={2} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (bookingQuery.isError || !bookingQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load your confirmation"
@@ -79,35 +93,20 @@ function BookingSuccessScreen() {
   const booking = bookingQuery.data;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="flex w-full flex-col animate-rise">
+      {/* The E2E suite addresses this by accessible name ("Booking placed!"),
+          which is why PageBanner's own title stays exactly that string. */}
+      <PageBanner
+        title="Booking placed!"
+        description={`Booking ID: ${booking.id}`}
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Booking placed!" }]} />}
+        badge={<BookingStatusBadge status={booking.status} label={booking.statusLabel} />}
+      />
+
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <BookingProgress current={2} />
 
-      <div className="mb-7 flex animate-rise flex-col items-center gap-3 text-center">
-        <span
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-success ring-8 ring-success/10"
-          aria-hidden
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-7 w-7"
-          >
-            <path d="m5 13 4 4L19 7" />
-          </svg>
-        </span>
-        {/* The E2E suite addresses this by accessible name ("Booking placed!")
-            and reads the booking id out of a single text node underneath it,
-            so both stay exactly as they are. */}
-        <h1 className="text-display-sm font-semibold text-fg">Booking placed!</h1>
-        <p className="nums text-sm text-fg-muted">{`Booking ID: ${booking.id}`}</p>
-        <BookingStatusBadge status={booking.status} label={booking.statusLabel} />
-      </div>
-
-      <div className="flex flex-col gap-5">
+      <div className="mt-6 flex flex-col gap-5">
         <Card title="Booking summary">
           <DetailList>
             <DetailRow label="Service">{booking.service.name}</DetailRow>
@@ -175,6 +174,7 @@ function BookingSuccessScreen() {
             Go to my bookings
           </LinkButton>
         </div>
+      </div>
       </div>
     </main>
   );
