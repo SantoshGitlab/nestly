@@ -60,4 +60,13 @@ public class GeographyRepository : IGeographyRepository
 
         return match;
     }
+
+    public Task<PincodeLookupResponse?> ResolvePincodeLocationAsync(string pincodeCode) =>
+        (
+            from pincode in _context.Set<Pincode>()
+            join city in _context.Set<City>() on pincode.CityId equals city.Id
+            join state in _context.Set<State>() on city.StateId equals state.Id
+            where pincode.IsActive && city.IsActive && state.IsActive && pincode.Code == pincodeCode
+            select new PincodeLookupResponse(city.Id, city.Name, state.Name)
+        ).FirstOrDefaultAsync();
 }

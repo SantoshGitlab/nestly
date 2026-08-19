@@ -21,4 +21,11 @@ public interface IGeographyRepository
     /// scoped to a city), so no city context is needed to disambiguate.
     /// </summary>
     Task<Guid?> FindActivePincodeIdByCodeAsync(string pincodeCode);
+
+    /// <summary>
+    /// Resolves the city/state a pincode belongs to, for autofilling an
+    /// address form once the customer enters a pincode (task 369) - null if
+    /// no active pincode has that exact code, or its city/state is inactive.
+    /// </summary>
+    Task<PincodeLookupResponse?> ResolvePincodeLocationAsync(string pincodeCode);
 }

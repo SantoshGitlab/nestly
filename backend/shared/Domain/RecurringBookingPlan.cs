@@ -51,6 +51,17 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
 
     public int Quantity { get; private set; }
 
+    /// <summary>
+    /// Whether every occurrence this plan generates should apply the
+    /// customer's wallet balance (task 370). Chosen once, at plan creation,
+    /// and reused for every future occurrence - there is no per-occurrence
+    /// UI moment to ask again, unlike an ad-hoc booking's own wallet
+    /// checkbox (<c>BookingSummaryRequest.ApplyWalletCredit</c>). Defaults
+    /// to false, matching that checkbox's own off-by-default precedent
+    /// (booking/summary's UI deliberately avoids a silent auto-apply).
+    /// </summary>
+    public bool ApplyWalletCredit { get; private set; }
+
     public RecurringBookingRecurrenceFrequency Frequency { get; private set; }
 
     /// <summary>Required for <see cref="RecurringBookingRecurrenceFrequency.Weekly"/>/<see cref="RecurringBookingRecurrenceFrequency.Biweekly"/>; null for <see cref="RecurringBookingRecurrenceFrequency.Monthly"/>.</summary>
@@ -95,7 +106,8 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         DateOnly startDate,
         DateOnly? endDate,
         int? occurrenceCount,
-        IReadOnlyList<(Guid AddOnId, int Quantity)>? addOns = null)
+        IReadOnlyList<(Guid AddOnId, int Quantity)>? addOns = null,
+        bool applyWalletCredit = false)
         : base(id)
     {
         if (quantity <= 0)
@@ -127,6 +139,7 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         AddressId = addressId;
         SlotWindowId = slotWindowId;
         Quantity = quantity;
+        ApplyWalletCredit = applyWalletCredit;
         Frequency = frequency;
         RecurrenceDayOfWeek = recurrenceDayOfWeek;
         RecurrenceDayOfMonth = recurrenceDayOfMonth;

@@ -40,6 +40,7 @@ public class RecurringBookingPlanConfiguration : IEntityTypeConfiguration<Recurr
         builder.HasOne<SlotWindow>().WithMany().HasForeignKey(x => x.SlotWindowId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.Quantity).IsRequired();
+        builder.Property(x => x.ApplyWalletCredit).IsRequired().HasDefaultValue(false);
 
         builder.Property(x => x.Frequency).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.RecurrenceDayOfWeek).HasConversion<string>().HasMaxLength(20);

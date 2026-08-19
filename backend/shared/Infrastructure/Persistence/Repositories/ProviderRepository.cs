@@ -97,6 +97,12 @@ public class ProviderRepository : IProviderRepository
             query = query.Where(p => p.OnboardingStatus == filter.OnboardingStatus.Value);
         }
 
+        if (filter.CityId.HasValue)
+        {
+            query = query.Where(p => _context.Set<ProviderServiceArea>()
+                .Any(a => a.ProviderId == p.Id && a.CityId == filter.CityId.Value && a.IsActive));
+        }
+
         int totalCount = await query.CountAsync();
 
         var rows = await query

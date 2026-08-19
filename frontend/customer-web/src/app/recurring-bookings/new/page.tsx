@@ -87,6 +87,9 @@ function NewRecurringBookingPlanScreen() {
   );
   const [occurrenceCount, setOccurrenceCount] = useState<string>("4");
   const [endDate, setEndDate] = useState<string>("");
+  // Off by default (task 370) - matches booking/summary's own wallet
+  // checkbox precedent, not a silent auto-apply.
+  const [applyWalletCredit, setApplyWalletCredit] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   /** Synchronous double-submit guard - see booking/summary/page.tsx. */
@@ -168,6 +171,7 @@ function NewRecurringBookingPlanScreen() {
       endDate: endDate || null,
       occurrenceCount: trimmedCount ? Number(trimmedCount) : null,
       addOns: Array.from(selectedAddOnIds, (addOnId) => ({ addOnId, quantity: 1 })),
+      applyWalletCredit,
     };
 
     if (inFlight.current) return;
@@ -355,6 +359,18 @@ function NewRecurringBookingPlanScreen() {
             manage screen.
           </p>
         </div>
+      </Card>
+
+      <Card
+        title="Payment"
+        description="Applies to every visit this plan generates — off by default, same as a one-off booking."
+      >
+        <CheckboxField
+          label="Use my wallet balance for every visit"
+          description="Applied automatically up to what's payable, on top of any pricing already in effect at the time."
+          checked={applyWalletCredit}
+          onChange={setApplyWalletCredit}
+        />
       </Card>
 
       {formError ? (

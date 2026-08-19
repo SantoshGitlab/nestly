@@ -85,4 +85,61 @@ public sealed class GeographyQueryServiceTests : IClassFixture<TestDatabase>
         byPincode.Value.Should().Contain(l => l.Id == connaughtPlace.Id).And.Contain(l => l.Id == karolBagh.Id);
         byPincode.Value.Should().NotContain(l => l.Id == elsewhere.Id);
     }
+
+    [Fact]
+    public async Task Resolves_a_pincode_to_its_city_and_state_for_address_autofill()
+    {
+        var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
+        var pincode = new Pincode(Guid.NewGuid(), city.Id, "560034");
+
+        using (var context = _db.CreateContext())
+        {
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.Pincodes.Add(pincode);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).ResolvePincodeAsync("560034");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.CityId.Should().Be(city.Id);
+        result.Value.CityName.Should().Be("Bengaluru");
+        result.Value.StateName.Should().Be("Karnataka");
+    }
+
+    [Fact]
+    public async Task Unknown_pincode_returns_not_found()
+    {
+        using var context = _db.CreateContext();
+        var result = await BuildService(context).ResolvePincodeAsync("999999");
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Geography.PincodeNotFound");
+    }
+
+    [Fact]
+    public async Task Inactive_pincode_is_not_resolved()
+    {
+        var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
+        var pincode = new Pincode(Guid.NewGuid(), city.Id, "560001");
+        pincode.Deactivate();
+
+        using (var context = _db.CreateContext())
+        {
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.Pincodes.Add(pincode);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).ResolvePincodeAsync("560001");
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Geography.PincodeNotFound");
+    }
 }

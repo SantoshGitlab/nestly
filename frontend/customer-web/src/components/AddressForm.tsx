@@ -1,11 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { FocusEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { StickyActionBar } from "@/components/patterns";
 import { Alert, Button, Checkbox, Field } from "@/components/ui";
-import type { CustomerAddress } from "@/lib/types";
+import { API_V1, apiFetch } from "@/lib/api";
+import type { CustomerAddress, PincodeLookup } from "@/lib/types";
 
 /**
  * Shared by the add and edit screens — both post the same
@@ -71,6 +73,26 @@ export function AddressForm({
 
   const { errors } = form.formState;
 
+  /**
+   * Autofills City/State from the geography master once a valid 6-digit
+   * pincode is entered (task 369), so the customer doesn't have to type
+   * them by hand for a pincode we already know. Both fields stay editable
+   * afterwards — an unmapped pincode (404) or a lookup failure just leaves
+   * them for manual entry rather than blocking the form.
+   */
+  async function handlePincodeBlur(e: FocusEvent<HTMLInputElement>) {
+    const code = e.target.value;
+    if (!/^\d{6}$/.test(code)) return;
+
+    try {
+      const location = await apiFetch<PincodeLookup>(`${API_V1}/geography/pincodes/${code}`);
+      form.setValue("city", location.cityName, { shouldValidate: true, shouldDirty: true });
+      form.setValue("state", location.stateName, { shouldValidate: true, shouldDirty: true });
+    } catch {
+      // No active pincode matches, or the lookup failed — leave City/State alone.
+    }
+  }
+
   return (
     <form
       onSubmit={form.handleSubmit((values) => onSubmit(values))}
@@ -89,7 +111,7 @@ export function AddressForm({
         autoComplete="postal-code"
         maxLength={6}
         error={errors.pincode?.message}
-        {...form.register("pincode")}
+        {...form.register("pincode", { onBlur: handlePincodeBlur })}
       />
       <Field label="City" error={errors.city?.message} {...form.register("city")} />
       <Field label="State" error={errors.state?.message} {...form.register("state")} />

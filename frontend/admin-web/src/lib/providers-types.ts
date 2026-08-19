@@ -108,6 +108,8 @@ export interface ProviderSummary {
   status: ProviderStatus;
   onboardingStatus: ProviderOnboardingStatus;
   createdAt: string;
+  /** Cities this provider has an active service area for (task 371) — empty if none configured yet. */
+  serviceCities: string[];
 }
 
 export interface ProviderSearchResponse {
@@ -122,6 +124,8 @@ export interface ProviderSearchParams {
   phone?: string;
   status?: ProviderStatus;
   onboardingStatus?: ProviderOnboardingStatus;
+  /** Matches a provider with an active service area covering this city (task 371). */
+  cityId?: string;
   page?: number;
   pageSize?: number;
 }

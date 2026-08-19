@@ -11,6 +11,13 @@ namespace Nestly.Application.RecurringBookings;
 /// promotional redemption; auto-reapplying the same code to every future
 /// occurrence would turn a single-use promotion into a standing discount it
 /// was never designed to be - task 184's scope note).
+///
+/// <see cref="ApplyWalletCredit"/> (task 370) is chosen once here, at plan
+/// creation, and reused for every occurrence, since there is no
+/// per-occurrence UI moment to ask again the way an ad-hoc booking's own
+/// wallet checkbox does. Defaults to false, matching that checkbox's
+/// existing off-by-default precedent (booking/summary deliberately avoids a
+/// silent auto-apply).
 /// </summary>
 public record CreateRecurringBookingPlanRequest(
     Guid ServiceId,
@@ -25,7 +32,8 @@ public record CreateRecurringBookingPlanRequest(
     DateOnly StartDate,
     DateOnly? EndDate,
     int? OccurrenceCount,
-    IReadOnlyList<AddOnSelection> AddOns);
+    IReadOnlyList<AddOnSelection> AddOns,
+    bool ApplyWalletCredit = false);
 
 public record RecurringBookingPlanResponse(
     Guid Id,
@@ -34,6 +42,7 @@ public record RecurringBookingPlanResponse(
     Guid AddressId,
     Guid SlotWindowId,
     int Quantity,
+    bool ApplyWalletCredit,
     RecurringBookingRecurrenceFrequency Frequency,
     DayOfWeek? RecurrenceDayOfWeek,
     int? RecurrenceDayOfMonth,

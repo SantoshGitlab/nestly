@@ -42,4 +42,14 @@ public class GeographyController : ControllerBase
         var result = await _geographyQueryService.SearchLocalitiesAsync(cityId, search);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
+
+    /// <summary>Resolves a pincode's city/state, so an address form can autofill them once the customer enters a pincode (task 369).</summary>
+    [HttpGet("pincodes/{code}")]
+    [ProducesResponseType(typeof(PincodeLookupResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResolvePincode(string code)
+    {
+        var result = await _geographyQueryService.ResolvePincodeAsync(code);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
 }

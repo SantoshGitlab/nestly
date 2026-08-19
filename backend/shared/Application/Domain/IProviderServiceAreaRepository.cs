@@ -15,4 +15,12 @@ public interface IProviderServiceAreaRepository
     Task<IReadOnlyList<ProviderServiceArea>> GetByProviderAsync(Guid providerId);
 
     Task ReplaceForProviderAsync(Guid providerId, IReadOnlyList<ProviderServiceArea> areas);
+
+    /// <summary>
+    /// Active service-area city names per provider, for the admin provider
+    /// directory (task 371) - a provider with no configured service areas
+    /// is simply absent from the result rather than mapped to an empty list,
+    /// so callers should default missing keys themselves.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<string>>> ListActiveCityNamesByProviderAsync(IReadOnlyList<Guid> providerIds);
 }

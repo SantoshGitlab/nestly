@@ -19,6 +19,7 @@ import { describeError } from "@/lib/api";
 import { createProvider, searchProviders } from "@/lib/providers-api";
 import { ProviderOnboardingStatus, ProviderStatus } from "@/lib/providers-types";
 import type { CreateProviderRequest, ProviderSummary } from "@/lib/providers-types";
+import { listCities } from "@/lib/serviceability-api";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
 const PAGE_SIZE = 20;
@@ -47,9 +48,10 @@ interface FilterFormState {
   name: string;
   phone: string;
   status: string;
+  cityId: string;
 }
 
-const EMPTY_FILTERS: FilterFormState = { name: "", phone: "", status: "" };
+const EMPTY_FILTERS: FilterFormState = { name: "", phone: "", status: "", cityId: "" };
 const EMPTY_CREATE: CreateProviderRequest = { legalName: "", displayName: "", phone: "", email: "" };
 
 /**
@@ -76,6 +78,8 @@ export default function ProvidersPage() {
   const [createForm, setCreateForm] = useState<CreateProviderRequest>(EMPTY_CREATE);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const citiesQuery = useQuery({ queryKey: ["cities"], queryFn: () => listCities() });
+
   const query = useQuery({
     queryKey: ["admin-providers", appliedFilters, page],
     queryFn: () =>
@@ -83,6 +87,7 @@ export default function ProvidersPage() {
         name: appliedFilters.name || undefined,
         phone: appliedFilters.phone || undefined,
         status: appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as ProviderStatus),
+        cityId: appliedFilters.cityId || undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -150,6 +155,16 @@ export default function ProvidersPage() {
     { key: "phone", header: "Phone", cell: (provider) => <span className="nums">{provider.phone}</span> },
     { key: "email", header: "Email", cell: (provider) => provider.email ?? "—" },
     {
+      key: "serviceCities",
+      header: "Serves",
+      cell: (provider) =>
+        provider.serviceCities.length > 0 ? (
+          <span className="truncate">{provider.serviceCities.join(", ")}</span>
+        ) : (
+          <span className="text-fg-subtle">Not configured</span>
+        ),
+    },
+    {
       key: "status",
       header: "Status",
       cell: (provider) => <ProviderStatusBadge status={provider.status} label={statusLabel(provider.status)} />,
@@ -187,7 +202,7 @@ export default function ProvidersPage() {
         onClear={onClear}
         activeCount={countActiveFilters(appliedFilters)}
         busy={query.isFetching}
-        columns={3}
+        columns={4}
       >
         <Field
           label="Name"
@@ -204,6 +219,15 @@ export default function ProvidersPage() {
           value={filters.status}
           onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
           options={STATUS_OPTIONS}
+        />
+        <Select
+          label="Serves city"
+          value={filters.cityId}
+          onChange={(e) => setFilters((f) => ({ ...f, cityId: e.target.value }))}
+          options={[
+            { value: "", label: "Any city" },
+            ...(citiesQuery.data ?? []).map((city) => ({ value: city.id, label: city.name })),
+          ]}
         />
       </FilterBar>
 
