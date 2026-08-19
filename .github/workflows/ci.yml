@@ -63,8 +63,12 @@ jobs:
     name: Frontend lint & build
     runs-on: ubuntu-latest
     strategy:
+      # Task #366: provider-web was missing here entirely and got no CI check
+      # at all. Every app under frontend/ belongs in this matrix - the list is
+      # the whole frontend/ directory, not a subset anyone has to remember to
+      # extend.
       matrix:
-        app: [customer-web, admin-web]
+        app: [customer-web, admin-web, provider-web]
     steps:
       - uses: actions/checkout@v4
 
