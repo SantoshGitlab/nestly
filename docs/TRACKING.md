@@ -245,11 +245,32 @@ consumer-api, `GET /admin/bookings/{id}/tracking` on admin-api).
 
 ## 6. Configuration surface — where the actual defaults live
 
-None of `ProviderLocationIngest`, `BookingEta`, or `AutoAssignment` has a
-section in any API's `appsettings*.json` today — all three run entirely on
-the C# class defaults documented above in every environment. Only
-`GoogleMaps` has an explicit section, and it is identical across all three
-APIs' base `appsettings.json`:
+`ProviderLocationIngest` and `BookingEta` have no section in any API's
+`appsettings*.json` today — both run entirely on the C# class defaults
+documented above, in every environment.
+
+`AutoAssignment` is the exception, and the shape of that exception matters:
+its section is materialised in **all three** APIs' base `appsettings.json`,
+but not identically. `ProviderAutoAssignmentHandler` is an in-process
+`INotificationHandler`, so it runs wherever the transition to
+`AwaitingFulfilment` is raised — consumer-api (a reschedule that needs
+reassignment, `RescheduleService`), provider-api (a provider rejecting an
+assignment, `BookingProviderAssignmentService`) and admin-api (the promotion
+sweep). A kill switch present in only one process would leave the matcher
+live in the other two, which is why all three carry the eight matcher keys
+(`Enabled`, `RetryAttempts`, and the six routing/travel ones in §4).
+
+The four `Promotion*` keys are in admin-api's section **only**, deliberately:
+`BookingFulfilmentPromotionJob` is scheduled from admin-api's `Program.cs`
+alone, so those keys have no reach elsewhere and writing them into the other
+two would hand ops a knob that silently does nothing mid-incident.
+`Catalog.Tests/AutoAssignmentConfigurationReachTests` pins both halves of
+that split, since nothing in the compiler ties a section to the options class
+it binds — a missing section falls back to the defaults and a misspelled key
+binds nothing, both silently.
+
+`GoogleMaps` also has an explicit section, and it *is* identical across all
+three APIs' base `appsettings.json`:
 
 ```json
 "GoogleMaps": {
