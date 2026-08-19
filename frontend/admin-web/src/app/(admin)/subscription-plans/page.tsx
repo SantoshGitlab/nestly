@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, PageHeading, useToast } from "@/components/ui";
+import { SubscriptionTabs } from "@/components/SubscriptionTabs";
 import { describeError } from "@/lib/api";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
@@ -96,6 +97,8 @@ export default function SubscriptionPlansPage() {
         subtitle="Price, billing cycle and benefits for the Nestly Plus tiers (PRODUCT-ENHANCEMENTS.md #1)."
         actions={newPlanButton}
       />
+
+      <SubscriptionTabs />
 
       <PlansTable
         plans={plansQuery.data}

@@ -138,12 +138,95 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         created.Value.Timeline[1].ToStatus.Should().Be(BookingStatus.PaymentPending);
         created.Value.AddOns.Should().ContainSingle(a => a.Id == fixture.AddOn.Id);
         created.Value.Price.TotalPayable.Should().Be(800m);
+        // Task 331's regression guard: the zero-payable fast path added there
+        // must never claim a booking that someone still owes money on.
+        created.Value.FinalPayable.Should().Be(800m);
+        created.Value.Timeline.Should().NotContain(entry => entry.ToStatus == BookingStatus.Confirmed);
 
         using var readContext = _db.CreateContext();
         var reloaded = await new BookingRepository(readContext).GetByIdAsync(created.Value.Id);
         reloaded.Should().NotBeNull();
         reloaded!.Items.Should().ContainSingle();
         reloaded.Items[0].AddOns.Should().ContainSingle(a => a.LineTotalSnapshot == 300m);
+    }
+
+    /// <summary>
+    /// Task 331: a booking whose payable has been driven to zero - here by
+    /// wallet credit covering the whole price - is confirmed on creation
+    /// instead of being parked in PaymentPending, which for it is a dead end
+    /// (<see cref="PaymentTransaction"/> rejects a non-positive amount, so no
+    /// gateway order exists to confirm it, and BookingExpirySweepJob would
+    /// eventually expire a booking the customer has already paid for out of
+    /// their wallet).
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_confirms_a_wallet_fully_covered_booking_without_a_payment_step()
+    {
+        Fixture fixture;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            await new WalletService(new WalletLedgerRepository(context), context)
+                .CreditAsync(fixture.Customer.Id, 900m, WalletSourceType.PromotionalCredit, null, "Promo");
+        }
+
+        using var createContext = _db.CreateContext();
+        var created = await BuildService(createContext).CreateAsync(
+            fixture.Customer.Id, RequestFor(fixture) with { ApplyWalletCredit = true });
+
+        created.IsSuccess.Should().BeTrue();
+        created.Value.FinalPayable.Should().Be(0m);
+        created.Value.WalletCreditApplied.Should().Be(500m);
+        created.Value.Status.Should().Be(BookingStatus.Confirmed);
+        created.Value.StatusLabel.Should().Be("Confirmed");
+        created.Value.Timeline.Should().HaveCount(2);
+        created.Value.Timeline[0].ToStatus.Should().Be(BookingStatus.Initiated);
+        created.Value.Timeline[1].ToStatus.Should().Be(BookingStatus.Confirmed);
+        created.Value.Timeline[1].Reason.Should().Be(
+            "Nothing payable on this booking - confirmed without a payment.",
+            "the timeline is where a never-charged booking stays explainable later");
+
+        using var readContext = _db.CreateContext();
+        var reloaded = await new BookingRepository(readContext).GetByIdAsync(created.Value.Id);
+        reloaded!.Status.Should().Be(BookingStatus.Confirmed);
+        reloaded.StatusHistory.Should().NotContain(entry => entry.ToStatus == BookingStatus.PaymentPending);
+
+        (await new PaymentTransactionRepository(readContext).GetByBookingIdAsync(created.Value.Id))
+            .Should().BeNull("nothing was charged, so there is no gateway transaction to record");
+        (await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id))
+            .Value.Balance.Should().Be(400m, "the wallet ledger is what records how this booking was actually settled");
+    }
+
+    /// <summary>
+    /// Task 331, the second zero-payable producer that is not AMC: a discount
+    /// large enough to take the total to zero. Same confirmation path - the
+    /// rule is "nothing is payable", not "this is an entitlement redemption".
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_confirms_a_fully_discounted_booking_without_a_payment_step()
+    {
+        Fixture fixture;
+        string couponCode = "FREE" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            context.Add(new Coupon(
+                Guid.NewGuid(), couponCode, "Fully discounted", CouponDiscountType.Percentage, 100m,
+                maxDiscountAmount: null, minOrderAmount: 0m,
+                DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(30),
+                usageLimitTotal: null, usageLimitPerCustomer: null,
+                applicableCategoryId: null, CouponCustomerSegment.All));
+            context.SaveChanges();
+        }
+
+        using var createContext = _db.CreateContext();
+        var created = await BuildService(createContext).CreateAsync(
+            fixture.Customer.Id, RequestFor(fixture) with { CouponCode = couponCode });
+
+        created.IsSuccess.Should().BeTrue();
+        created.Value.FinalPayable.Should().Be(0m);
+        created.Value.Status.Should().Be(BookingStatus.Confirmed);
+        created.Value.Timeline.Should().NotContain(entry => entry.ToStatus == BookingStatus.PaymentPending);
     }
 
     [Fact]

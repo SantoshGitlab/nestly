@@ -20,6 +20,15 @@ public class BookingService : IBookingService
     /// <summary>Recorded on the auto-transition to PaymentPending, since there is no real payment gateway integration yet to explain it instead (Phase 4).</summary>
     private const string NoPaymentGatewayReason = "No payment gateway integrated yet - booking moves directly to awaiting payment.";
 
+    /// <summary>
+    /// Task 331: recorded on the auto-transition to Confirmed taken by a
+    /// booking with nothing payable, so the one thing a booking-payment
+    /// mapping would otherwise have explained - why this booking was never
+    /// charged - stays on the record, in the booking's own status timeline,
+    /// for anyone reading it later.
+    /// </summary>
+    private const string NothingPayableReason = "Nothing payable on this booking - confirmed without a payment.";
+
     /// <summary>Task 137b: the specific error code SlotAvailabilityService.ReserveSlotAsync returns when a slot has no remaining per-day capacity.</summary>
     private const string SlotCapacityReachedErrorCode = "Booking.SlotCapacityReached";
 
@@ -86,7 +95,11 @@ public class BookingService : IBookingService
         _context = context;
     }
 
-    public async Task<Result<BookingDetailResponse>> CreateAsync(Guid customerId, BookingSummaryRequest request, Guid? recurringBookingPlanId = null)
+    public async Task<Result<BookingDetailResponse>> CreateAsync(
+        Guid customerId,
+        BookingSummaryRequest request,
+        Guid? recurringBookingPlanId = null,
+        Guid? amcContractId = null)
     {
         // Task 241: checked before anything else reserves - a retried
         // request carrying the same key must not take a second slot seat,
@@ -135,6 +148,46 @@ public class BookingService : IBookingService
 
         var summary = summaryResult.Value;
 
+        // docs/AMC.md: resolved and validated here, before anything reserves,
+        // the same "fail before reserving" discipline the idempotency and
+        // summary checks above already follow. Read directly off the shared
+        // context rather than through a repository abstraction - the same
+        // "cross-aggregate lookup, no single repository owns this join"
+        // pattern ProviderScheduleConflictService and
+        // BookingAssignmentConflictService already use, chosen here
+        // specifically to avoid adding a new constructor dependency to a
+        // class this widely constructed directly in tests.
+        CustomerAmcContract? amcContract = null;
+        if (amcContractId is { } contractId)
+        {
+            amcContract = await _context.CustomerAmcContracts.FirstOrDefaultAsync(c => c.Id == contractId);
+            if (amcContract is null || amcContract.CustomerId != customerId)
+            {
+                const string errorCode = "Amc.ContractNotFound";
+                _metricsService.RecordBookingCreated(succeeded: false, errorCode);
+                return Error.NotFound(errorCode, "The specified AMC contract does not exist.");
+            }
+
+            if (!amcContract.CanRedeem(DateTime.UtcNow))
+            {
+                const string errorCode = "Amc.ContractNotRedeemable";
+                _metricsService.RecordBookingCreated(succeeded: false, errorCode);
+                return Error.Conflict(errorCode, "This AMC contract has no entitlement remaining or its term has ended.");
+            }
+
+            Guid? serviceCategoryId = await _context.Set<Service>()
+                .Where(s => s.Id == summary.Service.Id)
+                .Select(s => (Guid?)s.CategoryId)
+                .FirstOrDefaultAsync();
+
+            if (serviceCategoryId != amcContract.CategoryIdSnapshot)
+            {
+                const string errorCode = "Amc.CategoryMismatch";
+                _metricsService.RecordBookingCreated(succeeded: false, errorCode);
+                return Error.Validation(errorCode, "This AMC contract does not cover the selected service's category.");
+            }
+        }
+
         // Everything below writes: slot capacity, coupon usage, subscription
         // free-visit credit, wallet credit, and the booking itself each go
         // through their own SaveChangesAsync on this same scoped context.
@@ -182,7 +235,12 @@ public class BookingService : IBookingService
             // race would create a booking with a discount that was never really
             // available. Reserves against both the coupon's global cap and
             // customerId's per-customer cap (NESTLY-009).
-            if (summary.Coupon is not null)
+            //
+            // docs/AMC.md: skipped entirely when redeeming AMC entitlement -
+            // the contract already fully covers the visit, so a coupon on the
+            // same request is never reserved or applied (see IBookingService.CreateAsync's
+            // amcContractId doc comment).
+            if (summary.Coupon is not null && amcContract is null)
             {
                 var reserveResult = await _couponService.ReserveAsync(summary.Coupon.CouponId, customerId);
                 if (reserveResult.IsFailure)
@@ -199,7 +257,12 @@ public class BookingService : IBookingService
             // both win. A percentage-discount benefit (FreeVisitApplied false)
             // has no counter to consume - it's a standing benefit, not a
             // per-cycle credit - so nothing to reserve in that branch.
-            if (summary.SubscriptionBenefit is { FreeVisitApplied: true } benefit)
+            //
+            // docs/AMC.md: skipped when redeeming AMC entitlement, same
+            // reasoning as the coupon guard above - AMC takes precedence over
+            // a subscription benefit for this one booking rather than
+            // stacking with it.
+            if (summary.SubscriptionBenefit is { FreeVisitApplied: true } benefit && amcContract is null)
             {
                 bool consumed = await _customerSubscriptionRepository.TryConsumeFreeVisitAsync(benefit.SubscriptionId);
                 if (!consumed)
@@ -217,8 +280,11 @@ public class BookingService : IBookingService
             // constructor below, purely so the wallet ledger entry can carry
             // a real SourceReferenceId rather than being written first and
             // patched afterwards.
+            // docs/AMC.md: wallet credit is skipped too when redeeming AMC
+            // entitlement - there is nothing left payable to apply it
+            // against (see the finalPayable override below).
             var bookingId = Guid.NewGuid();
-            if (summary.Wallet.AppliedAmount > 0)
+            if (summary.Wallet.AppliedAmount > 0 && amcContract is null)
             {
                 var debitResult = await _walletService.DebitAsync(
                     customerId, summary.Wallet.AppliedAmount, WalletSourceType.BookingWalletCredit, bookingId,
@@ -235,6 +301,14 @@ public class BookingService : IBookingService
                 }
             }
 
+            // docs/AMC.md: the contract already fully covers the visit, so the
+            // final payable is forced to zero here rather than trusting
+            // whatever summary.FinalPayable computed (which never knew an AMC
+            // redemption was in play) - the price BREAKDOWN above is left
+            // untouched so the customer/admin can still see what the visit
+            // would have cost, only the amount actually due is zeroed.
+            decimal finalPayable = amcContract is not null ? 0m : summary.FinalPayable;
+
             var booking = new Booking(
                 bookingId,
                 customerId,
@@ -249,12 +323,12 @@ public class BookingService : IBookingService
                 new PriceSnapshot(
                     summary.Price.BasePrice, summary.Price.Quantity, summary.Price.BaseTotal, summary.Price.AddOnTotal,
                     summary.Price.VisitCharge, summary.Price.Subtotal, summary.Price.TaxPercentage,
-                    summary.Price.TaxAmount, summary.Price.PlatformFee, summary.FinalPayable),
-                summary.Coupon?.Code,
-                summary.Coupon?.DiscountAmount,
-                summary.SubscriptionBenefit?.SubscriptionId,
-                summary.SubscriptionBenefit?.FreeVisitApplied ?? false,
-                summary.SubscriptionBenefit?.DiscountAmount,
+                    summary.Price.TaxAmount, summary.Price.PlatformFee, finalPayable),
+                amcContract is null ? summary.Coupon?.Code : null,
+                amcContract is null ? summary.Coupon?.DiscountAmount : null,
+                amcContract is null ? summary.SubscriptionBenefit?.SubscriptionId : null,
+                amcContract is null && (summary.SubscriptionBenefit?.FreeVisitApplied ?? false),
+                amcContract is null ? summary.SubscriptionBenefit?.DiscountAmount : null,
                 string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey,
                 // Task 297: the occurrence's link back to the plan that
                 // generated it. Set here rather than by the scheduler
@@ -263,7 +337,8 @@ public class BookingService : IBookingService
                 // (task 299) and provider (task 300) views would show as a
                 // one-off.
                 recurringBookingPlanId,
-                summary.Wallet.AppliedAmount);
+                amcContract is null ? summary.Wallet.AppliedAmount : null,
+                amcContract?.Id);
 
             // Add-on line items come from the price breakdown, not summary.AddOns:
             // the breakdown already carries each selection's quantity and
@@ -305,7 +380,27 @@ public class BookingService : IBookingService
                 }
             }
 
-            booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+            // Task 331: a booking with nothing left to pay is confirmed here
+            // and never enters PaymentPending. Stated as "is anything
+            // payable", not "is this an AMC redemption", because three
+            // different features already produce a zero payable - AMC
+            // entitlement (finalPayable forced to zero above), wallet credit
+            // covering the whole remainder, and a coupon/subscription
+            // discount that takes the total to zero (BookingSummaryService
+            // floors each at zero) - and none of them has, or should need,
+            // its own confirmation path. PaymentPending is not merely
+            // unnecessary for these: it is a dead end, since
+            // PaymentTransaction rejects a non-positive amount and
+            // PaymentService therefore cannot produce the gateway round trip
+            // that would confirm them.
+            if (finalPayable <= 0)
+            {
+                booking.TransitionTo(BookingStatus.Confirmed, NothingPayableReason);
+            }
+            else
+            {
+                booking.TransitionTo(BookingStatus.PaymentPending, NoPaymentGatewayReason);
+            }
 
             if (!await _bookingRepository.TryAddAsync(booking))
             {
@@ -331,7 +426,20 @@ public class BookingService : IBookingService
                 return Result.Success(ToDetailResponse(winner, winnerAssignment?.Status, await ProviderSummaryFor(winnerAssignment)));
             }
 
-            if (summary.Coupon is not null)
+            // Task 357: the `amcContract is null` half of this condition has to
+            // match the ReserveAsync guard above exactly - the two calls are the
+            // two halves of one redemption (reserve the cap, then link the
+            // reservation to the booking), so a redemption record written
+            // without a matching reservation records a redemption that never
+            // consumed a usage slot and never discounted anything (the booking's
+            // CouponCodeSnapshot/discount are nulled for an AMC redemption too).
+            // Skipped rather than rejected: IBookingService.CreateAsync's
+            // amcContractId doc comment and docs/AMC.md both define a coupon on
+            // an AMC redemption as *ignored*, and the request reaching here is
+            // the customer's own checkout request forwarded by
+            // AmcCustomerService.RedeemVisitAsync - failing it would turn a
+            // stale coupon still sitting in the cart into a blocked redemption.
+            if (summary.Coupon is not null && amcContract is null)
             {
                 await _couponService.CreateRedemptionRecordAsync(summary.Coupon.CouponId, customerId, booking.Id, summary.Coupon.DiscountAmount);
             }

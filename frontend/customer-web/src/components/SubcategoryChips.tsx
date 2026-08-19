@@ -30,7 +30,13 @@ export function SubcategoryChips({ subcategories }: { subcategories: CategorySum
           >
             {subcategory.iconUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
-              <img src={subcategory.iconUrl} alt="" className="h-5 w-5 object-contain" />
+              <img
+                src={subcategory.iconUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="h-5 w-5 object-contain"
+              />
             ) : (
               "🧰"
             )}

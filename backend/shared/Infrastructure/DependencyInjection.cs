@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Amc;
 using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.AdminRoleManagement;
@@ -497,6 +498,10 @@ public static class DependencyInjection
         // the manual admin path below and the automatic engine's eligibility
         // gate - registered before both, since both depend on it.
         services.AddScoped<IProviderScheduleConflictService, ProviderScheduleConflictService>();
+        // Task 321: the reporting counterpart to the invariant above - the
+        // gate answers "may this provider take this booking?", this answers
+        // "who is already double-booked?", which no gate can.
+        services.AddScoped<IBookingAssignmentConflictService, BookingAssignmentConflictService>();
         services.AddScoped<IBookingProviderAssignmentService, BookingProviderAssignmentService>();
         // Phase 14 (tasks 242-250): the automatic-assignment engine's
         // candidate ranking - a new writer of BookingProviderAssignment
@@ -654,6 +659,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
+        services.AddScoped<IBookingFulfilmentPromotionJob, BookingFulfilmentPromotionJob>();
         services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
         services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
         services.AddScoped<INestlyCoinsAdminService, NestlyCoinsAdminService>();
@@ -670,6 +676,16 @@ public static class DependencyInjection
         services.AddScoped<IReferralAdminService, ReferralAdminService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
+
+        // Phase 20 AMC module (docs/AMC.md, tasks 323-330): plan catalog,
+        // purchased contracts, and entitlement redemption - a thin layer over
+        // the existing IBookingService orchestration, the same shape as the
+        // Subscription registrations above.
+        services.AddScoped<IAmcPlanRepository, AmcPlanRepository>();
+        services.AddScoped<ICustomerAmcContractRepository, CustomerAmcContractRepository>();
+        services.AddScoped<IAmcServiceVisitRepository, AmcServiceVisitRepository>();
+        services.AddScoped<IAmcCustomerService, AmcCustomerService>();
+        services.AddScoped<IAmcAdminService, AmcAdminService>();
 
         // Tasks 184-186: recurring booking plans. IRecurringBookingPlanService
         // depends on the existing IBookingSummaryService/IBookingService
@@ -802,6 +818,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationTriggerHandler, ChatNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, SupportTicketNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, SubscriptionNotificationTriggerHandler>();
+        services.AddScoped<INotificationTriggerHandler, AmcNotificationTriggerHandler>();
 
         // Task 126a-d: admin CRUD, preview and change audit over the template
         // store above (SRS 12.17).

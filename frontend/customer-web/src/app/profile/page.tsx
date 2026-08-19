@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import { ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { OtpInput } from "@/components/OtpInput";
 import { DetailList, DetailRow, ScreenSkeleton } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
@@ -462,20 +463,8 @@ function ChangeIdentifierCard({
               to confirm the change.
             </p>
 
-            {/* A plain `Field` rather than auth-ui's `OtpField`: that one is a
-                bare function component, so React strips the `ref` out of
-                `register(...)`'s spread and never forwards it. This screen
-                clears the code with `setValue`/`reset` after a successful
-                change, and without the ref attached RHF has no way to write
-                that back to the DOM — the box would keep showing the old code. */}
-            <Field
+            <OtpInput
               label="6-digit code"
-              id={`${idPrefix}-otp`}
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              className="nums text-center text-base tracking-[0.4em]"
               error={form.formState.errors.otpCode?.message}
               {...form.register("otpCode")}
             />

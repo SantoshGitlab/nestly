@@ -71,10 +71,24 @@ each given its Phase 2 checklist as input)
   Watch console + Network tab for failed requests, CORS errors, 4xx/5xx,
   and any request that curls fine but fails in-browser (diagnose as
   CORS/credentials, not backend). Test one bad-input path per form.
-  Fix bugs you find directly if scoped to your app; if root cause is
-  shared infra (e.g. backend CORS config), report it instead of
-  patching around it. Report: checklist with status per item + bug list
-  in the format above.
+  customer-web and provider-web are mobile-first (docs/FRONTEND.md) —
+  run the entire walkthrough above TWICE: once at a normal desktop
+  viewport, once at a 375px-wide mobile viewport (iPhone SE/mini class
+  — set via the browser tool's viewport/device setting). On the 375px
+  pass, additionally check mobile-specific failure classes a desktop
+  pass won't catch: elements overflowing / forcing horizontal scroll,
+  tap targets too small or overlapping, fixed/sticky elements (headers,
+  bottom nav, CTAs) covering content, truncated/clipped text, modals/
+  dialogs that don't fit the viewport. admin-web is desk-first (same
+  doc) — desktop viewport only, do not add a phone-width pass; a
+  ~768px tablet pass is an optional extra if it fits naturally (admin-
+  web must still work on a tablet) but is not required. Fix bugs you
+  find directly if scoped to your app; if root cause is shared infra
+  (e.g. backend CORS config), report it instead of patching around it.
+  Report: checklist with status per item — for customer-web/provider-
+  web, tag any item that fails at only one viewport (desktop-only /
+  mobile-only) rather than collapsing it into a single pass/fail — plus
+  bug list in the format above.
 
 PHASE 4 — CROSS-SERVICE CONSISTENCY (one subagent, runs after Phase 3
 reports are in)

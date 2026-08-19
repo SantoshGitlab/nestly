@@ -5,10 +5,18 @@ In-App Chat, Service Completion Verification.
 
 ## STATUS
 
-Not implemented. Scoped as **Phase 10**, after Referral & Growth (Phase 9) —
-these build on Booking, Payments, Wallet, Notifications, and Provider
-(Phase 7), all of which exist or are substantially done. Backlog: `tasks.csv`
-`#177`–`#198`.
+**Implemented.** Delivered as **Phase 10** (`tasks.csv` `#177`–`#198`, all
+`done`); recurring services were extended in Phase 17 (`#296`–`#300`). All
+four features are live: subscription plans, recurring bookings with a Hangfire
+occurrence-generation job, in-app chat over SignalR, and booking completion
+proof.
+
+This document is the **specification**, not a status record.
+[ORIENTATION.md](ORIENTATION.md) is the single owner of current repository
+state — consult it, not this header, for what is built.
+
+Corrected 2026-08-17: this section read *"Not implemented"* long after
+delivery. See [LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md).
 
 ## PURPOSE
 

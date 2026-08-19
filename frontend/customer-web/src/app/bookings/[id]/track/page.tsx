@@ -3,13 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ChatWidget } from "@/components/ChatWidget";
 import { Timeline } from "@/components/patterns";
 import { RequireAuth } from "@/components/RequireAuth";
 import { TrackingMap } from "@/components/TrackingMap";
 import { Alert, Button, Card, LinkButton, PageHeading, Skeleton, cx } from "@/components/ui";
 import { isBookingTrackable, useLiveBookingTracking } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { BookingStatus } from "@/lib/types";
+import { BookingStatus, ChatContextType } from "@/lib/types";
 import type { BookingDetail, BookingTrackingResponse } from "@/lib/types";
 
 const TRACKING_POLL_INTERVAL_MS = 15_000;
@@ -131,6 +132,14 @@ function TrackScreen() {
       )}
 
       {tracking?.provider ? <ProviderCard provider={tracking.provider} /> : null}
+
+      {/* Reaching a professional mid-job used to mean leaving this screen for
+          the booking detail page (the only place `ChatWidget` mounted) -
+          exactly the one-handed friction task #352 asks about, since a live
+          job is the moment a customer is most likely to need it. Same
+          context/id pair as the detail page's copy, so it's one shared
+          thread either way. */}
+      <ChatWidget contextType={ChatContextType.Booking} contextId={booking.id} />
 
       <Card title="Status timeline">
         <Timeline

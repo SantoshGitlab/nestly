@@ -223,30 +223,31 @@ export function DataTable<T>({
 
   const totalColumns = columns.length + (rowActions ? 1 : 0);
 
-  const body = (() => {
+  // Shared between the `<table>` body and the card/list layout below the
+  // tablet breakpoint (task 348) so loading/error/empty states can never
+  // drift between the two — only the row markup itself differs per layout.
+  const stateBody = (() => {
     if (isLoading) {
       return (
-        <TableBodyMessage colSpan={totalColumns} padded={false}>
-          <div className="divide-y divide-line">
-            {Array.from({ length: skeletonRows }, (_, index) => (
-              <div key={index} className={cx("flex items-center gap-4", cellPadding)}>
-                {columns.map((column, columnIndex) => (
-                  <Skeleton
-                    key={column.key}
-                    className={cx("h-4", columnIndex === 0 ? "w-40" : "w-24")}
-                  />
-                ))}
-                {rowActions ? <Skeleton className="ml-auto h-4 w-16" /> : null}
-              </div>
-            ))}
-          </div>
-        </TableBodyMessage>
+        <div className="divide-y divide-line">
+          {Array.from({ length: skeletonRows }, (_, index) => (
+            <div key={index} className={cx("flex items-center gap-4", cellPadding)}>
+              {columns.map((column, columnIndex) => (
+                <Skeleton
+                  key={column.key}
+                  className={cx("h-4", columnIndex === 0 ? "w-40" : "w-24")}
+                />
+              ))}
+              {rowActions ? <Skeleton className="ml-auto h-4 w-16" /> : null}
+            </div>
+          ))}
+        </div>
       );
     }
 
     if (message) {
       return (
-        <TableBodyMessage colSpan={totalColumns}>
+        <div className="px-4 py-6 sm:px-5">
           <Alert
             tone="error"
             title="Could not load this list"
@@ -260,20 +261,20 @@ export function DataTable<T>({
           >
             {message}
           </Alert>
-        </TableBodyMessage>
+        </div>
       );
     }
 
     if (!sortedRows || sortedRows.length === 0) {
       return (
-        <TableBodyMessage colSpan={totalColumns}>
+        <div className="px-4 py-6 sm:px-5">
           <EmptyState
             title={emptyTitle}
             description={emptyDescription}
             action={emptyAction}
             className="border-0 py-10"
           />
-        </TableBodyMessage>
+        </div>
       );
     }
 
@@ -307,8 +308,62 @@ export function DataTable<T>({
         </div>
       ) : null}
 
+      {/*
+       * Below `lg` (1024px) — covering the ~768px tablet floor this admin
+       * must stay usable at (docs/FRONTEND.md RESPONSIVE DESIGN, task 348)
+       * — a wide `<table>` forces horizontal scroll to reach trailing
+       * columns, so every row renders twice: once as this label:value card,
+       * hidden at `lg` and up, and once as the `<table>` below, hidden below
+       * it. Only one is ever visible at a time; the duplication is CSS-only,
+       * not extra data or a second fetch. `lg` matches the breakpoint the
+       * sidebar drawer already uses for the same tablet/desktop split.
+       */}
       <div
-        className={cx("w-full overflow-x-auto", maxHeight && "overflow-y-auto")}
+        className={cx("divide-y divide-line lg:hidden", maxHeight && "overflow-y-auto")}
+        style={maxHeight ? { maxHeight } : undefined}
+      >
+        {caption ? <span className="sr-only">{caption}</span> : null}
+        {stateBody ??
+          sortedRows!.map((row) => (
+            <dl
+              key={rowKey(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  : undefined
+              }
+              className={cx(
+                "flex flex-col gap-2.5 p-4 transition-colors duration-fast ease-out",
+                onRowClick ? "cursor-pointer hover:bg-surface-2" : undefined,
+              )}
+            >
+              {columns.map((column) => (
+                <div key={column.key} className="flex items-baseline justify-between gap-3">
+                  <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                    {column.header}
+                  </dt>
+                  <dd className={cx("min-w-0 text-right text-sm text-fg", column.numeric && "nums")}>
+                    {column.cell(row)}
+                  </dd>
+                </div>
+              ))}
+              {rowActions ? (
+                <div className="flex items-center justify-end gap-1.5 border-t border-line/60 pt-2.5">
+                  {rowActions(row)}
+                </div>
+              ) : null}
+            </dl>
+          ))}
+      </div>
+
+      <div
+        className={cx("hidden w-full overflow-x-auto lg:block", maxHeight && "overflow-y-auto")}
         style={maxHeight ? { maxHeight } : undefined}
       >
         <table
@@ -389,7 +444,11 @@ export function DataTable<T>({
               isFetching && !isLoading && "opacity-60 transition-opacity duration-fast ease-out",
             )}
           >
-            {body ??
+            {stateBody ? (
+              <TableBodyMessage colSpan={totalColumns} padded={false}>
+                {stateBody}
+              </TableBodyMessage>
+            ) : (
               sortedRows!.map((row) => (
                 <tr
                   key={rowKey(row)}
@@ -433,7 +492,8 @@ export function DataTable<T>({
                     </td>
                   ) : null}
                 </tr>
-              ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>

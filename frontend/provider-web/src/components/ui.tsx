@@ -4,6 +4,7 @@ import { createContext, forwardRef, useContext, useEffect, useId, useRef, useSta
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
+  PointerEvent as ReactPointerEvent,
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
@@ -17,11 +18,32 @@ import type {
  * component here contains a hex code or a raw `neutral-*`/`black/10` class.
  * Restyling the product happens in the token layer, not here.
  *
- * This file is replicated verbatim across customer-web, admin-web and
- * provider-web (the three apps are independent Next projects with no shared
- * package), so it is a deliberate superset: an app that never renders a
- * `Table` still ships the identical file, and the three stay in step by being
- * literally the same bytes. Changing it in one app means porting to all three.
+ * This file is copied across customer-web, admin-web and provider-web (the
+ * three apps are independent Next projects with no shared package), so it is
+ * a deliberate superset: an app that never renders a `Table` still ships the
+ * component. Changing a primitive means porting the change to all three.
+ *
+ * The three are NOT byte-identical, and have not been since customer-web grew
+ * UI the other two never needed. This comment used to claim they were, which
+ * sent a reader looking for a drift bug that was really a deliberate feature
+ * (tasks.csv 336, 362). The truth: admin-web and provider-web ARE byte-
+ * identical to each other; customer-web is that same file plus five intended
+ * additions, listed here so nobody "restores" them by syncing the files:
+ *
+ *   1. `hideLabel` on `FieldShell`/`Field` - renders the label `sr-only`, for
+ *      the inline coupon-code field.
+ *   2. `LinkButton` - a `next/link` anchor sharing `BUTTON_VARIANTS` and
+ *      `BUTTON_SIZES`, so a navigation control can look like a button without
+ *      pretending to be one.
+ *   3. A `danger-soft` entry in `BUTTON_VARIANTS`.
+ *   4. `Modal` portals to `document.body` via `createPortal` - a
+ *      `backdrop-blur-md` ancestor makes `fixed inset-0` position against that
+ *      ancestor rather than the viewport.
+ *   5. The imports those four need: `next/link`, `createPortal`,
+ *      `AnchorHTMLAttributes`.
+ *
+ * Porting one of those INTO another app is fine. Deleting it from customer-web
+ * to make a diff come out clean is not.
  */
 
 /** Joins conditional class names, dropping falsy entries. */
@@ -347,9 +369,20 @@ function FieldShell({
   );
 }
 
-/** Derives a stable id from the field name so label/control always agree. */
-function controlId(explicit: string | undefined, name: string | undefined, label: string): string {
-  return explicit ?? `field-${name ?? label.toLowerCase().replace(/\s+/g, "-")}`;
+/**
+ * Derives a stable id from the field name so label/control always agree.
+ *
+ * Falls back to `reactId` (each caller's own `useId()`) rather than a
+ * label-derived slug: two controls with the same visible label (e.g. two
+ * "Reason" fields in different cards on one page, as bookings/[bookingId]
+ * has for cancel vs. refund) used to collide on the same `field-reason` id,
+ * producing duplicate DOM ids and an ambiguous `label[for]` association.
+ * `useId()` is per-component-instance and therefore always unique, while
+ * still leaving an explicit `id`/`name` free to opt into a predictable,
+ * human-readable id where one is actually wanted (CSS hooks, e2e selectors).
+ */
+function controlId(explicit: string | undefined, name: string | undefined, reactId: string): string {
+  return explicit ?? (name ? `field-${name}` : reactId);
 }
 
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -368,7 +401,8 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
   { label, error, hint, leading, id, className = "", ...props },
   ref,
 ) {
-  const inputId = controlId(id, props.name, label);
+  const reactId = useId();
+  const inputId = controlId(id, props.name, reactId);
 
   const input = (
     <input
@@ -419,7 +453,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   { label, error, hint, id, rows = 3, className = "", ...props },
   ref,
 ) {
-  const textareaId = controlId(id, props.name, label);
+  const reactId = useId();
+  const textareaId = controlId(id, props.name, reactId);
 
   return (
     <FieldShell
@@ -465,7 +500,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   { label, error, hint, id, options, placeholder, className = "", ...props },
   ref,
 ) {
-  const selectId = controlId(id, props.name, label);
+  const reactId = useId();
+  const selectId = controlId(id, props.name, reactId);
 
   return (
     <FieldShell id={selectId} label={label} hint={hint} error={error} required={props.required}>
@@ -517,9 +553,17 @@ export const Checkbox = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement> & { label: string }
 >(function Checkbox({ label, ...props }, ref) {
-  const inputId = controlId(props.id, props.name, `checkbox-${label}`);
+  const reactId = useId();
+  const inputId = controlId(props.id, props.name, reactId);
   return (
-    <label htmlFor={inputId} className="flex cursor-pointer items-center gap-2.5 text-sm text-fg">
+    <label
+      htmlFor={inputId}
+      // Text-only label sits well under the 44px touch-target minimum;
+      // hit-slop pads the tap area instead of adding visible row spacing.
+      // Callers stacking these should keep >=12px gap between rows so
+      // adjacent hit-slop zones don't overlap.
+      className="relative flex cursor-pointer items-center gap-2.5 text-sm text-fg after:absolute after:-inset-3 after:content-['']"
+    >
       <input
         {...props}
         ref={ref}
@@ -596,9 +640,14 @@ const BUTTON_VARIANTS = {
   link: "text-brand-600 underline-offset-4 hover:underline dark:text-brand-400",
 } as const;
 
+// 44x44 is the minimum touch target (Apple HIG / WCAG 2.5.5). `sm`/`md` fall
+// short (32px/40px) but keep their compact visual box — dense UI like table
+// row actions depends on that — so the shortfall is padded with a
+// transparent `::after` hit-slop instead of growing the box. `lg` already
+// clears 44px unaided.
 const BUTTON_SIZES = {
-  sm: "h-8 gap-1.5 px-3 text-xs",
-  md: "h-10 gap-2 px-4 text-sm",
+  sm: "relative h-8 gap-1.5 px-3 text-xs after:absolute after:-inset-1.5 after:content-['']",
+  md: "relative h-10 gap-2 px-4 text-sm after:absolute after:-inset-0.5 after:content-['']",
   lg: "h-12 gap-2 px-6 text-[0.9375rem]",
 } as const;
 
@@ -665,7 +714,9 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={cx(
-        "inline-flex h-9 w-9 items-center justify-center rounded-lg transition duration-fast ease-out disabled:cursor-not-allowed disabled:opacity-55",
+        // 36px box is short of the 44px touch-target minimum; same hit-slop
+        // approach as BUTTON_SIZES keeps the icon chip's visual size intact.
+        "relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition duration-fast ease-out disabled:cursor-not-allowed disabled:opacity-55 after:absolute after:-inset-1 after:content-['']",
         BUTTON_VARIANTS[variant],
         className,
       )}
@@ -916,7 +967,10 @@ export function Tabs<T extends string>({
             aria-selected={isActive}
             onClick={() => onChange(tab.value)}
             className={cx(
-              "relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors duration-fast ease-out",
+              // 40px tab is 4px short of the 44px touch-target minimum; same
+              // hit-slop approach as BUTTON_SIZES (2px/side stays inside the
+              // 4px `gap-1` between tabs, so slop zones never overlap).
+              "relative whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors duration-fast ease-out after:absolute after:-inset-0.5 after:content-['']",
               isActive ? "text-brand-600 dark:text-brand-400" : "text-fg-muted hover:text-fg",
             )}
           >
@@ -966,6 +1020,37 @@ export function Modal({
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descriptionId = useId();
+
+  // Swipe-to-dismiss for the mobile bottom-sheet state only (see the drag
+  // handle below, which is the only element wired to these handlers and is
+  // itself hidden from `sm:` up). `hasDraggedRef` keeps the drag transform
+  // out of the panel's inline style until a drag actually starts, so it
+  // never fights the `animate-pop` entrance keyframes on open.
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartYRef = useRef<number | null>(null);
+  const hasDraggedRef = useRef(false);
+
+  const handleSheetDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    hasDraggedRef.current = true;
+    dragStartYRef.current = event.clientY;
+    setIsDragging(true);
+  };
+
+  const handleSheetDragMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragStartYRef.current === null) return;
+    setDragOffset(Math.max(0, event.clientY - dragStartYRef.current));
+  };
+
+  // Released past ~30% of a typical sheet's visible height dismisses; short
+  // of that snaps back via the transition set below.
+  const handleSheetDragEnd = () => {
+    if (dragOffset > 96) onClose();
+    setIsDragging(false);
+    setDragOffset(0);
+    dragStartYRef.current = null;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -1046,9 +1131,32 @@ export function Modal({
         tabIndex={-1}
         className={cx(
           "relative w-full animate-pop rounded-t-2xl border border-line bg-surface shadow-xl outline-none sm:rounded-2xl",
+          // Clears an iPhone's home-indicator bar in the bottom-sheet state;
+          // reset on desktop where the dialog is centered, not sheet-anchored.
+          "pb-[env(safe-area-inset-bottom)] sm:pb-0",
           sizes[size],
         )}
+        style={
+          hasDraggedRef.current
+            ? {
+                transform: `translateY(${dragOffset}px)`,
+                transition: isDragging ? "none" : "transform 200ms ease-out",
+              }
+            : undefined
+        }
       >
+        {/* Drag handle: swipe-to-dismiss in the mobile bottom-sheet state
+            only — hidden from `sm:` up, where there is no sheet to drag. */}
+        <div
+          className="flex touch-none justify-center pb-1 pt-2 sm:hidden"
+          onPointerDown={handleSheetDragStart}
+          onPointerMove={handleSheetDragMove}
+          onPointerUp={handleSheetDragEnd}
+          onPointerCancel={handleSheetDragEnd}
+        >
+          <span className="h-1.5 w-10 rounded-full bg-line-strong" aria-hidden />
+        </div>
+
         <div className="flex items-start justify-between gap-4 px-6 pt-6">
           <div className="min-w-0">
             <h2 id={titleId} className="text-base font-semibold text-fg">
@@ -1131,7 +1239,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={push}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end"
+        className={cx(
+          "pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:items-end",
+          // Task #351: fixed at the true bottom edge, so a toast can land
+          // directly over the home-indicator area on iPhone X+ - this is
+          // nonzero even in an ordinary browser tab (not just standalone
+          // PWA mode), unlike the top inset. `max()` keeps the existing 1rem
+          // (`p-4`) as a floor on devices with no inset.
+          "supports-[padding:max(0px)]:pb-[max(1rem,env(safe-area-inset-bottom))]",
+        )}
         // Polite: a toast confirms something the user just did, so it must not
         // interrupt whatever they are reading or typing next.
         aria-live="polite"

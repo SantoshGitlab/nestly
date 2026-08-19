@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, type Variants } from "motion/react";
 import { useEffect, useState } from "react";
 import { SearchBar } from "@/components/SearchBar";
 import { cx } from "@/components/ui";
@@ -75,10 +75,12 @@ export function HeroBanner() {
 
   return (
     <section
-      // Cancels `#main`'s `pt-[4.5rem]` (reserved for `SiteHeader` now being
-      // permanently `fixed`) so the banner still starts at true y=0, flush
-      // under the header while it's in its transparent-over-photo state.
-      className="relative isolate -mt-[4.5rem] w-full overflow-hidden"
+      // Cancels `#main`'s `pt-[calc(4.5rem+env(safe-area-inset-top))]`
+      // (reserved for `SiteHeader` now being permanently `fixed`, grown by
+      // the top safe-area inset per task #351) so the banner still starts at
+      // true y=0, flush under the header while it's in its
+      // transparent-over-photo state.
+      className="relative isolate -mt-[calc(4.5rem+env(safe-area-inset-top))] w-full overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -201,7 +203,10 @@ export function HeroBanner() {
   );
 }
 
-const fadeUp = {
+// Explicit `Variants` typing (not inferred) so `ease: "easeOut"` is checked
+// against motion's `Easing` union instead of widening to a plain `string` -
+// an inferred type here was the cause of a `next build` type-check failure.
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };

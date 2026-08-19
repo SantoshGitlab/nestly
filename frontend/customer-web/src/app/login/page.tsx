@@ -8,11 +8,11 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import {
   AuthShell,
-  OtpField,
   ResendRow,
   Segmented,
   useResendCountdown,
 } from "@/components/auth-ui";
+import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { storeSession } from "@/lib/auth";
@@ -45,9 +45,12 @@ const passwordSchema = z.object({
 });
 const adminPasswordSchema = passwordSchema;
 const providerMobileSchema = z.object({ mobile: mobileSchema });
+// ProviderOtpService.GenerateAsync (backend/shared) always generates a
+// 6-digit code, same as the customer flow - mirror that here rather than the
+// looser 4-8 range the unified login previously accepted.
 const providerOtpSchema = z.object({
   mobile: mobileSchema,
-  otpCode: z.string().min(4, "Enter the code you received").max(8, "Enter the code you received"),
+  otpCode: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
 });
 
 type Mode = "otp" | "password";
@@ -248,7 +251,7 @@ function OtpLogin() {
       {error ? <Alert>{error}</Alert> : null}
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
-      <OtpField
+      <OtpInput
         error={verifyForm.formState.errors.otpCode?.message}
         {...verifyForm.register("otpCode")}
       />
@@ -460,10 +463,8 @@ function ProviderLoginUnified() {
       {error ? <Alert>{error}</Alert> : null}
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
-      {/* Provider codes are 4-8 digits (providerOtpSchema), unlike the
-          customer flow's fixed 6. */}
-      <OtpField
-        length={8}
+      {/* Same 6-digit code as the customer flow - see providerOtpSchema. */}
+      <OtpInput
         error={verifyForm.formState.errors.otpCode?.message}
         {...verifyForm.register("otpCode")}
       />

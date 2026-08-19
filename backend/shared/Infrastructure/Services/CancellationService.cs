@@ -226,9 +226,15 @@ public class CancellationService : ICancellationService
                 return refundResult.Error;
             }
 
-            refundTransactionId = refundResult.Value.Id;
-            refundStatus = refundResult.Value.Status;
-            refundMethod = refundResult.Value.Method;
+            // Task 356: a booking funded from both the gateway and the
+            // customer's wallet settles as two refund rows. BookingCancellation
+            // records one reference - the payment-funded one
+            // (RefundOutcomeResponse.Primary) - and the full amount is already
+            // carried by its own RefundAmount column; the other settlement is
+            // reachable through the booking's refund history either way.
+            refundTransactionId = refundResult.Value.Primary.Id;
+            refundStatus = refundResult.Value.Primary.Status;
+            refundMethod = refundResult.Value.Primary.Method;
 
             cancellation.AttachRefund(refundTransactionId.Value, refundMethod.Value);
             await _cancellationRepository.UpdateAsync(cancellation);
@@ -284,7 +290,7 @@ public class CancellationService : ICancellationService
 
     private async Task<CancellationFeeCalculator.Outcome> ComputeOutcomeAsync(Booking booking)
     {
-        decimal payableAmount = await ResolvePayableAmountAsync(booking.Id);
+        decimal payableAmount = await ResolveRefundableAmountAsync(booking);
 
         // Business wall-clock lifted to a real instant before it meets UTC
         // now - see IBusinessClock. Subtracting the raw snapshot skewed
@@ -299,18 +305,26 @@ public class CancellationService : ICancellationService
             payableAmount, timeUntilSlot, _policy.FreeCancellationWindowHours, _policy.LateCancellationFeePercentage);
     }
 
-    /// <summary>What remains refundable on the booking's payment - 0 if it was never paid for or already fully refunded.</summary>
-    private async Task<decimal> ResolvePayableAmountAsync(Guid bookingId)
+    /// <summary>
+    /// What the customer still stands to get back - 0 if the booking was
+    /// never funded at all (a 100%-off coupon, a free subscription visit, an
+    /// AMC redemption) or has already been fully refunded. Task 356: this is
+    /// the gateway payment PLUS the wallet balance the booking consumed at
+    /// checkout, computed by the same <see cref="RefundAllocationCalculator"/>
+    /// <c>RefundService</c> allocates against, so the fee this service charges
+    /// and the refund that service raises can never be computed off different
+    /// bases. Reading only the payment (as this did before) charged a
+    /// part-wallet booking's late-cancellation fee against the gateway half
+    /// alone and then left the wallet half unrefunded entirely.
+    /// </summary>
+    private async Task<decimal> ResolveRefundableAmountAsync(Booking booking)
     {
-        var payment = await _paymentRepository.GetByBookingIdAsync(bookingId);
-        if (payment is null || payment.Status != PaymentTransactionStatus.Success)
-        {
-            return 0m;
-        }
+        var payment = await _paymentRepository.GetByBookingIdAsync(booking.Id);
+        decimal paymentSettledAmount = payment is { Status: PaymentTransactionStatus.Success } ? payment.Amount : 0m;
+        var priorRefunds = await _refundTransactionRepository.ListByBookingAsync(booking.Id);
 
-        var priorRefunds = await _refundTransactionRepository.ListByPaymentTransactionAsync(payment.Id);
-        decimal alreadyRefunded = priorRefunds.Where(r => r.Status != RefundStatus.Failed).Sum(r => r.Amount);
-        decimal remaining = payment.Amount - alreadyRefunded;
-        return remaining > 0 ? remaining : 0m;
+        return RefundAllocationCalculator
+            .ComputeRemaining(paymentSettledAmount, booking.WalletCreditAppliedSnapshot ?? 0m, priorRefunds)
+            .Total;
     }
 }

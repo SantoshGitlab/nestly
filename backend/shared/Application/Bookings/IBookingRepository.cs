@@ -14,6 +14,28 @@ public interface IBookingRepository
 
     Task UpdateAsync(Booking booking);
 
+    /// <summary>
+    /// Task 333: throws away <paramref name="booking"/>'s unsaved changes and
+    /// stops tracking it, so a caller that mutated an aggregate and then failed
+    /// to persist it can leave the unit of work exactly as it found it.
+    ///
+    /// <para>
+    /// This exists because a persistence context batches: one unit of work
+    /// holds every aggregate loaded through it, and saving <i>any</i> of them
+    /// flushes the pending changes of <i>all</i> of them. Without this, a
+    /// booking whose own save threw would still be written by the next
+    /// booking's successful save - so a batch job's "this one failed, carry
+    /// on" would silently commit the very change it just reported as failed,
+    /// and whether it did would depend on the order rows came back in.
+    /// </para>
+    ///
+    /// <para>
+    /// Only ever correct on an aggregate whose changes are <b>meant</b> to be
+    /// abandoned; it is not a rollback of anything already written.
+    /// </para>
+    /// </summary>
+    void DiscardChanges(Booking booking);
+
     /// <summary>Loaded with its items, their add-ons, and its status history - a booking is never useful partially loaded.</summary>
     Task<Booking?> GetByIdAsync(Guid id);
 
@@ -58,6 +80,43 @@ public interface IBookingRepository
 
     /// <summary>Task 240: PaymentPending bookings created before <paramref name="olderThanUtc"/> - BookingExpirySweepJob's candidate set. Still PaymentPending only; one that already moved to Confirmed/PaymentFailed/CancelledByCustomer never matches regardless of age.</summary>
     Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc);
+
+    /// <summary>
+    /// Task 333: <see cref="BookingStatus.Confirmed"/> bookings whose slot
+    /// falls between <paramref name="onOrAfterSlotDate"/> and
+    /// <paramref name="onOrBeforeSlotDate"/> inclusive -
+    /// <c>BookingFulfilmentPromotionJob</c>'s candidate set, ordered by slot
+    /// date so the most urgent come first, and windowed by
+    /// <paramref name="skip"/>/<paramref name="take"/> so a backlog is paged
+    /// rather than loaded whole.
+    ///
+    /// <para>
+    /// Both dates are <b>business-local</b>, not UTC, because
+    /// <see cref="Booking.SlotDate"/> is stored that way (see
+    /// <c>IBusinessClock</c>); the caller converts once rather than this query
+    /// doing timezone arithmetic per row. They are deliberately whole boundary
+    /// <i>days</i> rather than exact instants: the caller owns the
+    /// hour-precision half of both ends of the window, because
+    /// <see cref="Booking.SlotStartTimeSnapshot"/> is a <c>TimeSpan</c> and
+    /// ordering comparisons on it are not translatable on both of this
+    /// project's database providers (they are on PostgreSQL's <c>interval</c>,
+    /// not on the SQLite the test suite runs). Pushing the days down and
+    /// applying the time of day in memory keeps one implementation of the rule
+    /// that works everywhere, instead of raw SQL that has to be written twice.
+    /// </para>
+    ///
+    /// <para>
+    /// Task 358: <paramref name="onOrAfterSlotDate"/> is the lower bound this
+    /// query originally lacked. A booking whose slot has already started while
+    /// still <see cref="BookingStatus.Confirmed"/> is a candidate rather than
+    /// being quietly left behind - it has nobody assigned and needs one more
+    /// urgently than any future booking - but only while somebody can still
+    /// realistically be sent. Without a floor, the first pass in any environment
+    /// swept the whole history of past-dated Confirmed rows into the manual
+    /// admin queue at once (see <c>AutoAssignmentOptions.PromotionMaxSlotAgeHours</c>).
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrAfterSlotDate, DateOnly onOrBeforeSlotDate, int skip, int take);
 
     /// <summary>
     /// Task 255: bookings for a set of ids in one round trip, for list

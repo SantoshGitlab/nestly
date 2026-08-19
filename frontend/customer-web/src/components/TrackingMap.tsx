@@ -48,6 +48,13 @@ export function TrackingMap({
         disableDefaultUI: true,
         zoomControl: true,
         mapId: "nestly-tracking",
+        // Explicit rather than relying on the SDK's own "auto" default
+        // (which happens to resolve to this on touch devices today): a
+        // one-finger drag starting on the map scrolls the page instead of
+        // panning it, and a "use two fingers to move the map" hint appears
+        // on the first touch attempt instead - the map never traps a phone
+        // scroll gesture (task #352's one-handed-usability pass).
+        gestureHandling: "cooperative",
       });
       mapRef.current = map;
 

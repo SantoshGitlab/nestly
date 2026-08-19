@@ -310,7 +310,7 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
         {
             var partial = await BuildRefundService(partialGatewayContext).InitiatePartialRefundAsync(fixture.BookingId, 600m, "Partial gateway refund");
             partial.IsSuccess.Should().BeTrue();
-            partial.Value.Method.Should().Be(Nestly.Domain.RefundMethod.Gateway);
+            partial.Value.Primary.Method.Should().Be(Nestly.Domain.RefundMethod.Gateway);
         }
 
         using (var overAskContext = _db.CreateContext())

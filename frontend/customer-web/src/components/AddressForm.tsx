@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { StickyActionBar } from "@/components/patterns";
 import { Alert, Button, Checkbox, Field } from "@/components/ui";
 import type { CustomerAddress } from "@/lib/types";
 
@@ -85,6 +86,7 @@ export function AddressForm({
       <Field
         label="Pincode"
         inputMode="numeric"
+        autoComplete="postal-code"
         maxLength={6}
         error={errors.pincode?.message}
         {...form.register("pincode")}
@@ -111,14 +113,24 @@ export function AddressForm({
       <Field
         label="Contact mobile"
         type="tel"
+        inputMode="tel"
+        autoComplete="tel"
         error={errors.contactMobile?.message}
         {...form.register("contactMobile")}
       />
       <Checkbox label="Use as my default address" {...form.register("isDefault")} />
 
-      <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Saving…" : submitLabel}
-      </Button>
+      {/* Reachable without hunting for it below nine stacked fields on a
+          phone (task #344 - addresses/new is reached mid-booking via
+          booking/summary's "add a new address", so this is a real booking-
+          funnel screen, not only account-management furniture; addresses/[id]/edit
+          shares this component and gets the same treatment for free rather
+          than forking the form in two). */}
+      <StickyActionBar>
+        <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
+          {isSubmitting ? "Saving…" : submitLabel}
+        </Button>
+      </StickyActionBar>
     </form>
   );
 }

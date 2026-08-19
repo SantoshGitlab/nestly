@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nestly">
+  <!--
+    App-icon rendering of the same mark as SiteHeader.tsx's NestlyMark /
+    auth-ui.tsx's AuthShell logo (house glyph on the brand gradient), traced
+    to the brand-gradient stops in tailwind.config.ts / globals.css
+    (--brand-700/--brand-500/--brand-400) rather than referencing the CSS
+    custom properties, which a standalone SVG file has no cascade to resolve.
+
+    Full-bleed background with the glyph kept well inside a centered safe
+    zone (~42% of the canvas) so this single file is valid for both the
+    "any" and "maskable" manifest purposes - a maskable consumer (Android's
+    adaptive-icon system) crops to a circle/squircle/rounded-square of its
+    own choosing, and only content within that safe zone is guaranteed to
+    survive the crop.
+  -->
+  <defs>
+    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgb(9,61,128)" />
+      <stop offset="55%" stop-color="rgb(45,111,194)" />
+      <stop offset="100%" stop-color="rgb(96,152,215)" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#brand)" />
+  <g transform="translate(256,256) scale(9) translate(-12,-12.5)">
+    <path
+      d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
+      fill="#ffffff"
+    />
+  </g>
+</svg>

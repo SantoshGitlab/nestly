@@ -17,7 +17,7 @@ import { BookingStatusBadge } from "@/components/status-badges";
 import { searchBookings } from "@/lib/bookings-api";
 import type { AdminBookingListItem } from "@/lib/bookings-types";
 import { BookingStatus } from "@/lib/types";
-import { BookingsTabs } from "./_components/BookingsTabs";
+import { BookingsTabs } from "@/components/BookingsTabs";
 
 const PAGE_SIZE = 20;
 

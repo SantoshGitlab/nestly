@@ -98,6 +98,14 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .HasForeignKey(x => x.RecurringBookingPlanId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // docs/AMC.md: same reasoning as RecurringBookingPlanId above - a
+        // real FK, since a CustomerAmcContract is never hard-deleted.
+        builder.Property(x => x.AmcContractId);
+        builder.HasOne<CustomerAmcContract>()
+            .WithMany()
+            .HasForeignKey(x => x.AmcContractId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(x => x.Items)
             .WithOne()
             .HasForeignKey(x => x.BookingId)
@@ -110,6 +118,16 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
 
         builder.HasIndex(x => new { x.CustomerId, x.Status });
         builder.HasIndex(x => x.CreatedAtUtc);
+
+        // Task 333: BookingFulfilmentPromotionJob runs every five minutes and
+        // asks "which Confirmed bookings start within the lead window?". Without
+        // this the only usable index is (customer_id, status), which that query
+        // cannot lead with - it would seq-scan the whole booking table 288 times
+        // a day, growing with history that is almost entirely terminal rows.
+        // Status first (the far more selective side once the table is mostly
+        // completed/cancelled bookings), slot_date second so the range predicate
+        // and the ordering both come off the index.
+        builder.HasIndex(x => new { x.Status, x.SlotDate });
 
         // Task 241: a retried/duplicated POST /bookings carrying the same
         // client-minted key must resolve to this same row - enforced here,

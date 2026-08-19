@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { cx } from "@/components/ui";
 
 /**
@@ -30,45 +31,63 @@ export function AuthShell({
   footer?: ReactNode;
 }) {
   return (
-    <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
-      {/* Decorative brand wash. Sits behind everything and is inert to AT. */}
-      <div
-        aria-hidden
-        className="absolute -top-40 left-1/2 -z-10 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-brand-500/10 blur-3xl"
-      />
-
-      <div className="w-full max-w-md animate-rise">
-        <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2" aria-label="Nestly Provider home">
-            <span
-              aria-hidden
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-fg-on-brand shadow-brand"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-                <path
-                  d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
-                  fill="currentColor"
-                />
-              </svg>
-            </span>
-            <span className="text-base font-semibold tracking-tight text-fg">
-              Nestly <span className="text-fg-muted">Provider</span>
-            </span>
-          </Link>
-
-          <h1 className="mt-6 text-display-sm font-semibold text-fg">{title}</h1>
-          {subtitle ? (
-            <p className="mt-2 text-sm leading-relaxed text-fg-muted text-pretty">{subtitle}</p>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-line bg-surface p-6 shadow-md sm:p-7">
-          {children}
-        </div>
-
-        {footer ? <p className="mt-6 text-center text-sm text-fg-muted">{footer}</p> : null}
+    <>
+      {/* Outside `main`'s centering flex row - a flex sibling here would be
+          laid out (and vertically centered) alongside the card instead of
+          sitting above it. No other `sticky` element competes for `top: 0`
+          on these screens, so it needs no coordinating wrapper (contrast
+          `AuthenticatedLayout`, which has one) - except this thin one for
+          task #351: `OfflineBanner` is the sole `sticky top-0` element here,
+          so unlike `AuthenticatedLayout`'s shared ancestor it could take the
+          top-safe-area padding directly, but a wrapper keeps that concern
+          out of the shared component (which is also used inside
+          `AuthenticatedLayout`'s own ancestor, where the padding must NOT
+          also live on `OfflineBanner` itself - see that file's header
+          comment - to avoid double-padding when both it and
+          `ProviderHeader` are stacked and visible together there). */}
+      <div className="pt-[env(safe-area-inset-top)]">
+        <OfflineBanner />
       </div>
-    </main>
+      <main className="relative isolate flex min-h-screen items-center justify-center overflow-hidden px-4 py-12">
+        {/* Decorative brand wash. Sits behind everything and is inert to AT. */}
+        <div
+          aria-hidden
+          className="absolute -top-40 left-1/2 -z-10 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-brand-500/10 blur-3xl"
+        />
+
+        <div className="w-full max-w-md animate-rise">
+          <div className="mb-8 text-center">
+            <Link href="/" className="inline-flex items-center gap-2" aria-label="Nestly Provider home">
+              <span
+                aria-hidden
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-fg-on-brand shadow-brand"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+                  <path
+                    d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </span>
+              <span className="text-base font-semibold tracking-tight text-fg">
+                Nestly <span className="text-fg-muted">Provider</span>
+              </span>
+            </Link>
+
+            <h1 className="mt-6 text-display-sm font-semibold text-fg">{title}</h1>
+            {subtitle ? (
+              <p className="mt-2 text-sm leading-relaxed text-fg-muted text-pretty">{subtitle}</p>
+            ) : null}
+          </div>
+
+          <div className="rounded-2xl border border-line bg-surface p-6 shadow-md sm:p-7">
+            {children}
+          </div>
+
+          {footer ? <p className="mt-6 text-center text-sm text-fg-muted">{footer}</p> : null}
+        </div>
+      </main>
+    </>
   );
 }
 
@@ -125,72 +144,12 @@ export function Segmented<T extends string>({
 }
 
 /**
- * One-time-code input.
- *
- * A single wide field with generous letter-spacing rather than N separate
- * boxes: split-box inputs fight platform SMS autofill, which is the fastest
- * path for the overwhelming majority of real users — and for a provider
- * signing in one-handed on site it is the only path worth optimising for.
- * `autoComplete="one-time-code"` plus `inputMode="numeric"` is what actually
- * makes iOS and Android offer the code from the message.
+ * One-time-code input moved to `components/OtpInput.tsx` (task #347) - a
+ * dedicated, boxed entry component shared by the login and register OTP
+ * steps. See that file's header comment for why it is still backed by a
+ * single real `<input>` rather than `length` separately-focusable ones,
+ * which is the same reasoning this component used to carry.
  */
-type OtpFieldProps = {
-  label?: string;
-  length?: number;
-  error?: string;
-  hint?: string;
-} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">;
-
-/**
- * forwardRef, not a plain function component: every call site spreads
- * `{...form.register("otpCode")}`, and `register` returns a `ref` alongside
- * name/onChange/onBlur. React drops `ref` from the props of a non-forwardRef
- * component, so react-hook-form never got a handle on the input and could not
- * write to it - `reset()` and `setValue()` updated the form store while the
- * box on screen kept its old digits.
- */
-export const OtpField = forwardRef<HTMLInputElement, OtpFieldProps>(function OtpField(
-  { label = "Verification code", length = 6, error, hint, ...props },
-  ref,
-) {
-  const id = props.id ?? `field-${props.name ?? "otp"}`;
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-fg">
-        {label}
-      </label>
-      <input
-        {...props}
-        ref={ref}
-        id={id}
-        type="text"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        maxLength={length}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-        className={cx(
-          "w-full rounded-lg border bg-surface px-3 py-3 text-center font-mono text-xl tracking-[0.4em] text-fg shadow-xs outline-none transition duration-fast ease-out",
-          "placeholder:tracking-[0.4em] placeholder:text-fg-subtle",
-          error
-            ? "border-danger focus:border-danger focus:ring-2 focus:ring-danger/25"
-            : "border-line hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25",
-        )}
-        placeholder={"•".repeat(length)}
-      />
-      {error ? (
-        <p id={`${id}-error`} className="text-xs font-medium text-danger">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={`${id}-hint`} className="text-xs text-fg-muted">
-          {hint}
-        </p>
-      ) : null}
-    </div>
-  );
-});
 
 /**
  * Countdown gating a "resend code" action.

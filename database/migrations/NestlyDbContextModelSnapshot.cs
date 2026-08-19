@@ -259,6 +259,102 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("admin_user", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.AmcPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price");
+
+                    b.Property<int>("TermMonths")
+                        .HasColumnType("integer")
+                        .HasColumnName("term_months");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<Guid?>("UpdatedByAdminUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_admin_user_id");
+
+                    b.Property<int>("VisitsIncluded")
+                        .HasColumnType("integer")
+                        .HasColumnName("visits_included");
+
+                    b.HasKey("Id")
+                        .HasName("pk_amc_plan");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_amc_plan_category_id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_amc_plan_name");
+
+                    b.ToTable("amc_plan", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.AmcServiceVisit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("ConsumedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at_utc");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("contract_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_amc_service_visit");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_amc_service_visit_booking_id");
+
+                    b.HasIndex("ContractId")
+                        .HasDatabaseName("ix_amc_service_visit_contract_id");
+
+                    b.ToTable("amc_service_visit", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -479,6 +575,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("address_state_snapshot");
 
+                    b.Property<Guid?>("AmcContractId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("amc_contract_id");
+
                     b.Property<Guid?>("AssignedProviderId")
                         .HasColumnType("uuid")
                         .HasColumnName("assigned_provider_id");
@@ -619,6 +719,9 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_booking");
 
+                    b.HasIndex("AmcContractId")
+                        .HasDatabaseName("ix_booking_amc_contract_id");
+
                     b.HasIndex("AssignedProviderId")
                         .HasDatabaseName("ix_booking_assigned_provider_id");
 
@@ -634,6 +737,9 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CustomerId", "Status")
                         .HasDatabaseName("ix_booking_customer_id_status");
+
+                    b.HasIndex("Status", "SlotDate")
+                        .HasDatabaseName("ix_booking_status_slot_date");
 
                     b.ToTable("booking", (string)null);
                 });
@@ -1816,6 +1922,102 @@ namespace Nestly.Infrastructure.Migrations
                         .HasFilter("is_default = true");
 
                     b.ToTable("customer_address", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CustomerAmcContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AssetLabel")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("asset_label");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at_utc");
+
+                    b.Property<Guid>("CategoryIdSnapshot")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id_snapshot");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<DateTime>("EndDateUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_date_utc");
+
+                    b.Property<DateTime?>("ExpiringSoonNotifiedForEndDateUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiring_soon_notified_for_end_date_utc");
+
+                    b.Property<Guid?>("PaymentTransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_transaction_id");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("plan_id");
+
+                    b.Property<string>("PlanNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("plan_name_snapshot");
+
+                    b.Property<decimal>("PriceSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price_snapshot");
+
+                    b.Property<DateTime>("StartDateUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_date_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TermMonthsSnapshot")
+                        .HasColumnType("integer")
+                        .HasColumnName("term_months_snapshot");
+
+                    b.Property<int>("VisitsIncludedSnapshot")
+                        .HasColumnType("integer")
+                        .HasColumnName("visits_included_snapshot");
+
+                    b.Property<int>("VisitsRemaining")
+                        .HasColumnType("integer")
+                        .HasColumnName("visits_remaining");
+
+                    b.HasKey("Id")
+                        .HasName("pk_customer_amc_contract");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("ix_customer_amc_contract_customer_id");
+
+                    b.HasIndex("EndDateUtc")
+                        .HasDatabaseName("ix_customer_amc_contract_end_date_utc");
+
+                    b.HasIndex("PaymentTransactionId")
+                        .HasDatabaseName("ix_customer_amc_contract_payment_transaction_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_customer_amc_contract_status");
+
+                    b.ToTable("customer_amc_contract", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.CustomerAuthIdentity", b =>
@@ -4215,6 +4417,12 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<string>("FundingSource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("funding_source");
+
                     b.Property<string>("GatewayRefundRef")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -4226,7 +4434,7 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("method");
 
-                    b.Property<Guid>("PaymentTransactionId")
+                    b.Property<Guid?>("PaymentTransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_transaction_id");
 
@@ -5492,6 +5700,33 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_admin_user_admin_role_role_id");
                 });
 
+            modelBuilder.Entity("Nestly.Domain.AmcPlan", b =>
+                {
+                    b.HasOne("Nestly.Domain.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_amc_plan_category_category_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.AmcServiceVisit", b =>
+                {
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_amc_service_visit_bookings_booking_id");
+
+                    b.HasOne("Nestly.Domain.CustomerAmcContract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_amc_service_visit_customer_amc_contracts_contract_id");
+                });
+
             modelBuilder.Entity("Nestly.Domain.Banner", b =>
                 {
                     b.HasOne("Nestly.Domain.Category", null)
@@ -5510,6 +5745,12 @@ namespace Nestly.Infrastructure.Migrations
 
             modelBuilder.Entity("Nestly.Domain.Booking", b =>
                 {
+                    b.HasOne("Nestly.Domain.CustomerAmcContract", null)
+                        .WithMany()
+                        .HasForeignKey("AmcContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_booking_customer_amc_contracts_amc_contract_id");
+
                     b.HasOne("Nestly.Domain.Provider", null)
                         .WithMany()
                         .HasForeignKey("AssignedProviderId")
@@ -5728,6 +5969,22 @@ namespace Nestly.Infrastructure.Migrations
                         .HasForeignKey("PincodeId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_customer_address_pincodes_pincode_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.CustomerAmcContract", b =>
+                {
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_amc_contract_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.PaymentTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_customer_amc_contract_payment_transactions_payment_transact");
                 });
 
             modelBuilder.Entity("Nestly.Domain.CustomerRating", b =>
@@ -6093,7 +6350,6 @@ namespace Nestly.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("PaymentTransactionId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_refund_transaction_payment_transaction_payment_transaction_");
                 });
 

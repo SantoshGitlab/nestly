@@ -3,7 +3,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useState, type ComponentProps, type ReactNode } from "react";
-import { Controller, useForm, type FieldValues, type Resolver, type UseFormReturn } from "react-hook-form";
+import {
+  Controller,
+  useForm,
+  type FieldValues,
+  type Path,
+  type Resolver,
+  type UseFormReturn,
+} from "react-hook-form";
 import { z } from "zod";
 import { Alert, Button, Card, CheckboxField, Field, PageHeading, Skeleton, useToast } from "@/components/ui";
 import { FormActions, FormGrid } from "@/components/data-table";
@@ -37,6 +44,80 @@ function emptyStringToNull(value: string): number | null {
 
 function nullableNumberToInputValue(value: number | null): string {
   return value === null || value === undefined ? "" : String(value);
+}
+
+/**
+ * Nullable numeric setting (a cap that's "unlimited" when unset), as a
+ * `Controller`-bound field rather than `register(name, { setValueAs })` on a
+ * plain uncontrolled input.
+ *
+ * `setValueAs` only runs inside the `onChange` handler `register` generates
+ * - it transforms a value the admin actively types, but a field they never
+ * touch keeps whatever `defaultValue` rendered the input with: `""` for
+ * every one of these fields today, since they're all currently unset
+ * (`null`) in the database. `z.number().nullable()` rejects that empty
+ * string as neither a number nor null, so submitting the group without
+ * first touching this one unrelated field silently failed client
+ * validation - the whole card (every other field in it too) never reached
+ * the API, with only a one-line "Invalid input" under this field as any
+ * sign why. `Controller` keeps the field's RHF-tracked value correctly
+ * typed (`number | null`) from the first render, whether the admin edits it
+ * or not, so the untouched/blank/"unlimited" case - the actual current
+ * state of every field this wraps - validates and saves like any other.
+ */
+function NullableNumberField<T extends FieldValues>({
+  form,
+  name,
+  label,
+}: {
+  form: UseFormReturn<T>;
+  name: Path<T>;
+  label: string;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field, fieldState }) => (
+        <Field
+          label={label}
+          type="number"
+          value={nullableNumberToInputValue(field.value as number | null)}
+          onChange={(event) => field.onChange(emptyStringToNull(event.target.value))}
+          onBlur={field.onBlur}
+          error={fieldState.error?.message}
+        />
+      )}
+    />
+  );
+}
+
+/** Same fix as {@link NullableNumberField}, for the one nullable *text* setting (tax registration number). */
+function NullableTextField<T extends FieldValues>({
+  form,
+  name,
+  label,
+}: {
+  form: UseFormReturn<T>;
+  name: Path<T>;
+  label: string;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field, fieldState }) => (
+        <Field
+          label={label}
+          type="text"
+          value={(field.value as string | null) ?? ""}
+          onChange={(event) => field.onChange(event.target.value === "" ? null : event.target.value)}
+          onBlur={field.onBlur}
+          error={fieldState.error?.message}
+        />
+      )}
+    />
+  );
 }
 
 /**
@@ -171,12 +252,10 @@ function BookingSettingsSection({ initial, queryClient }: { initial: BookingSett
             error={form.formState.errors.maxAdvanceBookingDays?.message}
             {...form.register("maxAdvanceBookingDays", { valueAsNumber: true })}
           />
-          <Field
+          <NullableNumberField
+            form={form}
+            name="maxActiveBookingsPerCustomer"
             label="Max active bookings per customer (blank = unlimited)"
-            type="number"
-            defaultValue={nullableNumberToInputValue(initial.maxActiveBookingsPerCustomer)}
-            error={form.formState.errors.maxActiveBookingsPerCustomer?.message}
-            {...form.register("maxActiveBookingsPerCustomer", { setValueAs: emptyStringToNull })}
           />
           <Controller
             control={form.control}
@@ -370,14 +449,10 @@ function TaxSettingsSection({ initial, queryClient }: { initial: TaxSettings; qu
             error={form.formState.errors.defaultTaxPercentage?.message}
             {...form.register("defaultTaxPercentage", { valueAsNumber: true })}
           />
-          <Field
+          <NullableTextField
+            form={form}
+            name="taxRegistrationNumber"
             label="Tax registration number (blank = not configured)"
-            type="text"
-            defaultValue={initial.taxRegistrationNumber ?? ""}
-            error={form.formState.errors.taxRegistrationNumber?.message}
-            {...form.register("taxRegistrationNumber", {
-              setValueAs: (value: string) => (value === "" ? null : value),
-            })}
           />
           <Controller
             control={form.control}
@@ -425,12 +500,10 @@ function WalletSettingsSection({ initial, queryClient }: { initial: WalletSettin
             error={form.formState.errors.maxWalletUsagePercentagePerBooking?.message}
             {...form.register("maxWalletUsagePercentagePerBooking", { valueAsNumber: true })}
           />
-          <Field
+          <NullableNumberField
+            form={form}
+            name="walletCreditExpiryDays"
             label="Wallet credit expiry (days, blank = never)"
-            type="number"
-            defaultValue={nullableNumberToInputValue(initial.walletCreditExpiryDays)}
-            error={form.formState.errors.walletCreditExpiryDays?.message}
-            {...form.register("walletCreditExpiryDays", { setValueAs: emptyStringToNull })}
           />
           <Controller
             control={form.control}
@@ -471,12 +544,10 @@ function CouponSettingsSection({ initial, queryClient }: { initial: CouponSettin
             error={form.formState.errors.maxDiscountPercentagePerCoupon?.message}
             {...form.register("maxDiscountPercentagePerCoupon", { valueAsNumber: true })}
           />
-          <Field
+          <NullableNumberField
+            form={form}
+            name="maxActiveCouponsPerCustomer"
             label="Max active coupons per customer (blank = unlimited)"
-            type="number"
-            defaultValue={nullableNumberToInputValue(initial.maxActiveCouponsPerCustomer)}
-            error={form.formState.errors.maxActiveCouponsPerCustomer?.message}
-            {...form.register("maxActiveCouponsPerCustomer", { setValueAs: emptyStringToNull })}
           />
           <Controller
             control={form.control}

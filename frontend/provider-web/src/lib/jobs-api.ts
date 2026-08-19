@@ -72,10 +72,23 @@ export const submitCompletionVerification = (jobId: string, request: SubmitCompl
     body: JSON.stringify(request),
   });
 
-export const getCompletionVerification = (jobId: string) =>
-  apiFetch<BookingCompletionProofResponse | undefined>(`${JOBS_BASE}/${jobId}/completion-verification`, {
-    authenticated: true,
-  });
+/**
+ * 204 No Content ("nothing submitted yet") is the expected shape for a job
+ * that has no completion verification on file. `apiFetch` resolves a 204 as
+ * `undefined`, but TanStack Query v5 treats `undefined` as "no data" and
+ * logs a dev warning every time a queryFn resolves it - so this coalesces
+ * to `null`, an explicit "confirmed absent" value React Query is happy to
+ * cache, instead of letting the generic apiFetch behavior leak through.
+ */
+export const getCompletionVerification = async (
+  jobId: string,
+): Promise<BookingCompletionProofResponse | null> => {
+  const result = await apiFetch<BookingCompletionProofResponse | undefined>(
+    `${JOBS_BASE}/${jobId}/completion-verification`,
+    { authenticated: true },
+  );
+  return result ?? null;
+};
 
 /**
  * Uploads one camera/gallery photo for completion verification and returns

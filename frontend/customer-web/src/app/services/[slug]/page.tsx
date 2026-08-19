@@ -8,7 +8,8 @@ import { PriceCalculator } from "@/components/PriceCalculator";
 import { ReviewsSummary } from "@/components/ReviewsSummary";
 import { ServiceAvailability } from "@/components/ServiceAvailability";
 import { ServiceFaqs } from "@/components/ServiceFaqs";
-import { Alert, Button, LinkButton, Skeleton } from "@/components/ui";
+import { STICKY_BAR_SPACER, StickyActionBar } from "@/components/patterns";
+import { Alert, Button, LinkButton, Skeleton, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { getServiceVisual } from "@/lib/serviceVisuals";
@@ -52,7 +53,12 @@ export default function ServiceDetailPage() {
   const service = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-7xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
+    <main
+      className={cx(
+        "mx-auto w-full max-w-7xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
+        STICKY_BAR_SPACER,
+      )}
+    >
       <nav aria-label="Breadcrumb" className="mb-5 text-sm">
         <ol className="flex flex-wrap items-center gap-1.5 text-fg-muted">
           <li>
@@ -127,12 +133,22 @@ export default function ServiceDetailPage() {
           />
           <ServiceAvailability serviceId={service.id} />
 
-          {/* LinkButton, not <Link><Button/></Link>: nesting a button inside
-              an anchor is invalid HTML and gives assistive tech two nested
-              interactive elements for one action. */}
-          <LinkButton href={`/booking/summary?serviceSlug=${service.slug}`} size="lg" fullWidth>
-            Book now
-          </LinkButton>
+          {/* StickyActionBar: below `md`, `aside`'s own `md:sticky` doesn't
+              apply (single-column grid), so without this "Book now" - the
+              actual start of the booking funnel per task #344 - sat at the
+              bottom of a page that can run description + two inclusion
+              lists + policies + FAQs + reviews deep, exactly the
+              "primary CTA requires scrolling to find" gap docs/FRONTEND.md's
+              RESPONSIVE DESIGN policy calls out. `md:` collapses back to a
+              plain inline block, unchanged from before. LinkButton, not
+              <Link><Button/></Link>: nesting a button inside an anchor is
+              invalid HTML and gives assistive tech two nested interactive
+              elements for one action. */}
+          <StickyActionBar>
+            <LinkButton href={`/booking/summary?serviceSlug=${service.slug}`} size="lg" fullWidth>
+              Book now
+            </LinkButton>
+          </StickyActionBar>
         </aside>
       </div>
     </main>

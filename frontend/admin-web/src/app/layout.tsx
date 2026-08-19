@@ -30,6 +30,15 @@ export const viewport = {
     { media: "(prefers-color-scheme: light)", color: "#fafafc" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0b10" },
   ],
+  // Task #351 audit finding (same root cause as provider-web's #338 note):
+  // without this, `env(safe-area-inset-*)` resolves to 0 on iOS regardless
+  // of how many components reference it. admin-web has no fixed bottom nav
+  // or sticky CTA (desk-first per policy), but `ui.tsx`'s `Modal` still has
+  // a bottom-sheet mobile state with `env(safe-area-inset-bottom)` padding
+  // that needs this to work on a phone-width admin session. admin-web has no
+  // manifest.json (not installable as a standalone PWA), so this only ever
+  // matters inside a normal browser tab's bottom safe area, never a notch.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

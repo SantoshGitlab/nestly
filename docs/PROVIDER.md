@@ -4,21 +4,32 @@ Provider / Vendor module specification.
 
 ## STATUS
 
-**In implementation.** The open decisions below are resolved (task 144); the
-data model (tasks 145a-145f) and provider auth/onboarding foundation (tasks
-146a-146c) are being built against those decisions. Out of scope for Phase 1
-per the SRS (§4.2 Excluded Direct End-User Interfaces, §34 Open Decision #9)
-— this is the SRS's own release-phase terminology, unrelated to the
-backlog's numbered phases below.
+**Implemented.** Delivered as **Phase 7** (all backlog rows `done`), and
+extended by Phase 14 (automatic provider assignment). The data model, provider
+auth and onboarding, availability windows, background checks, earnings, the
+`provider-api` host and the `provider-web` app are all live.
 
-Automatic provider assignment — deferred by decision 1 below at the time —
-is now in implementation as its own **Phase 14** (`tasks.csv` 242-250); see
-OPEN DECISIONS — AUTOMATIC ASSIGNMENT below for that phase's decisions.
+This document is the **specification**, not a status record.
+[ORIENTATION.md](ORIENTATION.md) is the single owner of current repository
+state — consult it, not this header, for what is built.
 
-In the backlog (`tasks.csv`), Provider is scheduled as **Phase 7**, ahead of
-Hardening & Launch (Phase 8) — moved there explicitly so provider/provider
-work is done before launch, not after it. No longer "deferred" in the sense
-of "after everything else"; only in the sense of "not yet built."
+Automatic provider assignment — deferred by decision 1 below when this
+document was written — was subsequently delivered as its own **Phase 14**
+(`tasks.csv` 242-250); see OPEN DECISIONS — AUTOMATIC ASSIGNMENT below for
+that phase's decisions. Assignment-conflict detection and manual resolution
+followed as **Phase 19** (`tasks.csv` 321-322) — see ASSIGNMENT CONFLICTS
+below.
+
+The SRS excludes a provider-facing interface from its own Phase 1 (§4.2
+Excluded Direct End-User Interfaces, §34 Open Decision #9). That is the SRS's
+release-phase terminology and is unrelated to the backlog's numbered phases;
+in the backlog Provider is Phase 7, ahead of Hardening & Launch (Phase 8), so
+that provider work was done before launch rather than after it.
+
+Corrected 2026-08-17: this section read *"In implementation"* long after
+delivery, and a first correction pass left contradictory remnants ("not yet
+built") in place beneath it. See
+[LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md).
 
 ## PURPOSE
 
@@ -95,8 +106,70 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 - Provider CRUD: list/create/update providers, get provider detail
 - KYC approval: approve/reject provider KYC
 - Assignment: assign provider to a booking
+- Assignment conflicts: list standing double-bookings, count them
 - Performance: get provider performance metrics
 - Payouts: run payout batch, list payouts
+
+## ASSIGNMENT CONFLICTS (tasks 321-322)
+
+"One person cannot be in two places at once" is enforced on the way in by
+`IProviderScheduleConflictService` (task 288) and backstopped by the
+`ex_booking_provider_no_double_booking` exclusion constraint. Both are **gates**:
+they answer "may this provider take this booking?" one booking at a time.
+
+Neither can answer "who is double-booked right now?" — and that question has
+real answers, because a gate only governs writes that go through it. Rows
+predating task 288, rows that lost a race, and rows written by any future
+path that bypasses the service are all standing conflicts that nothing
+surfaced. An invariant with no way to observe its own violations is only half
+an invariant.
+
+**Detection** — `IBookingAssignmentConflictService` reports conflict *groups*:
+one provider, one date, a set of two or more live assignments whose slots
+overlap. It reuses task 288's semantics exactly — half-open `[start, end)`
+overlap, "live" meaning `Assigned`/`Accepted` only — so detection and
+prevention cannot disagree about what a conflict is. Read-only; no schema
+change.
+
+Grouping is a single interval-merge walk over one provider-day's jobs ordered
+by start time, tracking the furthest end seen rather than the previous job's
+end, so a long booking containing several short ones is reported as one group
+rather than several pairs. The scan is capped (20,000 live assignments per
+query window) and returns a validation error rather than a silently truncated
+answer.
+
+**Resolution** — the admin dashboard at `/bookings/conflicts` (admin-web, a
+third `BookingsTabs` entry) lists each group with the provider, the overlapping
+window, and every booking caught in it, distinguishing an `Accepted`
+commitment from a merely offered `Assigned` one — the difference that decides
+which job it is reasonable to move.
+
+Reassignment posts to the **existing** `POST /admin/bookings/{id}/assign-provider`.
+There is deliberately no "resolve conflict" write path: a second route into
+assignment state would need its own copy of the validation, the supersede
+rules and the task 288 check. Routing through the existing endpoint also means
+the fix is checked by the invariant itself — a reassignment that would leave
+the provider still double-booked is rejected — and lands in the audit trail as
+the ordinary assignment it is.
+
+**RBAC** — the existing `bookings.read` to view, `bookings.write` to act. No
+new module: every booking listed is one the caller can already open in more
+detail through `BookingsController`, and the write is an ordinary assignment.
+Same reasoning `RecurringPlansController` records.
+
+**Status** — written 2026-08-17, fully verified 2026-08-18: `dotnet build`
+0 errors/0 warnings, full suite 1930/1930 passing (9 new tests), and
+end-to-end against a real PostgreSQL instance and a live browser session —
+a seeded conflict was detected, rendered correctly with the right
+Offered/Accepted distinction, and resolved through the dashboard's Reassign
+action, with the open-conflict count dropping from 2 to 1 in the UI. Two
+real defects surfaced only once a build actually ran: a SQL-side `ORDER BY`
+on a `TimeSpan` column (SQLite has no total order for it and throws, rather
+than merely translating "unreliably" as the surrounding comment had assumed)
+and a cross-test data leak from the shared `IClassFixture` test database
+(this service scans a date range rather than one provider, so tests needed
+isolated dates). Both fixed; see `tasks.csv` task 321's note. admin-web
+separately passes `tsc --noEmit` and `next lint`.
 
 ## RBAC ADDITIONS
 
@@ -263,6 +336,60 @@ approach as the five above.
    waste real dispatch capacity for nothing. The engine runs once a booking
    reaches `AwaitingFulfilment` (task 246), the same status manual admin
    assignment already targets today.
+
+   **What reached that status was the hole (task 333).** This decision named
+   the trigger and task 246 wired the engine to it, but *nothing ever
+   performed* `Confirmed → AwaitingFulfilment`. `BookingLifecycle` permitted
+   the edge and no code took it: the status was reachable only via a
+   reschedule (`RescheduleService`/`Booking.Reschedule`) or an assignment
+   rejection (`BookingProviderAssignmentService`). An ordinary paid booking
+   therefore sat `Confirmed` until an admin moved it by hand, and the entire
+   automatic dispatch stack behind this decision never ran for it — while
+   admin-web's copy described automatic assignment as if it did. Found by the
+   QA sweep of 2026-08-18 ([QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md),
+   finding 6) and left as a product decision rather than assumed either way.
+
+   **Resolved: build the transition, not soften the copy.**
+   `IBookingFulfilmentPromotionJob` is a Hangfire recurring job that promotes
+   every `Confirmed` booking whose slot starts within
+   `AutoAssignmentOptions.PromotionLeadTimeHours` (default 24). It performs the
+   transition and nothing else — no assignment logic is duplicated, because
+   `ProviderAutoAssignmentHandler` already reacts to the resulting
+   `BookingStatusChangedEvent`. The two knobs that matter:
+
+   - **Lead window, 24 hours.** Late enough that the availability, capacity and
+     travel feasibility the engine reads are the ones that will still hold on
+     the day; early enough that a booking the engine *cannot* place still has a
+     full day in the manual queue (decision 5) before the customer expects
+     somebody at the door.
+   - **Cadence, every 5 minutes** (`*/5 * * * *`, matching
+     `booking-expiry-sweep` rather than the daily sweeps beside it). The window
+     and the cadence answer different questions and both have to be right: the
+     window decides how far *ahead of the slot* a booking is dispatched, the
+     cadence decides how *late* that can happen. A booking confirmed **inside**
+     the window — every same-day booking — is already overdue for dispatch the
+     moment it is paid for, so the interval is the entire delay between a
+     customer paying at 10:00 for an 11:00 slot and a provider being offered
+     the job. A daily sweep against a 24-hour window would miss those bookings
+     outright.
+
+   Killable in an incident the same way the engine is:
+   `AutoAssignmentOptions.PromotionEnabled`, read on every pass so it takes
+   effect without a restart. It is deliberately a *separate* switch from
+   `Enabled` and neither implies the other — `Enabled` governs who gets picked,
+   `PromotionEnabled` governs whether a booking becomes pickable at all. With
+   promotion on and `Enabled` off, bookings still surface in the admin's manual
+   queue as their slot approaches, which is the pre-automation flow rather than
+   a broken one.
+
+   Safety properties, since this writes to bookings unattended: it filters on
+   `Confirmed` only (never "not terminal"), so a cancelled, expired,
+   rescheduled or already-assigned booking is not a candidate at all; it pages
+   rather than loading every due booking; a booking that raced out of
+   `Confirmed` between the read and the write is refused by `BookingLifecycle`
+   and skipped rather than double-promoted; and one booking that fails is
+   logged, has its unsaved change discarded, and does not stop the pass — nor
+   get silently committed by the next booking's save.
 
 5. **No eligible candidate: unchanged manual queue, not a hard failure.** A
    booking with no provider matching skill + area + availability + capacity

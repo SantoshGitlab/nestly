@@ -96,7 +96,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
     private async Task<Fixture> SeedBookingAsync(
-        Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m,
+        bool withFullDiscountCoupon = false)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];
@@ -127,6 +128,19 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         context.ServicePincodeMappings.Add(new ServicePincodeMapping(Guid.NewGuid(), service.Id, pincode.Id));
         context.SlotWindows.Add(window);
         context.SlotWindowRules.Add(rule);
+
+        string? couponCode = null;
+        if (withFullDiscountCoupon)
+        {
+            couponCode = "FREE" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+            context.Add(new Coupon(
+                Guid.NewGuid(), couponCode, "Fully discounted", CouponDiscountType.Percentage, 100m,
+                maxDiscountAmount: null, minOrderAmount: 0m,
+                DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(30),
+                usageLimitTotal: null, usageLimitPerCustomer: null,
+                applicableCategoryId: null, CouponCustomerSegment.All));
+        }
+
         context.SaveChanges();
 
         if (walletCreditToApply > 0)
@@ -137,6 +151,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
 
         var request = new BookingSummaryRequest(
             service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, [],
+            CouponCode: couponCode,
             ApplyWalletCredit: walletCreditToApply > 0);
         var created = await BuildBookingService(context).CreateAsync(customer.Id, request);
         created.IsSuccess.Should().BeTrue();
@@ -187,6 +202,35 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         return fixture;
     }
 
+    /// <summary>
+    /// Task 331 + 356: a booking with nothing left to pay is Confirmed on
+    /// creation and never gets a PaymentTransaction at all. Cancelled here so
+    /// it is refund-eligible, exactly as <see cref="SeedCancelledPaidBookingAsync"/>
+    /// leaves a gateway-paid one - minus the payment round trip, which for
+    /// this booking never happened.
+    /// </summary>
+    private async Task<Fixture> SeedCancelledZeroPayableBookingAsync(
+        decimal servicePrice = 1000m, decimal walletCreditToApply = 0m, bool withFullDiscountCoupon = false)
+    {
+        Fixture fixture;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = await SeedBookingAsync(seedContext, servicePrice, walletCreditToApply, withFullDiscountCoupon);
+            fixture.Total.Should().Be(0m, "this fixture exists to cover bookings that were never charged anything");
+        }
+
+        using (var cancelContext = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(cancelContext);
+            var booking = await bookingRepository.GetByIdAsync(fixture.BookingId);
+            booking!.Status.Should().Be(BookingStatus.Confirmed, "task 331 confirms a zero-payable booking without a payment step");
+            booking.TransitionTo(BookingStatus.CancelledByCustomer, "Customer changed their mind.");
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        return fixture;
+    }
+
     [Fact]
     public async Task InitiateFullRefundAsync_refunds_the_full_amount_via_gateway_and_marks_the_booking_Refunded()
     {
@@ -197,11 +241,15 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         var result = await BuildRefundService(context, gateway).InitiateFullRefundAsync(fixture.BookingId, "Customer cancellation");
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Type.Should().Be(RefundType.Full);
-        result.Value.Method.Should().Be(RefundMethod.Gateway);
-        result.Value.Status.Should().Be(RefundStatus.Refunded);
-        result.Value.Amount.Should().Be(fixture.Total);
-        result.Value.GatewayRefundRef.Should().NotBeNullOrEmpty();
+        result.Value.TotalAmount.Should().Be(fixture.Total);
+        result.Value.Settlements.Should().ContainSingle("a booking funded only by the gateway settles in one place");
+        result.Value.Primary.FundingSource.Should().Be(RefundFundingSource.Payment);
+        result.Value.Primary.PaymentTransactionId.Should().NotBeNull();
+        result.Value.Primary.Type.Should().Be(RefundType.Full);
+        result.Value.Primary.Method.Should().Be(RefundMethod.Gateway);
+        result.Value.Primary.Status.Should().Be(RefundStatus.Refunded);
+        result.Value.Primary.Amount.Should().Be(fixture.Total);
+        result.Value.Primary.GatewayRefundRef.Should().NotBeNullOrEmpty();
 
         using var readContext = _db.CreateContext();
         var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
@@ -218,8 +266,10 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         {
             var result = await BuildRefundService(context, gateway).InitiateFullRefundAsync(fixture.BookingId, "Goodwill wallet refund", RefundMethod.Wallet);
             result.IsSuccess.Should().BeTrue();
-            result.Value.Method.Should().Be(RefundMethod.Wallet);
-            result.Value.GatewayRefundRef.Should().BeNull("a wallet-settled refund never calls the gateway");
+            result.Value.Primary.Method.Should().Be(RefundMethod.Wallet);
+            result.Value.Primary.FundingSource.Should().Be(
+                RefundFundingSource.Payment, "the money came from the gateway even though it is being handed back as wallet credit");
+            result.Value.Primary.GatewayRefundRef.Should().BeNull("a wallet-settled refund never calls the gateway");
         }
 
         using var readContext = _db.CreateContext();
@@ -228,13 +278,14 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
     }
 
     /// <summary>
-    /// Task 310: a booking that spent wallet balance at checkout gets it
-    /// back once the booking is FULLY refunded - the customer never received
-    /// the service that balance paid for. Deliberately different from a
-    /// Coupon's redemption, which is never reversed on any refund (see
-    /// CouponService - RedemptionCount has no decrement path anywhere) -
-    /// see RefundService's doc comment on this branch for why the two are
-    /// treated differently despite both being "checkout-time discounts".
+    /// Task 310, remodelled by task 356: a booking that spent wallet balance
+    /// at checkout gets it back when the booking is refunded - the customer
+    /// never received the service that balance paid for. Deliberately
+    /// different from a Coupon's redemption, which is never reversed on any
+    /// refund (see CouponService - RedemptionCount has no decrement path
+    /// anywhere). The reversal is now a wallet-FUNDED RefundTransaction of
+    /// its own rather than an invisible ledger credit, so the customer's
+    /// refund history adds up to what they actually got back.
     /// </summary>
     [Fact]
     public async Task InitiateFullRefundAsync_reverses_the_wallet_credit_the_booking_applied_at_checkout()
@@ -256,7 +307,20 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         {
             var result = await BuildRefundService(context, gateway).InitiateFullRefundAsync(fixture.BookingId, "Customer cancellation");
             result.IsSuccess.Should().BeTrue();
-            result.Value.Amount.Should().Be(700m, "the refund itself only ever covers what the gateway was actually paid");
+            result.Value.TotalAmount.Should().Be(1000m, "the customer funded the booking with 700 of gateway money and 300 of wallet balance");
+            result.Value.Settlements.Should().HaveCount(2);
+
+            var paymentSettlement = result.Value.Settlements.Single(s => s.FundingSource == RefundFundingSource.Payment);
+            paymentSettlement.Amount.Should().Be(700m);
+            paymentSettlement.Method.Should().Be(RefundMethod.Gateway);
+            paymentSettlement.PaymentTransactionId.Should().NotBeNull();
+            result.Value.Primary.Should().Be(paymentSettlement, "the payment-funded settlement is the one a single-reference caller records");
+
+            var walletSettlement = result.Value.Settlements.Single(s => s.FundingSource == RefundFundingSource.Wallet);
+            walletSettlement.Amount.Should().Be(300m);
+            walletSettlement.Method.Should().Be(RefundMethod.Wallet, "wallet-funded money never went through a gateway that could take it back");
+            walletSettlement.PaymentTransactionId.Should().BeNull();
+            walletSettlement.Status.Should().Be(RefundStatus.Refunded);
         }
 
         using var readContext = _db.CreateContext();
@@ -278,8 +342,8 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         {
             var first = await BuildRefundService(firstContext, gateway).InitiatePartialRefundAsync(fixture.BookingId, half, "Partial refund 1");
             first.IsSuccess.Should().BeTrue();
-            first.Value.Type.Should().Be(RefundType.Partial);
-            first.Value.Status.Should().Be(RefundStatus.Refunded);
+            first.Value.Primary.Type.Should().Be(RefundType.Partial);
+            first.Value.Primary.Status.Should().Be(RefundStatus.Refunded);
         }
 
         using (var midContext = _db.CreateContext())
@@ -355,6 +419,175 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
         // second refund is blocked before "how much is left" is ever asked.
         second.IsFailure.Should().BeTrue();
         second.Error.Code.Should().Be("Refund.BookingNotEligible");
+    }
+
+    /// <summary>
+    /// Task 356, the gap this task exists to close: a booking whose wallet
+    /// balance covered the entire price has no PaymentTransaction (task 331
+    /// confirms it without one), so before this change every refund attempt
+    /// bailed with Refund.NoSuccessfulPayment and the money was simply gone.
+    /// </summary>
+    [Fact]
+    public async Task InitiateFullRefundAsync_refunds_a_fully_wallet_covered_booking_back_to_the_wallet()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedCancelledZeroPayableBookingAsync(servicePrice: 1000m, walletCreditToApply: 1500m);
+
+        IReadOnlyList<WalletLedgerEntryResponse> ledgerBeforeRefund;
+        using (var preRefundContext = _db.CreateContext())
+        {
+            var wallet = new WalletService(new WalletLedgerRepository(preRefundContext), preRefundContext);
+            (await wallet.GetBalanceAsync(fixture.Customer.Id)).Value.Balance
+                .Should().Be(500m, "checkout drew the whole 1000 price out of the 1500 balance");
+            ledgerBeforeRefund = (await wallet.GetLedgerAsync(fixture.Customer.Id)).Value;
+        }
+
+        Guid walletRefundId;
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildRefundService(context, gateway).InitiateFullRefundAsync(fixture.BookingId, "Customer cancellation");
+
+            result.IsSuccess.Should().BeTrue();
+            result.Value.TotalAmount.Should().Be(1000m);
+            result.Value.Settlements.Should().ContainSingle("nothing but wallet balance funded this booking");
+            result.Value.Primary.FundingSource.Should().Be(RefundFundingSource.Wallet);
+            result.Value.Primary.PaymentTransactionId.Should().BeNull("there is no gateway payment this refund could point at");
+            result.Value.Primary.Method.Should().Be(RefundMethod.Wallet);
+            result.Value.Primary.Status.Should().Be(RefundStatus.Refunded);
+            result.Value.Primary.GatewayRefundRef.Should().BeNull();
+            walletRefundId = result.Value.Primary.Id;
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+        booking!.Status.Should().Be(BookingStatus.Refunded);
+
+        var walletService = new WalletService(new WalletLedgerRepository(readContext), readContext);
+        (await walletService.GetBalanceAsync(fixture.Customer.Id)).Value.Balance
+            .Should().Be(1500m, "the customer is back where they started - they paid entirely from the wallet and got nothing");
+
+        var ledgerAfterRefund = (await walletService.GetLedgerAsync(fixture.Customer.Id)).Value;
+        ledgerAfterRefund.Should().HaveCount(ledgerBeforeRefund.Count + 1, "a refund appends to the ledger, it never rewrites it");
+        ledgerAfterRefund.Should().Contain(ledgerBeforeRefund, "SRS 14.5: existing entries are immutable");
+
+        var reversal = ledgerAfterRefund.Except(ledgerBeforeRefund).Single();
+        reversal.EntryType.Should().Be(WalletEntryType.Credit);
+        reversal.Amount.Should().Be(1000m);
+        reversal.BalanceAfter.Should().Be(1500m);
+        reversal.SourceType.Should().Be(WalletSourceType.BookingWalletCreditReversal);
+        reversal.SourceReferenceId.Should().Be(walletRefundId, "SRS 14.5: every entry references the source event that produced it");
+    }
+
+    /// <summary>
+    /// Task 356: the other zero-payable producer. Nothing was ever collected -
+    /// no gateway payment and no wallet balance - so there is genuinely
+    /// nothing to hand back, which must read as a clean business refusal that
+    /// leaves the booking and the ledger alone.
+    /// </summary>
+    [Fact]
+    public async Task InitiateFullRefundAsync_on_a_fully_coupon_discounted_booking_has_nothing_to_refund()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedCancelledZeroPayableBookingAsync(servicePrice: 1000m, withFullDiscountCoupon: true);
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildRefundService(context, gateway).InitiateFullRefundAsync(fixture.BookingId, "Customer cancellation");
+
+            result.IsFailure.Should().BeTrue();
+            result.Error.Code.Should().Be("Refund.NoSuccessfulPayment");
+        }
+
+        using var readContext = _db.CreateContext();
+        (await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId))!.Status
+            .Should().Be(BookingStatus.CancelledByCustomer, "a refund that never happened must not move the booking");
+        (await new RefundTransactionRepository(readContext).ListByBookingAsync(fixture.BookingId)).Should().BeEmpty();
+        (await new WalletService(new WalletLedgerRepository(readContext), readContext).GetLedgerAsync(fixture.Customer.Id))
+            .Value.Should().BeEmpty("a coupon discount is the merchant's money, not the customer's - there is nothing to credit back");
+    }
+
+    /// <summary>
+    /// Task 356: a booking paid part-wallet/part-gateway must refund BOTH
+    /// halves. The split is gateway-first, so a cancellation fee is withheld
+    /// from the wallet-funded portion last - see RefundAllocationCalculator.
+    /// </summary>
+    [Fact]
+    public async Task InitiatePartialRefundAsync_draws_the_gateway_payment_down_before_the_wallet_credit()
+    {
+        var gateway = BuildGateway();
+        // 1000 total, 300 from the wallet at checkout, 700 through the gateway.
+        var fixture = await SeedCancelledPaidBookingAsync(gateway, servicePrice: 1000m, walletCreditToApply: 300m);
+
+        using (var firstContext = _db.CreateContext())
+        {
+            var first = await BuildRefundService(firstContext, gateway).InitiatePartialRefundAsync(fixture.BookingId, 800m, "Cancellation less a 200 fee");
+
+            first.IsSuccess.Should().BeTrue();
+            first.Value.TotalAmount.Should().Be(800m);
+            first.Value.Settlements.Should().HaveCount(2);
+            first.Value.Settlements.Single(s => s.FundingSource == RefundFundingSource.Payment).Amount
+                .Should().Be(700m, "the whole gateway payment comes back before the wallet is touched");
+            first.Value.Settlements.Single(s => s.FundingSource == RefundFundingSource.Wallet).Amount
+                .Should().Be(100m, "only the shortfall the fee left over is taken out of the wallet-funded portion");
+        }
+
+        using (var midContext = _db.CreateContext())
+        {
+            (await new BookingRepository(midContext).GetByIdAsync(fixture.BookingId))!.Status
+                .Should().Be(BookingStatus.RefundPending, "200 of the customer's money is still unrefunded");
+            (await new WalletService(new WalletLedgerRepository(midContext), midContext).GetBalanceAsync(fixture.Customer.Id))
+                .Value.Balance.Should().Be(100m);
+        }
+
+        using (var overAskContext = _db.CreateContext())
+        {
+            var overAsk = await BuildRefundService(overAskContext, gateway).InitiatePartialRefundAsync(fixture.BookingId, 201m, "Too much");
+            overAsk.IsFailure.Should().BeTrue();
+            overAsk.Error.Code.Should().Be("Refund.ExceedsRemainingBalance", "only the 200 of wallet-funded money still held is refundable");
+        }
+
+        using (var secondContext = _db.CreateContext())
+        {
+            var second = await BuildRefundService(secondContext, gateway).InitiatePartialRefundAsync(fixture.BookingId, 200m, "Fee waived on review");
+
+            second.IsSuccess.Should().BeTrue();
+            second.Value.Settlements.Should().ContainSingle();
+            second.Value.Primary.FundingSource.Should().Be(RefundFundingSource.Wallet, "the gateway payment was already exhausted");
+        }
+
+        using var readContext = _db.CreateContext();
+        (await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId))!.Status.Should().Be(BookingStatus.Refunded);
+        (await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id))
+            .Value.Balance.Should().Be(300m, "every rupee of wallet balance the booking consumed is back");
+
+        var refunds = await new RefundTransactionRepository(readContext).ListByBookingAsync(fixture.BookingId);
+        refunds.Should().HaveCount(3);
+        refunds.Sum(r => r.Amount).Should().Be(1000m, "gateway 700 + wallet 300 - exactly what the customer funded the booking with");
+    }
+
+    /// <summary>Task 356: the wallet-only path is no more double-payable than the gateway path - a fully refunded booking is terminal.</summary>
+    [Fact]
+    public async Task InitiateFullRefundAsync_rejects_a_second_refund_of_a_fully_wallet_covered_booking()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedCancelledZeroPayableBookingAsync(servicePrice: 1000m, walletCreditToApply: 1500m);
+
+        using (var firstContext = _db.CreateContext())
+        {
+            (await BuildRefundService(firstContext, gateway).InitiateFullRefundAsync(fixture.BookingId, "First refund")).IsSuccess.Should().BeTrue();
+        }
+
+        using (var secondContext = _db.CreateContext())
+        {
+            var second = await BuildRefundService(secondContext, gateway).InitiateFullRefundAsync(fixture.BookingId, "Duplicate refund attempt");
+            second.IsFailure.Should().BeTrue();
+            second.Error.Code.Should().Be("Refund.BookingNotEligible");
+        }
+
+        using var readContext = _db.CreateContext();
+        (await new RefundTransactionRepository(readContext).ListByBookingAsync(fixture.BookingId)).Should().ContainSingle();
+        (await new WalletService(new WalletLedgerRepository(readContext), readContext).GetBalanceAsync(fixture.Customer.Id))
+            .Value.Balance.Should().Be(1500m, "the customer must not be paid twice for one booking");
     }
 
     [Fact]

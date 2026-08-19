@@ -1,0 +1,14 @@
+{
+  "name": "Nestly — Trusted home services",
+  "short_name": "Nestly",
+  "description": "Cleaning, repairs, salon and more — vetted professionals, upfront pricing, and slots that fit your day.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafafc",
+  "theme_color": "#fafafc",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

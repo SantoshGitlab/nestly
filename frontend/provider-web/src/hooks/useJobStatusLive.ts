@@ -32,8 +32,20 @@ export function useJobStatusLive(jobId: string) {
   useEffect(() => {
     if (!jobId) return;
 
+    // withCredentials: false - this app authenticates the hub via
+    // accessTokenFactory's bearer token (?access_token= on the handshake),
+    // never cookies, so the browser must not send credentials on the CORS
+    // preflight. Same pattern as ChatPanel's /hubs/chat connection: the
+    // shared CORS policy (AddNestlyCors) deliberately omits
+    // AllowCredentials for exactly this reason, and the SignalR JS client
+    // defaults withCredentials to true, so leaving this unset here (unlike
+    // ChatPanel) broke the preflight with "Access-Control-Allow-Credentials
+    // ... must be 'true'" and silently killed live job-status sync.
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/tracking`, { accessTokenFactory: () => getAccessToken() ?? "" })
+      .withUrl(`${API_BASE_URL}/hubs/tracking`, {
+        accessTokenFactory: () => getAccessToken() ?? "",
+        withCredentials: false,
+      })
       .withAutomaticReconnect()
       .build();
 

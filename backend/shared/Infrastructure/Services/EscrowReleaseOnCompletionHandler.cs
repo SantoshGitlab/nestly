@@ -58,7 +58,19 @@ public sealed class EscrowReleaseOnCompletionHandler : INotificationHandler<Doma
             return;
         }
 
+        var booking = await _bookingRepository.GetByIdAsync(domainEvent.BookingId);
         var transaction = await _paymentRepository.GetByBookingIdAsync(domainEvent.BookingId);
+
+        if (transaction is null && booking is { TotalPayableSnapshot: <= 0 })
+        {
+            // Task 331: a booking with nothing payable (an AMC entitlement
+            // redemption, a fully wallet-covered checkout) is confirmed
+            // without a payment, so it never held any escrow and has no
+            // provider earning to credit. Silent, not warned about: unlike
+            // the branch below this is the designed outcome, not a gap.
+            return;
+        }
+
         if (transaction is null || transaction.Status != PaymentTransactionStatus.Success || transaction.CommissionAmount is null)
         {
             // Data-integrity gap, not a business outcome - a booking cannot
@@ -73,7 +85,6 @@ public sealed class EscrowReleaseOnCompletionHandler : INotificationHandler<Doma
             return;
         }
 
-        var booking = await _bookingRepository.GetByIdAsync(domainEvent.BookingId);
         var providerId = booking?.AssignedProviderId;
 
         var release = await _escrowService.ReleaseToProviderAsync(

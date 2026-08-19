@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
+import { StickyActionBar } from "@/components/patterns";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
   Alert,
@@ -48,6 +49,26 @@ import type { BookingCompletionProofResponse, CompletionChecklistAnswer } from "
 import type { LocationSharingStatus } from "@/hooks/useLocationSharing";
 
 /**
+ * Statuses whose job can actually have completion evidence to read. The
+ * backend's GET /jobs/{id}/completion-verification resolves the provider's
+ * *accepted* assignment and 404s otherwise (ProviderJobService's
+ * ResolveAcceptedAsync), and evidence only ever exists once work has started -
+ * so anything earlier than InProgress has nothing to fetch, and the
+ * non-accepted terminal states (Rejected/Reassigned/Withdrawn) 404 outright.
+ * Completed is kept in: the evidence stays readable after the job is done.
+ * Doubles as the render gate for the verification cards below, so the fetch
+ * and the UI that consumes it can never drift apart.
+ */
+const VERIFIABLE_STATUSES: ReadonlySet<JobStatus> = new Set([
+  JobStatus.InProgress,
+  JobStatus.Completed,
+]);
+
+function hasCompletionVerification(status: JobStatus): boolean {
+  return VERIFIABLE_STATUSES.has(status);
+}
+
+/**
  * Job detail (docs/PROVIDER.md's `booking_provider_assignment` bridge table):
  * accept/reject/start/complete actions plus completion proof submission.
  * Same 501 caveat as the list page - if the backend for this surface is not
@@ -68,9 +89,14 @@ export default function JobDetailPage() {
   const [confirmDecline, setConfirmDecline] = useState(false);
 
   const query = useQuery({ queryKey: ["provider-job", jobId], queryFn: () => getJobDetail(jobId) });
+  const jobStatus = query.data?.status;
   const verificationQuery = useQuery({
     queryKey: ["provider-job-completion-verification", jobId],
     queryFn: () => getCompletionVerification(jobId),
+    // Only fetch where the endpoint can answer (see VERIFIABLE_STATUSES) -
+    // firing it for every other status just 404s. Explicit `!== undefined`
+    // because JobStatus.Assigned is 0 and would fail a truthiness check.
+    enabled: jobStatus !== undefined && hasCompletionVerification(jobStatus),
   });
 
   useJobStatusLive(jobId);
@@ -212,8 +238,18 @@ export default function JobDetailPage() {
     completeMutation.error ??
     proofMutation.error;
 
-  const showVerification =
-    job.status === JobStatus.InProgress || job.status === JobStatus.Completed;
+  const showVerification = hasCompletionVerification(job.status);
+
+  // Task #345: exactly one primary action is ever pinned to the bottom of
+  // the screen at a time. InProgress renders both the "Finishing up" card
+  // and the verification form, so these two are mutually exclusive - before
+  // verification is submitted, submitting it is the thing blocking
+  // progress; once it exists, completing the job is. Two simultaneous
+  // `StickyActionBar`s would otherwise stack/overlap at the viewport's
+  // bottom edge.
+  const verificationIsPrimaryAction =
+    job.status === JobStatus.InProgress && !verificationQuery.isPending && !verificationQuery.data;
+  const completeIsPrimaryAction = job.status === JobStatus.InProgress && !!verificationQuery.data;
 
   return (
     <div className="animate-rise">
@@ -435,7 +471,13 @@ export default function JobDetailPage() {
             title="Ready to go?"
             description="Start the job when you arrive and begin work."
           >
-            <div className="flex flex-col gap-2.5">
+            {/* StickyActionBar, not a plain div: this is the screen's only
+                primary action while the job is Accepted/EnRoute/Arrived, and
+                it must stay reachable regardless of scroll position (#345) -
+                fixed to the viewport bottom below `md`, inline here from
+                `md` up. Safe to nest inside `Card`: see StickyActionBar's
+                own comment on why its `overflow-hidden` doesn't clip it. */}
+            <StickyActionBar>
               {/* Neither is mandatory before Start - Accepted -> InProgress is
                   a legal transition on its own (BookingLifecycle.cs). Once en
                   route, though, Arrived is the only way forward: the
@@ -481,7 +523,7 @@ export default function JobDetailPage() {
                   Start job
                 </Button>
               ) : null}
-            </div>
+            </StickyActionBar>
           </Card>
         ) : null}
 
@@ -490,16 +532,35 @@ export default function JobDetailPage() {
             title="Finishing up"
             description="Submit the photos and checklist below, then mark the job complete."
           >
-            <Button
-              type="button"
-              size="lg"
-              fullWidth
-              loading={completeMutation.isPending}
-              disabled={anyActionPending || !verificationQuery.data}
-              onClick={() => completeMutation.mutate()}
-            >
-              Mark complete
-            </Button>
+            {/* Sticky only once it is actually the actionable next step
+                (verification submitted) - while it's still disabled,
+                pinning a button the provider can't yet press would just
+                occupy their thumb-reach real estate for nothing (#345). */}
+            {completeIsPrimaryAction ? (
+              <StickyActionBar>
+                <Button
+                  type="button"
+                  size="lg"
+                  fullWidth
+                  loading={completeMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => completeMutation.mutate()}
+                >
+                  Mark complete
+                </Button>
+              </StickyActionBar>
+            ) : (
+              <Button
+                type="button"
+                size="lg"
+                fullWidth
+                loading={completeMutation.isPending}
+                disabled={anyActionPending || !verificationQuery.data}
+                onClick={() => completeMutation.mutate()}
+              >
+                Mark complete
+              </Button>
+            )}
             {!verificationQuery.data && !verificationQuery.isPending ? (
               <p className="mt-3 text-center text-sm text-fg-muted">
                 Submit the completion verification below first.
@@ -513,8 +574,12 @@ export default function JobDetailPage() {
             <CompletionVerificationCard
               jobId={jobId}
               existing={verificationQuery.data}
-              isLoading={verificationQuery.isPending}
+              // `isLoading`, not `isPending`: a disabled query stays "pending"
+              // forever in React Query v5, so keying the skeleton off it would
+              // hang this card if it ever rendered outside VERIFIABLE_STATUSES.
+              isLoading={verificationQuery.isLoading}
               onSubmitted={invalidate}
+              stickySubmit={verificationIsPrimaryAction}
             />
 
             <Card
@@ -857,11 +922,16 @@ function CompletionVerificationCard({
   existing,
   isLoading,
   onSubmitted,
+  stickySubmit,
 }: {
   jobId: string;
-  existing: BookingCompletionProofResponse | undefined;
+  existing: BookingCompletionProofResponse | null | undefined;
   isLoading: boolean;
   onSubmitted: () => void;
+  /** Pin the submit button to the viewport bottom (#345) - true only while
+   *  submitting this is the job's actual next step; see JobDetailPage's
+   *  `verificationIsPrimaryAction` for the full precedence. */
+  stickySubmit: boolean;
 }) {
   const toast = useToast();
   const [photos, setPhotos] = useState<CompletionPhoto[]>([]);
@@ -1102,15 +1172,33 @@ function CompletionVerificationCard({
           </Button>
         </div>
 
-        <Button
-          type="submit"
-          size="lg"
-          fullWidth
-          loading={mutation.isPending}
-          disabled={readyRefs.length === 0 || uploading}
-        >
-          {existing ? "Resubmit verification" : "Submit verification"}
-        </Button>
+        {stickySubmit ? (
+          // Fixed to the viewport bottom below `md` (#345) - still a normal
+          // descendant of this <form>, so `type="submit"` keeps working
+          // exactly as it did inline; DOM membership governs form
+          // association, not visual position.
+          <StickyActionBar>
+            <Button
+              type="submit"
+              size="lg"
+              fullWidth
+              loading={mutation.isPending}
+              disabled={readyRefs.length === 0 || uploading}
+            >
+              {existing ? "Resubmit verification" : "Submit verification"}
+            </Button>
+          </StickyActionBar>
+        ) : (
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            loading={mutation.isPending}
+            disabled={readyRefs.length === 0 || uploading}
+          >
+            {existing ? "Resubmit verification" : "Submit verification"}
+          </Button>
+        )}
       </form>
     </Card>
   );

@@ -53,7 +53,11 @@ public static class NotificationIntentPlanner
         [nameof(SupportTicketStatusChangedEvent)] = typeof(SupportTicketStatusChangedEvent),
         [nameof(SubscriptionRenewedEvent)] = typeof(SubscriptionRenewedEvent),
         [nameof(SubscriptionExpiringSoonEvent)] = typeof(SubscriptionExpiringSoonEvent),
-        [nameof(SubscriptionPaymentFailedEvent)] = typeof(SubscriptionPaymentFailedEvent)
+        [nameof(SubscriptionPaymentFailedEvent)] = typeof(SubscriptionPaymentFailedEvent),
+        [nameof(AmcContractPurchasedEvent)] = typeof(AmcContractPurchasedEvent),
+        [nameof(AmcVisitRedeemedEvent)] = typeof(AmcVisitRedeemedEvent),
+        [nameof(AmcContractExpiringSoonEvent)] = typeof(AmcContractExpiringSoonEvent),
+        [nameof(AmcContractExhaustedEvent)] = typeof(AmcContractExhaustedEvent)
     };
 
     /// <summary>
@@ -64,7 +68,7 @@ public static class NotificationIntentPlanner
     /// </summary>
     public static IReadOnlyList<NotificationEventType> Plan(IDomainEvent domainEvent) => domainEvent switch
     {
-        BookingStatusChangedEvent statusChanged => EventTypesFor(statusChanged.ToStatus),
+        BookingStatusChangedEvent statusChanged => WithoutUnchargedPaymentSuccess(statusChanged),
 
         // Task 295: announced on acceptance, never on the offer.
         ProviderAssignmentAcceptedEvent => [NotificationEventType.ProviderAssigned],
@@ -89,8 +93,50 @@ public static class NotificationIntentPlanner
         SubscriptionExpiringSoonEvent => [NotificationEventType.SubscriptionExpiringSoon],
         SubscriptionPaymentFailedEvent => [NotificationEventType.SubscriptionPaymentFailed],
 
+        AmcContractPurchasedEvent => [NotificationEventType.AmcContractPurchased],
+        AmcVisitRedeemedEvent => [NotificationEventType.AmcVisitRedeemed],
+        AmcContractExpiringSoonEvent => [NotificationEventType.AmcContractExpiringSoon],
+        AmcContractExhaustedEvent => [NotificationEventType.AmcContractExhausted],
+
         _ => []
     };
+
+    /// <summary>
+    /// Task 359: <see cref="EventTypesFor"/> is keyed on status alone, so
+    /// <see cref="BookingStatus.Confirmed"/> owes both
+    /// <see cref="NotificationEventType.BookingConfirmed"/> and
+    /// <see cref="NotificationEventType.PaymentSuccess"/>. That is right for
+    /// the transition the pair was written for (PaymentPending -&gt; Confirmed,
+    /// on a real gateway callback) and false for the one task 331 added: a
+    /// booking with nothing payable is confirmed at creation with no payment
+    /// behind it, and telling that customer their payment succeeded describes
+    /// a charge that never happened.
+    ///
+    /// <para>
+    /// Suppressed here rather than in <see cref="EventTypesFor"/> on purpose.
+    /// That table is the shared status mapping - it answers a question about a
+    /// status, and it is the only thing standing between the intent writer and
+    /// the handlers agreeing. "Was anything actually charged" is a fact about
+    /// this particular booking, not about the status, so it belongs on the
+    /// per-event arm beside the other two context-dependent silences above
+    /// (an unaccepted assignment, a customer's own chat message).
+    /// </para>
+    ///
+    /// <para>
+    /// <see cref="NotificationEventType.BookingConfirmed"/> is untouched: the
+    /// booking genuinely is confirmed, which is the fact the customer needs.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<NotificationEventType> WithoutUnchargedPaymentSuccess(BookingStatusChangedEvent statusChanged)
+    {
+        var eventTypes = EventTypesFor(statusChanged.ToStatus);
+        if (statusChanged.AnythingPayable)
+        {
+            return eventTypes;
+        }
+
+        return eventTypes.Where(eventType => eventType != NotificationEventType.PaymentSuccess).ToList();
+    }
 
     /// <summary>
     /// The booking-lifecycle mapping, lifted out of
@@ -112,6 +158,14 @@ public static class NotificationIntentPlanner
     /// "your booking is confirmed" and "your payment went through"). Assigned
     /// is deliberately absent: reaching it means an offer was made, not that
     /// anybody accepted it - see <see cref="Plan"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// Task 359: Confirmed's second message is dropped by <see cref="Plan"/>
+    /// for a booking that never had anything to charge. That is a fact about
+    /// the booking rather than about the status, so it does not live in this
+    /// table - which means callers must plan through <see cref="Plan"/> and
+    /// not read this mapping directly for a booking-status event.
     /// </para>
     /// </summary>
     public static IReadOnlyList<NotificationEventType> EventTypesFor(BookingStatus toStatus) => toStatus switch

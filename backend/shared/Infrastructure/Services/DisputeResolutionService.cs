@@ -100,8 +100,10 @@ public class DisputeResolutionService : IDisputeResolutionService
                 return refundResult.Error;
             }
 
-            refundTransactionId = refundResult.Value.Id;
-            refundStatus = refundResult.Value.Status;
+            // Task 356: the payment-funded settlement when the booking had
+            // one, otherwise the wallet-funded one - see RefundOutcomeResponse.Primary.
+            refundTransactionId = refundResult.Value.Primary.Id;
+            refundStatus = refundResult.Value.Primary.Status;
         }
 
         try

@@ -22,6 +22,8 @@ export const metadata: Metadata = {
     template: "%s · Nestly Provider",
   },
   description: "Nestly provider portal.",
+  // Task #354: Add-to-Home-Screen support. See public/manifest.json.
+  manifest: "/manifest.json",
 };
 
 /** Paints the browser chrome to match the theme on each side of the switch. */
@@ -30,6 +32,14 @@ export const viewport = {
     { media: "(prefers-color-scheme: light)", color: "#fafafc" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0b10" },
   ],
+  // Task #338 audit finding: without this, `env(safe-area-inset-*)` resolves
+  // to 0 on iOS regardless of how many components reference it - it only
+  // activates once the viewport opts into drawing under the notch/home
+  // indicator. `ProviderTabBar`'s `pb-[env(safe-area-inset-bottom)]` and
+  // `ui.tsx`'s `Modal` bottom-sheet padding were both silently inert without
+  // this; it is also what makes StickyActionBar's own safe-area padding
+  // (#345) work as a home-screen PWA (#354) on a notched phone.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

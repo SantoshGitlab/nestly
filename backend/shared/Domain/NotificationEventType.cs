@@ -87,5 +87,21 @@ public enum NotificationEventType
     /// explanation. Only ever sent when the outgoing provider had accepted, so
     /// it never refers to a name the customer never heard.
     /// </summary>
-    ProviderChanged
+    ProviderChanged,
+
+    // Phase 20 AMC module (docs/AMC.md, tasks 323-330). APPENDED, NEVER
+    // INSERTED - see the comment above ProviderAssigned on why this enum's
+    // wire format requires strict append-only growth.
+
+    /// <summary>A customer purchased a new AMC contract.</summary>
+    AmcContractPurchased,
+
+    /// <summary>A visit was redeemed against an AMC contract's entitlement, on booking completion.</summary>
+    AmcVisitRedeemed,
+
+    /// <summary>An AMC contract's term end date is within the reminder window.</summary>
+    AmcContractExpiringSoon,
+
+    /// <summary>Every entitled visit on an AMC contract has been redeemed while the term still has time left.</summary>
+    AmcContractExhausted
 }

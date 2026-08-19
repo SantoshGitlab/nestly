@@ -7,7 +7,7 @@ import { Reveal, revealItem } from "@/components/motion";
 import { Badge, Button, Card, Field, PageHeading, Select, Skeleton, StatTile } from "@/components/ui";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
-import { BookingsTabs } from "../_components/BookingsTabs";
+import { BookingsTabs } from "@/components/BookingsTabs";
 import {
   FREQUENCY_LABELS,
   PLAN_STATUS_LABELS,

@@ -82,6 +82,9 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<NestlyCoinsProgramConfig> NestlyCoinsProgramConfigs { get; set; }
     public DbSet<SubscriptionPlan> SubscriptionPlans { get; set; }
     public DbSet<CustomerSubscription> CustomerSubscriptions { get; set; }
+    public DbSet<AmcPlan> AmcPlans { get; set; }
+    public DbSet<CustomerAmcContract> CustomerAmcContracts { get; set; }
+    public DbSet<AmcServiceVisit> AmcServiceVisits { get; set; }
 
     public NestlyDbContext(DbContextOptions<NestlyDbContext> options) : base(options)
     {

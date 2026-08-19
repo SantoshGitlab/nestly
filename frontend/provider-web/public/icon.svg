@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nestly Provider">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6538CD" />
+      <stop offset="55%" stop-color="#8A6CF0" />
+      <stop offset="100%" stop-color="#A594F6" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)" />
+  <path
+    d="M110 246 256 132l146 114v154a20 20 0 0 1-20 20h-84v-106H190v106h-84a20 20 0 0 1-20-20Z"
+    fill="#ffffff"
+  />
+</svg>

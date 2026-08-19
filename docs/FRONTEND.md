@@ -226,13 +226,47 @@ Accessibility should be considered during development.
 
 ## RESPONSIVE DESIGN
 
-Support:
+**Mobile is the primary platform, not one of three equally-weighted targets.**
+The large majority of real usage is mobile — design and build for a phone
+screen first, then verify the result still holds up on tablet and desktop,
+not the other way around.
 
-- Desktop
-- Tablet
-- Mobile
+This applies differently by app, because the three apps have different
+real-world users:
 
-Layouts should adapt consistently across supported devices.
+- **customer-web** and **provider-web** are mobile-first without
+  qualification. Customers browse and book on their phones; providers work
+  the entire job lifecycle (accept, navigate, complete, upload proof) from
+  the field, usually one-handed, often on a mobile network, sometimes with
+  a phone in one hand and a tool in the other. Every screen in these two
+  apps must be designed for a phone viewport (~375–430px) first.
+- **admin-web** is desk-first — an operations tool typically used at a
+  workstation — but must stay usable on a tablet for on-the-go checks
+  (approve a provider, look up a booking) without horizontal scrolling or
+  broken layout. It does not need bottom-tab navigation or a phone-first
+  redesign.
+
+Concretely, "mobile-first" means, at minimum:
+
+- Every interactive element meets a minimum touch target (44×44pt),
+  not a size tuned for mouse pointers.
+- Primary actions (Continue, Pay Now, Accept Job) stay reachable without
+  scrolling to find them — a sticky/fixed action bar on long screens, not
+  a button at the bottom of a page.
+- Forms use the correct mobile keyboard per field (`inputMode`, `type`,
+  `autoComplete`) — numeric for OTP/pincode, `tel` for phone, etc.
+- Modals and dialogs use a full-screen or bottom-sheet pattern below a
+  breakpoint instead of a small centered desktop dialog.
+- Data tables collapse to a card/list layout below a breakpoint instead of
+  forcing horizontal scroll.
+- Root layouts respect iOS/Android safe areas (notch, home indicator) for
+  any fixed header or footer.
+- Performance is budgeted for a mobile network (3G/4G), not just desktop
+  broadband — this is where a slow page costs the most real users.
+
+Layouts should adapt consistently across supported devices, with mobile as
+the baseline every other breakpoint is verified against, not an
+afterthought checked once desktop is done.
 
 ## SECURITY
 

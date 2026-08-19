@@ -11,6 +11,7 @@ using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence.Seed;
 using Nestly.Infrastructure.Realtime;
 using Serilog;
 
@@ -64,6 +65,14 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// Task 332 (QA-REPORT-2026-08-18 bug #5): fills in admin_permission rows for
+// any module added since the last seed migration, and the default-role grants
+// for them, so a fresh deployment's Super Admin really does have access to
+// every module without an operator opening the permission-matrix UI once per
+// module. Idempotent, and never re-grants a permission an operator has
+// deliberately revoked - see AdminPermissionReconciler's doc comment.
+app.ReconcileAdminPermissions();
 
 // Pipeline order: correlation first so all downstream logs carry the id,
 // then exception shielding, then request logging.
@@ -158,6 +167,15 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         job => job.SweepAsync(CancellationToken.None),
         "*/5 * * * *");
 }
+
+// Task 333: promotes Confirmed bookings to AwaitingFulfilment as their slot
+// approaches - the transition nothing performed before, and therefore the
+// trigger that makes tasks 246-248's automatic assignment engine reachable on
+// an ordinary booking rather than only after a reschedule or a rejection. Same
+// ServerEnabled-guarded registration pattern as the sweeps above; see the
+// extension's own doc comment for why the cadence is 5 minutes rather than
+// daily.
+app.ScheduleBookingFulfilmentPromotion();
 
 // Task 294: delivers customer notifications whose in-process, post-commit
 // dispatch never completed. This is the "and a retry path that does not depend
