@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { AuthShell, OtpField, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { AuthShell, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, CheckboxField, Field } from "@/components/ui";
 import { describeError } from "@/lib/api";
 import { registerProvider, requestRegistrationOtp } from "@/lib/auth-api";
@@ -167,7 +168,7 @@ export default function ProviderRegisterPage() {
           </form>
         ) : (
           <form onSubmit={submitRegistration} className="flex flex-col gap-5" noValidate>
-            <OtpField
+            <OtpInput
               autoFocus
               error={detailsForm.formState.errors.otpCode?.message}
               {...detailsForm.register("otpCode")}
@@ -197,6 +198,7 @@ export default function ProviderRegisterPage() {
               <Field
                 label="Email (optional)"
                 type="email"
+                inputMode="email"
                 autoComplete="email"
                 error={detailsForm.formState.errors.email?.message}
                 {...detailsForm.register("email")}

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
+import { StickyActionBar } from "@/components/patterns";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import {
   Alert,
@@ -210,6 +211,17 @@ export default function JobDetailPage() {
 
   const showVerification =
     job.status === JobStatus.InProgress || job.status === JobStatus.Completed;
+
+  // Task #345: exactly one primary action is ever pinned to the bottom of
+  // the screen at a time. InProgress renders both the "Finishing up" card
+  // and the verification form, so these two are mutually exclusive - before
+  // verification is submitted, submitting it is the thing blocking
+  // progress; once it exists, completing the job is. Two simultaneous
+  // `StickyActionBar`s would otherwise stack/overlap at the viewport's
+  // bottom edge.
+  const verificationIsPrimaryAction =
+    job.status === JobStatus.InProgress && !verificationQuery.isPending && !verificationQuery.data;
+  const completeIsPrimaryAction = job.status === JobStatus.InProgress && !!verificationQuery.data;
 
   return (
     <div className="animate-rise">
@@ -431,7 +443,13 @@ export default function JobDetailPage() {
             title="Ready to go?"
             description="Start the job when you arrive and begin work."
           >
-            <div className="flex flex-col gap-2.5">
+            {/* StickyActionBar, not a plain div: this is the screen's only
+                primary action while the job is Accepted/EnRoute/Arrived, and
+                it must stay reachable regardless of scroll position (#345) -
+                fixed to the viewport bottom below `md`, inline here from
+                `md` up. Safe to nest inside `Card`: see StickyActionBar's
+                own comment on why its `overflow-hidden` doesn't clip it. */}
+            <StickyActionBar>
               {/* Neither is mandatory before Start - Accepted -> InProgress is
                   a legal transition on its own (BookingLifecycle.cs). Once en
                   route, though, Arrived is the only way forward: the
@@ -477,7 +495,7 @@ export default function JobDetailPage() {
                   Start job
                 </Button>
               ) : null}
-            </div>
+            </StickyActionBar>
           </Card>
         ) : null}
 
@@ -486,16 +504,35 @@ export default function JobDetailPage() {
             title="Finishing up"
             description="Submit the photos and checklist below, then mark the job complete."
           >
-            <Button
-              type="button"
-              size="lg"
-              fullWidth
-              loading={completeMutation.isPending}
-              disabled={anyActionPending || !verificationQuery.data}
-              onClick={() => completeMutation.mutate()}
-            >
-              Mark complete
-            </Button>
+            {/* Sticky only once it is actually the actionable next step
+                (verification submitted) - while it's still disabled,
+                pinning a button the provider can't yet press would just
+                occupy their thumb-reach real estate for nothing (#345). */}
+            {completeIsPrimaryAction ? (
+              <StickyActionBar>
+                <Button
+                  type="button"
+                  size="lg"
+                  fullWidth
+                  loading={completeMutation.isPending}
+                  disabled={anyActionPending}
+                  onClick={() => completeMutation.mutate()}
+                >
+                  Mark complete
+                </Button>
+              </StickyActionBar>
+            ) : (
+              <Button
+                type="button"
+                size="lg"
+                fullWidth
+                loading={completeMutation.isPending}
+                disabled={anyActionPending || !verificationQuery.data}
+                onClick={() => completeMutation.mutate()}
+              >
+                Mark complete
+              </Button>
+            )}
             {!verificationQuery.data && !verificationQuery.isPending ? (
               <p className="mt-3 text-center text-sm text-fg-muted">
                 Submit the completion verification below first.
@@ -511,6 +548,7 @@ export default function JobDetailPage() {
               existing={verificationQuery.data}
               isLoading={verificationQuery.isPending}
               onSubmitted={invalidate}
+              stickySubmit={verificationIsPrimaryAction}
             />
 
             <Card
@@ -697,11 +735,16 @@ function CompletionVerificationCard({
   existing,
   isLoading,
   onSubmitted,
+  stickySubmit,
 }: {
   jobId: string;
   existing: BookingCompletionProofResponse | null | undefined;
   isLoading: boolean;
   onSubmitted: () => void;
+  /** Pin the submit button to the viewport bottom (#345) - true only while
+   *  submitting this is the job's actual next step; see JobDetailPage's
+   *  `verificationIsPrimaryAction` for the full precedence. */
+  stickySubmit: boolean;
 }) {
   const toast = useToast();
   const [photos, setPhotos] = useState<CompletionPhoto[]>([]);
@@ -942,15 +985,33 @@ function CompletionVerificationCard({
           </Button>
         </div>
 
-        <Button
-          type="submit"
-          size="lg"
-          fullWidth
-          loading={mutation.isPending}
-          disabled={readyRefs.length === 0 || uploading}
-        >
-          {existing ? "Resubmit verification" : "Submit verification"}
-        </Button>
+        {stickySubmit ? (
+          // Fixed to the viewport bottom below `md` (#345) - still a normal
+          // descendant of this <form>, so `type="submit"` keeps working
+          // exactly as it did inline; DOM membership governs form
+          // association, not visual position.
+          <StickyActionBar>
+            <Button
+              type="submit"
+              size="lg"
+              fullWidth
+              loading={mutation.isPending}
+              disabled={readyRefs.length === 0 || uploading}
+            >
+              {existing ? "Resubmit verification" : "Submit verification"}
+            </Button>
+          </StickyActionBar>
+        ) : (
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            loading={mutation.isPending}
+            disabled={readyRefs.length === 0 || uploading}
+          >
+            {existing ? "Resubmit verification" : "Submit verification"}
+          </Button>
+        )}
       </form>
     </Card>
   );

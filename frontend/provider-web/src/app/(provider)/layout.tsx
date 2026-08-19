@@ -1,12 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { STICKY_BAR_SPACER } from "@/components/patterns";
 import { ProviderHeader } from "@/components/ProviderHeader";
-import { ProviderSidebar, ProviderTabBar } from "@/components/ProviderSidebar";
+import { isJobDetailPath, ProviderSidebar, ProviderTabBar } from "@/components/ProviderSidebar";
 import { RequireProviderAuth } from "@/components/RequireProviderAuth";
-import { Alert } from "@/components/ui";
+import { Alert, cx } from "@/components/ui";
 import { getSessionClaims, subscribeToAuthChanges } from "@/lib/auth";
 import { DevicePlatform, registerDeviceToken, storeDeviceTokenId } from "@/lib/device-tokens-api";
 import { getProfile } from "@/lib/profile-api";
@@ -24,7 +27,9 @@ import type { ProviderSessionClaims } from "@/lib/types";
  * thumb-tap away rather than behind a drawer.
  */
 export default function AuthenticatedLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [claims, setClaims] = useState<ProviderSessionClaims | null>(null);
+  const isJobDetail = isJobDetailPath(pathname);
 
   useEffect(() => {
     const sync = () => setClaims(getSessionClaims());
@@ -70,14 +75,27 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
   return (
     <RequireProviderAuth>
       <div className="flex min-h-screen flex-col bg-bg">
-        <ProviderHeader claims={claims} />
+        {/* One sticky ancestor for both rows, not two independent
+            `sticky top-0` siblings - see OfflineBanner's header comment for
+            why that distinction matters once the page is scrolled. */}
+        <div className="sticky top-0 z-40">
+          <OfflineBanner />
+          <ProviderHeader claims={claims} />
+        </div>
 
         <div className="flex flex-1">
           <ProviderSidebar />
 
-          {/* Bottom padding clears the fixed tab bar so the last element on a
-              page is never trapped underneath it. */}
-          <main className="min-w-0 flex-1 px-4 py-6 pb-24 sm:px-6 md:pb-6 lg:px-8">
+          {/* Bottom padding clears whatever is fixed to the viewport's
+              bottom edge so the last element on a page is never trapped
+              underneath it: the tab bar everywhere else, the job detail
+              screen's (taller, up-to-two-button) StickyActionBar there. */}
+          <main
+            className={cx(
+              "min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8",
+              isJobDetail ? STICKY_BAR_SPACER : "pb-24 md:pb-6",
+            )}
+          >
             <div className="mx-auto w-full max-w-5xl">
               {profileQuery.data?.status === "PendingVerification" ? (
                 <Alert tone="warning" title="Your account is pending verification" >

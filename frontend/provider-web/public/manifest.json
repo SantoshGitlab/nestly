@@ -1,0 +1,18 @@
+{
+  "name": "Nestly Provider",
+  "short_name": "Nestly Provider",
+  "description": "Manage jobs, availability and earnings in the field.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafafc",
+  "theme_color": "#fafafc",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

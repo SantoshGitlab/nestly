@@ -28,6 +28,18 @@ function useActiveMatcher() {
   return (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/**
+ * True for `/jobs/{id}` - not `/jobs` itself. That screen's primary actions
+ * live in a `StickyActionBar` (task #345), which occupies the same
+ * thumb-reach real estate at the bottom of the viewport as this tab bar; a
+ * native app hides its bottom tabs on a task-focused detail screen for the
+ * same reason. Exported so `AuthenticatedLayout` can give that one route its
+ * own (taller) bottom padding instead of the tab bar's.
+ */
+export function isJobDetailPath(pathname: string | null): boolean {
+  return /^\/jobs\/[^/]+\/?$/.test(pathname ?? "");
+}
+
 /** Side rail, `md` and up. */
 export function ProviderSidebar() {
   const isActive = useActiveMatcher();
@@ -71,7 +83,12 @@ export function ProviderSidebar() {
  * iOS home indicator instead of hiding behind it.
  */
 export function ProviderTabBar() {
+  const pathname = usePathname();
   const isActive = useActiveMatcher();
+
+  // See isJobDetailPath's comment - redundant with that screen's own sticky
+  // action bar.
+  if (isJobDetailPath(pathname)) return null;
 
   return (
     <nav

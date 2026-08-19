@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { AuthShell, OtpField, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { AuthShell, ResendRow, useResendCountdown } from "@/components/auth-ui";
+import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, Field } from "@/components/ui";
 import { describeError, describeLoginError } from "@/lib/api";
 import { requestLoginOtp, verifyLoginOtp } from "@/lib/auth-api";
@@ -203,7 +204,7 @@ export default function ProviderLoginPage() {
           </form>
         ) : (
           <form onSubmit={verifyOtp} className="flex flex-col gap-4" noValidate>
-            <OtpField
+            <OtpInput
               autoFocus
               error={otpForm.formState.errors.otpCode?.message}
               {...otpForm.register("otpCode")}
