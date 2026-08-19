@@ -8,7 +8,14 @@ import type { UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import { ResendRow, useResendCountdown } from "@/components/auth-ui";
 import { OtpInput } from "@/components/OtpInput";
-import { DetailList, DetailRow, ScreenSkeleton } from "@/components/patterns";
+import {
+  AccountQuickLinksCard,
+  BannerBreadcrumb,
+  DetailList,
+  DetailRow,
+  ScreenSkeleton,
+} from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -16,7 +23,6 @@ import {
   Card,
   Checkbox,
   Field,
-  PageHeading,
   Skeleton,
   useToast,
 } from "@/components/ui";
@@ -45,13 +51,16 @@ function ProfileScreen() {
 
   if (profileQuery.isPending) {
     return (
-      <ScreenSkeleton cards={4} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={4} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
     );
   }
 
   if (profileQuery.isError) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load your profile"
@@ -70,28 +79,47 @@ function ProfileScreen() {
   const profile = profileQuery.data;
 
   return (
-    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading title="Your profile" subtitle="View and edit your details and preferences." />
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Your profile"
+        description="View and edit your details and preferences."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Your profile" }]} />}
+      />
 
-      <div className="flex flex-col gap-6">
-        <Card
-          title="Sign-in details"
-          description="Changing either of these needs a verification code."
-        >
-          <DetailList>
-            <DetailRow label="Mobile number" numeric>
-              {profile.mobile}
-            </DetailRow>
-            <DetailRow label="Email address">
-              {profile.email ?? <span className="font-normal text-fg-subtle">Not set</span>}
-            </DetailRow>
-          </DetailList>
-        </Card>
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* 8 of 12: everything a customer actually edits. Its own column,
+              not the full max-w-7xl width, is what fixes the fields
+              themselves reading as unreasonably long single-line boxes. */}
+          <div className="flex flex-col gap-6 lg:col-span-8">
+            <ProfileDetailsForm profile={profile} />
+            <ChangeMobileCard currentMobile={profile.mobile} />
+            <ChangeEmailCard currentEmail={profile.email} />
+            <PreferencesForm />
+          </div>
 
-        <ProfileDetailsForm profile={profile} />
-        <ChangeMobileCard currentMobile={profile.mobile} />
-        <ChangeEmailCard currentEmail={profile.email} />
-        <PreferencesForm />
+          {/* 4 of 12: read-only "who you're signed in as" plus the rest of
+              the account, so a customer mid-edit can jump to bookings/wallet/
+              support without losing their place. Sticky so it stays in view
+              beside a form this long. */}
+          <div className="flex flex-col gap-6 lg:col-span-4 lg:sticky lg:top-20 lg:self-start">
+            <Card
+              title="Sign-in details"
+              description="Changing either of these needs a verification code."
+            >
+              <DetailList>
+                <DetailRow label="Mobile number" numeric>
+                  {profile.mobile}
+                </DetailRow>
+                <DetailRow label="Email address">
+                  {profile.email ?? <span className="font-normal text-fg-subtle">Not set</span>}
+                </DetailRow>
+              </DetailList>
+            </Card>
+
+            <AccountQuickLinksCard currentHref="/profile" />
+          </div>
+        </div>
       </div>
     </main>
   );
@@ -218,33 +246,37 @@ function ProfileDetailsForm({ profile }: { profile: CustomerProfile }) {
           error={form.formState.errors.dateOfBirth?.message}
           {...form.register("dateOfBirth")}
         />
-        <Field
-          label="City"
-          autoComplete="address-level2"
-          error={form.formState.errors.city?.message}
-          {...form.register("city")}
-        />
-        <Field
-          label="State"
-          autoComplete="address-level1"
-          error={form.formState.errors.state?.message}
-          {...form.register("state")}
-        />
-        <Field
-          label="Pincode"
-          inputMode="numeric"
-          autoComplete="postal-code"
-          maxLength={6}
-          className="nums"
-          error={form.formState.errors.pincode?.message}
-          {...form.register("pincode")}
-        />
-        <Field
-          label="Country"
-          autoComplete="country-name"
-          error={form.formState.errors.country?.message}
-          {...form.register("country")}
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            label="City"
+            autoComplete="address-level2"
+            error={form.formState.errors.city?.message}
+            {...form.register("city")}
+          />
+          <Field
+            label="State"
+            autoComplete="address-level1"
+            error={form.formState.errors.state?.message}
+            {...form.register("state")}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            label="Pincode"
+            inputMode="numeric"
+            autoComplete="postal-code"
+            maxLength={6}
+            className="nums"
+            error={form.formState.errors.pincode?.message}
+            {...form.register("pincode")}
+          />
+          <Field
+            label="Country"
+            autoComplete="country-name"
+            error={form.formState.errors.country?.message}
+            {...form.register("country")}
+          />
+        </div>
 
         <Button type="submit" className="self-start" loading={mutation.isPending}>
           Save changes

@@ -14,6 +14,14 @@ import {
   isAuthenticated,
   subscribeToAuthChanges,
 } from "@/lib/auth";
+import {
+  DevicePlatform,
+  registerDeviceToken,
+  revokeDeviceToken,
+  storeDeviceTokenId,
+  takeDeviceTokenId,
+} from "@/lib/device-tokens-api";
+import { requestPushToken } from "@/lib/push";
 
 /**
  * Global chrome for customer-web.
@@ -44,8 +52,13 @@ import {
  */
 const SCROLL_SOLID_PX = 24;
 
-/** Account-menu destinations, in the order they matter to a signed-in customer. */
-const ACCOUNT_LINKS = [
+/**
+ * Account-menu destinations, in the order they matter to a signed-in
+ * customer. Exported (not just used here) so app/profile/page.tsx's "Quick
+ * links" sidebar card can reuse the exact same list rather than keeping a
+ * second copy that could drift from this one.
+ */
+export const ACCOUNT_LINKS = [
   { href: "/bookings", label: "My bookings" },
   { href: "/recurring-bookings", label: "Recurring bookings" },
   { href: "/addresses", label: "Addresses" },
@@ -71,6 +84,35 @@ export function SiteHeader() {
     return subscribeToAuthChanges(sync);
   }, []);
 
+  // Booking/assignment status notifications (task 307's customer-side
+  // counterpart - provider-web has the identical effect in its
+  // (provider)/layout.tsx). Runs whenever `authed` flips to true - once at
+  // load for a returning signed-in customer, once more per fresh sign-in -
+  // rather than on every render, since SiteHeader itself never remounts
+  // across navigation (it lives in the root layout). No-ops entirely when
+  // Firebase is not configured or the browser declines - see lib/push.ts.
+  useEffect(() => {
+    if (!authed) return;
+    let cancelled = false;
+
+    void (async () => {
+      const token = await requestPushToken();
+      if (cancelled || !token) return;
+
+      try {
+        const registered = await registerDeviceToken(DevicePlatform.Fcm, token);
+        if (!cancelled) storeDeviceTokenId(registered.id);
+      } catch {
+        // Best-effort: a customer with no working push still has a fully
+        // working account. Nothing here blocks any other part of the app.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
+
   // A route change means the destination was reached — leaving the drawer open
   // over the new page is never what the customer wanted.
   useEffect(() => {
@@ -91,6 +133,7 @@ export function SiteHeader() {
 
   const signOut = async () => {
     const refreshToken = getRefreshToken();
+    const deviceTokenId = takeDeviceTokenId();
 
     // Clear locally regardless of the server's answer: the customer asked to
     // be signed out, and a network failure must not leave the token behind.
@@ -100,6 +143,13 @@ export function SiteHeader() {
           method: "POST",
           body: JSON.stringify({ refreshToken }),
         });
+      }
+
+      // Best-effort, same as the token registration itself: a signed-out
+      // device should stop receiving booking/assignment push notifications,
+      // but that must never block sign-out.
+      if (deviceTokenId) {
+        await revokeDeviceToken(deviceTokenId);
       }
     } catch {
       // Already-invalid tokens are a no-op server-side; nothing to report.

@@ -824,10 +824,10 @@ public static class DependencyInjection
         // store above (SRS 12.17).
         services.AddScoped<INotificationTemplateManagementService, NotificationTemplateManagementService>();
 
-        // Task 156: push channel. Sandbox in every environment for now
-        // (no real FCM/APNs credentials exist), same registration approach
-        // as INotificationProvider above.
-        services.AddScoped<IPushNotificationProvider, SandboxPushNotificationProvider>();
+        // Task 156/307: push channel. Firebase Cloud Messaging when a
+        // service account key is configured, the sandbox provider otherwise
+        // - see PushNotificationRegistration.
+        services.AddPushNotifications(configuration);
         services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
         services.AddScoped<IDeviceTokenService, DeviceTokenService>();
 
