@@ -40,6 +40,7 @@ Every topic has exactly **one authoritative document**.
 | [RUNBOOK-DEPLOYMENT.md](RUNBOOK-DEPLOYMENT.md) | Deployment procedure (companion to DEVOPS.md) |
 | [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Feature inventory and static findings S1–S11 (still open). Its release verdict is **superseded by QA-REPORT-2026-08-18.md** — kept for the inventory and static findings only |
 | [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md) | Execution of QA phases 3–4 (task 318): full browser walkthrough and cross-service consistency check, with a **CONDITIONAL GO** verdict and a consolidated bug list |
+| [audits/mobile-ux-customer-web-2026-08-18.md](audits/mobile-ux-customer-web-2026-08-18.md) · [-provider-web-](audits/mobile-ux-provider-web-2026-08-18.md) · [-admin-web-](audits/mobile-ux-admin-web-2026-08-18.md) | Per-app mobile/tablet UX findings (Phase 22, tasks #337–339) that scoped the rest of the mobile-first batch, plus each app's #351 safe-area audit appended |
 | [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. Per ORIENTATION.md, this is where the next task comes from |
 | [UAT-REPORT.md](UAT-REPORT.md) | User acceptance testing results |
 | [BOOKING-FLOW-AUDIT.md](BOOKING-FLOW-AUDIT.md) | Point-in-time audit of the booking funnel (source of the Phase 13 defect rows) |
