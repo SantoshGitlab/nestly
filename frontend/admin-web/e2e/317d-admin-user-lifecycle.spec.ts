@@ -33,7 +33,10 @@ test.describe("Admin user list, detail and activation lifecycle", () => {
     // Scoped to the row's name link (not its "Manage" action, which shares
     // the same href) - matched by href to survive the table briefly showing
     // the previous (unfiltered) page while the filtered request is in flight.
-    const nameLink = page.locator(`a[href="/admin-users/${fixture.seededAdminUserId}"]`).getByText(
+    // `:visible` because the responsive DataTable renders every row twice -
+    // once for the desktop table and once for the stacked mobile layout - and
+    // hides one with CSS, so the bare href matches two elements.
+    const nameLink = page.locator(`a[href="/admin-users/${fixture.seededAdminUserId}"]:visible`).getByText(
       fixture.seededAdminUserFullName,
       { exact: true }
     );

@@ -26,7 +26,10 @@ test.describe("Bookings list and detail", () => {
     // name - a name-based locator is briefly ambiguous (strict-mode
     // violation, which Playwright does not retry through) during that
     // window. The href is unique to this booking from the first render.
-    const customerLink = page.locator(`a[href="/bookings/${fixture.sampleBookingId}"]`);
+    // `:visible` because the responsive DataTable renders every row twice -
+    // once for the desktop table and once for the stacked mobile layout - and
+    // hides one with CSS, so the bare href matches two elements.
+    const customerLink = page.locator(`a[href="/bookings/${fixture.sampleBookingId}"]:visible`);
     await expect(customerLink).toBeVisible({ timeout: 15_000 });
     await expect(customerLink).toHaveText(fixture.sampleBookingCustomerName);
     await customerLink.click();

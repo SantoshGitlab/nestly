@@ -61,7 +61,16 @@ test.describe("Repeat this booking (recurring plan opt-in)", () => {
 
     // Plans come back most-recently-created first, so the plan this test just
     // made is the first row even on a re-run against a dirty database.
-    const planCard = page.getByRole("listitem").first();
+    //
+    // Filtered on the card's own heading rather than taken as the page's first
+    // listitem: the page's BannerBreadcrumb is a list too and its items come
+    // first in the DOM, so a bare .first() picks "Home" out of the breadcrumb.
+    // Each plan card carries an h2 with the service name; neither the
+    // breadcrumb items nor the per-card nested detail list does.
+    const planCard = page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { level: 2 }) })
+      .first();
     await expect(planCard.getByRole("heading", { name: fixture.serviceName })).toBeVisible({
       timeout: 15_000,
     });
@@ -77,7 +86,9 @@ test.describe("Repeat this booking (recurring plan opt-in)", () => {
     // Bounded by the 3 repeat visits asked for, not by the booking itself.
     await expect(planCard).toContainText("0 of 3");
     await planCard.getByRole("button", { name: "Show upcoming" }).click();
-    await expect(planCard.getByText("Next visits")).toBeVisible({ timeout: 15_000 });
+    // Exact: the card also carries a "Next visit" detail row, and a substring
+    // match picks up its wrapper as well once this section is expanded.
+    await expect(planCard.getByText("Next visits", { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(planCard.locator("li").filter({ hasText: "(projected)" })).toHaveCount(3);
 
     // Pause / resume / cancel - the management actions the row calls for.
