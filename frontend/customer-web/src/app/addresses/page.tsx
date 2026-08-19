@@ -3,7 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
+import { BannerBreadcrumb } from "@/components/patterns";
 import { Reveal, RevealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -13,7 +15,6 @@ import {
   EmptyState,
   LinkButton,
   Modal,
-  PageHeading,
   Skeleton,
 } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -70,12 +71,14 @@ function AddressBook() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col">
+      <PageBanner
         title="Address book"
-        subtitle="Where we should send your service professional."
+        description="Where we should send your service professional."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Address book" }]} />}
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-6">
         {/* LinkButton, not a Button inside a Link: nesting a <button> in an
             <a> is invalid HTML and gives one action two focusable controls.
@@ -206,6 +209,7 @@ function AddressBook() {
           This can&apos;t be undone. Bookings already placed at this address are unaffected.
         </p>
       </Modal>
+      </div>
     </main>
   );
 }

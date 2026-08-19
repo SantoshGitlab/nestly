@@ -7,7 +7,8 @@ import { useParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { ScreenSkeleton, formatInstant } from "@/components/patterns";
+import { BannerBreadcrumb, ScreenSkeleton, formatInstant } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Badge, Button, Card, Field, PageHeading, Textarea, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
@@ -71,12 +72,17 @@ function ReviewBookingScreen() {
   });
 
   if (eligibilityQuery.isPending || reviewQuery.isPending) {
-    return <ScreenSkeleton cards={1} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={1} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (eligibilityQuery.isError || !eligibilityQuery.data) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6">
         <PageHeading title="Leave a review" />
         <Alert
           tone="error"
@@ -95,7 +101,7 @@ function ReviewBookingScreen() {
 
   if (reviewQuery.isError) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6">
         <PageHeading title="Leave a review" />
         <Alert
           tone="error"
@@ -116,9 +122,18 @@ function ReviewBookingScreen() {
 
   if (existingReview) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-        <PageHeading title="Your review" subtitle="Thanks — this helps the next customer choose." />
+      <main className="flex w-full flex-col animate-rise">
+        <PageBanner
+          title="Your review"
+          description="Thanks — this helps the next customer choose."
+          breadcrumb={
+            <BannerBreadcrumb
+              items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: "Your review" }]}
+            />
+          }
+        />
 
+        <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
         <Card title="Submitted review">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <StarDisplay rating={existingReview.rating} />
@@ -157,6 +172,7 @@ function ReviewBookingScreen() {
         </Card>
 
         {existingReview.rating >= 4 ? <ReferEarnPrompt /> : null}
+        </div>
       </main>
     );
   }
@@ -165,7 +181,7 @@ function ReviewBookingScreen() {
 
   if (!eligibility.isEligible) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <PageHeading title="Leave a review" />
         <Alert tone="warning" title="This booking can't be reviewed yet">
           {eligibility.ineligibilityReason ??
@@ -233,9 +249,18 @@ function ReviewForm({ bookingId, onSubmitted }: { bookingId: string; onSubmitted
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading title="Leave a review" subtitle="Tell us how the service went." />
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Leave a review"
+        description="Tell us how the service went."
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: "Leave a review" }]}
+          />
+        }
+      />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <Card title="Rate your experience">
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
           {submitMutation.isError ? (
@@ -284,6 +309,7 @@ function ReviewForm({ bookingId, onSubmitted }: { bookingId: string; onSubmitted
           </p>
         </form>
       </Card>
+      </div>
     </main>
   );
 }

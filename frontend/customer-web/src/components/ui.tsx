@@ -1108,6 +1108,17 @@ export function Modal({
     dragStartYRef.current = null;
   };
 
+  // Callers overwhelmingly pass an inline `onClose` (a fresh function every
+  // render), so keeping it out of the effect below matters: a ref lets the
+  // keydown handler always call the latest `onClose` without making every
+  // parent re-render (e.g. each keystroke updating form state) re-run the
+  // effect and re-focus the dialog's first control, stealing focus back from
+  // whatever the user was actually typing into.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
@@ -1136,7 +1147,7 @@ export function Modal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -1165,7 +1176,11 @@ export function Modal({
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+    // `onClose` intentionally excluded - see onCloseRef above. Re-running this
+    // only on `open` also means the focus-on-open behavior fires once per
+    // open, not once per parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 

@@ -3,8 +3,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { inr } from "@/components/patterns";
+import { BannerBreadcrumb, inr } from "@/components/patterns";
 import { Reveal, RevealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -13,7 +14,6 @@ import {
   EmptyState,
   Field,
   Modal,
-  PageHeading,
   Skeleton,
   useToast,
 } from "@/components/ui";
@@ -79,12 +79,18 @@ function PlanBrowseScreen() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col">
+      <PageBanner
         title="AMC plans"
-        subtitle="Pay once for a fixed number of service visits against one appliance, over a fixed term."
+        description="Pay once for a fixed number of service visits against one appliance, over a fixed term."
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "My AMC contracts", href: "/amc" }, { label: "AMC plans" }]}
+          />
+        }
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       {plansQuery.isPending ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden>
           {[0, 1].map((card) => (
@@ -159,6 +165,7 @@ function PlanBrowseScreen() {
           </div>
         ) : null}
       </Modal>
+      </div>
     </main>
   );
 }

@@ -5,8 +5,8 @@ import { useState } from "react";
 import { Alert, Button, Modal, Skeleton, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { setSelectedCity } from "@/lib/location";
-import type { City } from "@/lib/types";
+import { clearSelectedLocality, setSelectedCity, setSelectedLocality } from "@/lib/location";
+import type { City, LocalitySearchResult } from "@/lib/types";
 
 /**
  * City picker (SRS 11.1, 11.4.1): a trigger button that opens a modal list of
@@ -19,8 +19,14 @@ import type { City } from "@/lib/types";
  * bespoke version had none of those.
  */
 export function CitySelector({ transparent = false }: { transparent?: boolean }) {
-  const { city } = useSelectedCity();
+  const { city, locality } = useSelectedCity();
   const [open, setOpen] = useState(false);
+
+  // "…" while storage is still being read, "Select city" once read and
+  // empty, "City" for a city-only pick, "City - Area" once an area is
+  // narrowed too (SRS 11.1.3's "filtered by selected city/serviceability").
+  const label =
+    city === undefined ? "…" : city === null ? "Select city" : locality ? `${city.name} - ${locality.name}` : city.name;
 
   return (
     <>
@@ -28,18 +34,14 @@ export function CitySelector({ transparent = false }: { transparent?: boolean })
         type="button"
         onClick={() => setOpen(true)}
         className={cx(
-          "inline-flex h-9 max-w-[11rem] items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-fast ease-out",
+          "inline-flex h-9 max-w-[13rem] items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-fast ease-out",
           transparent
             ? "border border-white/30 bg-white/10 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.5)] hover:bg-white/20"
             : "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
         )}
       >
         <PinIcon className={transparent ? "text-white/80" : undefined} />
-        <span className="truncate">
-          {/* `undefined` is "still reading storage", `null` is "read, none chosen" —
-              they must not collapse into the same label. */}
-          {city === undefined ? "…" : (city?.name ?? "Select city")}
-        </span>
+        <span className="truncate">{label}</span>
       </button>
 
       <Modal
@@ -49,7 +51,16 @@ export function CitySelector({ transparent = false }: { transparent?: boolean })
         description="We'll show the services available near you."
         size="sm"
       >
-        <CityList onPicked={() => setOpen(false)} selectedId={city?.id ?? null} />
+        <div className="flex flex-col gap-5">
+          <CityList onPicked={() => setOpen(false)} selectedId={city?.id ?? null} />
+          {city ? (
+            <AreaList
+              city={city}
+              selectedLocalityId={locality?.id ?? null}
+              onPicked={() => setOpen(false)}
+            />
+          ) : null}
+        </div>
       </Modal>
     </>
   );
@@ -130,6 +141,100 @@ function CityList({
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Areas within the selected city (SRS 11.1.3 - "filtered by selected city/
+ * serviceability"): narrows category browsing to one pincode, or clears
+ * back to every serviceable area in the city. No search box, unlike the
+ * booking-flow `LocalitySelector` - this is a short, browsable "which
+ * launched area am I in" list, not a lookup over a customer's own address.
+ */
+function AreaList({
+  city,
+  selectedLocalityId,
+  onPicked,
+}: {
+  city: City;
+  selectedLocalityId: string | null;
+  onPicked: () => void;
+}) {
+  const query = useQuery({
+    queryKey: ["geography", "localities", city.id],
+    queryFn: () => apiFetch<LocalitySearchResult[]>(`${API_V1}/geography/cities/${city.id}/localities`),
+  });
+
+  if (query.isPending) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+      </div>
+    );
+  }
+
+  // A city can be live with no areas registered yet under it - quietly omit
+  // this section rather than showing an empty-looking list under a heading.
+  if (query.isError || query.data.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="px-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+        Areas in {city.name}
+      </p>
+      <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+        <li>
+          <button
+            type="button"
+            onClick={() => {
+              clearSelectedLocality();
+              onPicked();
+            }}
+            aria-current={selectedLocalityId === null ? "true" : undefined}
+            className={cx(
+              "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors duration-fast ease-out",
+              selectedLocalityId === null
+                ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+                : "text-fg hover:bg-surface-2",
+            )}
+          >
+            <span>All of {city.name}</span>
+            {selectedLocalityId === null ? <CheckIcon /> : null}
+          </button>
+        </li>
+        {query.data.map((locality) => {
+          const isSelected = locality.id === selectedLocalityId;
+          return (
+            <li key={locality.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLocality({ id: locality.id, name: locality.name, pincodeId: locality.pincodeId });
+                  onPicked();
+                }}
+                aria-current={isSelected ? "true" : undefined}
+                className={cx(
+                  "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors duration-fast ease-out",
+                  isSelected
+                    ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
+                    : "text-fg hover:bg-surface-2",
+                )}
+              >
+                <span className="min-w-0 truncate">
+                  {locality.name}
+                  <span className="ml-1.5 text-fg-subtle">· {locality.pincodeCode}</span>
+                </span>
+                {isSelected ? <CheckIcon /> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

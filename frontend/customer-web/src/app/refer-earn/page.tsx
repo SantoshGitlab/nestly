@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { formatInstantDate, inr } from "@/components/patterns";
+import { BannerBreadcrumb, formatInstantDate, inr } from "@/components/patterns";
 import { Reveal, revealItem } from "@/components/motion";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -13,7 +14,6 @@ import {
   Button,
   Card,
   EmptyState,
-  PageHeading,
   Skeleton,
   StatTile,
   TBody,
@@ -85,16 +85,19 @@ function ReferEarnScreen() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col">
+      <PageBanner
         title="Refer & Earn"
-        subtitle="Share Nestly with friends and earn a reward for every qualifying booking."
+        description="Share Nestly with friends and earn a reward for every qualifying booking."
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Refer & Earn" }]} />}
       />
 
-      <div className="flex animate-rise flex-col gap-6">
-        <ShareCard query={summaryQuery} />
-        <StatsRow query={summaryQuery} />
-        <HistoryCard query={historyQuery} />
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+        <div className="flex animate-rise flex-col gap-6">
+          <ShareCard query={summaryQuery} />
+          <StatsRow query={summaryQuery} />
+          <HistoryCard query={historyQuery} />
+        </div>
       </div>
     </main>
   );

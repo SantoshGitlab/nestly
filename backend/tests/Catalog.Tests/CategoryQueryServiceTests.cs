@@ -55,6 +55,92 @@ public sealed class CategoryQueryServiceTests : IClassFixture<TestDatabase>
         result.Error.Code.Should().Be("Catalog.CityNotFound");
     }
 
+    /// <summary>
+    /// Bidirectional to the "add locations" work: a category mapped to the
+    /// city is still only shown for a specific pincode if one of its
+    /// services actually reaches that pincode (SRS 11.1.3) - city mapping
+    /// alone is not enough once an area is picked.
+    /// </summary>
+    [Fact]
+    public async Task Listing_narrowed_to_a_pincode_excludes_a_category_with_no_service_reaching_it()
+    {
+        var state = new State(Guid.NewGuid(), "Rajasthan", "RJ" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Jaipur");
+        var reachablePincode = new Pincode(Guid.NewGuid(), city.Id, "302017");
+        var unreachablePincode = new Pincode(Guid.NewGuid(), city.Id, "302020");
+
+        var reachableCategory = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+        var unreachableCategory = new Category(Guid.NewGuid(), "Painting", "painting-" + Guid.NewGuid(), "desc");
+        var reachableService = new Service(Guid.NewGuid(), reachableCategory.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 999m);
+        var unreachableService = new Service(Guid.NewGuid(), unreachableCategory.Id, "Paint Job", "paint-job-" + Guid.NewGuid(), "desc", 1999m);
+
+        using (var context = _db.CreateContext())
+        {
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.Pincodes.AddRange(reachablePincode, unreachablePincode);
+            context.Add(reachableCategory);
+            context.Add(unreachableCategory);
+            context.Add(reachableService);
+            context.Add(unreachableService);
+            context.CategoryCityMappings.Add(new CategoryCityMapping(Guid.NewGuid(), reachableCategory.Id, city.Id));
+            context.CategoryCityMappings.Add(new CategoryCityMapping(Guid.NewGuid(), unreachableCategory.Id, city.Id));
+            context.ServicePincodeMappings.Add(new ServicePincodeMapping(Guid.NewGuid(), reachableService.Id, reachablePincode.Id));
+            // unreachableService has no mapping to either pincode at all.
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).ListServiceableInCityAsync(city.Id, reachablePincode.Id);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(c => c.Id == reachableCategory.Id);
+    }
+
+    [Fact]
+    public async Task Listing_with_no_pincode_returns_every_city_mapped_category_regardless_of_area_reach()
+    {
+        var state = new State(Guid.NewGuid(), "Rajasthan", "RJ" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Jaipur");
+        var category = new Category(Guid.NewGuid(), "Painting", "painting-" + Guid.NewGuid(), "desc");
+        // No service, no ServicePincodeMapping at all - purely city-mapped.
+
+        using (var context = _db.CreateContext())
+        {
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.Add(category);
+            context.CategoryCityMappings.Add(new CategoryCityMapping(Guid.NewGuid(), category.Id, city.Id));
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).ListServiceableInCityAsync(city.Id);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().ContainSingle(c => c.Id == category.Id);
+    }
+
+    [Fact]
+    public async Task Listing_for_an_unknown_pincode_returns_not_found()
+    {
+        var state = new State(Guid.NewGuid(), "Rajasthan", "RJ" + Guid.NewGuid().ToString("N")[..6]);
+        var city = new City(Guid.NewGuid(), state.Id, "Jaipur");
+
+        using (var context = _db.CreateContext())
+        {
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.SaveChanges();
+        }
+
+        using var readContext = _db.CreateContext();
+        var result = await BuildService(readContext).ListServiceableInCityAsync(city.Id, Guid.NewGuid());
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Catalog.PincodeNotFound");
+    }
+
     [Fact]
     public async Task Detail_includes_active_services_with_their_active_addons_only()
     {

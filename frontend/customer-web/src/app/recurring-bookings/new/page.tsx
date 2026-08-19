@@ -6,12 +6,14 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
 import {
+  BannerBreadcrumb,
   FrequencyPicker,
   STICKY_BAR_SPACER,
   ScreenSkeleton,
   StickyActionBar,
   inr,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SlotPicker } from "@/components/SlotPicker";
 import {
@@ -22,7 +24,6 @@ import {
   EmptyState,
   Field,
   LinkButton,
-  PageHeading,
   Select,
   Skeleton,
   cx,
@@ -55,7 +56,14 @@ import type {
  */
 export default function NewRecurringBookingPlanPage() {
   return (
-    <Suspense fallback={<ScreenSkeleton cards={4} />}>
+    <Suspense
+      fallback={
+        <main className="flex w-full flex-col">
+          <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+          <ScreenSkeleton cards={4} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+        </main>
+      }
+    >
       <RequireAuth>
         <NewRecurringBookingPlanScreen />
       </RequireAuth>
@@ -173,7 +181,7 @@ function NewRecurringBookingPlanScreen() {
 
   if (!serviceSlug) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <EmptyState
           title="No service selected"
           description="Pick the service you'd like on a repeating schedule."
@@ -184,12 +192,17 @@ function NewRecurringBookingPlanScreen() {
   }
 
   if (serviceQuery.isPending) {
-    return <ScreenSkeleton cards={4} className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10" />;
+    return (
+      <main className="flex w-full flex-col">
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" aria-hidden />
+        <ScreenSkeleton cards={4} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (serviceQuery.isError || !service) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <Alert
           tone="error"
           title="Couldn't load this service"
@@ -212,14 +225,27 @@ function NewRecurringBookingPlanScreen() {
       : DAY_OF_WEEK_LABELS[anchorDate.getDay()];
 
   return (
-    <main
-      className={cx(
-        "mx-auto flex w-full max-w-3xl animate-rise flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10",
-        STICKY_BAR_SPACER,
-      )}
-    >
-      <PageHeading title="Set up a recurring booking" subtitle={service.name} />
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
+        title="Set up a recurring booking"
+        description={service.name}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Recurring bookings", href: "/recurring-bookings" },
+              { label: "Set up a plan" },
+            ]}
+          />
+        }
+      />
 
+      <div
+        className={cx(
+          "mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-10 sm:px-6 sm:py-14",
+          STICKY_BAR_SPACER,
+        )}
+      >
       <Card title="Service address" description="Every visit in this plan goes to this address.">
         {addressesQuery.isPending ? (
           <Skeleton className="h-10 rounded-lg" />
@@ -374,6 +400,7 @@ function NewRecurringBookingPlanScreen() {
           </Button>
         </div>
       </StickyActionBar>
+      </div>
     </main>
   );
 }

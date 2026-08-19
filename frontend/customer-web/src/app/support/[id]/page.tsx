@@ -8,12 +8,14 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ChatWidget } from "@/components/ChatWidget";
 import {
+  BannerBreadcrumb,
   DetailList,
   DetailRow,
   ScreenSkeleton,
   formatInstant,
   supportStatusTone,
 } from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import {
   Alert,
@@ -21,7 +23,6 @@ import {
   Button,
   Card,
   Divider,
-  PageHeading,
   Textarea,
   cx,
 } from "@/components/ui";
@@ -59,13 +60,16 @@ function SupportTicketDetailScreen() {
 
   if (query.isPending) {
     return (
-      <ScreenSkeleton cards={3} className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12" />
+      <main className="flex w-full flex-col" aria-hidden>
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" />
+        <ScreenSkeleton cards={3} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
     );
   }
 
   if (query.isError) {
     return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6">
         <Alert
           tone="error"
           title="Couldn't load this ticket"
@@ -84,13 +88,19 @@ function SupportTicketDetailScreen() {
   const ticket = query.data;
 
   return (
-    <main className="mx-auto w-full max-w-3xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title={ticket.subject}
-        subtitle={`Ticket ID: ${ticket.id}`}
-        actions={<Badge tone={supportStatusTone(ticket.status)}>{statusLabel(ticket.status)}</Badge>}
+        description={`Ticket ID: ${ticket.id}`}
+        badge={<Badge tone={supportStatusTone(ticket.status)}>{statusLabel(ticket.status)}</Badge>}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[{ label: "Home", href: "/" }, { label: "Support tickets", href: "/support" }, { label: ticket.subject }]}
+          />
+        }
       />
 
+      <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="flex flex-col gap-6">
         {ticket.resolutionSummary ? (
           <Alert tone="success" title="Resolution">
@@ -147,6 +157,7 @@ function SupportTicketDetailScreen() {
         >
           Back to tickets
         </Link>
+      </div>
       </div>
     </main>
   );

@@ -1,6 +1,7 @@
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Coupons;
+using Nestly.Application.CustomerRatings;
 using Nestly.Application.Customers;
 using Nestly.Application.Support;
 using Nestly.Application.Wallet;
@@ -25,6 +26,10 @@ public class CustomerManagementService : ICustomerManagementService
     private readonly ICouponRepository _couponRepository;
     private readonly ISupportTicketRepository _supportTicketRepository;
     private readonly ICustomerNoteRepository _noteRepository;
+    private readonly ICustomerRatingRepository _customerRatingRepository;
+
+    /// <summary>Recent ratings shown on the Customer 360 view - a risk signal, not a full history, same cap rationale as ReviewsSummary's 5-most-recent on the service page.</summary>
+    private const int RecentRatingsLimit = 10;
 
     private static readonly IReadOnlyList<BookingStatus> AllBookingStatuses = Enum.GetValues<BookingStatus>();
 
@@ -36,7 +41,8 @@ public class CustomerManagementService : ICustomerManagementService
         ICouponRedemptionRepository couponRedemptionRepository,
         ICouponRepository couponRepository,
         ISupportTicketRepository supportTicketRepository,
-        ICustomerNoteRepository noteRepository)
+        ICustomerNoteRepository noteRepository,
+        ICustomerRatingRepository customerRatingRepository)
     {
         _customerRepository = customerRepository;
         _addressRepository = addressRepository;
@@ -46,6 +52,7 @@ public class CustomerManagementService : ICustomerManagementService
         _couponRepository = couponRepository;
         _supportTicketRepository = supportTicketRepository;
         _noteRepository = noteRepository;
+        _customerRatingRepository = customerRatingRepository;
     }
 
     public async Task<Result<CustomerSearchResponse>> SearchAsync(CustomerSearchRequest request)
@@ -155,6 +162,8 @@ public class CustomerManagementService : ICustomerManagementService
         var redemptions = await _couponRedemptionRepository.ListByCustomerAsync(customer.Id);
         var supportTickets = await _supportTicketRepository.ListByCustomerAsync(customer.Id);
         var notes = await _noteRepository.ListByCustomerAsync(customer.Id);
+        var ratingSummary = await _customerRatingRepository.GetSummaryForCustomerAsync(customer.Id);
+        var recentRatings = await _customerRatingRepository.ListRecentForCustomerAsync(customer.Id, RecentRatingsLimit);
 
         decimal walletBalance = walletEntries.Count > 0 ? walletEntries[0].BalanceAfter : 0m;
 
@@ -195,6 +204,7 @@ public class CustomerManagementService : ICustomerManagementService
             coupons,
             supportTickets.Select(t => new CustomerSupportTicketResponse(
                 t.Id, t.Category, t.Priority, t.Subject, t.Status, t.CreatedAtUtc)).ToList(),
-            notes.Select(n => new CustomerNoteResponse(n.Id, n.AuthorAdminUserId, n.Note, n.CreatedAtUtc)).ToList());
+            notes.Select(n => new CustomerNoteResponse(n.Id, n.AuthorAdminUserId, n.Note, n.CreatedAtUtc)).ToList(),
+            new CustomerProviderRatingsResponse(ratingSummary?.AverageRating, ratingSummary?.RatingCount ?? 0, recentRatings));
     }
 }

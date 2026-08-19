@@ -164,7 +164,9 @@ public sealed class AmcServiceTests : IClassFixture<TestDatabase>
             new CommissionService(Options.Create(new CommissionOptions())),
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
-        var paymentService = new PaymentService(paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService);
+        var paymentService = new PaymentService(
+            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
+            new AlwaysEligibleProviderSearchStub());
 
         var order = await paymentService.CreateOrderAsync(customerId, new CreatePaymentOrderRequest(bookingId, null));
         order.IsSuccess.Should().BeTrue();

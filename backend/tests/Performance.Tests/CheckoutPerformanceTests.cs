@@ -92,7 +92,28 @@ public sealed class CheckoutPerformanceTests : IClassFixture<PerfTestDatabase>
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
-        return new PaymentService(paymentRepository, bookingRepository, gateway, simulator, webhookService);
+        return new PaymentService(
+            paymentRepository, bookingRepository, gateway, simulator, webhookService, new AlwaysEligibleProviderSearchStub());
+    }
+
+    /// <summary>
+    /// Always reports exactly one eligible provider - keeps this suite
+    /// measuring what its doc comment says it measures (booking-creation-
+    /// through-payment-order throughput), not provider-matching query cost,
+    /// which is unrelated and would otherwise dominate the numbers. See
+    /// Catalog.Tests' identical stub for the full rationale; duplicated here
+    /// because Performance.Tests does not reference that project.
+    /// </summary>
+    private sealed class AlwaysEligibleProviderSearchStub : Nestly.Application.ProviderManagement.IEligibleProviderSearchService
+    {
+        public async IAsyncEnumerable<Nestly.Application.ProviderManagement.ProviderMatchCandidate> FindEligibleAsync(
+            Guid bookingId,
+            IReadOnlyCollection<Guid>? excludeProviderIds = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new Nestly.Application.ProviderManagement.ProviderMatchCandidate(Guid.NewGuid(), null);
+        }
     }
 
     private sealed record CustomerFixture(Customer Customer, CustomerAddress Address, Guid ServiceId, Guid CityId, Guid LocalityId, Guid SlotWindowId, DateOnly Date);

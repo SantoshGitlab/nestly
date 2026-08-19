@@ -39,6 +39,16 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Expired]: "Expired",
 };
 
+/** Same amber rating convention as the reviews moderation screen's StarRating. */
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <span aria-label={`${rating} out of 5 stars`} className="nums text-accent-500">
+      {"★".repeat(rating)}
+      <span className="text-fg-subtle">{"★".repeat(Math.max(0, 5 - rating))}</span>
+    </span>
+  );
+}
+
 const SUPPORT_STATUS_LABELS: Record<SupportTicketStatus, string> = {
   [SupportTicketStatus.Open]: "Open",
   [SupportTicketStatus.InProgress]: "In Progress",
@@ -209,6 +219,39 @@ export default function CustomerDetailPage() {
             )}
           </div>
         ) : null}
+      </Card>
+
+      <Card
+        title="Provider ratings"
+        description="Private feedback providers have left about this customer - never shown to the customer."
+      >
+        {customer.providerRatings.recent.length === 0 ? (
+          <EmptyState title="No ratings yet" description="Providers rate customers after completing a job." />
+        ) : (
+          <>
+            <div className="mb-4 flex items-center gap-3">
+              <StarRating rating={Math.round(customer.providerRatings.averageRating ?? 0)} />
+              <span className="nums text-sm font-medium text-fg">
+                {customer.providerRatings.averageRating?.toFixed(1)} average
+              </span>
+              <span className="nums text-sm text-fg-subtle">
+                ({customer.providerRatings.ratingCount} rating{customer.providerRatings.ratingCount === 1 ? "" : "s"})
+              </span>
+            </div>
+            <ul className="flex flex-col gap-2 text-sm">
+              {customer.providerRatings.recent.map((rating) => (
+                <li key={rating.id} className="rounded-xl border border-line p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <StarRating rating={rating.rating} />
+                    <span className="nums text-xs text-fg-subtle">{formatDate(rating.createdAtUtc)}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-fg-subtle">by {rating.providerDisplayName}</p>
+                  {rating.note ? <p className="mt-1.5 text-fg">{rating.note}</p> : null}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </Card>
 
       <Card title="Addresses" description="SRS 12.4.2">

@@ -1,3 +1,4 @@
+using Nestly.Application.CustomerRatings;
 using Nestly.Domain;
 
 namespace Nestly.Application.Customers;
@@ -127,7 +128,20 @@ public sealed record CustomerDetailResponse(
     IReadOnlyList<CustomerWalletEntryResponse> WalletEntries,
     IReadOnlyList<CustomerCouponUsageResponse> Coupons,
     IReadOnlyList<CustomerSupportTicketResponse> SupportTickets,
-    IReadOnlyList<CustomerNoteResponse> Notes);
+    IReadOnlyList<CustomerNoteResponse> Notes,
+    CustomerProviderRatingsResponse ProviderRatings);
+
+/// <summary>
+/// Bidirectional reviews: the ratings providers have left about this
+/// customer, admin-only per product decision (never shown to the customer).
+/// <see cref="AverageRating"/>/<see cref="RatingCount"/> are null/0 when the
+/// customer has no ratings yet, same "no rating" vs "rated 0" distinction as
+/// <c>ProviderRatingSummary</c> on the provider side.
+/// </summary>
+public sealed record CustomerProviderRatingsResponse(
+    double? AverageRating,
+    int RatingCount,
+    IReadOnlyList<CustomerRatingRow> Recent);
 
 /// <summary>Block a customer's account (SRS 12.4.3, task 101c). A reason is required for the audit trail.</summary>
 public sealed record BlockCustomerRequest(string Reason);

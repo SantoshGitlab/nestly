@@ -123,6 +123,19 @@ export default function ProvidersPage() {
     setPage(1);
   };
 
+  /**
+   * Closing without submitting (Cancel, the Modal's own X/Escape/backdrop) has
+   * to clear `createForm`/`createError` here, not only in the mutation's
+   * `onSuccess` - otherwise the next "New provider" open resumes mid-edit on
+   * whatever was typed (or the last error) last time, since `useState`'s
+   * initial value only applies once, on mount.
+   */
+  const closeCreateForm = () => {
+    setShowCreateForm(false);
+    setCreateForm(EMPTY_CREATE);
+    setCreateError(null);
+  };
+
   const createDisabled =
     !createForm.legalName.trim() || !createForm.displayName.trim() || !createForm.phone.trim();
 
@@ -255,12 +268,12 @@ export default function ProvidersPage() {
 
       <Modal
         open={showCreateForm}
-        onClose={() => setShowCreateForm(false)}
+        onClose={closeCreateForm}
         title="Create provider"
         description="Provider type is always Individual in v1 (PROVIDER.md OPEN DECISIONS #2)."
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowCreateForm(false)} disabled={createMutation.isPending}>
+            <Button variant="secondary" onClick={closeCreateForm} disabled={createMutation.isPending}>
               Cancel
             </Button>
             <Button

@@ -191,3 +191,27 @@ export interface RecordProviderLocationResponse {
   pingId: string | null;
   nextAcceptedAfterUtc: string;
 }
+
+/**
+ * Bidirectional reviews - the provider's private rating of the customer.
+ * Mirrors Nestly.Application.CustomerRatings.CustomerRatingContracts.cs.
+ * Never shown to the customer (admin-only, on the Customer 360 view).
+ */
+export interface CustomerRatingEligibility {
+  isEligible: boolean;
+  ineligibilityReason: string | null;
+}
+
+export interface SubmitCustomerRatingRequest {
+  rating: number;
+  note: string | null;
+}
+
+export interface CustomerRatingResponse {
+  id: string;
+  bookingId: string;
+  customerId: string;
+  rating: number;
+  note: string | null;
+  createdAtUtc: string;
+}

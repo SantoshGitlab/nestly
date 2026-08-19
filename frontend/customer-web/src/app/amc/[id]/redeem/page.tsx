@@ -6,7 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { CitySelector } from "@/components/CitySelector";
 import { LocalitySelector } from "@/components/LocalitySelector";
 import { RequireAuth } from "@/components/RequireAuth";
-import { STICKY_BAR_SPACER, ScreenSkeleton, StickyActionBar } from "@/components/patterns";
+import {
+  BannerBreadcrumb,
+  STICKY_BAR_SPACER,
+  ScreenSkeleton,
+  StickyActionBar,
+} from "@/components/patterns";
+import { PageBanner } from "@/components/PageBanner";
 import { SlotPicker } from "@/components/SlotPicker";
 import {
   Alert,
@@ -14,7 +20,6 @@ import {
   Card,
   EmptyState,
   LinkButton,
-  PageHeading,
   Select,
   Skeleton,
   cx,
@@ -143,12 +148,17 @@ function RedeemScreen() {
   };
 
   if (contractQuery.isPending) {
-    return <ScreenSkeleton cards={3} className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12" />;
+    return (
+      <main className="flex w-full flex-col" aria-hidden>
+        <div className="listing-banner h-[13.5rem] w-full sm:h-[15.5rem]" />
+        <ScreenSkeleton cards={3} className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14" />
+      </main>
+    );
   }
 
   if (contractQuery.isError) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6">
         <Alert
           tone="error"
           title="Couldn't load this contract"
@@ -168,7 +178,7 @@ function RedeemScreen() {
 
   if (!contract.canRedeemNow) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6">
         <EmptyState
           title="This contract can't redeem a visit right now"
           description="It may have run out of visits, expired, or been cancelled."
@@ -192,12 +202,23 @@ function RedeemScreen() {
     !!city && !!locality && !!selectedServiceId && !!selectedAddressId && !!selectedSlotWindowId;
 
   return (
-    <main className={cx("mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", STICKY_BAR_SPACER)}>
-      <PageHeading
+    <main className="flex w-full flex-col animate-rise">
+      <PageBanner
         title="Redeem a visit"
-        subtitle={`${contract.assetLabel} — ${contract.visitsRemaining} of ${contract.visitsIncluded} visits left`}
+        description={`${contract.assetLabel} — ${contract.visitsRemaining} of ${contract.visitsIncluded} visits left`}
+        breadcrumb={
+          <BannerBreadcrumb
+            items={[
+              { label: "Home", href: "/" },
+              { label: "My AMC contracts", href: "/amc" },
+              { label: contract.assetLabel, href: `/amc/${contractId}` },
+              { label: "Redeem a visit" },
+            ]}
+          />
+        }
       />
 
+      <div className={cx("mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14", STICKY_BAR_SPACER)}>
       <div className="flex flex-col gap-6">
         <Card title="Service" description="Which service is this visit for?">
           {categoriesQuery.isPending ? (
@@ -299,6 +320,7 @@ function RedeemScreen() {
           Confirm redemption
         </Button>
       </StickyActionBar>
+      </div>
     </main>
   );
 }
