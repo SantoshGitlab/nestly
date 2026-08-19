@@ -7,7 +7,8 @@ import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AddressForm, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
-import { Alert, Button, Card, EmptyState, LinkButton, PageHeading, Skeleton } from "@/components/ui";
+import { STICKY_BAR_SPACER } from "@/components/patterns";
+import { Alert, Button, Card, EmptyState, LinkButton, PageHeading, Skeleton, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CustomerAddress } from "@/lib/types";
 
@@ -52,7 +53,17 @@ function EditAddress() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
+    <main
+      className={cx(
+        "mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
+        // AddressForm (below) renders its submit inside a StickyActionBar
+        // whenever it's actually reached - the skeleton/error/empty branches
+        // above it never mount that bar, but the constant spacer here is
+        // harmless padding on those, same trade-off STICKY_BAR_SPACER's own
+        // doc comment describes.
+        STICKY_BAR_SPACER,
+      )}
+    >
       <PageHeading title="Edit address" />
 
       {query.isPending ? (

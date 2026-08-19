@@ -7,7 +7,8 @@ import { Suspense, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AddressForm, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
-import { Card, PageHeading } from "@/components/ui";
+import { STICKY_BAR_SPACER } from "@/components/patterns";
+import { Card, PageHeading, cx } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { safeRedirectTarget } from "@/lib/auth";
 import type { CustomerAddress } from "@/lib/types";
@@ -57,7 +58,12 @@ function NewAddress() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12">
+    <main
+      className={cx(
+        "mx-auto w-full max-w-2xl animate-rise px-4 py-8 sm:px-6 sm:py-12",
+        STICKY_BAR_SPACER,
+      )}
+    >
       <PageHeading
         title="Add an address"
         subtitle="Your first address automatically becomes your default."

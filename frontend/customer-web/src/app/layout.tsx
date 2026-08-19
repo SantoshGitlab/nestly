@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Jost } from "next/font/google";
+import { BottomTabBar } from "@/components/BottomTabBar";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ToastProvider } from "@/components/ui";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
@@ -30,6 +32,11 @@ export const metadata: Metadata = {
   },
   description:
     "Cleaning, repairs, salon and more — vetted professionals, upfront pricing, and slots that fit your day.",
+  // Add-to-Home-Screen / standalone install (task #354). See
+  // public/manifest.json's own comment-equivalent (JSON has none) for why
+  // its icon is a hand-authored SVG rather than the usual PNG set - no
+  // rasterizing tool was available to generate one from this environment.
+  manifest: "/manifest.json",
 };
 
 /** Paints the browser chrome to match the theme on each side of the switch. */
@@ -64,16 +71,22 @@ export default function RootLayout({
               Skip to content
             </a>
             <SiteHeader />
+            <OfflineBanner />
             {/* Skip-link target. A wrapper rather than the pages' own <main>
                 elements, so the anchor works without editing every route.
                 `pt-[4.5rem]` compensates for `SiteHeader` now being
                 permanently `fixed` (h-[4.5rem]) rather than `sticky` — every
                 page keeps the exact spacing it had before; only the home
                 hero cancels this out (`-mt-[4.5rem]` in HeroBanner.tsx) to
-                sit flush under the header's transparent-over-photo state. */}
-            <div id="main" className="pt-[4.5rem]">
+                sit flush under the header's transparent-over-photo state.
+                `pb-20` clears `BottomTabBar`, fixed below `md` on every route
+                that doesn't already carry its own much larger
+                `STICKY_BAR_SPACER` for a `StickyActionBar` — same spacer
+                relationship as that constant documents, one level up. */}
+            <div id="main" className="pt-[4.5rem] pb-20 md:pb-0">
               {children}
             </div>
+            <BottomTabBar />
           </ToastProvider>
         </Providers>
       </body>

@@ -51,6 +51,12 @@ export function ServiceCard({
             <img
               src={coverImageUrl}
               alt=""
+              // These render dozens-deep in a catalog grid, almost all below
+              // the fold - eager-loading every one at once is exactly the
+              // mobile-network cost docs/FRONTEND.md's RESPONSIVE DESIGN
+              // policy calls out.
+              loading="lazy"
+              decoding="async"
               onError={() => setImageFailed(true)}
               className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />

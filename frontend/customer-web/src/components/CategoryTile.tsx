@@ -38,6 +38,11 @@ export function CategoryTile({ category }: { category: CategorySummary }) {
             <img
               src={category.bannerUrl!}
               alt=""
+              // Same reasoning as ServiceCard: most of a category grid sits
+              // below the fold, so only the ones actually scrolled into view
+              // should cost a request.
+              loading="lazy"
+              decoding="async"
               onError={() => setImageFailed(true)}
               className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />
