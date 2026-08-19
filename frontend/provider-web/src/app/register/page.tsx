@@ -164,7 +164,15 @@ export default function ProviderRegisterPage() {
         {infoMessage && !error ? <Alert tone="info">{infoMessage}</Alert> : null}
 
         {step === "mobile" ? (
-          <form onSubmit={requestOtp} className="flex flex-col gap-4" noValidate>
+          <form method="post" onSubmit={requestOtp} className="flex flex-col gap-4" noValidate>
+            {/* method="post" is defence in depth, not routing: react-hook-form's
+                handleSubmit preventDefaults every real submit, so this attribute never
+                takes effect once the page is interactive. It matters for a submit that
+                lands *before* hydration (slow JS, a failed chunk, an extension), which
+                falls back to the browser's native behaviour - and a form with no method
+                defaults to GET, which would put the OTP and chosen password into the URL, the
+                browser history, the server access log and any outbound Referer header.
+                POST keeps them in a request body. */}
             <Field
               label="Mobile number"
               type="tel"
@@ -180,7 +188,7 @@ export default function ProviderRegisterPage() {
             </Button>
           </form>
         ) : (
-          <form onSubmit={submitRegistration} className="flex flex-col gap-5" noValidate>
+          <form method="post" onSubmit={submitRegistration} className="flex flex-col gap-5" noValidate>
             <OtpInput
               autoFocus
               error={detailsForm.formState.errors.otpCode?.message}

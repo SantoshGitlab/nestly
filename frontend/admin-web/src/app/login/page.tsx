@@ -65,7 +65,15 @@ export default function AdminLoginPage() {
       subtitle="Use your admin email and password."
       footer="Authorised personnel only. Activity on this panel is audited."
     >
-      <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      <form method="post" onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        {/* method="post" is defence in depth, not routing: react-hook-form's
+            handleSubmit preventDefaults every real submit, so this attribute never
+            takes effect once the page is interactive. It matters for a submit that
+            lands *before* hydration (slow JS, a failed chunk, an extension), which
+            falls back to the browser's native behaviour - and a form with no method
+            defaults to GET, which would put the admin password into the URL, the
+            browser history, the server access log and any outbound Referer header.
+            POST keeps them in a request body. */}
         {error ? <Alert>{error}</Alert> : null}
         <Field
           label="Email"
