@@ -73,15 +73,28 @@ export function isNotImplemented(error: unknown): boolean {
 /**
  * Login-specific error message: checks the signals RFC 7807 + the codebase's
  * Module.Reason convention (docs/API.md) make available - HTTP status (401
- * invalid/expired OTP, 429 throttled) - rather than asserting one exact code
- * string that provider-api's controller may not use yet.
+ * invalid/expired OTP or bad credentials, 429 throttled) - rather than
+ * asserting one exact code string that provider-api's controller may not use
+ * yet.
+ *
+ * `context` distinguishes the two sign-in modes (task 372's OTP/password
+ * toggle) because a 401 means something different in each: an incorrect/
+ * expired code for OTP, versus a wrong email or password for the password
+ * flow. Getting this wrong (e.g. telling a password-flow user their "code"
+ * expired) is confusing even though both cases are technically a 401. The
+ * password branch defers to `describeError` instead of hardcoding text
+ * because `ProviderLoginService.LoginWithPasswordAsync` already returns a
+ * user-facing "Invalid email or password." detail for that case.
  */
-export function describeLoginError(error: unknown): string {
+export function describeLoginError(
+  error: unknown,
+  context: "otp" | "password" = "otp",
+): string {
   if (error instanceof ApiError) {
     if (error.status === 429) {
       return "Too many attempts. Please wait a few minutes and try again.";
     }
-    if (error.status === 401) {
+    if (error.status === 401 && context === "otp") {
       return "That code is incorrect or has expired. Request a new one and try again.";
     }
   }

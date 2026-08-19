@@ -285,7 +285,7 @@ function PasswordLogin() {
       storeSession(session);
       router.push("/jobs");
     } catch (err) {
-      setError(describeLoginError(err));
+      setError(describeLoginError(err, "password"));
     }
   });
 

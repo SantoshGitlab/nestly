@@ -121,9 +121,24 @@ export const recordProviderLocation = (jobId: string, request: RecordProviderLoc
 export const getCustomerRatingEligibility = (jobId: string) =>
   apiFetch<CustomerRatingEligibility>(`${JOBS_BASE}/${jobId}/customer-rating/eligibility`, { authenticated: true });
 
-/** The rating already submitted for this job, if any - undefined (204) means none yet. */
-export const getCustomerRating = (jobId: string) =>
-  apiFetch<CustomerRatingResponse | undefined>(`${JOBS_BASE}/${jobId}/customer-rating`, { authenticated: true });
+/**
+ * The rating already submitted for this job, if any - a 204 means none yet.
+ * Normalises to `null` (same as `getCompletionVerification` above) rather
+ * than passing `undefined` through: React Query v5 treats a query function
+ * resolving to `undefined` as a contract violation (it reserves `undefined`
+ * to mean "no data fetched yet") and logs a console error every time this
+ * fires for a completed-but-unrated job - the common case right after a job
+ * finishes.
+ */
+export const getCustomerRating = async (
+  jobId: string,
+): Promise<CustomerRatingResponse | null> => {
+  const result = await apiFetch<CustomerRatingResponse | undefined>(
+    `${JOBS_BASE}/${jobId}/customer-rating`,
+    { authenticated: true },
+  );
+  return result ?? null;
+};
 
 export const submitCustomerRating = (jobId: string, request: SubmitCustomerRatingRequest) =>
   apiFetch<CustomerRatingResponse>(`${JOBS_BASE}/${jobId}/customer-rating`, {
