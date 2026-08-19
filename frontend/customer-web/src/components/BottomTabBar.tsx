@@ -61,8 +61,11 @@ export function BottomTabBar() {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
+    // Distinct name from SiteHeader's own `<nav aria-label="Primary">` -
+    // two landmarks sharing one name are indistinguishable to a screen
+    // reader's landmark list.
     <nav
-      aria-label="Primary"
+      aria-label="Bottom navigation"
       className={cx(
         "fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/95 backdrop-blur-md md:hidden",
         "supports-[padding:max(0px)]:pb-[max(0px,env(safe-area-inset-bottom))]",

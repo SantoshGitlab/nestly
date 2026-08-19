@@ -149,7 +149,6 @@ export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(function Otp
         role="group"
         aria-labelledby={`${groupId}-label`}
         aria-describedby={describedBy}
-        aria-invalid={error ? true : undefined}
         className="flex flex-wrap gap-2"
       >
         {Array.from({ length }, (_, index) => (
