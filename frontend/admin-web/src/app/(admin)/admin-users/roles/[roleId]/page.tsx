@@ -73,13 +73,19 @@ function buildPermissionColumns(
       header: "Read",
       cell: (row) => (
         <Checkbox
-          label="Read"
-          // The visible label is one word in all 30 checkboxes, which in the
-          // `<table>` layout is disambiguated by the row header and in the
-          // card layout below `lg` is not - there the module is a sibling
-          // `<dd>`, not a header. Naming each control for its own module
-          // keeps them distinguishable in a screen reader's form-controls
-          // list either way, and still contains the visible text (WCAG 2.5.3).
+          // No visible label text on purpose. Both layouts already name this
+          // control beside it - the "Read" column header in the `<table>`, the
+          // "READ" <dt> in the card DataTable collapses to below `lg` - so a
+          // word on the checkbox itself printed "Read" twice on every one of
+          // the 44 rows once this screen moved onto the shared component. A
+          // bare checkbox under a labelled header is the conventional
+          // permission-matrix shape anyway.
+          label=""
+          // The accessible name has to carry what the visible layout carries
+          // positionally, and it cannot be just "Read": that would leave 22
+          // identically-named controls in a screen reader's form-controls
+          // list, disambiguated only by a row header the card layout does not
+          // have (there the module is a sibling <dd>, not a header).
           aria-label={`Read ${row.module}`}
           checked={selectedCodes.has(row.readCode)}
           disabled={!canWrite || selectedCodes.has(row.writeCode)}
@@ -92,7 +98,7 @@ function buildPermissionColumns(
       header: "Write",
       cell: (row) => (
         <Checkbox
-          label="Write"
+          label=""
           aria-label={`Write ${row.module}`}
           checked={selectedCodes.has(row.writeCode)}
           disabled={!canWrite}
