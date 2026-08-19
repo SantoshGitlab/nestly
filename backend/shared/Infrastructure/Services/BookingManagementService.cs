@@ -52,6 +52,30 @@ public class BookingManagementService : IBookingManagementService
         BookingStatus.Refunded,
     };
 
+    /// <summary>
+    /// Every status that presupposes a provider is actually on the job.
+    /// <see cref="BookingLifecycle.IsValidTransition"/> only checks the
+    /// state-machine shape - it has no idea whether a real provider exists -
+    /// and <see cref="Booking.TransitionTo"/> deliberately never touches
+    /// <see cref="Booking.AssignedProviderId"/> (see that method's own doc
+    /// comment). Left unguarded, this generic endpoint could move a booking
+    /// straight to "Professional Assigned" (and from there to InProgress,
+    /// even Completed) with no <c>BookingProviderAssignment</c> row and no
+    /// provider anywhere in the city - a real gap, not a hypothetical one,
+    /// since <c>Assigned</c> was never in <see cref="DisallowedGenericTransitionTargets"/>
+    /// and admin-web's generic status dropdown lists it right alongside every
+    /// other status. Reaching any of these must go through
+    /// <c>IBookingProviderAssignmentService.AssignAsync</c> first, which is
+    /// the one place that actually requires and records a real provider.
+    /// </summary>
+    private static readonly IReadOnlyCollection<BookingStatus> RequiresAssignedProviderTargets = new HashSet<BookingStatus>
+    {
+        BookingStatus.Assigned,
+        BookingStatus.ProviderEnRoute,
+        BookingStatus.ProviderArrived,
+        BookingStatus.InProgress,
+    };
+
     private readonly IBookingRepository _bookingRepository;
     private readonly IPaymentTransactionRepository _paymentRepository;
     private readonly ICancellationRepository _cancellationRepository;
@@ -145,6 +169,13 @@ public class BookingManagementService : IBookingManagementService
             return Error.Business(
                 "Booking.InvalidTransition",
                 $"A booking in status '{booking.Status}' cannot be moved to '{request.NewStatus}'.");
+        }
+
+        if (RequiresAssignedProviderTargets.Contains(request.NewStatus) && booking.AssignedProviderId is null)
+        {
+            return Error.Business(
+                "Booking.NoProviderAssigned",
+                $"'{request.NewStatus}' requires a provider already assigned to this booking. Use the assign-provider action first.");
         }
 
         if (request.NewStatus == BookingStatus.Completed)
