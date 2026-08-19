@@ -111,8 +111,16 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total, Guid LocalityId, Guid NewSlotWindowId, DateOnly NewSlotDate, DateTime SlotStartUtc);
 
-    /// <summary>A freshly created, fully paid booking (Confirmed) with its slot far in the future, plus a second slot window available on a later date to reschedule into.</summary>
-    private async Task<Fixture> SeedPaidBookingAsync(IPaymentGateway gateway, decimal servicePrice = 1000m)
+    /// <summary>
+    /// A freshly created, fully paid booking (Confirmed) with its slot far in
+    /// the future, plus a second slot window available on a later date to
+    /// reschedule into. <paramref name="walletCreditToApply"/> funds part (or
+    /// all) of it from the customer's wallet instead of the gateway; when it
+    /// covers the whole price there is no gateway round trip at all, because
+    /// task 331 confirms such a booking without a payment.
+    /// </summary>
+    private async Task<Fixture> SeedPaidBookingAsync(
+        IPaymentGateway gateway, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
         var newDate = futureDate.AddDays(2);
@@ -157,13 +165,31 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
             context.SlotWindowRules.Add(newRule);
             context.SaveChanges();
 
-            var request = new BookingSummaryRequest(service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, []);
+            if (walletCreditToApply > 0)
+            {
+                await new WalletService(new WalletLedgerRepository(context), context)
+                    .CreditAsync(customer.Id, walletCreditToApply, WalletSourceType.PromotionalCredit, null, "Test wallet credit");
+            }
+
+            var request = new BookingSummaryRequest(
+                service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, [],
+                ApplyWalletCredit: walletCreditToApply > 0);
             var created = await BuildBookingService(context).CreateAsync(customer.Id, request);
             created.IsSuccess.Should().BeTrue();
             bookingId = created.Value.Id;
             total = created.Value.Price.TotalPayable;
             localityId = locality.Id;
             newWindowId = newWindow.Id;
+        }
+
+        var slotStartUtcValue = futureDate.ToDateTime(TimeOnly.MinValue).Add(slotStart);
+
+        // A fully wallet-covered booking has nothing left to charge, so task
+        // 331 confirms it with no PaymentTransaction at all - there is no
+        // gateway round trip to make here.
+        if (total <= 0)
+        {
+            return new Fixture(customer, bookingId, total, localityId, newWindowId, newDate, slotStartUtcValue);
         }
 
         string gatewayOrderId;
@@ -189,8 +215,7 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
             callback.IsSuccess.Should().BeTrue();
         }
 
-        var slotStartUtc = futureDate.ToDateTime(TimeOnly.MinValue).Add(slotStart);
-        return new Fixture(customer, bookingId, total, localityId, newWindowId, newDate, slotStartUtc);
+        return new Fixture(customer, bookingId, total, localityId, newWindowId, newDate, slotStartUtcValue);
     }
 
     [Fact]
@@ -251,6 +276,78 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
         var history = await new BookingRescheduleRepository(readContext).ListByBookingAsync(fixture.BookingId);
         history.Should().HaveCount(1);
         history[0].Reason.Should().Be("Need a different day");
+    }
+
+    /// <summary>
+    /// Task 364. The late-reschedule fee is a percentage of what the booking
+    /// is funded by, and a part-wallet booking is funded from two sources: the
+    /// gateway <c>PaymentTransaction</c> and the wallet balance it consumed at
+    /// checkout. Reading the payment alone (as ResolvePayableAmountAsync did
+    /// before) charged the percentage against the gateway half only, so the
+    /// recorded fee was understated by exactly the wallet-funded share - the
+    /// same defect class task 356 fixed in CancellationService/RefundService,
+    /// and the reason both now compute their base through
+    /// <see cref="RefundAllocationCalculator"/>.
+    ///
+    /// FALSIFIABILITY: computing the fee off the gateway payment alone gives
+    /// 70 (10% of the 700 charged), not 100 (10% of the 1000 the booking
+    /// actually cost), and fails this test.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmRescheduleAsync_charges_the_late_fee_on_the_wallet_funded_share_too()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, servicePrice: 1000m, walletCreditToApply: 300m);
+        fixture.Total.Should().Be(700m, "the wallet covered 300 of the 1000 at checkout");
+
+        // 3 hours out: inside the 6-hour late-fee threshold, still outside the
+        // 2-hour hard block, so the reschedule succeeds AND carries a fee.
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddHours(-3));
+
+        using var context = _db.CreateContext();
+        var result = await BuildRescheduleService(context, timeProvider).ConfirmRescheduleAsync(
+            fixture.Customer.Id, fixture.BookingId,
+            new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Something came up"));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsLate.Should().BeTrue();
+        result.Value.FeeAmount.Should().Be(100m,
+            "the 10% late fee applies to the whole 1000 the booking was funded by - 700 through the gateway plus the 300 the wallet covered");
+
+        using var readContext = _db.CreateContext();
+        var history = await new BookingRescheduleRepository(readContext).ListByBookingAsync(fixture.BookingId);
+        history.Should().HaveCount(1);
+        history[0].FeeAmount.Should().Be(100m, "the history row records the same fee the response reported");
+        history[0].IsLate.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Task 364, the end of the same range: a booking whose wallet balance
+    /// covered the entire price has no <c>PaymentTransaction</c> at all (task
+    /// 331 confirms it without one), so reading the payment alone reported a
+    /// zero base and therefore no fee whatsoever on a booking the customer had
+    /// genuinely paid 1000 for.
+    ///
+    /// FALSIFIABILITY: the old gateway-only base gives 0 here, not 100.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmRescheduleAsync_charges_the_late_fee_on_a_fully_wallet_covered_booking()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, servicePrice: 1000m, walletCreditToApply: 1500m);
+        fixture.Total.Should().Be(0m, "the wallet covered the entire price");
+
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddHours(-3));
+
+        using var context = _db.CreateContext();
+        var result = await BuildRescheduleService(context, timeProvider).ConfirmRescheduleAsync(
+            fixture.Customer.Id, fixture.BookingId,
+            new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Something came up"));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.IsLate.Should().BeTrue();
+        result.Value.FeeAmount.Should().Be(100m,
+            "the wallet balance the booking consumed is what it was funded by, and 10% of it is the late fee");
     }
 
     [Fact]
