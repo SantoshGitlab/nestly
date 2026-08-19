@@ -166,6 +166,9 @@ function BalanceCard({
   );
 }
 
+/** Shared by the card list and the table so the two can never describe themselves differently to a screen reader. */
+const LEDGER_CAPTION = "Wallet transactions, newest first, with the running balance after each one.";
+
 function LedgerCard({
   query,
 }: {
@@ -220,51 +223,120 @@ function LedgerCard({
 
   return (
     <Card title="Transaction history" flush>
-      <Table>
-        <caption className="sr-only">
-          Wallet transactions, newest first, with the running balance after each one.
-        </caption>
-        <THead>
-          <TR>
-            <TH>Transaction</TH>
-            <TH numeric>Amount</TH>
-            <TH numeric>Balance after</TH>
-          </TR>
-        </THead>
-        <TBody>
-          {query.data.map((entry) => (
-            <LedgerRow key={entry.id} entry={entry} />
-          ))}
-        </TBody>
-      </Table>
+      {/*
+       * Task 365. Three columns of financial data is the case
+       * docs/FRONTEND.md RESPONSIVE DESIGN asks to collapse rather than let
+       * scroll sideways: `Table` confines the overflow to itself so it can
+       * never break the page, but on a 375px phone "Balance after" still ends
+       * up off-screen behind a scroll gesture nothing signals. So each entry
+       * renders twice - once as the card below, once as a table row - with
+       * exactly one visible at a time. The duplication is CSS-only: same
+       * data, same query, no second fetch.
+       *
+       * `md` (768px) rather than admin-web's `lg`: it is the breakpoint this
+       * app's own mobile/desktop split already uses (SiteHeader's menu,
+       * BottomTabBar), and customer-web is mobile-first without
+       * qualification, so the card is the primary layout here and the table
+       * is the enhancement - the reverse of the admin.
+       */}
+      {/* The caption rides on the list itself rather than as an sr-only first
+          child: a hidden <li> would be announced as a list item and inflate
+          "list, N items" by one, which the <caption> equivalent below does
+          not do. */}
+      <ul aria-label={LEDGER_CAPTION} className="divide-y divide-line md:hidden">
+        {query.data.map((entry) => (
+          <LedgerCardRow key={entry.id} entry={entry} />
+        ))}
+      </ul>
+
+      <div className="hidden md:block">
+        <Table>
+          <caption className="sr-only">{LEDGER_CAPTION}</caption>
+          <THead>
+            <TR>
+              <TH>Transaction</TH>
+              <TH numeric>Amount</TH>
+              <TH numeric>Balance after</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {query.data.map((entry) => (
+              <LedgerRow key={entry.id} entry={entry} />
+            ))}
+          </TBody>
+        </Table>
+      </div>
     </Card>
   );
 }
 
-function LedgerRow({ entry }: { entry: WalletLedgerEntryResponse }) {
+/**
+ * The signed amount, shared by both layouts so the two can never disagree
+ * about direction, sign or colour.
+ *
+ * Direction was previously carried by green/red alone, which is invisible to
+ * anyone who cannot separate the two. The sign is the primary signal, the
+ * colour reinforces it, and the word itself is there for a screen reader.
+ */
+function LedgerAmount({ entry }: { entry: WalletLedgerEntryResponse }) {
   const isCredit = entry.entryType === WalletEntryType.Credit;
 
   return (
+    <span className={cx("font-semibold", isCredit ? "text-success" : "text-danger")}>
+      <span className="sr-only">{isCredit ? "Credit " : "Debit "}</span>
+      {isCredit ? "+" : "−"}
+      {inr(entry.amount)}
+    </span>
+  );
+}
+
+/**
+ * The identity of an entry - what it was, and when. Identical in both
+ * layouts; only its surroundings differ.
+ */
+function LedgerIdentity({ entry }: { entry: WalletLedgerEntryResponse }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Badge tone={sourceTone(entry.sourceType)} className="self-start">
+        {sourceLabel(entry.sourceType)}
+      </Badge>
+      <span className="text-sm text-fg">{entry.description}</span>
+      <span className="nums text-xs text-fg-subtle">{formatInstant(entry.createdAtUtc)}</span>
+    </div>
+  );
+}
+
+/**
+ * The below-`md` card. Not a generic label:value stack: the amount is what a
+ * customer opens this screen for, so it keeps its place on the same line as
+ * the entry it belongs to, and only the running balance - the one value with
+ * no meaning without its header - carries a visible label.
+ */
+function LedgerCardRow({ entry }: { entry: WalletLedgerEntryResponse }) {
+  return (
+    <li className="flex flex-col gap-2.5 px-4 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <LedgerIdentity entry={entry} />
+        <span className="shrink-0 text-right text-sm">
+          <LedgerAmount entry={entry} />
+        </span>
+      </div>
+      <dl className="flex items-baseline justify-between gap-3 border-t border-line/60 pt-2.5 text-xs">
+        <dt className="font-medium uppercase tracking-wide text-fg-subtle">Balance after</dt>
+        <dd className="nums text-sm text-fg-muted">{inr(entry.balanceAfter)}</dd>
+      </dl>
+    </li>
+  );
+}
+
+function LedgerRow({ entry }: { entry: WalletLedgerEntryResponse }) {
+  return (
     <TR>
       <TD>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <Badge tone={sourceTone(entry.sourceType)} className="self-start">
-            {sourceLabel(entry.sourceType)}
-          </Badge>
-          <span className="text-sm text-fg">{entry.description}</span>
-          <span className="nums text-xs text-fg-subtle">{formatInstant(entry.createdAtUtc)}</span>
-        </div>
+        <LedgerIdentity entry={entry} />
       </TD>
       <TD numeric>
-        {/* Direction was previously carried by green/red alone, which is
-            invisible to anyone who cannot separate the two. The sign is the
-            primary signal, the colour reinforces it, and the word itself is
-            there for a screen reader. */}
-        <span className={cx("font-semibold", isCredit ? "text-success" : "text-danger")}>
-          <span className="sr-only">{isCredit ? "Credit " : "Debit "}</span>
-          {isCredit ? "+" : "−"}
-          {inr(entry.amount)}
-        </span>
+        <LedgerAmount entry={entry} />
       </TD>
       <TD numeric className="text-fg-muted">
         {inr(entry.balanceAfter)}
