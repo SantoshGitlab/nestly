@@ -24,6 +24,8 @@ public class AuthController : ControllerBase
     private readonly IProviderPasswordResetService _passwordResetService;
     private readonly IValidator<RequestProviderRegistrationOtpRequest> _registrationOtpValidator;
     private readonly IValidator<RegisterProviderRequest> _registerValidator;
+    private readonly IValidator<RequestProviderRegistrationEmailOtpRequest> _registrationEmailOtpValidator;
+    private readonly IValidator<RegisterProviderWithEmailRequest> _registerWithEmailValidator;
     private readonly IValidator<RequestProviderLoginOtpRequest> _loginOtpValidator;
     private readonly IValidator<LoginProviderWithOtpRequest> _loginWithOtpValidator;
     private readonly IValidator<LoginProviderWithPasswordRequest> _loginWithPasswordValidator;
@@ -38,6 +40,8 @@ public class AuthController : ControllerBase
         IProviderPasswordResetService passwordResetService,
         IValidator<RequestProviderRegistrationOtpRequest> registrationOtpValidator,
         IValidator<RegisterProviderRequest> registerValidator,
+        IValidator<RequestProviderRegistrationEmailOtpRequest> registrationEmailOtpValidator,
+        IValidator<RegisterProviderWithEmailRequest> registerWithEmailValidator,
         IValidator<RequestProviderLoginOtpRequest> loginOtpValidator,
         IValidator<LoginProviderWithOtpRequest> loginWithOtpValidator,
         IValidator<LoginProviderWithPasswordRequest> loginWithPasswordValidator,
@@ -51,6 +55,8 @@ public class AuthController : ControllerBase
         _passwordResetService = passwordResetService;
         _registrationOtpValidator = registrationOtpValidator;
         _registerValidator = registerValidator;
+        _registrationEmailOtpValidator = registrationEmailOtpValidator;
+        _registerWithEmailValidator = registerWithEmailValidator;
         _loginOtpValidator = loginOtpValidator;
         _loginWithOtpValidator = loginWithOtpValidator;
         _loginWithPasswordValidator = loginWithPasswordValidator;
@@ -92,6 +98,41 @@ public class AuthController : ControllerBase
         }
 
         var result = await _registrationService.RegisterAsync(request);
+        return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Email-first registration step 1: send an OTP to an email address instead of a mobile number.</summary>
+    [EnableRateLimiting("otp")]
+    [HttpPost("registration/email-otp")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequestRegistrationEmailOtp([FromBody] RequestProviderRegistrationEmailOtpRequest request)
+    {
+        var validation = await _registrationEmailOtpValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _registrationService.RequestEmailOtpAsync(request);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
+    /// <summary>Email-first registration step 2: complete registration once the email OTP has been verified.</summary>
+    [HttpPost("registration/email")]
+    [ProducesResponseType(typeof(ProviderSummaryResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RegisterWithEmail([FromBody] RegisterProviderWithEmailRequest request)
+    {
+        var validation = await _registerWithEmailValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _registrationService.RegisterWithEmailAsync(request);
         return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : result.ToProblemResult();
     }
 

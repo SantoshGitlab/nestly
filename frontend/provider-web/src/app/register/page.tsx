@@ -10,62 +10,53 @@ import { AuthShell, ResendRow, useResendCountdown } from "@/components/auth-ui";
 import { OtpInput } from "@/components/OtpInput";
 import { Alert, Button, CheckboxField, Field } from "@/components/ui";
 import { describeError } from "@/lib/api";
-import { registerProvider, requestRegistrationOtp } from "@/lib/auth-api";
+import { registerProviderWithEmail, requestRegistrationEmailOtp } from "@/lib/auth-api";
 
-const mobileSchema = z.object({
+const emailSchema = z.object({
+  email: z.email("Enter a valid email address"),
+});
+type EmailFormValues = z.infer<typeof emailSchema>;
+
+const detailsSchema = z.object({
+  otpCode: z
+    .string()
+    .min(4, "Enter the code you received")
+    .max(8, "Enter the code you received")
+    .regex(/^[0-9]+$/, "The code is numeric"),
+  legalName: z.string().min(1, "Legal name is required").max(200),
+  displayName: z.string().min(1, "Display name is required").max(100),
   mobile: z
     .string()
     .min(7, "Enter a valid mobile number")
     .max(15, "Enter a valid mobile number")
     .regex(/^[0-9+]+$/, "Digits only (a leading + is fine)"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  consentAccepted: z.literal(true, {
+    error: "You must accept the terms to register.",
+  }),
 });
-type MobileFormValues = z.infer<typeof mobileSchema>;
-
-const detailsSchema = z
-  .object({
-    otpCode: z
-      .string()
-      .min(4, "Enter the code you received")
-      .max(8, "Enter the code you received")
-      .regex(/^[0-9]+$/, "The code is numeric"),
-    legalName: z.string().min(1, "Legal name is required").max(200),
-    displayName: z.string().min(1, "Display name is required").max(100),
-    email: z.union([z.email("Enter a valid email address"), z.literal("")]),
-    password: z.union([
-      z.string().min(8, "Password must be at least 8 characters"),
-      z.literal(""),
-    ]),
-    consentAccepted: z.literal(true, {
-      error: "You must accept the terms to register.",
-    }),
-  })
-  // The server rejects a password without an email
-  // (ProviderRegistration.EmailRequiredForPassword); say so before the round trip.
-  .refine((v) => v.password === "" || v.email !== "", {
-    path: ["email"],
-    message: "Email is required when you set a password",
-  });
 type DetailsFormValues = z.infer<typeof detailsSchema>;
 
 /**
- * Provider registration (docs/PROVIDER.md's OTP-based auth): mobile number
- * entry requests an OTP, then the provider supplies their details alongside
- * that code in a single submission (matching the API contract - registration
- * itself does not return a session, so a successful registration sends the
- * provider to /login to sign in with a fresh OTP).
+ * Provider registration, email-first: an email address requests an OTP,
+ * then the provider supplies their details alongside that code in a single
+ * submission. Mobile is still collected and stored, but is no longer itself
+ * OTP-verified (mirrors customer-web's own email-first registration).
+ * Registration itself does not return a session, so a successful submission
+ * sends the provider to /login to sign in with their new password.
  */
 export default function ProviderRegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"mobile" | "details">("mobile");
-  const [mobile, setMobile] = useState("");
+  const [step, setStep] = useState<"email" | "details">("email");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
   const resend = useResendCountdown();
 
-  const mobileForm = useForm<MobileFormValues>({
-    resolver: zodResolver(mobileSchema),
-    defaultValues: { mobile: "" },
+  const emailForm = useForm<EmailFormValues>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: "" },
   });
 
   const detailsForm = useForm<DetailsFormValues>({
@@ -74,7 +65,7 @@ export default function ProviderRegisterPage() {
       otpCode: "",
       legalName: "",
       displayName: "",
-      email: "",
+      mobile: "",
       password: "",
       // Deliberately false: pre-ticking a consent box records an agreement the
       // provider never gave, and would make the schema's z.literal(true) rule
@@ -83,12 +74,12 @@ export default function ProviderRegisterPage() {
     },
   });
 
-  const requestOtp = mobileForm.handleSubmit(async (values) => {
+  const requestOtp = emailForm.handleSubmit(async (values) => {
     setError(null);
     try {
-      await requestRegistrationOtp({ mobile: values.mobile });
-      setMobile(values.mobile);
-      setInfoMessage(`We sent a verification code to ${values.mobile}.`);
+      await requestRegistrationEmailOtp({ email: values.email });
+      setEmail(values.email);
+      setInfoMessage(`We sent a verification code to ${values.email}.`);
       setStep("details");
       resend.start();
     } catch (err) {
@@ -99,29 +90,31 @@ export default function ProviderRegisterPage() {
   const submitRegistration = detailsForm.handleSubmit(async (values) => {
     setError(null);
     try {
-      await registerProvider({
-        mobile,
+      await registerProviderWithEmail({
+        email,
         otpCode: values.otpCode,
         legalName: values.legalName,
         displayName: values.displayName,
-        email: values.email === "" ? undefined : values.email,
-        password: values.password === "" ? undefined : values.password,
+        mobile: values.mobile,
+        password: values.password,
         consentAccepted: values.consentAccepted,
       });
-      router.push("/login?registered=1");
+      // /install-app shows the "add to home screen" steps on a mobile
+      // browser that hasn't seen them before, then forwards on to /login.
+      router.push("/install-app?next=%2Flogin%3Fregistered%3D1");
     } catch (err) {
       setError(describeError(err));
     }
   });
 
-  // Same endpoint as the first send; the countdown is what prevents a provider
-  // burning their SMS quota and tripping gateway rate limiting.
+  // Same endpoint as the first send; the countdown is what prevents burning
+  // through the resend limit and tripping gateway rate limiting.
   const resendOtp = async () => {
     setError(null);
     setIsResending(true);
     try {
-      await requestRegistrationOtp({ mobile });
-      setInfoMessage(`We sent a new verification code to ${mobile}.`);
+      await requestRegistrationEmailOtp({ email });
+      setInfoMessage(`We sent a new verification code to ${email}.`);
       resend.start();
     } catch (err) {
       setError(describeError(err));
@@ -130,8 +123,8 @@ export default function ProviderRegisterPage() {
     }
   };
 
-  const changeNumber = () => {
-    setStep("mobile");
+  const changeEmail = () => {
+    setStep("email");
     setError(null);
     setInfoMessage(null);
     detailsForm.reset();
@@ -143,9 +136,9 @@ export default function ProviderRegisterPage() {
     <AuthShell
       title="Become a Nestly provider"
       subtitle={
-        step === "mobile"
-          ? "Register with your mobile number to start onboarding."
-          : "Verify your number and tell us who you are."
+        step === "email"
+          ? "Register with your email to start onboarding."
+          : "Verify your email and tell us who you are."
       }
       footer={
         <>
@@ -163,7 +156,7 @@ export default function ProviderRegisterPage() {
         {error ? <Alert>{error}</Alert> : null}
         {infoMessage && !error ? <Alert tone="info">{infoMessage}</Alert> : null}
 
-        {step === "mobile" ? (
+        {step === "email" ? (
           <form method="post" onSubmit={requestOtp} className="flex flex-col gap-4" noValidate>
             {/* method="post" is defence in depth, not routing: react-hook-form's
                 handleSubmit preventDefaults every real submit, so this attribute never
@@ -174,16 +167,16 @@ export default function ProviderRegisterPage() {
                 browser history, the server access log and any outbound Referer header.
                 POST keeps them in a request body. */}
             <Field
-              label="Mobile number"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
+              label="Email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
               autoFocus
-              placeholder="+919876543210"
-              error={mobileForm.formState.errors.mobile?.message}
-              {...mobileForm.register("mobile")}
+              placeholder="you@example.com"
+              error={emailForm.formState.errors.email?.message}
+              {...emailForm.register("email")}
             />
-            <Button type="submit" size="lg" fullWidth loading={mobileForm.formState.isSubmitting}>
+            <Button type="submit" size="lg" fullWidth loading={emailForm.formState.isSubmitting}>
               Send verification code
             </Button>
           </form>
@@ -217,16 +210,17 @@ export default function ProviderRegisterPage() {
                 {...detailsForm.register("displayName")}
               />
               <Field
-                label="Email (optional)"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                hint="Needed only if you want to sign in with a password."
-                error={detailsForm.formState.errors.email?.message}
-                {...detailsForm.register("email")}
+                label="Mobile number"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="+919876543210"
+                hint="For job updates and customer contact."
+                error={detailsForm.formState.errors.mobile?.message}
+                {...detailsForm.register("mobile")}
               />
               <Field
-                label="Password (optional)"
+                label="Password"
                 type="password"
                 autoComplete="new-password"
                 hint="At least 8 characters."
@@ -254,8 +248,8 @@ export default function ProviderRegisterPage() {
             <Button type="submit" size="lg" fullWidth loading={detailsForm.formState.isSubmitting}>
               Complete registration
             </Button>
-            <Button type="button" variant="ghost" fullWidth onClick={changeNumber}>
-              Use a different number
+            <Button type="button" variant="ghost" fullWidth onClick={changeEmail}>
+              Use a different email
             </Button>
           </form>
         )}

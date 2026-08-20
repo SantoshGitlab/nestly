@@ -113,4 +113,71 @@ public class ProviderRegistrationService : IProviderRegistrationService
             provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
             provider.Status.ToString(), provider.OnboardingStatus.ToString()));
     }
+
+    public async Task<Result> RequestEmailOtpAsync(RequestProviderRegistrationEmailOtpRequest request)
+    {
+        if (!_options.PasswordAuthEnabled)
+        {
+            return Result.Failure(Error.Validation(
+                "ProviderRegistration.PasswordAuthDisabled", "Password-based authentication is not enabled."));
+        }
+
+        if (_options.RequireUniqueEmail && await _providerRepository.ExistsByEmailAsync(request.Email))
+        {
+            return Result.Failure(Error.Conflict("ProviderRegistration.EmailAlreadyRegistered",
+                "A provider with this email already exists."));
+        }
+
+        return await _otpService.GenerateAsync(request.Email, OtpPurpose.Registration, NotificationChannel.Email);
+    }
+
+    public async Task<Result<ProviderSummaryResponse>> RegisterWithEmailAsync(RegisterProviderWithEmailRequest request)
+    {
+        if (!request.ConsentAccepted)
+        {
+            return Result.Failure<ProviderSummaryResponse>(Error.Validation(
+                "ProviderRegistration.ConsentRequired", "Consent to Terms & Privacy is required."));
+        }
+
+        if (!_options.PasswordAuthEnabled)
+        {
+            return Result.Failure<ProviderSummaryResponse>(Error.Validation(
+                "ProviderRegistration.PasswordAuthDisabled", "Password-based authentication is not enabled."));
+        }
+
+        var otpResult = await _otpService.ValidateAsync(request.Email, request.OtpCode, OtpPurpose.Registration);
+        if (otpResult.IsFailure)
+        {
+            return Result.Failure<ProviderSummaryResponse>(otpResult.Error);
+        }
+
+        if (await _providerRepository.ExistsByPhoneAsync(request.Mobile))
+        {
+            return Result.Failure<ProviderSummaryResponse>(Error.Conflict(
+                "ProviderRegistration.MobileAlreadyRegistered", "A provider with this mobile number already exists."));
+        }
+
+        if (_options.RequireUniqueEmail && await _providerRepository.ExistsByEmailAsync(request.Email))
+        {
+            return Result.Failure<ProviderSummaryResponse>(Error.Conflict(
+                "ProviderRegistration.EmailAlreadyRegistered", "A provider with this email already exists."));
+        }
+
+        // OTP proved email ownership only, not KYC - same PendingVerification
+        // start state as the mobile-OTP path.
+        var provider = new Provider(
+            Guid.NewGuid(), request.LegalName, request.DisplayName, ProviderType.Individual, request.Mobile, request.Email);
+        await _providerRepository.AddAsync(provider);
+
+        // Email+password is the verified identity here - mobile was never
+        // proven via OTP on this path, so no MobileOtp identity is created.
+        var emailIdentity = new ProviderAuthIdentity(
+            Guid.NewGuid(), provider.Id, AuthProviderType.EmailPassword, request.Email, isPrimary: true);
+        emailIdentity.SetPasswordHash(_passwordHasher.HashPassword(provider, request.Password));
+        await _authIdentityRepository.AddAsync(emailIdentity);
+
+        return Result.Success(new ProviderSummaryResponse(
+            provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
+            provider.Status.ToString(), provider.OnboardingStatus.ToString()));
+    }
 }

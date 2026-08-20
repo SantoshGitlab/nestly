@@ -12,7 +12,9 @@ import type {
   ProviderProfile,
   RefreshSessionRequest,
   RegisterProviderRequest,
+  RegisterProviderWithEmailRequest,
   RequestOtpRequest,
+  RequestRegistrationEmailOtpRequest,
   ResetPasswordRequest,
   VerifyLoginOtpRequest,
 } from "./types";
@@ -27,6 +29,20 @@ export const requestRegistrationOtp = (request: RequestOtpRequest) =>
 
 export const registerProvider = (request: RegisterProviderRequest) =>
   apiFetch<ProviderProfile>(`${AUTH_BASE}/registration`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+/** Email-first registration step 1: send an OTP to an email address instead of a mobile number. */
+export const requestRegistrationEmailOtp = (request: RequestRegistrationEmailOtpRequest) =>
+  apiFetch<void>(`${AUTH_BASE}/registration/email-otp`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+
+/** Email-first registration step 2: the OTP proves email ownership instead of mobile ownership. */
+export const registerProviderWithEmail = (request: RegisterProviderWithEmailRequest) =>
+  apiFetch<ProviderProfile>(`${AUTH_BASE}/registration/email`, {
     method: "POST",
     body: JSON.stringify(request),
   });

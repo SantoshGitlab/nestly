@@ -126,11 +126,87 @@ public class CustomerRegistrationService : ICustomerRegistrationService
             await _authIdentityRepository.AddAsync(emailIdentity);
         }
 
-        // Best-effort side effects from here down: the account (Customer +
-        // CustomerAuthIdentity rows above) is already durably committed, so a
-        // failure dispatching the welcome notification or creating a
-        // referral must never turn an already-successful registration into a
-        // 500 (NESTLY-001).
+        await DispatchPostRegistrationSideEffectsAsync(customer, request.ReferralCode);
+
+        return Result.Success(new CustomerSummaryResponse(
+            customer.Id, customer.Mobile, customer.Email, customer.Name, customer.Status.ToString()));
+    }
+
+    public async Task<Result> RequestEmailOtpAsync(RequestRegistrationEmailOtpRequest request)
+    {
+        if (!_options.PasswordAuthEnabled)
+        {
+            return Result.Failure(Error.Validation(
+                "Registration.PasswordAuthDisabled", "Password-based authentication is not enabled."));
+        }
+
+        if (_options.RequireUniqueEmail && await _customerRepository.ExistsByEmailAsync(request.Email))
+        {
+            return Result.Failure(Error.Conflict("Registration.EmailAlreadyRegistered",
+                "A customer with this email already exists."));
+        }
+
+        return await _otpService.GenerateAsync(request.Email, OtpPurpose.Registration, NotificationChannel.Email);
+    }
+
+    public async Task<Result<CustomerSummaryResponse>> RegisterWithEmailAsync(RegisterCustomerWithEmailRequest request)
+    {
+        if (!request.ConsentAccepted)
+        {
+            return Result.Failure<CustomerSummaryResponse>(Error.Validation(
+                "Registration.ConsentRequired", "Consent to Terms & Privacy is required."));
+        }
+
+        if (!_options.PasswordAuthEnabled)
+        {
+            return Result.Failure<CustomerSummaryResponse>(Error.Validation(
+                "Registration.PasswordAuthDisabled", "Password-based authentication is not enabled."));
+        }
+
+        var otpResult = await _otpService.ValidateAsync(request.Email, request.OtpCode, OtpPurpose.Registration);
+        if (otpResult.IsFailure)
+        {
+            return Result.Failure<CustomerSummaryResponse>(otpResult.Error);
+        }
+
+        if (await _customerRepository.ExistsByMobileAsync(request.Mobile))
+        {
+            return Result.Failure<CustomerSummaryResponse>(Error.Conflict(
+                "Registration.MobileAlreadyRegistered", "A customer with this mobile number already exists."));
+        }
+
+        if (_options.RequireUniqueEmail && await _customerRepository.ExistsByEmailAsync(request.Email))
+        {
+            return Result.Failure<CustomerSummaryResponse>(Error.Conflict(
+                "Registration.EmailAlreadyRegistered", "A customer with this email already exists."));
+        }
+
+        // OTP proved email ownership, so the account starts Active - same
+        // reasoning as the mobile-OTP path, just against the other channel.
+        var customer = new Customer(Guid.NewGuid(), request.Mobile, request.Name, CustomerStatus.Active, request.Email);
+        await _customerRepository.AddAsync(customer);
+
+        // Email+password is the verified identity here, not mobile - mobile
+        // was never proven via OTP on this path, so no MobileOtp identity is
+        // created for it (unlike RegisterAsync's mobile-first flow).
+        var emailIdentity = new CustomerAuthIdentity(
+            Guid.NewGuid(), customer.Id, AuthProviderType.EmailPassword, request.Email, isPrimary: true);
+        emailIdentity.SetPasswordHash(_passwordHasher.HashPassword(customer, request.Password));
+        await _authIdentityRepository.AddAsync(emailIdentity);
+
+        await DispatchPostRegistrationSideEffectsAsync(customer, request.ReferralCode);
+
+        return Result.Success(new CustomerSummaryResponse(
+            customer.Id, customer.Mobile, customer.Email, customer.Name, customer.Status.ToString()));
+    }
+
+    // Best-effort side effects: the account (Customer + CustomerAuthIdentity
+    // rows) is already durably committed by the time this runs, so a
+    // failure dispatching the welcome notification or creating a referral
+    // must never turn an already-successful registration into a 500
+    // (NESTLY-001).
+    private async Task DispatchPostRegistrationSideEffectsAsync(Customer customer, string? referralCode)
+    {
         try
         {
             await _notificationDispatchService.DispatchAsync(
@@ -144,20 +220,17 @@ public class CustomerRegistrationService : ICustomerRegistrationService
             _logger.LogError(ex, "Failed to dispatch welcome notification for customer {CustomerId}.", customer.Id);
         }
 
-        if (!string.IsNullOrWhiteSpace(request.ReferralCode))
+        if (!string.IsNullOrWhiteSpace(referralCode))
         {
             try
             {
-                await TryCreateReferralAsync(customer, request.ReferralCode);
+                await TryCreateReferralAsync(customer, referralCode);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to process referral code {ReferralCode} for customer {CustomerId}.", request.ReferralCode, customer.Id);
+                _logger.LogError(ex, "Failed to process referral code {ReferralCode} for customer {CustomerId}.", referralCode, customer.Id);
             }
         }
-
-        return Result.Success(new CustomerSummaryResponse(
-            customer.Id, customer.Mobile, customer.Email, customer.Name, customer.Status.ToString()));
     }
 
     /// <summary>

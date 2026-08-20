@@ -16,34 +16,26 @@ import { Alert, Button, Checkbox, Field } from "@/components/ui";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { CustomerSummary } from "@/lib/types";
 
-// Mirrors RegistrationValidators.cs.
+// Mirrors RegistrationValidators.cs (RegisterCustomerWithEmailRequestValidator).
 const mobileSchema = z
   .string()
   .regex(/^\+?[1-9]\d{7,14}$/, "Enter a valid mobile number");
 
-const otpRequestSchema = z.object({ mobile: mobileSchema });
+const emailOtpRequestSchema = z.object({
+  email: z.email("Enter a valid email address"),
+});
 
-const registerSchema = z
-  .object({
-    mobile: mobileSchema,
-    otpCode: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
-    name: z.string().min(1, "Name is required").max(200),
-    email: z.union([z.email("Enter a valid email address"), z.literal("")]),
-    password: z.union([
-      z.string().min(8, "Password must be at least 8 characters"),
-      z.literal(""),
-    ]),
-    consentAccepted: z.literal(true, {
-      message: "You must accept the Terms & Privacy Policy",
-    }),
-    referralCode: z.string(),
-  })
-  // The server rejects a password without an email
-  // (Registration.EmailRequiredForPassword); say so before the round trip.
-  .refine((v) => v.password === "" || v.email !== "", {
-    path: ["email"],
-    message: "Email is required when you set a password",
-  });
+const registerSchema = z.object({
+  email: z.email("Enter a valid email address"),
+  otpCode: z.string().regex(/^\d{6}$/, "Enter the 6-digit code"),
+  name: z.string().min(1, "Name is required").max(200),
+  mobile: mobileSchema,
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  consentAccepted: z.literal(true, {
+    message: "You must accept the Terms & Privacy Policy",
+  }),
+  referralCode: z.string(),
+});
 
 export default function RegisterPage() {
   // Suspense for useSearchParams below (see login/page.tsx for the same
@@ -52,7 +44,7 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <AuthShell title="Create your account" subtitle="We verify your mobile number with a one-time code.">
+        <AuthShell title="Create your account" subtitle="We verify your email with a one-time code.">
           <div />
         </AuthShell>
       }
@@ -68,25 +60,24 @@ function RegisterScreen() {
   // ReferralOptions.ShareLinkBaseUrl, "https://nestly.app/register?ref=").
   const referralCodeFromLink = useSearchParams().get("ref") ?? "";
   const [step, setStep] = useState<"otp" | "details">("otp");
-  const [mobile, setMobile] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
-  const [registered, setRegistered] = useState(false);
   const { remaining, start, canResend } = useResendCountdown();
 
-  const otpForm = useForm<z.infer<typeof otpRequestSchema>>({
-    resolver: zodResolver(otpRequestSchema),
-    defaultValues: { mobile: "" },
+  const otpForm = useForm<z.infer<typeof emailOtpRequestSchema>>({
+    resolver: zodResolver(emailOtpRequestSchema),
+    defaultValues: { email: "" },
   });
 
   const detailsForm = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      mobile: "",
+      email: "",
       otpCode: "",
       name: "",
-      email: "",
+      mobile: "",
       password: "",
       // Must start false. Defaulting to true pre-ticks the consent box, so the
       // schema's "you must accept" rule can never fire and the account is
@@ -97,19 +88,19 @@ function RegisterScreen() {
   });
 
   const sendCode = async (value: string) => {
-    await apiFetch(`${API_V1}/auth/registration/otp`, {
+    await apiFetch(`${API_V1}/auth/registration/email-otp`, {
       method: "POST",
-      body: JSON.stringify({ mobile: value }),
+      body: JSON.stringify({ email: value }),
     });
     start();
   };
 
-  const onRequestOtp = otpForm.handleSubmit(async ({ mobile: value }) => {
+  const onRequestOtp = otpForm.handleSubmit(async ({ email: value }) => {
     setError(null);
     try {
       await sendCode(value);
-      setMobile(value);
-      detailsForm.setValue("mobile", value);
+      setEmail(value);
+      detailsForm.setValue("email", value);
       setNotice(`We sent a 6-digit code to ${value}.`);
       setStep("details");
     } catch (err) {
@@ -121,8 +112,8 @@ function RegisterScreen() {
     setError(null);
     setResending(true);
     try {
-      await sendCode(mobile);
-      setNotice(`We sent a new code to ${mobile}.`);
+      await sendCode(email);
+      setNotice(`We sent a new code to ${email}.`);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -133,30 +124,22 @@ function RegisterScreen() {
   const onRegister = detailsForm.handleSubmit(async (values) => {
     setError(null);
     try {
-      await apiFetch<CustomerSummary>(`${API_V1}/auth/registration`, {
+      await apiFetch<CustomerSummary>(`${API_V1}/auth/registration/email`, {
         method: "POST",
         body: JSON.stringify({
-          mobile: values.mobile,
+          email: values.email,
           otpCode: values.otpCode,
           name: values.name,
-          // Empty strings would fail the server's EmailAddress rule; the
-          // fields are genuinely optional, so send null instead.
-          email: values.email === "" ? null : values.email,
-          password: values.password === "" ? null : values.password,
+          mobile: values.mobile,
+          password: values.password,
           consentAccepted: values.consentAccepted,
           referralCode: values.referralCode === "" ? null : values.referralCode,
         }),
       });
-      // A referral code was submitted: pause on a confirmation instead of an
-      // immediate redirect. The server processes referrals best-effort
-      // (CustomerRegistrationService.TryCreateReferralAsync) and never
-      // reports back whether the code matched, so this can only confirm the
-      // code was submitted, not that a reward was created.
-      if (values.referralCode !== "") {
-        setRegistered(true);
-      } else {
-        router.push("/login");
-      }
+      // Registration doesn't return a session, so sign-in happens next -
+      // the install-app screen carries the eventual /login destination
+      // along as `next` and forwards it once the customer is done there.
+      router.push("/install-app?next=%2Flogin");
     } catch (err) {
       setError(describeError(err));
     }
@@ -165,7 +148,7 @@ function RegisterScreen() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="We verify your mobile number with a one-time code."
+      subtitle="We verify your email with a one-time code."
       footer={
         <>
           Already have an account?{" "}
@@ -178,17 +161,7 @@ function RegisterScreen() {
         </>
       }
     >
-      {registered ? (
-        <div className="flex flex-col gap-4">
-          <Alert tone="success">
-            Account created — you were invited by a friend. If your code was
-            valid, their reward will be added once it qualifies.
-          </Alert>
-          <Button size="lg" fullWidth onClick={() => router.push("/login")}>
-            Continue to sign in
-          </Button>
-        </div>
-      ) : step === "otp" ? (
+      {step === "otp" ? (
         <form method="post" onSubmit={onRequestOtp} className="flex flex-col gap-4" noValidate>
           {/* method="post" is defence in depth, not routing: react-hook-form's
               handleSubmit preventDefaults every real submit, so this attribute never
@@ -200,13 +173,13 @@ function RegisterScreen() {
               POST keeps them in a request body. */}
           {error ? <Alert>{error}</Alert> : null}
           <Field
-            label="Mobile number"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+919876543210"
-            hint="We'll text you a 6-digit code to confirm it's you."
-            error={otpForm.formState.errors.mobile?.message}
-            {...otpForm.register("mobile")}
+            label="Email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            hint="We'll email you a 6-digit code to confirm it's you."
+            error={otpForm.formState.errors.email?.message}
+            {...otpForm.register("email")}
           />
           <Button type="submit" size="lg" fullWidth loading={otpForm.formState.isSubmitting}>
             Send code
@@ -239,18 +212,19 @@ function RegisterScreen() {
             {...detailsForm.register("name")}
           />
           <Field
-            label="Email"
-            type="email"
-            autoComplete="email"
-            hint="Optional — needed only if you want to sign in with a password."
-            error={detailsForm.formState.errors.email?.message}
-            {...detailsForm.register("email")}
+            label="Mobile number"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+919876543210"
+            hint="For booking updates and provider contact."
+            error={detailsForm.formState.errors.mobile?.message}
+            {...detailsForm.register("mobile")}
           />
           <Field
             label="Password"
             type="password"
             autoComplete="new-password"
-            hint="Optional — at least 8 characters."
+            hint="At least 8 characters."
             error={detailsForm.formState.errors.password?.message}
             {...detailsForm.register("password")}
           />
@@ -288,7 +262,7 @@ function RegisterScreen() {
               setError(null);
             }}
           >
-            Use a different number ({mobile})
+            Use a different email ({email})
           </Button>
         </form>
       )}
