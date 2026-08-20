@@ -55,7 +55,8 @@ export type NavModuleKey =
   | "referral"
   | "nestly-coins"
   | "subscription"
-  | "payments";
+  | "payments"
+  | "provider-referral";
 
 export interface NavModule {
   key: NavModuleKey;
@@ -89,6 +90,7 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "nestly-coins", label: "Nestly Coins", href: "/nestly-coins", srsRef: "NESTLY-COINS.md", requiredPermission: "nestly-coins.read" },
   { key: "subscription", label: "Subscription Plans", href: "/subscription-plans", srsRef: "PRODUCT-ENHANCEMENTS.md #1", requiredPermission: "subscription.read" },
   { key: "payments", label: "Payments", href: "/payments", srsRef: "SRS 12.13.1", requiredPermission: "payments.read" },
+  { key: "provider-referral", label: "Provider Referral Program", href: "/provider-referral", srsRef: "PROVIDER-REFERRAL.md", requiredPermission: "provider-referral.read" },
 ];
 
 /** Whether the current admin can perform mutating ("write") actions within a module, per AdminPermissionCatalog. */
@@ -114,13 +116,13 @@ export function canWriteModule(claims: AdminSessionClaims | null, moduleKey: Nav
  */
 const ROLE_MODULE_FALLBACK: Record<string, NavModuleKey[] | "*"> = {
   "Super Admin": "*",
-  "Operations Admin": ["dashboard", "customers", "bookings", "serviceability", "slots", "support", "chat", "provider", "payments"],
+  "Operations Admin": ["dashboard", "customers", "bookings", "serviceability", "slots", "support", "chat", "provider", "payments", "provider-referral"],
   "Booking Admin": ["dashboard", "bookings", "slots", "serviceability"],
   "Support Admin": ["dashboard", "support", "chat", "customers", "reviews"],
   "Catalog Admin": ["dashboard", "catalog", "pricing"],
   "Pricing Admin": ["dashboard", "pricing", "coupons"],
   "Marketing Admin": ["dashboard", "coupons", "cms", "notifications", "reviews", "referral", "nestly-coins", "subscription"],
-  "Finance Admin": ["dashboard", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments"],
+  "Finance Admin": ["dashboard", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments", "provider-referral"],
   "Read-only Analyst": ["dashboard", "reports"],
 };
 

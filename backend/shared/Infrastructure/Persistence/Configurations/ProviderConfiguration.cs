@@ -46,5 +46,9 @@ public class ProviderConfiguration : IEntityTypeConfiguration<Provider>
 
         // Derived from the two columns above - a gate, not stored state.
         builder.Ignore(x => x.PublicPhotoUrl);
+
+        // PROVIDER-REFERRAL.md, mirrors CustomerConfiguration's ReferralCode.
+        builder.Property(x => x.ReferralCode).HasMaxLength(20);
+        builder.HasIndex(x => x.ReferralCode).IsUnique().HasFilter("referral_code IS NOT NULL");
     }
 }

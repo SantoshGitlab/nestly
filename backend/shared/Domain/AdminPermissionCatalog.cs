@@ -104,6 +104,12 @@ public static class AdminPermissionCatalog
             // access to the transaction list/detail formalises that same
             // visibility, not new financial authority (which stays with
             // Finance Admin below).
+            // ProviderReferral=true added: the provider referral program
+            // (config, fraud review) is supply-side operational work, the
+            // same tier as Provider itself - unlike the customer Referral
+            // program (a Marketing Admin growth campaign), this one is about
+            // acquiring and vetting the providers who fulfil bookings, which
+            // is this role's territory.
             [AdminRoleNames.OperationsAdmin] =
             [
                 (AdminModules.Dashboard, true), (AdminModules.Customers, true),
@@ -113,7 +119,8 @@ public static class AdminPermissionCatalog
                 (AdminModules.Pricing, false), (AdminModules.Coupons, false),
                 (AdminModules.Reviews, false), (AdminModules.Reports, false),
                 (AdminModules.Audit, false), (AdminModules.Provider, true),
-                (AdminModules.Chat, true), (AdminModules.Payments, false)
+                (AdminModules.Chat, true), (AdminModules.Payments, false),
+                (AdminModules.ProviderReferral, true)
             ],
 
             // Booking Admin: the booking lifecycle and the slot capacity it
@@ -199,6 +206,10 @@ public static class AdminPermissionCatalog
             // transaction view (SRS 12.13.1) is the reconciliation surface
             // this role exists for - same tier as Payout, the other module
             // that is directly "money moving" rather than reporting context.
+            // ProviderReferral=false added: read-only cost visibility into
+            // provider referral payouts, same treatment as Referral=false
+            // right above - configuration/fraud-review authority stays with
+            // Operations Admin.
             [AdminRoleNames.FinanceAdmin] =
             [
                 (AdminModules.Dashboard, false), (AdminModules.Bookings, false),
@@ -206,7 +217,7 @@ public static class AdminPermissionCatalog
                 (AdminModules.Audit, false), (AdminModules.Provider, false),
                 (AdminModules.Payout, true), (AdminModules.Referral, false),
                 (AdminModules.NestlyCoins, false), (AdminModules.Subscription, false),
-                (AdminModules.Payments, true)
+                (AdminModules.Payments, true), (AdminModules.ProviderReferral, false)
             ],
 
             // Read-only Analyst: visibility everywhere, authority nowhere —

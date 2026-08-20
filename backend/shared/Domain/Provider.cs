@@ -129,6 +129,9 @@ public class Provider : Entity<Guid>
     /// <summary>The moderator's reason for the most recent verdict, shown back to the provider so a rejection is actionable rather than silent.</summary>
     public string? PhotoModerationNote { get; private set; }
 
+    /// <summary>This provider's own shareable referral code (PROVIDER-REFERRAL.md), mirroring <see cref="Customer.ReferralCode"/>. Null until first requested - generated lazily, not at signup, since most providers never share it.</summary>
+    public string? ReferralCode { get; private set; }
+
     /// <summary>
     /// The moderation gate, expressed once. Every customer-facing surface
     /// (<c>BookingProviderSummary</c>, <c>TrackedProviderSummary</c>) reads
@@ -353,6 +356,27 @@ public class Provider : Entity<Guid>
     public void MarkOnboardingCompleted()
     {
         OnboardingStatus = ProviderOnboardingStatus.Completed;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Assigns this provider's referral code (PROVIDER-REFERRAL.md, mirrors
+    /// <see cref="Customer.SetReferralCode"/>). Set-once: a provider's code is
+    /// stable for life once generated, so links already shared never break.
+    /// Uniqueness is the caller's responsibility (the generating service
+    /// checks against <c>IProviderRepository</c> before calling this) - the
+    /// entity only enforces its own invariant.
+    /// </summary>
+    public void SetReferralCode(string code)
+    {
+        if (ReferralCode is not null)
+        {
+            throw new InvalidOperationException("Referral code is already assigned and cannot be changed.");
+        }
+
+        ReferralCode = string.IsNullOrWhiteSpace(code)
+            ? throw new ArgumentException("Referral code is required.", nameof(code))
+            : code;
         UpdatedAt = DateTime.UtcNow;
     }
 }

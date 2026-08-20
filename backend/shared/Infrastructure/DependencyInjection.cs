@@ -39,6 +39,7 @@ using Nestly.Application.ProviderManagement;
 using Nestly.Application.ProviderProfile;
 using Nestly.Application.NestlyCoins;
 using Nestly.Application.Referral;
+using Nestly.Application.ProviderReferral;
 using Nestly.Application.Routing;
 using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
@@ -203,6 +204,12 @@ public static class DependencyInjection
         services
             .AddOptions<ReferralOptions>()
             .Bind(configuration.GetSection(ReferralOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        // Mirrors ReferralOptions above, for the provider-side program.
+        services
+            .AddOptions<ProviderReferralOptions>()
+            .Bind(configuration.GetSection(ProviderReferralOptions.SectionName))
             .ValidateDataAnnotations();
 
         // Job-completion photo / CMS media upload: Supabase Storage when
@@ -675,6 +682,15 @@ public static class DependencyInjection
         services.AddScoped<IReferralProgramConfigAdminService, ReferralProgramConfigAdminService>();
         services.AddScoped<IReferralCustomerService, ReferralCustomerService>();
         services.AddScoped<IReferralAdminService, ReferralAdminService>();
+        services.AddScoped<IProviderReferralCodeService, ProviderReferralCodeService>();
+        services.AddScoped<IProviderReferralRepository, ProviderReferralRepository>();
+        services.AddScoped<IProviderReferralProgramConfigRepository, ProviderReferralProgramConfigRepository>();
+        services.AddScoped<IProviderReferralRewardService, ProviderReferralRewardService>();
+        services.AddScoped<IProviderReferralFraudReviewService, ProviderReferralFraudReviewService>();
+        services.AddScoped<IProviderReferralProgramConfigAdminService, ProviderReferralProgramConfigAdminService>();
+        services.AddScoped<IProviderReferralProviderService, ProviderReferralProviderService>();
+        services.AddScoped<IProviderReferralAdminService, ProviderReferralAdminService>();
+        services.AddScoped<IProviderReferralExpirySweepService, ProviderReferralExpirySweepService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 

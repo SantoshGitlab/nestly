@@ -77,6 +77,8 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<RecurringBookingOccurrence> RecurringBookingOccurrences { get; set; }
     public DbSet<ReferralMilestone> ReferralMilestones { get; set; }
     public DbSet<ReferralMilestoneAward> ReferralMilestoneAwards { get; set; }
+    public DbSet<ProviderReferral> ProviderReferrals { get; set; }
+    public DbSet<ProviderReferralProgramConfig> ProviderReferralProgramConfigs { get; set; }
     public DbSet<ChatThread> ChatThreads { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<NestlyCoinsProgramConfig> NestlyCoinsProgramConfigs { get; set; }

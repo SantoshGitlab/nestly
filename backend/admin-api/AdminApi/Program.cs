@@ -144,6 +144,10 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
 // only one that should own this registration.
 app.ScheduleRecurringBookingJob();
 
+// PROVIDER-REFERRAL.md: closes out provider referrals that never reached
+// their qualifying completed-job count within the configured expiry window.
+app.ScheduleProviderReferralExpirySweepJob();
+
 // Task 178: the subscription recurring-billing sweep, same
 // ServerEnabled-guarded, idempotent-by-design registration pattern as
 // wallet-credit-expiry-sweep above.

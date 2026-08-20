@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.ProviderIdentity;
+using Nestly.Application.ProviderReferral;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
@@ -15,13 +17,21 @@ namespace Nestly.Infrastructure.Services;
 /// welcome-notification trigger here (unlike the customer flow):
 /// <c>NotificationEvent.CustomerId</c> has a real foreign key to the
 /// customer table, so it cannot record a provider actor without a schema
-/// change - out of scope for this pass.
+/// change - out of scope for this pass. The same constraint means
+/// <see cref="TryCreateProviderReferralAsync"/> below (PROVIDER-REFERRAL.md)
+/// never dispatches a "your invite was used" notification either, unlike
+/// <c>CustomerRegistrationService.TryCreateReferralAsync</c> - the referrer
+/// sees a new invite the same way they see everything else about their
+/// referral program, via <c>GET /me/referral/history</c>.
 /// </summary>
 public class ProviderRegistrationService : IProviderRegistrationService
 {
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderAuthIdentityRepository _authIdentityRepository;
     private readonly IProviderOtpService _otpService;
+    private readonly IProviderReferralRepository _referralRepository;
+    private readonly IProviderReferralProgramConfigRepository _referralProgramConfigRepository;
+    private readonly ILogger<ProviderRegistrationService> _logger;
     private readonly ProviderAccountOptions _options;
     private readonly PasswordHasher<Provider> _passwordHasher = new();
 
@@ -29,11 +39,17 @@ public class ProviderRegistrationService : IProviderRegistrationService
         IProviderRepository providerRepository,
         IProviderAuthIdentityRepository authIdentityRepository,
         IProviderOtpService otpService,
+        IProviderReferralRepository referralRepository,
+        IProviderReferralProgramConfigRepository referralProgramConfigRepository,
+        ILogger<ProviderRegistrationService> logger,
         IOptions<ProviderAccountOptions> options)
     {
         _providerRepository = providerRepository;
         _authIdentityRepository = authIdentityRepository;
         _otpService = otpService;
+        _referralRepository = referralRepository;
+        _referralProgramConfigRepository = referralProgramConfigRepository;
+        _logger = logger;
         _options = options.Value;
     }
 
@@ -109,6 +125,18 @@ public class ProviderRegistrationService : IProviderRegistrationService
             await _authIdentityRepository.AddAsync(emailIdentity);
         }
 
+        if (!string.IsNullOrWhiteSpace(request.ReferralCode))
+        {
+            try
+            {
+                await TryCreateProviderReferralAsync(provider, request.ReferralCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process provider referral code {ReferralCode} for provider {ProviderId}.", request.ReferralCode, provider.Id);
+            }
+        }
+
         return Result.Success(new ProviderSummaryResponse(
             provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
             provider.Status.ToString(), provider.OnboardingStatus.ToString()));
@@ -176,8 +204,66 @@ public class ProviderRegistrationService : IProviderRegistrationService
         emailIdentity.SetPasswordHash(_passwordHasher.HashPassword(provider, request.Password));
         await _authIdentityRepository.AddAsync(emailIdentity);
 
+        if (!string.IsNullOrWhiteSpace(request.ReferralCode))
+        {
+            try
+            {
+                await TryCreateProviderReferralAsync(provider, request.ReferralCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process provider referral code {ReferralCode} for provider {ProviderId}.", request.ReferralCode, provider.Id);
+            }
+        }
+
         return Result.Success(new ProviderSummaryResponse(
             provider.Id, provider.LegalName, provider.DisplayName, provider.Phone, provider.Email,
             provider.Status.ToString(), provider.OnboardingStatus.ToString()));
+    }
+
+    /// <summary>
+    /// Best-effort - an invalid or self-referential code never fails
+    /// registration itself, mirrors
+    /// <c>CustomerRegistrationService.TryCreateReferralAsync</c>.
+    /// </summary>
+    private async Task TryCreateProviderReferralAsync(Provider referee, string referralCode)
+    {
+        Provider? referrer = await _providerRepository.GetByReferralCodeAsync(referralCode);
+        if (referrer is null)
+        {
+            _logger.LogInformation("Provider registration referral code {ReferralCode} did not match any provider.", referralCode);
+            return;
+        }
+
+        // Self-referral block by phone/email match - the referee is a
+        // brand-new account, so id equality can never trigger; the real risk
+        // is the same person's second account using their own code.
+        bool samePhone = referrer.Phone == referee.Phone;
+        bool sameEmail = referrer.Email is not null && referee.Email is not null && referrer.Email == referee.Email;
+        if (samePhone || sameEmail)
+        {
+            _logger.LogWarning(
+                "Provider registration blocked a self-referral attempt: provider {ProviderId} tried to use their own referral code.",
+                referrer.Id);
+            return;
+        }
+
+        // One referral per referee, ever - the unique index on
+        // referee_provider_id is the real backstop; this check exists so a
+        // stale/duplicate submission gets a clean no-op.
+        if (await _referralRepository.GetByRefereeProviderIdAsync(referee.Id) is not null)
+        {
+            return;
+        }
+
+        ProviderReferralProgramConfig? config = await _referralProgramConfigRepository.GetAsync();
+        if (config is null || !config.IsActive)
+        {
+            _logger.LogInformation("Provider registration referral code {ReferralCode} ignored: provider referral program is not active.", referralCode);
+            return;
+        }
+
+        var referral = new Domain.ProviderReferral(Guid.NewGuid(), referrer.Id, referee.Id, referralCode, config);
+        await _referralRepository.AddAsync(referral);
     }
 }

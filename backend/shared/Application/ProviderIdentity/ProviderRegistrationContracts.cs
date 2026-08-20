@@ -17,7 +17,9 @@ public record RegisterProviderRequest(
     string DisplayName,
     string? Email,
     bool ConsentAccepted,
-    string? Password = null);
+    string? Password = null,
+    /// <summary>Optional - PROVIDER-REFERRAL.md: another provider's shared referral code. Processed best-effort; an invalid or self-referential code never fails registration itself.</summary>
+    string? ReferralCode = null);
 
 /// <summary>Step 1 of email-first provider registration: request an OTP be sent to an email address.</summary>
 public record RequestProviderRegistrationEmailOtpRequest(string Email);
@@ -36,7 +38,9 @@ public record RegisterProviderWithEmailRequest(
     string DisplayName,
     string Mobile,
     string Password,
-    bool ConsentAccepted);
+    bool ConsentAccepted,
+    /// <summary>Optional - PROVIDER-REFERRAL.md: another provider's shared referral code, same handling as <see cref="RegisterProviderRequest.ReferralCode"/>.</summary>
+    string? ReferralCode = null);
 
 /// <summary>Never includes anything auth-sensitive.</summary>
 public record ProviderSummaryResponse(

@@ -30,7 +30,10 @@ public enum ProviderEarningSourceType
     NestlyCoinsReward,
 
     /// <summary>Debited to reverse a Nestly Coins reward when its crediting booking is cancelled/refunded within the program's ClawbackWindowDays (docs/NESTLY-COINS.md FRAUD/ABUSE PREVENTION, task 201) - distinct from the credit's own NestlyCoinsReward tag, mirroring WalletSourceType's equivalent separation. SourceReferenceId is the same Booking's id.</summary>
-    NestlyCoinsClawback
+    NestlyCoinsClawback,
+
+    /// <summary>Credited when a provider referral qualifies and is disbursed (PROVIDER-REFERRAL.md), mirroring WalletSourceType.ReferralReward. SourceReferenceId is the ProviderReferral's id.</summary>
+    ProviderReferralReward
 }
 
 /// <summary>
