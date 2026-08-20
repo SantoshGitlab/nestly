@@ -41,7 +41,8 @@ Every topic has exactly **one authoritative document**.
 | [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Feature inventory and static findings S1–S11 (still open). Its release verdict is **superseded by QA-REPORT-2026-08-18.md** — kept for the inventory and static findings only |
 | [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md) | Execution of QA phases 3–4 (task 318): full browser walkthrough and cross-service consistency check, with a **CONDITIONAL GO** verdict and a consolidated bug list |
 | [audits/mobile-ux-customer-web-2026-08-18.md](audits/mobile-ux-customer-web-2026-08-18.md) · [-provider-web-](audits/mobile-ux-provider-web-2026-08-18.md) · [-admin-web-](audits/mobile-ux-admin-web-2026-08-18.md) | Per-app mobile/tablet UX findings (Phase 22, tasks #337–339) that scoped the rest of the mobile-first batch, plus each app's #351 safe-area audit appended |
-| [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. Per ORIENTATION.md, this is where the next task comes from |
+| [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. **Closed** — its items became rows #303–#320; kept for its reasoning |
+| [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md) | What stands between a green build and a production deployment, with file:line evidence (2026-08-20). Rows #375–#391. Per ORIENTATION.md, this is where the next task comes from |
 | [UAT-REPORT.md](UAT-REPORT.md) | User acceptance testing results |
 | [BOOKING-FLOW-AUDIT.md](BOOKING-FLOW-AUDIT.md) | Point-in-time audit of the booking funnel (source of the Phase 13 defect rows) |
 | [CATALOG-ARCHITECTURE-REVIEW.md](CATALOG-ARCHITECTURE-REVIEW.md) | Point-in-time review of the catalog hierarchy (service groups, variants, add-on groups) |
@@ -72,7 +73,8 @@ Every topic has exactly **one authoritative document**.
 | Implementation status ("what is built") | ORIENTATION.md |
 | Status-claim verification and audit history | LAUNCH-READINESS-AUDIT.md |
 | Release readiness / go-no-go | QA-REPORT-2026-08-18.md |
-| Spec-vs-code gap backlog | ENHANCEMENT-BACKLOG-2026-08-08.md |
+| Spec-vs-code gap backlog | ENHANCEMENT-BACKLOG-2026-08-08.md (closed) |
+| Production readiness / what blocks deployment | PRODUCTION-READINESS.md |
 | Launch market strategy | MARKET.md |
 | Revenue models and margin thesis | MARKET.md |
 | Pricing posture and go-to-market | MARKET.md (strategic rationale) · PRICING.md (mechanics and policy) |

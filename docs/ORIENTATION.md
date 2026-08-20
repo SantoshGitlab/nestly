@@ -9,29 +9,42 @@ The rest of the documentation suite describes how things *should* be built
 is the only one that describes **the current state of the repository** — so
 treat the others as the specification and this one as the map.
 
-Last verified: **2026-08-17**, against `main` at commit `e020819`. The
-2026-08-08 pass against `39cc78a` remains the last one that **built and tested**
-the solution; this pass re-counted the backlog and the code surface statically
-and corrected the figures below. Nothing was rebuilt or re-run.
+Last verified: **2026-08-20**, against `main` at commit `7f07b4a` — and this
+pass **built and tested the solution**, which the 2026-08-17 pass could not:
+`dotnet build Nestly.sln` **0 errors / 0 warnings**, `dotnet test Nestly.sln`
+**2073 passed / 0 failed**. That supersedes the 2026-08-08 run against
+`39cc78a` (1767 passing) as the last green build of record.
 
-The backlog is **effectively complete**: `tasks.csv` carries 647 rows, of which
-596 are `done`, 50 are `decomposed` parent placeholders already satisfied by
-their own lettered subtasks, and **one is `todo`**. All nineteen phase groups
-(0–18, plus a small set of unphased early setup rows) are closed except that
-one row. See TASKS-SUMMARY.md for the per-phase table.
+**Every backlog row through Phase 25 is closed.** `tasks.csv` carries 718 rows:
+701 in phases 0–25 (651 `done`, 50 `decomposed` parent placeholders already
+satisfied by their own lettered subtasks, none open), plus the 17 newly filed
+rows of Phase 26. Task 318 — the single open row this section reported on
+2026-08-17 — was executed; see
+[QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md), whose **CONDITIONAL GO**
+supersedes the 2026-08-07 NO-GO verdict. See TASKS-SUMMARY.md for the per-phase
+table.
 
-The single open row is **task 318** — execute QA phases 3 and 4 from
-[QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md). That report's verdict is
-**NO-GO for release on absence of evidence**: 587 inventoried UI features are
-runtime-unverified and cross-service booking consistency across the three
-backends is unmeasured. Backlog completeness is therefore not the same as
-release readiness, and this row is the gap between them.
+What remains is not feature delivery. It is **production readiness**, now
+tracked as `tasks.csv` **#375–#391, "Phase 26 - Production Readiness"** and
+documented with file:line evidence in
+**[PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)**. That document, not this
+one, is where the next task comes from. The short version, because it is easy
+to misread a green build as a shippable system:
 
-Work beyond the backlog is tracked in
-**[ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md)** —
-verified gaps between what the specs describe and what the code does, with
-file:line evidence. That document, not this one, is where the next task comes
-from.
+- The payment gateway is a **fake registered in every environment**, including
+  Production (`#375`).
+- SMS and email are a **no-op in every environment**, and OTP is the primary
+  auth path — so **on a production deploy today, nobody can log in, silently**
+  (`#376`).
+- There is **no production environment**, no container image for any of the
+  three frontends, and no TLS anywhere in the deployment topology
+  (`#378`–`#380`).
+
+Two earlier documents are now superseded on status and kept for their reasoning
+only: [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md)
+(its gaps became rows #303–#320, all closed) and
+[LAUNCH-READINESS-AUDIT.md](LAUNCH-READINESS-AUDIT.md) (its §6 items 1 and 2
+are done; items 3 and 4 survive as `#386`).
 
 ---
 
@@ -56,18 +69,19 @@ Full requirements: [SRS.md](SRS.md).
 This is the section most likely to be out of date, and the most important to
 keep honest.
 
-**Every phase in `tasks.csv` is closed but one row.** The platform is
+**Every phase in `tasks.csv` through Phase 25 is closed.** The platform is
 feature-complete against its own backlog: three APIs, three frontends, 93
 domain entity classes (across 145 files in `shared/Domain`) and 76 migrations.
-What remains is not backlog delivery but the gap set in
-[ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) and the
-release-readiness work in [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md).
+What remains is not backlog delivery but the production-readiness gap set in
+[PRODUCTION-READINESS.md](PRODUCTION-READINESS.md) — rows #375–#391.
 
 ### What genuinely exists and is verified
 
-Verified 2026-08-08 by building and testing a clean checkout of `origin/main`
-(not a working tree): `dotnet build Nestly.sln` **0 errors / 0 warnings**,
-`dotnet test Nestly.sln` **1767 passing / 0 failing**.
+Verified 2026-08-20 by building and testing `main` at `7f07b4a`:
+`dotnet build Nestly.sln` **0 errors / 0 warnings**, `dotnet test Nestly.sln`
+**2073 passing / 0 failing**. The surface counts in the table below are from the
+2026-08-17 static pass and have not been recounted since; the build, test and
+module rows have.
 
 | Area | State |
 |---|---|
@@ -77,7 +91,7 @@ Verified 2026-08-08 by building and testing a clean checkout of `origin/main`
 | Persistence | EF Core + PostgreSQL, snake_case, configuration-by-assembly-scan, 76 migrations, 94 entity configurations, 72 `DbSet`s, replayable from an empty database (task 207) |
 | Domain | 93 entity classes; 15 derive from `AggregateRoot` and raise domain events |
 | Modules live | Identity, catalog, serviceability, slots, booking, payments, wallet, coupons, cancellation/reschedule, reviews, support, notifications, admin panel + RBAC, provider/partner, referral, Nestly Coins, subscriptions, recurring bookings, chat, live tracking, completion verification |
-| Tests | 1767 across `Catalog.Tests` (1443), `Identity.Tests` (304), `CustomerManagement.Tests` (12), `Performance.Tests` (8) — SQLite-backed integration, not just unit |
+| Tests | 2073 across `Catalog.Tests` (1698), `Identity.Tests` (355), `CustomerManagement.Tests` (12), `Performance.Tests` (8) — SQLite-backed integration, not just unit. Note the distribution: `Catalog.Tests` is in practice the whole-platform suite under one module's name (`#386`), and browser E2E does not run in CI at all (`#385`) |
 | Caching | `ICacheService` over Redis with in-process fallback — in real use (catalog, notification templates) |
 | Background jobs | Hangfire on PostgreSQL — in real use (expiry sweeps, recurring-booking scheduling, notification intents) |
 | Realtime | SignalR — chat and live booking tracking |
@@ -107,9 +121,16 @@ as complete:
   event types (notifications, metrics, realtime broadcast, referral fraud
   signals). Note the ordering consequence: handlers run **after** the save,
   inside the same request.
-- **Release readiness.** QA's 2026-08-07 verdict is **NO-GO**, on absence of
-  evidence rather than known defects: all 587 inventoried UI features remain
-  runtime-unverified, and there is no admin-web browser E2E suite.
+- **Production readiness — the real remaining gap.** The 2026-08-07 NO-GO has
+  been retired by [QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md)
+  (**CONDITIONAL GO**) and by task #374's later sweep, both of which walked all
+  three apps in a real browser. What replaced it is narrower and harder: the
+  platform's three external dependencies — taking money, delivering an OTP, and
+  being reachable over TLS — are respectively a fake, a no-op and absent. See
+  [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md) and rows #375–#391.
+- **Browser E2E still does not run in CI.** customer-web has 5 Playwright specs
+  and admin-web 4, but no workflow invokes them and provider-web has none
+  (`#385`).
 
 ---
 
@@ -308,8 +329,9 @@ stale, fix it in the same pass.
 ## 8. THE ROADMAP
 
 `tasks.csv` carries a `phase` column; work proceeds phase by phase. Counts
-below are from `tasks.csv` itself on 2026-08-08, not from TASKS-SUMMARY.md
-(which is regenerated only at phase boundaries and lags).
+below are regenerated from `tasks.csv` itself on 2026-08-20, not from
+TASKS-SUMMARY.md (which is regenerated only at phase boundaries and lags).
+Summary rows are excluded; only rows with a real task id are counted.
 
 | Phase | Scope | Done | Open |
 |---|---|---|---|
@@ -319,7 +341,7 @@ below are from `tasks.csv` itself on 2026-08-08, not from TASKS-SUMMARY.md
 | 3 | Booking Core | 47/56 | — |
 | 4 | Payments & Financial | 40/46 | — |
 | 5 | Post-Booking — reviews, support, notifications | 40/47 | — |
-| 6 | Admin Panel | 104/121 | 2 |
+| 6 | Admin Panel | 106/121 | — |
 | 7 | Partner — provider identity, onboarding, assignment, earnings (PROVIDER.md) | 23/27 | — |
 | 8 | Hardening & Launch | 35/41 | — |
 | 9 | Referral & Growth (REFERRAL.md) | 16/16 | — |
@@ -331,11 +353,21 @@ below are from `tasks.csv` itself on 2026-08-08, not from TASKS-SUMMARY.md
 | 15 | QA Audit Defects | 13/13 | — |
 | 16 | End-to-End Order Tracking (TRACKING.md) | 32/32 | — |
 | 17 | Recurring Services | 5/5 | — |
-| 18 | Spec-Gap Closure — verified gaps between the specs and the code | 2/20 | 16 |
+| 18 | Spec-Gap Closure — verified gaps between the specs and the code | 18/18 | — |
+| 19 | Assignment Conflict Resolution | 2/2 | — |
+| 20 | AMC Contracts (AMC.md) | 9/9 | — |
+| 21 | QA Sweep Follow-ups | 5/5 | — |
+| 22 | Mobile-First Experience | 24/24 | — |
+| 22 | Post-Sweep Follow-ups | 9/9 | — |
+| 23 | Address & Booking Enhancements | 3/3 | — |
+| 24 | Provider Auth Parity | 1/1 | — |
+| 25 | QA Sweep (tasks #369-372) | 1/1 | — |
+| 26 | Production Readiness — the gap between a green build and a deployable system (PRODUCTION-READINESS.md) | 0/17 | 17 |
 
-The `Done` column counts only rows with status `done`; the remainder in
-phases 2–8 are `decomposed` parent placeholders, each already satisfied by its
-own lettered subtasks (e.g. `#35` → `#35a`..`#35d`). A `done/total` ratio is
+The `Done` column counts only rows with status `done` and `Open` only rows with
+status `todo`; the remainder in phases 2–8 are `decomposed` parent placeholders,
+each already satisfied by its own lettered subtasks (e.g. `#35` → `#35a`..`#35d`).
+Phase 26 is the only phase with open rows. A `done/total` ratio is
 only meaningful against a phase's *current* total, not the number originally
 planned. **Provider/Partner moved from Phase 8 to Phase 7 on 2026-07-31** — see
 PROVIDER.md's STATUS section for why.

@@ -22,27 +22,35 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 15 - QA Audit Defects | 13 | 0 | 0 | 0 | 13 |
 | Phase 16 - End-to-End Order Tracking | 32 | 0 | 0 | 0 | 32 |
 | Phase 17 - Recurring Services | 5 | 0 | 0 | 0 | 5 |
-| Phase 18 - Spec-Gap Closure | 17 | 1 | 0 | 0 | 18 |
+| Phase 18 - Spec-Gap Closure | 18 | 0 | 0 | 0 | 18 |
 | Phase 19 - Assignment Conflict Resolution | 2 | 0 | 0 | 0 | 2 |
-| (unphased, early setup rows) | 13 | 0 | 0 | 0 | 13 |
-| **Overall** | **598** | **1** | **50** | **0** | **649** |
+| Phase 20 - AMC Contracts | 9 | 0 | 0 | 0 | 9 |
+| Phase 21 - QA Sweep Follow-ups | 5 | 0 | 0 | 0 | 5 |
+| Phase 22 - Mobile-First Experience | 24 | 0 | 0 | 0 | 24 |
+| Phase 22 - Post-Sweep Follow-ups | 9 | 0 | 0 | 0 | 9 |
+| Phase 23 - Address & Booking Enhancements | 3 | 0 | 0 | 0 | 3 |
+| Phase 24 - Provider Auth Parity | 1 | 0 | 0 | 0 | 1 |
+| Phase 25 - QA Sweep (tasks #369-372) | 1 | 0 | 0 | 0 | 1 |
+| Phase 26 - Production Readiness | 0 | 17 | 0 | 0 | 17 |
+| **Overall** | **638** | **17** | **50** | **0** | **705** |
 
-Last updated: 2026-08-18. Phase 19 (tasks 321-322, assignment-conflict
-detection and the admin resolution dashboard) was added 2026-08-17 and
-verified 2026-08-18: a real .NET 8 SDK was obtained, the full solution built
-clean, and the full test suite passed 1930/1930 (up from 1921, the 9 new
-conflict-detection tests). Two real defects surfaced only once a build ran -
-a SQL-side ORDER BY on a TimeSpan column, and a cross-test data leak from a
-shared test database - both fixed; see task 321's note for detail. The
-feature was further verified against a live PostgreSQL instance and a real
-browser session: a seeded conflict was detected, displayed correctly, and
-resolved through the dashboard's Reassign flow, dropping the open-conflict
-count from 2 to 1. See docs/PROVIDER.md's ASSIGNMENT CONFLICTS section.
-Originally regenerated during the
-documentation-integrity pass recorded in
-[docs/LAUNCH-READINESS-AUDIT.md](docs/LAUNCH-READINESS-AUDIT.md). The previous
-table stopped at Phase 11 and reported 522 rows against an actual 647 —
-Phases 12-18 had been delivered without the summary being regenerated.
+Last updated: 2026-08-20. Regenerated on filing **Phase 26 - Production
+Readiness** (tasks 375-391), the 17 rows that separate a green build from a
+deployable system - see [docs/PRODUCTION-READINESS.md](docs/PRODUCTION-READINESS.md)
+for the file:line evidence behind each. Phase 26 is the only phase with open
+rows; everything through Phase 25 is closed. Verified the same day against
+`main` at `7f07b4a`: `dotnet build` 0 errors / 0 warnings, `dotnet test`
+2073 passed / 0 failed. Eight of the new rows carry `depends on` gates, so
+`scripts/task_claim.py status` reports 9 free and 8 blocked rather than all 17
+claimable.
+
+One correction in this regeneration, called out so it does not read as drift:
+the previous table carried a `(unphased, early setup rows)` line counting 13
+rows as done tasks. Those 13 are the file's own `summary` / `summary-p0`..`p10`
+/ `summary-note` **metadata rows**, not tasks - `scripts/task_claim.py`'s own
+`TASK_ID` regex (`^[0-9]+[a-z0-9]*$`) has always excluded them from scheduling.
+They are excluded here too, so `Overall` counts 705 task rows out of 718 rows in
+the file. The 13-row difference is metadata, not lost work.
 
 The single remaining `todo` is **task 318**: execute QA phases 3 and 4 from
 `docs/QA-REPORT-2026-08-07.md`. That report's verdict is **NO-GO for release
