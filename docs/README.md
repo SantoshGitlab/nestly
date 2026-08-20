@@ -36,6 +36,7 @@ Every topic has exactly **one authoritative document**.
 | [SECURITY.md](SECURITY.md) | Authentication, authorization, secrets and security practices |
 | [TESTING.md](TESTING.md) | Unit, integration, API and end-to-end testing strategy |
 | [DEVOPS.md](DEVOPS.md) | Docker, CI/CD, deployment, monitoring and operations |
+| [LAUNCH-COST.md](LAUNCH-COST.md) | Production launch rollout plan and infra cost sizing/minimization for the Jaipur launch (companion to DEVOPS.md's open decisions; pending infra/ops sign-off) |
 | [RUNBOOK-BACKUP-RESTORE.md](RUNBOOK-BACKUP-RESTORE.md) | Tested PostgreSQL backup/restore procedure (companion to DEVOPS.md's backup requirement) |
 | [RUNBOOK-DEPLOYMENT.md](RUNBOOK-DEPLOYMENT.md) | Deployment procedure (companion to DEVOPS.md) |
 | [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Feature inventory and static findings S1–S11 (still open). Its release verdict is **superseded by QA-REPORT-2026-08-18.md** — kept for the inventory and static findings only |
