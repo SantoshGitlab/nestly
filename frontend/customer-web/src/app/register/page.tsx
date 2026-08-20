@@ -64,6 +64,7 @@ function RegisterScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const { remaining, start, canResend } = useResendCountdown();
 
   const otpForm = useForm<z.infer<typeof emailOtpRequestSchema>>({
@@ -136,10 +137,19 @@ function RegisterScreen() {
           referralCode: values.referralCode === "" ? null : values.referralCode,
         }),
       });
-      // Registration doesn't return a session, so sign-in happens next -
-      // the install-app screen carries the eventual /login destination
-      // along as `next` and forwards it once the customer is done there.
-      router.push("/install-app?next=%2Flogin");
+      // A referral code was submitted: pause on a confirmation instead of an
+      // immediate redirect. The server processes referrals best-effort
+      // (CustomerRegistrationService.TryCreateReferralAsync) and never
+      // reports back whether the code matched, so this can only confirm the
+      // code was submitted, not that a reward was created.
+      if (values.referralCode !== "") {
+        setRegistered(true);
+      } else {
+        // Registration doesn't return a session, so sign-in happens next -
+        // the install-app screen carries the eventual /login destination
+        // along as `next` and forwards it once the customer is done there.
+        router.push("/install-app?next=%2Flogin");
+      }
     } catch (err) {
       setError(describeError(err));
     }
@@ -161,7 +171,17 @@ function RegisterScreen() {
         </>
       }
     >
-      {step === "otp" ? (
+      {registered ? (
+        <div className="flex flex-col gap-4">
+          <Alert tone="success">
+            Account created — you were invited by a friend. If your code was
+            valid, their reward will be added once it qualifies.
+          </Alert>
+          <Button size="lg" fullWidth onClick={() => router.push("/install-app?next=%2Flogin")}>
+            Continue
+          </Button>
+        </div>
+      ) : step === "otp" ? (
         <form method="post" onSubmit={onRequestOtp} className="flex flex-col gap-4" noValidate>
           {/* method="post" is defence in depth, not routing: react-hook-form's
               handleSubmit preventDefaults every real submit, so this attribute never
