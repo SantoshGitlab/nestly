@@ -313,6 +313,8 @@ export default function BookingDetailPage() {
   }
 
   const booking = detailQuery.data;
+  const isAssignableStatus =
+    booking.status === BookingStatus.AwaitingFulfilment || booking.status === BookingStatus.Assigned;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -487,6 +489,13 @@ export default function BookingDetailPage() {
 
         {canWrite ? (
           <div className="mt-5 flex flex-col gap-4 border-t border-line pt-5">
+            {!isAssignableStatus ? (
+              <Alert tone="info">
+                A provider can only be assigned once this booking reaches{" "}
+                {BOOKING_STATUS_LABELS[BookingStatus.AwaitingFulfilment]} (current status:{" "}
+                {booking.statusLabel}).
+              </Alert>
+            ) : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 {eligibleProvidersQuery.isPending ? (
@@ -511,6 +520,7 @@ export default function BookingDetailPage() {
                 ) : (
                   <Select
                     label="Provider to assign"
+                    disabled={!isAssignableStatus}
                     value={assignProviderId}
                     onChange={(e) => setAssignProviderId(e.target.value)}
                     placeholder="Select a provider…"
@@ -526,7 +536,7 @@ export default function BookingDetailPage() {
                 )}
               </div>
               <Button
-                disabled={!assignProviderId.trim()}
+                disabled={!isAssignableStatus || !assignProviderId.trim()}
                 loading={assignProviderMutation.isPending}
                 onClick={() => assignProviderMutation.mutate()}
               >
