@@ -1,0 +1,197 @@
+version: 2
+
+# Automated dependency update PRs (task #388).
+#
+# WHY THIS FILE EXISTS
+# Tasks 133a-g closed as manual OWASP review passes. A manual review is a
+# snapshot of one commit; this repo takes dependency updates from two
+# ecosystems and has moved 100+ commits since. .github/workflows/security.yml
+# *detects* vulnerable dependencies but cannot fix them - Dependabot is the
+# half that produces the remediating PR. Without it the security workflow
+# just accumulates a backlog nobody opens a PR for.
+#
+# NOISE CONTROL - the reason a Dependabot config gets deleted six weeks after
+# it lands is twenty open PRs nobody reviews. Three deliberate choices here:
+#
+#   1. `schedule: weekly` everywhere, not daily. Security *advisories* are
+#      not throttled by this - GitHub's security updates (the Dependabot
+#      alerts -> PR path, enabled in repo settings, not here) open
+#      immediately regardless of schedule. This interval governs only
+#      routine version-drift PRs.
+#   2. `groups` collapse minor+patch drift into ONE PR per ecosystem per
+#      week. Ungrouped, the three Next.js apps alone would open ~10 PRs a
+#      week between them. Major bumps stay ungrouped and individual, because
+#      those are the ones that need to be read.
+#   3. `open-pull-requests-limit` is low on purpose. If the queue is full,
+#      the right action is to merge what is open, not to raise the limit.
+#
+# WHAT IS DELIBERATELY NOT CONFIGURED
+# Nothing is `ignore`d. The temptation is to ignore the Next.js 14 -> 15/16
+# major, since the security workflow's baseline already records next@14.2.35
+# as a knowingly-accepted High. Ignoring it here would hide the only PR that
+# actually clears that baseline entry, so the major bump stays visible and is
+# simply un-merged until someone schedules the upgrade.
+
+updates:
+  # ---------------------------------------------------------------------
+  # .NET / NuGet - Nestly.sln at the repo root, which resolves all nine
+  # projects (shared libs, three API hosts, four test projects) through the
+  # solution file. A single entry covers them because they share one
+  # solution; per-project entries would open near-duplicate PRs for the
+  # transitive graph they have in common.
+  # ---------------------------------------------------------------------
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - backend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      dotnet-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # ---------------------------------------------------------------------
+  # npm - one entry per Next.js app. These are genuinely separate dependency
+  # trees with their own package-lock.json (there is no workspace root), so
+  # Dependabot needs to be pointed at each; frontend/ as a single directory
+  # would find no manifest at all.
+  #
+  # Keep this list in sync with ci.yml's `frontend` matrix and
+  # security.yml's `npm-dependencies` matrix - the same #366 failure mode
+  # (provider-web silently absent from a list of "all the frontends")
+  # applies here.
+  # ---------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /frontend/customer-web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      customer-web-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /frontend/admin-web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      admin-web-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /frontend/provider-web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      provider-web-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # ---------------------------------------------------------------------
+  # GitHub Actions - the workflows in this repo pin third-party actions by
+  # major tag (actions/checkout@v4, aquasecurity/trivy-action@0.28.0, ...).
+  # A compromised or abandoned action runs with the workflow's token, so
+  # these need the same update discipline as application dependencies.
+  # Grouped hard: action bumps are almost always mechanical.
+  # ---------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # ---------------------------------------------------------------------
+  # Docker base images. `directories` (plural) lets one entry cover all
+  # three API Dockerfiles plus the compose file at the root; they all track
+  # mcr.microsoft.com/dotnet/{sdk,aspnet}:8.0 and move together.
+  #
+  # NOTE for whoever reads a PR from this entry: the repo-root `Dockerfile`
+  # is a stale scaffold that still references .NET *5* base images
+  # (mcr.microsoft.com/dotnet/core/sdk:5.0.106) and a placeholder
+  # `your_project_name.dll` entrypoint. Nothing builds it - ci.yml builds
+  # the per-API Dockerfiles - but Dependabot and Trivy will both keep
+  # reporting on it until it is deleted. Deleting it is out of scope for
+  # #388 (that file is outside this task's allowed edit set); it wants its
+  # own one-line task.
+  # ---------------------------------------------------------------------
+  - package-ecosystem: docker
+    directories:
+      - /backend/consumer-api/ConsumerApi
+      - /backend/admin-api/AdminApi
+      - /backend/provider-api/ProviderApi
+      - "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      docker-base-images:
+        patterns:
+          - "*"
