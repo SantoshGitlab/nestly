@@ -43,6 +43,7 @@ Every topic has exactly **one authoritative document**.
 | [audits/mobile-ux-customer-web-2026-08-18.md](audits/mobile-ux-customer-web-2026-08-18.md) · [-provider-web-](audits/mobile-ux-provider-web-2026-08-18.md) · [-admin-web-](audits/mobile-ux-admin-web-2026-08-18.md) | Per-app mobile/tablet UX findings (Phase 22, tasks #337–339) that scoped the rest of the mobile-first batch, plus each app's #351 safe-area audit appended |
 | [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. **Closed** — its items became rows #303–#320; kept for its reasoning |
 | [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md) | What stands between a green build and a production deployment, with file:line evidence (2026-08-20). Rows #375–#391. Per ORIENTATION.md, this is where the next task comes from |
+| [PHASE-26-HANDOFF.md](PHASE-26-HANDOFF.md) | Execution plan for Phase 26 — branches in flight, merge order, per-agent file-ownership boundaries, and the verification gate before any row is closed |
 | [UAT-REPORT.md](UAT-REPORT.md) | User acceptance testing results |
 | [BOOKING-FLOW-AUDIT.md](BOOKING-FLOW-AUDIT.md) | Point-in-time audit of the booking funnel (source of the Phase 13 defect rows) |
 | [CATALOG-ARCHITECTURE-REVIEW.md](CATALOG-ARCHITECTURE-REVIEW.md) | Point-in-time review of the catalog hierarchy (service groups, variants, add-on groups) |
