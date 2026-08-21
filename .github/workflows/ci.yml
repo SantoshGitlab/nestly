@@ -277,6 +277,207 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  e2e:
+    # Task #385: the Playwright suites actually run here. Before this job they
+    # existed (customer-web 5 specs, admin-web 4) and nothing invoked them -
+    # the only browser job in this file was `lighthouse-mobile`, which measures
+    # performance budgets, not behaviour. Every defect the 2026-08-18 QA sweep
+    # and #374 found was found by a human driving a browser; this is what turns
+    # that class of finding into a red build instead of a support ticket.
+    #
+    # WHY A MATRIX RATHER THAN ONE JOB RUNNING ALL THREE SUITES.
+    # Each leg gets its own Postgres service container, so each suite starts
+    # from a freshly migrated, freshly seeded database. That is not just tidy -
+    # it is load-bearing. These suites are not self-cleaning: every
+    # customer-web run creates a booking on `today + 2` and permanently
+    # consumes a provider for that whole day, because the E2E slot window
+    # ("E2E Anytime") spans 00:00-23:59 and BookingProviderAssignmentService's
+    # double-booking guard is unconditional. Against a long-lived database the
+    # suite therefore exhausts its own provider supply after enough runs and
+    # starts failing with "No one's available for this slot" - a data
+    # condition, not a regression. A per-leg database makes that impossible
+    # here; see tasks.csv #394 for the local-development side of it.
+    #
+    # All three APIs start in every leg. provider-web genuinely needs all
+    # three (admin-api seeds the catalog and assigns, consumer-api creates and
+    # pays for the booking, provider-api is what the app talks to), and paying
+    # that cost uniformly is worth more than three slightly different setups
+    # that drift apart.
+    #
+    # ASPNETCORE_ENVIRONMENT=Development is required, not incidental: it
+    # relaxes the RateLimiting overrides, sets the CORS origins each frontend
+    # is served from, and maps provider-api's dev-only login endpoint, which
+    # is the only way the provider suite can authenticate without a real OTP
+    # (SandboxNotificationProvider never delivers one - PRODUCTION-READINESS.md
+    # §2.2).
+    name: E2E (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    needs: backend
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # customer-web is deliberately ABSENT, and this is the only thing in
+          # this job that is not yet proven. Its suite is not green on any
+          # environment it has been run in: it fails on the long-lived dev
+          # database from the provider-supply exhaustion described above
+          # (#394), and it also failed on an improvised fresh stack built to
+          # test that theory - though that stack differed from this job's path
+          # (next dev on a non-standard port, no `npm run seed:ci`), so those
+          # failures are not evidence about customer-web itself either way.
+          # Adding an unverified leg would put a red job on main on day one,
+          # which is how a gate gets continue-on-error'd and stops being a
+          # gate. Tracked as #395: run the suite against this job's exact
+          # shape, fix what it finds, then add the leg back here. The
+          # lighthouse-mobile job below already drives customer-web against a
+          # fresh CI database, so the shape is expected to work.
+          - app: admin-web
+            port: 3001
+          - app: provider-web
+            port: 3002
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # Matches docker-compose.yml / appsettings.Development.json's dev
+          # defaults exactly, so the APIs need no connection-string override -
+          # same reasoning as the lighthouse-mobile job above.
+          POSTGRES_DB: nestly
+          POSTGRES_USER: nestly
+          POSTGRES_PASSWORD: nestly_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nestly -d nestly"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/${{ matrix.app }}/package-lock.json
+
+      - name: Build backend
+        run: dotnet build Nestly.sln --configuration Release
+
+      - name: Apply database migrations
+        run: |
+          dotnet tool restore
+          bash database/scripts/apply-migrations.sh
+
+      - name: Seed accounts, geography and provider capacity
+        env:
+          PGURL: postgresql://nestly:nestly_dev@localhost:5432/nestly
+        run: |
+          set -e
+          # Order matters: providers must exist before the capacity seed gives
+          # them service areas and skills, and the category-city mapping is
+          # what makes the seeded catalog visible in E2E City at all.
+          for f in dev-admin-seed dev-customer-seed dev-provider-seed \
+                   dev-category-city-mapping-seed dev-provider-e2e-capacity-seed; do
+            echo "--- $f"
+            psql "$PGURL" -v ON_ERROR_STOP=1 -f "database/seed/$f.sql"
+          done
+
+      - name: Start consumer-api, admin-api and provider-api
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          set -e
+          dotnet run --project backend/consumer-api/ConsumerApi --no-build --configuration Release --urls http://localhost:5257 > consumer-api.log 2>&1 &
+          dotnet run --project backend/admin-api/AdminApi       --no-build --configuration Release --urls http://localhost:5177 > admin-api.log 2>&1 &
+          dotnet run --project backend/provider-api/ProviderApi --no-build --configuration Release --urls http://localhost:5337 > provider-api.log 2>&1 &
+
+          for url in http://localhost:5257/health/ready http://localhost:5177/health/ready http://localhost:5337/health/ready; do
+            echo "Waiting for $url ..."
+            for i in $(seq 1 60); do
+              if curl -sf "$url" >/dev/null; then echo "$url is ready"; break; fi
+              if [ "$i" -eq 60 ]; then
+                echo "$url did not become ready in time"
+                cat consumer-api.log admin-api.log provider-api.log
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Install ${{ matrix.app }} dependencies
+        working-directory: frontend/${{ matrix.app }}
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend/${{ matrix.app }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and start ${{ matrix.app }}
+        working-directory: frontend/${{ matrix.app }}
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:5257
+        run: |
+          set -e
+          npm run build
+          npm run start > web.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:${{ matrix.port }}/ >/dev/null; then
+              echo "${{ matrix.app }} is ready"; break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "${{ matrix.app }} did not become ready in time"; cat web.log; exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Run Playwright suite
+        working-directory: frontend/${{ matrix.app }}
+        run: npm run test:e2e
+
+      - name: Why did it fail - was the database even bookable?
+        # Task #389's probe, as a post-failure diagnostic rather than a
+        # pre-flight gate. It cannot be a gate: each suite's own Playwright
+        # `globalSetup` is what seeds the catalog and geography, so the
+        # database is legitimately NOT bookable until the test command itself
+        # has started. (Verified the hard way - as a pre-run step this failed
+        # on a correctly seeded CI database.) After a failure it is the single
+        # most useful line in the log: it separates "the app is broken" from
+        # "the database could never have served this booking", which otherwise
+        # surfaces as a misleading locator timeout deep inside a spec.
+        if: failure()
+        run: |
+          curl -s http://localhost:5257/health/bootstrap | python3 -m json.tool || true
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.app }}
+          path: |
+            frontend/${{ matrix.app }}/test-results
+            frontend/${{ matrix.app }}/playwright-report
+          retention-days: 14
+          if-no-files-found: ignore
+
   docker:
     name: Docker image build
     runs-on: ubuntu-latest
