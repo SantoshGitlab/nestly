@@ -21,7 +21,7 @@ messages say so:
 | Row | Branch (pushed to origin) | State |
 |---|---|---|
 | 388 | `feature/388-security-scanning` | **DONE and merged to `main`.** All four scan types run locally to verify; both baselines match the observed findings key-for-key, so the gate is green on merge. Row closed. Remediation of the six baselined advisories filed as **#393**. |
-| 385 | `feature/385-e2e-in-ci` | **WIP.** provider-web Playwright config + e2e suite; agent stopped while fixing spec locators. |
+| 385 | `feature/385-e2e-in-ci` | **DONE and merged to `main`.** provider-web suite green (5, twice); admin-web verified at 7; matrixed `e2e` job added to ci.yml. customer-web held out of the matrix as unverified — see **#395**. Row closed. |
 | 389 | `feature/389-bootstrap-readiness` | **DONE and merged to `main`.** Probe + `/health/bootstrap` + `bootstrap-bookability.sql` + runbook section. Verified against a scratch database, both the positive and the negative path. Row closed. |
 | 387 | `feature/387-load-harness` | **WIP.** k6 harness scaffold under `load/`. Agent stopped before writing the scenarios. |
 | 386 | *not started* | Split `Catalog.Tests`; re-verify `CustomerManagement.Tests`. |
@@ -30,9 +30,10 @@ All four forked from `3faf0e2`, one commit before this document existed, so a
 diff against `main` shows this file as deleted. That is an artifact of the fork
 point, not a deletion — merging will not remove it.
 
-**Finish each branch before merging it.** 389 and 388 have since been completed,
-verified and merged. The remaining two (385, 387) still have no passing build or
-test run behind them. Treat those as salvaged drafts, not as deliverables.
+**Finish each branch before merging it.** 389, 388 and 385 have since been
+completed, verified and merged. Only **387** (`feature/387-load-harness`, a k6
+scaffold with no scenarios written) remains an unverified draft — treat it as
+one, not as a deliverable.
 
 **386 is deliberately last.** It rewrites `backend/tests/**` and `Nestly.sln`,
 and 389 adds tests into that same tree — running them concurrently would
@@ -41,7 +42,8 @@ merged, so it splits the final state rather than a stale one.
 
 ## 2. MERGE ORDER
 
-**388 -> 385 -> 387 -> 389**, then start 386. (388 and 389 are done.)
+**388 -> 385 -> 387 -> 389**, then start 386. (388, 389 and 385 are done; 387
+and 386 remain.)
 
 The order is not arbitrary. It runs from least-entangled to most: 388 touches
 only new files, 385 owns `ci.yml`, 387 owns a new top-level directory, 389
