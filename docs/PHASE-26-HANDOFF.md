@@ -20,7 +20,7 @@ messages say so:
 
 | Row | Branch (pushed to origin) | State |
 |---|---|---|
-| 388 | `feature/388-security-scanning` | Agent committed its own work (`569fe67`) before stopping. Adds dependabot.yml, codeql.yml, container-scan.yml, security.yml. **Not verified by a build/test run here.** |
+| 388 | `feature/388-security-scanning` | **DONE and merged to `main`.** All four scan types run locally to verify; both baselines match the observed findings key-for-key, so the gate is green on merge. Row closed. Remediation of the six baselined advisories filed as **#393**. |
 | 385 | `feature/385-e2e-in-ci` | **WIP.** provider-web Playwright config + e2e suite; agent stopped while fixing spec locators. |
 | 389 | `feature/389-bootstrap-readiness` | **DONE and merged to `main`.** Probe + `/health/bootstrap` + `bootstrap-bookability.sql` + runbook section. Verified against a scratch database, both the positive and the negative path. Row closed. |
 | 387 | `feature/387-load-harness` | **WIP.** k6 harness scaffold under `load/`. Agent stopped before writing the scenarios. |
@@ -30,8 +30,8 @@ All four forked from `3faf0e2`, one commit before this document existed, so a
 diff against `main` shows this file as deleted. That is an artifact of the fork
 point, not a deletion — merging will not remove it.
 
-**Finish each branch before merging it.** 389 has since been completed, verified
-and merged; the remaining three (385, 387, 388) still have no passing build or
+**Finish each branch before merging it.** 389 and 388 have since been completed,
+verified and merged. The remaining two (385, 387) still have no passing build or
 test run behind them. Treat those as salvaged drafts, not as deliverables.
 
 **386 is deliberately last.** It rewrites `backend/tests/**` and `Nestly.sln`,
@@ -41,7 +41,7 @@ merged, so it splits the final state rather than a stale one.
 
 ## 2. MERGE ORDER
 
-**388 -> 385 -> 387 -> 389**, then start 386.
+**388 -> 385 -> 387 -> 389**, then start 386. (388 and 389 are done.)
 
 The order is not arbitrary. It runs from least-entangled to most: 388 touches
 only new files, 385 owns `ci.yml`, 387 owns a new top-level directory, 389
