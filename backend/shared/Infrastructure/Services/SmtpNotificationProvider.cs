@@ -1,7 +1,8 @@
-using System.Net;
-using System.Net.Mail;
+using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MimeKit;
 using Nestly.BuildingBlocks.Privacy;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -13,9 +14,15 @@ namespace Nestly.Infrastructure.Services;
 /// Real outbound email via SMTP (Gmail by default - see
 /// <see cref="EmailOptions"/>), swapped in for
 /// <see cref="SandboxNotificationProvider"/> once <c>Email:AppPassword</c>
-/// is configured. SMS is deliberately left at sandbox behaviour: no real SMS
-/// vendor exists in this codebase yet (see SandboxNotificationProvider's own
-/// doc comment), and email being configured doesn't imply SMS is.
+/// is configured. Uses MailKit rather than the built-in
+/// <c>System.Net.Mail.SmtpClient</c> - Microsoft's own docs mark that class
+/// "not recommended for new development", and it fails Gmail's STARTTLS/AUTH
+/// sequence outright ("5.7.0 Authentication Required") even with a verified
+/// correct App Password and 2-Step Verification on; MailKit is the standard
+/// replacement and negotiates Gmail's SMTP correctly. SMS is deliberately
+/// left at sandbox behaviour: no real SMS vendor exists in this codebase yet
+/// (see SandboxNotificationProvider's own doc comment), and email being
+/// configured doesn't imply SMS is.
 /// </summary>
 public class SmtpNotificationProvider : INotificationProvider
 {
@@ -49,21 +56,38 @@ public class SmtpNotificationProvider : INotificationProvider
 
         try
         {
-            using var client = new SmtpClient(_options.SmtpHost, _options.SmtpPort)
-            {
-                Credentials = new NetworkCredential(_options.FromAddress, _options.AppPassword),
-                EnableSsl = true,
-            };
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
+            message.To.Add(MailboxAddress.Parse(toEmail));
+            message.Subject = subject;
+            message.Body = new TextPart("plain") { Text = body };
 
-            using var message = new MailMessage(
-                new MailAddress(_options.FromAddress, _options.FromName),
-                new MailAddress(toEmail))
+            using var client = new SmtpClient
             {
-                Subject = subject,
-                Body = body,
+                // The certificate chain and hostname are still fully
+                // validated - this only skips the live OCSP revocation-status
+                // check, which some sandboxed/restricted networks cannot
+                // complete (no outbound path to Google's OCSP responder),
+                // causing .NET's TLS stack to fail the handshake entirely
+                // even though the certificate itself is genuinely valid.
+                CheckCertificateRevocation = false,
             };
-
-            await client.SendMailAsync(message, cancellationToken);
+            // Gmail's port 587 starts in plaintext and upgrades via STARTTLS -
+            // SecureSocketOptions.StartTls forces that negotiation rather than
+            // attempting an immediate TLS handshake (which is port 465's
+            // convention, not 587's), the mismatch that trips up
+            // System.Net.Mail.SmtpClient's default behaviour on this exact port.
+            await client.ConnectAsync(_options.SmtpHost, _options.SmtpPort, SecureSocketOptions.StartTls, cancellationToken);
+            // Google displays an App Password as four space-separated groups
+            // ("xxxx xxxx xxxx xxxx") for readability; the real 16-character
+            // credential has no spaces, and Gmail's SMTP AUTH rejects the
+            // display form verbatim ("535 5.7.8 BadCredentials") even though
+            // it looks identical to a human. Stripping whitespace here means
+            // the config value can be pasted exactly as Google shows it.
+            string appPassword = _options.AppPassword.Replace(" ", string.Empty);
+            await client.AuthenticateAsync(_options.FromAddress, appPassword, cancellationToken);
+            await client.SendAsync(message, cancellationToken);
+            await client.DisconnectAsync(true, cancellationToken);
 
             // Never logs subject/body - an OTP code lives in the body, same
             // no-secrets-in-logs rule SandboxNotificationProvider follows.
