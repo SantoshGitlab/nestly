@@ -11,6 +11,7 @@ using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence.Readiness;
 using Nestly.Infrastructure.Persistence.Seed;
 using Nestly.Infrastructure.Realtime;
 using Serilog;
@@ -73,6 +74,15 @@ var app = builder.Build();
 // module. Idempotent, and never re-grants a permission an operator has
 // deliberately revoked - see AdminPermissionReconciler's doc comment.
 app.ReconcileAdminPermissions();
+
+// Task 389 (PRODUCTION-READINESS.md 5.1, QA-REPORT-2026-08-18 Phase 1):
+// reports whether this database can serve a booking at all. Unlike the
+// reconciliation above it writes nothing - which cities a deployment serves
+// is a business decision with no catalog in code to reconcile against - so it
+// names the missing rows and leaves the fix to the operator, who does it from
+// this very API's admin panel or from
+// database/seed/bootstrap-launch-city.sql. See BookabilityProbe.
+app.ReportBookabilityReadiness();
 
 // Pipeline order: correlation first so all downstream logs carry the id,
 // then exception shielding, then request logging.
@@ -200,6 +210,10 @@ app.MapHub<BookingTrackingHub>(HubRoutes.TrackingPath);
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+// Bootstrap: the database holds enough data for a customer to book something
+// (task 389). Separate from /health/ready because the plain-text writer those
+// two use reports only an aggregate word - this one names each missing link.
+app.MapBookabilityHealthCheck();
 
 // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): Prometheus scrape
 // endpoint for the payment/booking/notification counters and histograms
