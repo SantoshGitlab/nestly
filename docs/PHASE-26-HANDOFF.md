@@ -22,7 +22,7 @@ messages say so:
 |---|---|---|
 | 388 | `feature/388-security-scanning` | Agent committed its own work (`569fe67`) before stopping. Adds dependabot.yml, codeql.yml, container-scan.yml, security.yml. **Not verified by a build/test run here.** |
 | 385 | `feature/385-e2e-in-ci` | **WIP.** provider-web Playwright config + e2e suite; agent stopped while fixing spec locators. |
-| 389 | `feature/389-bootstrap-readiness` | **WIP.** Bookability readiness probe under `Infrastructure/Persistence/Readiness/`, wired into all three `Program.cs`, plus `BookabilityProbeTests.cs`. Agent stopped before the operator bootstrap path. |
+| 389 | `feature/389-bootstrap-readiness` | **DONE and merged to `main`.** Probe + `/health/bootstrap` + `bootstrap-bookability.sql` + runbook section. Verified against a scratch database, both the positive and the negative path. Row closed. |
 | 387 | `feature/387-load-harness` | **WIP.** k6 harness scaffold under `load/`. Agent stopped before writing the scenarios. |
 | 386 | *not started* | Split `Catalog.Tests`; re-verify `CustomerManagement.Tests`. |
 
@@ -30,8 +30,9 @@ All four forked from `3faf0e2`, one commit before this document existed, so a
 diff against `main` shows this file as deleted. That is an artifact of the fork
 point, not a deletion — merging will not remove it.
 
-**Finish each branch before merging it.** None of the four has a passing build
-or test run behind it. Treat them as salvaged drafts, not as deliverables.
+**Finish each branch before merging it.** 389 has since been completed, verified
+and merged; the remaining three (385, 387, 388) still have no passing build or
+test run behind them. Treat those as salvaged drafts, not as deliverables.
 
 **386 is deliberately last.** It rewrites `backend/tests/**` and `Nestly.sln`,
 and 389 adds tests into that same tree — running them concurrently would
