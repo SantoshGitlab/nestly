@@ -855,10 +855,26 @@ public static class DependencyInjection
         services.AddScoped<IPlatformEscrowLedgerRepository, PlatformEscrowLedgerRepository>();
         services.AddScoped<IEscrowService, EscrowService>();
 
-        // Sandbox in every environment for now (SRS 30.2): no real SMS/email
-        // vendor is configured yet. Swap this registration, not the callers,
-        // when a production provider lands.
-        services.AddScoped<INotificationProvider, SandboxNotificationProvider>();
+        // SRS 30.2: SMS still has no real vendor configured. Email switches to
+        // a real Gmail SMTP send once Email:AppPassword is set (see
+        // EmailOptions's doc comment for where that value comes from) -
+        // reading the raw config value here rather than IOptions<T> because
+        // this decision runs at registration time, before the container that
+        // would resolve IOptions<T> exists yet.
+        services
+            .AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName))
+            .ValidateDataAnnotations();
+
+        bool emailConfigured = !string.IsNullOrWhiteSpace(configuration[$"{EmailOptions.SectionName}:{nameof(EmailOptions.AppPassword)}"]);
+        if (emailConfigured)
+        {
+            services.AddScoped<INotificationProvider, SmtpNotificationProvider>();
+        }
+        else
+        {
+            services.AddScoped<INotificationProvider, SandboxNotificationProvider>();
+        }
 
         services.AddRouteEstimates(configuration);
 
