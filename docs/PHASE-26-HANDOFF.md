@@ -12,16 +12,26 @@ rules that keep the merges clean. Read it before touching anything.
 
 `main` is at `3faf0e2` (the Phase 26 filing commit), pushed to `origin/main`.
 
-Five of the seventeen rows were started, each by its own agent in its own
-worktree under `.claude/worktrees/`, each on its own branch:
+Five of the seventeen rows were started. **All four in-flight agents hit the
+account session limit mid-task on 2026-08-21 and stopped.** Their working trees
+were preserved as commits and pushed, so nothing was lost — but with one
+exception the branches are **incomplete and unverified**, and their commit
+messages say so:
 
-| Row | Branch | Scope |
+| Row | Branch (pushed to origin) | State |
 |---|---|---|
-| 385 | `feature/385-e2e-in-ci` | Run the Playwright suites in CI; write provider-web's missing suite |
-| 388 | `feature/388-security-scanning` | Dependabot, dependency/SAST/image scanning |
-| 389 | `feature/389-bootstrap-readiness` | Bootstrap data + a loud signal for an unbookable database |
-| 387 | `feature/387-load-harness` | Real load harness + recorded baseline |
-| 386 | *not yet started* | Split `Catalog.Tests`; re-verify `CustomerManagement.Tests` |
+| 388 | `feature/388-security-scanning` | Agent committed its own work (`569fe67`) before stopping. Adds dependabot.yml, codeql.yml, container-scan.yml, security.yml. **Not verified by a build/test run here.** |
+| 385 | `feature/385-e2e-in-ci` | **WIP.** provider-web Playwright config + e2e suite; agent stopped while fixing spec locators. |
+| 389 | `feature/389-bootstrap-readiness` | **WIP.** Bookability readiness probe under `Infrastructure/Persistence/Readiness/`, wired into all three `Program.cs`, plus `BookabilityProbeTests.cs`. Agent stopped before the operator bootstrap path. |
+| 387 | `feature/387-load-harness` | **WIP.** k6 harness scaffold under `load/`. Agent stopped before writing the scenarios. |
+| 386 | *not started* | Split `Catalog.Tests`; re-verify `CustomerManagement.Tests`. |
+
+All four forked from `3faf0e2`, one commit before this document existed, so a
+diff against `main` shows this file as deleted. That is an artifact of the fork
+point, not a deletion — merging will not remove it.
+
+**Finish each branch before merging it.** None of the four has a passing build
+or test run behind it. Treat them as salvaged drafts, not as deliverables.
 
 **386 is deliberately last.** It rewrites `backend/tests/**` and `Nestly.sln`,
 and 389 adds tests into that same tree — running them concurrently would
