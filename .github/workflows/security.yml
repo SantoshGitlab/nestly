@@ -178,47 +178,19 @@ jobs:
           #   dotnet list Nestly.sln package --vulnerable --include-transitive
           # Key is "package@resolvedVersion". Changing the resolved version
           # invalidates the entry and re-arms the gate (see RULE 3).
+          #
+          # Empty as of 2026-08-21 (#393): all three original entries -
+          # MessagePack@2.5.108, System.Text.Json@8.0.0, and
+          # SQLitePCLRaw.lib.e_sqlite3@2.1.6 - were cleared by the version
+          # bumps that entry's own CLEARED BY note described (System.Text.Json
+          # pinned explicitly in AdminApi/ProviderApi; SignalR.StackExchangeRedis
+          # and EntityFrameworkCore.Sqlite bumped past the versions that pulled
+          # in the other two transitively). `dotnet list package --vulnerable
+          # --include-transitive` reports zero findings across every project as
+          # of that commit. Left as an empty dict rather than deleted so the
+          # next real finding has a populated example to follow.
           # ------------------------------------------------------------------
-          BASELINE = {
-              "MessagePack@2.5.108": {
-                  # 2 High + 10 Moderate. Transitive, from
-                  # Microsoft.AspNetCore.SignalR.StackExchangeRedis 8.0.10
-                  # (backend/shared/Infrastructure/Infrastructure.csproj:33),
-                  # so it is present in all three API hosts and all four test
-                  # projects. Nothing in this repo hands MessagePack
-                  # attacker-controlled bytes directly - it deserialises the
-                  # SignalR Redis backplane, which is internal traffic on a
-                  # trusted network - so the exposure is real but not
-                  # internet-facing.
-                  # CLEARED BY: bumping the SignalR.StackExchangeRedis
-                  # PackageReference (an edit to backend/**, outside #388's
-                  # allowed file set - needs its own task).
-                  "reason": "transitive via SignalR.StackExchangeRedis 8.0.10; internal backplane traffic only",
-                  "review_by": "2026-11-20",
-              },
-              "System.Text.Json@8.0.0": {
-                  # 2 High. Transitive, resolved into AdminApi and ProviderApi
-                  # only (ConsumerApi resolves a patched version through a
-                  # different path). This one is genuinely reachable - it is
-                  # the JSON deserialiser on request bodies - and is the
-                  # highest-priority item in this baseline.
-                  # CLEARED BY: an explicit
-                  # <PackageReference Include="System.Text.Json" Version="8.0.5"/>
-                  # (or later) in the AdminApi/ProviderApi csproj to float the
-                  # transitive pin up. Again a backend/** edit.
-                  "reason": "transitive pin in AdminApi/ProviderApi; reachable on request deserialisation - HIGHEST PRIORITY in this baseline",
-                  "review_by": "2026-09-20",
-              },
-              "SQLitePCLRaw.lib.e_sqlite3@2.1.6": {
-                  # 1 High. Test-only: pulled in by the four *.Tests projects'
-                  # EF Core in-memory/SQLite test provider. Never published in
-                  # any Docker image (the Dockerfiles publish only the API
-                  # projects), so it does not reach production. It IS executed
-                  # on CI runners, hence "baselined", not "excluded".
-                  "reason": "test-project-only dependency; not present in any published image",
-                  "review_by": "2027-02-20",
-              },
-          }
+          BASELINE = {}
 
           BLOCKING = {"High", "Critical"}
 

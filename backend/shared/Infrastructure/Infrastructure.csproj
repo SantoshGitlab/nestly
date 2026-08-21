@@ -31,7 +31,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.10" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="8.0.10" />
+    <!-- Task #393: 8.0.10 pulled in MessagePack 2.5.108, which carries
+         GHSA-4qm4-8hg2-g2xm (2 High + 10 Moderate). Bumped alone, ahead of
+         the rest of this project's 8.0.10-pinned Microsoft.* packages, to
+         float the transitive MessagePack version past the fix. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="8.0.30" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.17.0-beta.1" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />

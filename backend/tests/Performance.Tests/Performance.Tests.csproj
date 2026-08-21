@@ -26,7 +26,8 @@
       its doc comment) so genuinely concurrent callers get independent
       connections instead of sharing one.
     -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <!-- Task #393: bumped past GHSA-2m69-gcr7-jv3q (High) in the transitive SQLitePCLRaw.lib.e_sqlite3 - test-only, never in a published image, but easy to clear so it should not linger. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
     <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
   </ItemGroup>
 

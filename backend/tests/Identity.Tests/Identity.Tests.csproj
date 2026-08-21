@@ -27,7 +27,8 @@
       unique-index enforcement (task 35c), and the in-memory provider ignores
       indexes entirely, so it would report a false pass.
     -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <!-- Task #393: bumped past GHSA-2m69-gcr7-jv3q (High) in the transitive SQLitePCLRaw.lib.e_sqlite3 - test-only, never in a published image, but easy to clear so it should not linger. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
     <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
   </ItemGroup>
 
