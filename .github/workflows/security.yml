@@ -1,0 +1,518 @@
+name: Security - dependencies
+
+# Continuous dependency vulnerability scanning for both of this repo's
+# ecosystems (task #388, docs/PRODUCTION-READINESS.md §4.4).
+#
+# ---------------------------------------------------------------------------
+# WHY THIS EXISTS
+# ---------------------------------------------------------------------------
+# Tasks 133a-g closed as manual OWASP review passes (injection, XSS, CSRF,
+# IDOR, broken access control, payment callback abuse, OTP brute force) and
+# their findings were real. But a manual review is a snapshot of ONE commit,
+# and this repo has moved 100+ commits since while pulling updates from NuGet
+# and npm. Nothing was re-checking. This workflow is the "keeps checking"
+# half; .github/dependabot.yml is the "produces the fix" half; codeql.yml is
+# SAST over first-party code; container-scan.yml covers the OS layer of the
+# three API images.
+#
+# ---------------------------------------------------------------------------
+# THE THRESHOLD DECISION - read this before changing any number below
+# ---------------------------------------------------------------------------
+# The failure mode that kills a scanner is not missing a CVE. It is producing
+# an unactionable wall of red on every PR until someone adds
+# `continue-on-error: true` and the job becomes decoration. Three rules keep
+# the signal real:
+#
+#   RULE 1 - Only High and Critical block. Moderate and Low are reported in
+#   the job summary and never fail a build. Rationale: the standing Moderate
+#   population in a .NET 8 + Next.js tree is dominated by DoS-class issues in
+#   transitive serializers and build tooling. Blocking on them buys almost no
+#   real risk reduction and costs the gate its credibility. Moderates are
+#   still surfaced, and Dependabot still opens PRs for them.
+#
+#   RULE 2 - Only PRODUCTION dependency scope blocks on the npm side
+#   (`npm audit --omit=dev`). Dev-only findings are printed but do not fail.
+#   Rationale: eslint plugins, `glob`'s CLI, and the Lighthouse CI toolchain
+#   never reach a browser or a server. As of this workflow landing, blocking
+#   on full npm scope would have failed customer-web on `@lhci/cli` - a
+#   package that exists solely to run the #350 perf budget in CI - which is
+#   precisely the unactionable noise this rule prevents. Dev-scope findings
+#   ARE still shown in the summary, and a dev-tool compromise is a real
+#   supply-chain risk, so this is "not a merge blocker", not "ignored".
+#   (The .NET side has no equivalent dev/prod split in
+#   `dotnet list package`; the four test projects are scanned with the rest
+#   and their findings are baselined below with that noted explicitly.)
+#
+#   RULE 3 - A BASELINE, not a lowered threshold. This repo already has
+#   High-severity findings in both ecosystems TODAY (enumerated in the
+#   baselines below, each recorded with the version it was accepted at). A
+#   plain "fail on High" gate would be red on its very first run, on findings
+#   that predate this workflow and that #388 is not authorised to fix
+#   (fixing them means editing backend/** and frontend/**). So each existing
+#   finding is written down, at the exact resolved version it was seen at,
+#   with why it is accepted and what clears it. Anything NOT on that list
+#   fails the build immediately.
+#
+#   The baseline is keyed on `package@resolvedVersion`, deliberately NOT on
+#   advisory ID. Consequences, both intended:
+#     - A version bump that does not clear the finding re-arms the gate (the
+#       new version is not in the baseline), so a partial Dependabot upgrade
+#       cannot silently re-accept the risk.
+#     - A NEW advisory published against an already-baselined version does
+#       NOT block a PR. It is reported in the summary and by Dependabot
+#       alerts. This is on purpose: advisory databases churn constantly
+#       against pinned versions (Next.js 14 accumulated 20+ advisories
+#       between this repo's commits), and none of that churn is actionable
+#       without the major upgrade that is already tracked. Blocking on it
+#       would be RULE 1's mistake in a different costume.
+#
+# Every baseline entry carries a REVIEW-BY date. They are not permanent
+# waivers. An entry past its date is reported as stale in the job summary.
+#
+# OPERATING THE BASELINE - the one recurring cost of this design. Because
+# entries are version-keyed, a Dependabot PR that bumps a baselined package
+# WITHOUT clearing its advisories (say postcss 8.5.22 -> 8.5.26 while the
+# sourceMappingURL issues are still open) will fail this gate on that PR. The
+# correct response is to look at the new version's findings and either delete
+# the baseline entry (finding is gone - the job summary's "no longer match"
+# section tells you) or edit the version list and re-date it. The wrong
+# response is to widen the entry to a range so it never re-arms; the re-arming
+# IS the review trigger, and it is what stops a stale accepted-risk note from
+# outliving the risk assessment behind it.
+#
+# ---------------------------------------------------------------------------
+# SCHEDULING
+# ---------------------------------------------------------------------------
+# On PRs and pushes: catches a vulnerability the moment it enters the tree,
+# attributed to the change that introduced it, which is when it is cheapest
+# to act on. Both jobs are lockfile/manifest-only (no `npm ci`, no
+# `dotnet build`), so they add well under a minute.
+#
+# Nightly at 02:15 UTC: catches an advisory published against dependencies
+# that did NOT change. This is the case §4.4 actually complains about - the
+# code stands still and the world moves - and no PR-triggered job can ever
+# see it. Nightly runs the same blocking rules, so a red nightly means
+# something genuinely new landed, not a permanent background failure.
+#
+# ---------------------------------------------------------------------------
+# A NOTE ON EXIT CODES (this is why both jobs parse JSON rather than just
+# checking $?)
+# ---------------------------------------------------------------------------
+# `dotnet list package --vulnerable` exits 0 even when it finds High-severity
+# vulnerabilities - verified against this solution, which currently reports
+# five High advisories and still returns 0. A naive `run: dotnet list package
+# --vulnerable` step passes forever and looks like it is working. `npm audit`
+# does exit non-zero, but on the wrong axis (any severity, full scope), which
+# is RULE 1 and RULE 2 inverted. Both jobs therefore read the machine-readable
+# output and apply the rules above.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  schedule:
+    # 02:15 UTC daily. Offset from :00 because GitHub's scheduler queues are
+    # heavily contended on the hour; offset from container-scan.yml's 04:00
+    # and codeql.yml's 03:00 so the three do not contend for runners.
+    - cron: "15 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-deps-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # =========================================================================
+  # NuGet
+  # =========================================================================
+  nuget:
+    name: NuGet vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # Same pin as ci.yml - the SDK version affects which NuGet audit
+          # sources and JSON schema version are available, so this must not
+          # drift from the version the build uses.
+          global-json-file: global.json
+
+      - name: Restore
+        # `dotnet list package --vulnerable` reads project.assets.json, so a
+        # restore is mandatory. No build is needed - this is a manifest-level
+        # scan, which is what keeps the job under a minute.
+        run: dotnet restore Nestly.sln
+
+      - name: Collect vulnerability report
+        run: |
+          # --include-transitive matters more than the direct list: every
+          # High finding in this solution today is transitive (MessagePack
+          # via Microsoft.AspNetCore.SignalR.StackExchangeRedis,
+          # System.Text.Json via the ASP.NET stack). A direct-only scan
+          # reports this repo as clean, which is false.
+          #
+          # --output-version 1 pins the JSON schema so an SDK bump cannot
+          # silently reshape what the gate parses.
+          dotnet list Nestly.sln package --vulnerable --include-transitive \
+            --format json --output-version 1 > nuget-vulnerabilities.json
+          echo "::group::Raw report"
+          cat nuget-vulnerabilities.json
+          echo "::endgroup::"
+
+      - name: Apply threshold and baseline
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from datetime import date
+
+          # ------------------------------------------------------------------
+          # BASELINE - NuGet
+          #
+          # Every entry was observed by running, on 2026-08-20:
+          #   dotnet list Nestly.sln package --vulnerable --include-transitive
+          # Key is "package@resolvedVersion". Changing the resolved version
+          # invalidates the entry and re-arms the gate (see RULE 3).
+          # ------------------------------------------------------------------
+          BASELINE = {
+              "MessagePack@2.5.108": {
+                  # 2 High + 10 Moderate. Transitive, from
+                  # Microsoft.AspNetCore.SignalR.StackExchangeRedis 8.0.10
+                  # (backend/shared/Infrastructure/Infrastructure.csproj:33),
+                  # so it is present in all three API hosts and all four test
+                  # projects. Nothing in this repo hands MessagePack
+                  # attacker-controlled bytes directly - it deserialises the
+                  # SignalR Redis backplane, which is internal traffic on a
+                  # trusted network - so the exposure is real but not
+                  # internet-facing.
+                  # CLEARED BY: bumping the SignalR.StackExchangeRedis
+                  # PackageReference (an edit to backend/**, outside #388's
+                  # allowed file set - needs its own task).
+                  "reason": "transitive via SignalR.StackExchangeRedis 8.0.10; internal backplane traffic only",
+                  "review_by": "2026-11-20",
+              },
+              "System.Text.Json@8.0.0": {
+                  # 2 High. Transitive, resolved into AdminApi and ProviderApi
+                  # only (ConsumerApi resolves a patched version through a
+                  # different path). This one is genuinely reachable - it is
+                  # the JSON deserialiser on request bodies - and is the
+                  # highest-priority item in this baseline.
+                  # CLEARED BY: an explicit
+                  # <PackageReference Include="System.Text.Json" Version="8.0.5"/>
+                  # (or later) in the AdminApi/ProviderApi csproj to float the
+                  # transitive pin up. Again a backend/** edit.
+                  "reason": "transitive pin in AdminApi/ProviderApi; reachable on request deserialisation - HIGHEST PRIORITY in this baseline",
+                  "review_by": "2026-09-20",
+              },
+              "SQLitePCLRaw.lib.e_sqlite3@2.1.6": {
+                  # 1 High. Test-only: pulled in by the four *.Tests projects'
+                  # EF Core in-memory/SQLite test provider. Never published in
+                  # any Docker image (the Dockerfiles publish only the API
+                  # projects), so it does not reach production. It IS executed
+                  # on CI runners, hence "baselined", not "excluded".
+                  "reason": "test-project-only dependency; not present in any published image",
+                  "review_by": "2027-02-20",
+              },
+          }
+
+          BLOCKING = {"High", "Critical"}
+
+          report = json.load(open("nuget-vulnerabilities.json"))
+
+          findings = {}   # package@version -> {severity: count}, plus projects
+          for project in report.get("projects", []):
+              pname = os.path.basename(project["path"]).replace(".csproj", "")
+              for fw in project.get("frameworks") or []:
+                  for bucket in ("topLevelPackages", "transitivePackages"):
+                      for pkg in fw.get(bucket) or []:
+                          key = f'{pkg["id"]}@{pkg["resolvedVersion"]}'
+                          entry = findings.setdefault(
+                              key, {"sev": {}, "projects": set(), "direct": bucket == "topLevelPackages"}
+                          )
+                          entry["projects"].add(pname)
+                          for v in pkg.get("vulnerabilities") or []:
+                              # De-duplicate by advisory URL: the same package
+                              # resolves into eight projects here, and counting
+                              # per-project occurrences would report "16x High"
+                              # for what is two advisories.
+                              entry["sev"].setdefault(v["severity"], set()).add(v["advisoryurl"])
+
+          blocking, accepted, informational = [], [], []
+          for key, e in sorted(findings.items()):
+              worst = [s for s in ("Critical", "High") if s in e["sev"]]
+              if worst:
+                  (accepted if key in BASELINE else blocking).append((key, e))
+              else:
+                  informational.append((key, e))
+
+          def table(rows, show_reason=False):
+              out = ["| Package | Severities | Projects |" + (" Accepted because | Review by |" if show_reason else "")]
+              out.append("|---|---|---|" + ("---|---|" if show_reason else ""))
+              for key, e in rows:
+                  sev = ", ".join(f"{len(urls)}x {s}" for s, urls in sorted(e["sev"].items()))
+                  projs = ", ".join(sorted(e["projects"]))
+                  row = f"| `{key}` | {sev} | {projs} |"
+                  if show_reason:
+                      b = BASELINE[key]
+                      row += f" {b['reason']} | {b['review_by']} |"
+                  out.append(row)
+              return "\n".join(out)
+
+          summary = ["## NuGet dependency scan", ""]
+          if blocking:
+              summary += ["### :x: Blocking - High/Critical, not baselined", "", table(blocking), ""]
+          else:
+              summary += ["### :white_check_mark: No un-baselined High/Critical findings", ""]
+          if accepted:
+              summary += ["### Accepted (baselined) High/Critical", "", table(accepted, show_reason=True), ""]
+          if informational:
+              summary += ["### Informational - Moderate/Low, never blocking (RULE 1)", "", table(informational), ""]
+
+          # Stale-baseline check. A waiver with no expiry is a permanent
+          # waiver, which is how a baseline turns into a way of not fixing
+          # things. Reported loudly; deliberately NOT a build failure, so
+          # that a date rolling over cannot block an unrelated PR.
+          today = date.today().isoformat()
+          stale = [k for k, b in BASELINE.items() if b["review_by"] < today]
+          if stale:
+              summary += ["### :warning: Baseline entries past their review-by date", ""]
+              summary += [f"- `{k}` (review by {BASELINE[k]['review_by']})" for k in stale] + [""]
+              for k in stale:
+                  print(f"::warning::NuGet baseline entry {k} is past its review-by date ({BASELINE[k]['review_by']})")
+
+          # Entries that no longer match anything - the finding was fixed and
+          # the waiver should be deleted. Also non-fatal.
+          unused = sorted(set(BASELINE) - set(findings))
+          if unused:
+              summary += ["### Baseline entries that no longer match (safe to delete)", ""]
+              summary += [f"- `{k}`" for k in unused] + [""]
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(summary) + "\n")
+
+          for key, e in blocking:
+              print(f"::error::{key} has un-baselined High/Critical advisories "
+                    f"({', '.join(sorted(e['sev']))}) in {', '.join(sorted(e['projects']))}")
+          if blocking:
+              print("\nA High or Critical NuGet advisory is present that is not recorded in this "
+                    "workflow's baseline. Fix it (preferred), or - if it is genuinely not "
+                    "exploitable here - add it to BASELINE in .github/workflows/security.yml with "
+                    "a written reason and a review-by date. Do not raise the threshold.")
+              sys.exit(1)
+          print("NuGet scan passed: no un-baselined High/Critical advisories.")
+          PY
+
+  # =========================================================================
+  # npm - one job per app. Same matrix as ci.yml's `frontend` job and the
+  # same reason (#366): the list is every directory under frontend/, not a
+  # subset someone has to remember to extend.
+  # =========================================================================
+  npm:
+    name: npm vulnerability scan (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      # fail-fast: false so one app's finding does not cancel the other two -
+      # a partial report is how you end up fixing the same class of issue
+      # three times in three PRs.
+      fail-fast: false
+      matrix:
+        app: [customer-web, admin-web, provider-web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          # No `cache: npm` here on purpose: this job never installs. `npm
+          # audit` resolves entirely from package-lock.json plus the registry
+          # advisory endpoint, so there is no node_modules to cache and
+          # priming one would cost more than the whole job.
+
+      - name: Audit
+        working-directory: frontend/${{ matrix.app }}
+        run: |
+          # `npm audit` exits non-zero whenever it finds ANYTHING, at any
+          # severity, in any scope - which is the opposite of RULE 1 and
+          # RULE 2. `|| true` defers the decision to the gate below; it is
+          # not a way of ignoring the result.
+          npm audit --omit=dev --json > audit-production.json || true
+          npm audit --json > audit-all.json || true
+
+      - name: Apply threshold and baseline
+        working-directory: frontend/${{ matrix.app }}
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from datetime import date
+
+          app = os.environ["APP"]
+
+          # ------------------------------------------------------------------
+          # BASELINE - npm (shared across all three apps; they run the same
+          # Next.js 14.2.35 stack, so a per-app baseline would be three copies
+          # of the same three entries).
+          #
+          # Observed on 2026-08-20 by running, in each of the three apps:
+          #   npm audit --omit=dev
+          # Versions are the ones resolved in that app's package-lock.json.
+          # ------------------------------------------------------------------
+          BASELINE = {
+              "next": {
+                  "versions": ["14.2.35"],
+                  # Next.js 14.2.35 carries a long and still-growing list of
+                  # High advisories (cache poisoning, SSRF via rewrites,
+                  # middleware bypass, image-optimizer DoS, XSS with CSP
+                  # nonces). Several are only reachable in configurations
+                  # this repo does not use (custom servers, i18n Pages
+                  # Router, remotePatterns image optimisation), but not all.
+                  # There is no patch inside 14.x for the full set.
+                  # CLEARED BY: the Next.js 15/16 major upgrade across all
+                  # three apps - a frontend/** change, outside #388's allowed
+                  # file set, and a real piece of work rather than a bump.
+                  # Dependabot is deliberately NOT configured to ignore this
+                  # major, so the PR that clears it stays visible.
+                  "reason": "no fix within Next.js 14.x; requires the 15/16 major upgrade across all three apps",
+                  "review_by": "2026-10-20",
+              },
+              "postcss": {
+                  "versions": ["8.4.31", "8.5.22", "8.5.25"],
+                  # sourceMappingURL path traversal / arbitrary .map read.
+                  # Transitive, under next's own build toolchain. Reached
+                  # only at build time over first-party CSS in this repo -
+                  # no user-supplied stylesheet is ever compiled - so the
+                  # attacker-controlled-input precondition is not met here.
+                  # CLEARED BY: the same Next.js upgrade that floats postcss.
+                  "reason": "build-time only, over first-party CSS; transitive under next",
+                  "review_by": "2026-10-20",
+              },
+              "nanoid": {
+                  "versions": ["3.3.16"],
+                  # Infinite loop when a custom generator is called with
+                  # size 0. Transitive under next; this repo never calls
+                  # nanoid directly, let alone with a custom generator.
+                  "reason": "transitive under next; not called directly anywhere in frontend/",
+                  "review_by": "2026-10-20",
+              },
+          }
+
+          BLOCKING = {"high", "critical"}
+
+          def load(path):
+              try:
+                  return json.load(open(path))
+              except Exception as exc:   # noqa: BLE001 - report, do not mask
+                  print(f"::error::could not parse {path}: {exc}")
+                  sys.exit(1)
+
+          prod = load("audit-production.json")
+          full = load("audit-all.json")
+
+          if "vulnerabilities" not in prod:
+              # npm audit failed outright (registry down, malformed lockfile).
+              # Treat as a failure: a scan that did not run must never look
+              # like a scan that found nothing.
+              print("::error::npm audit produced no vulnerability report - treating as a failed scan")
+              print(json.dumps(prod)[:2000])
+              sys.exit(1)
+
+          lock = json.load(open("package-lock.json"))
+          def installed_versions(name):
+              seen = set()
+              for path, meta in lock.get("packages", {}).items():
+                  marker = "node_modules/"
+                  idx = path.rfind(marker)
+                  if idx >= 0 and path[idx + len(marker):] == name and meta.get("version"):
+                      seen.add(meta["version"])
+              return sorted(seen)
+
+          blocking, accepted = [], []
+          for name, v in sorted(prod["vulnerabilities"].items()):
+              if v.get("severity") not in BLOCKING:
+                  continue
+              versions = installed_versions(name)
+              entry = BASELINE.get(name)
+              ok = entry is not None and all(ver in entry["versions"] for ver in versions)
+              (accepted if ok else blocking).append((name, v, versions))
+
+          def advisories(v):
+              out = []
+              for via in v.get("via", []):
+                  if isinstance(via, dict):
+                      out.append(f'[{via.get("title", "advisory")}]({via.get("url", "")})')
+              return "<br>".join(out) or "(transitive only)"
+
+          meta_prod = prod["metadata"]["vulnerabilities"]
+          meta_full = full.get("metadata", {}).get("vulnerabilities", {})
+
+          summary = [
+              f"## npm dependency scan - {app}",
+              "",
+              f"- **Production scope** (blocking, RULE 2): "
+              f"{meta_prod.get('critical',0)} critical, {meta_prod.get('high',0)} high, "
+              f"{meta_prod.get('moderate',0)} moderate, {meta_prod.get('low',0)} low",
+              f"- **Full scope incl. dev** (informational): "
+              f"{meta_full.get('critical',0)} critical, {meta_full.get('high',0)} high, "
+              f"{meta_full.get('moderate',0)} moderate, {meta_full.get('low',0)} low",
+              "",
+          ]
+
+          if blocking:
+              summary += ["### :x: Blocking - production-scope High/Critical, not baselined", "",
+                          "| Package | Severity | Installed | Advisories |", "|---|---|---|---|"]
+              for name, v, versions in blocking:
+                  summary.append(f'| `{name}` | {v["severity"]} | {", ".join(versions) or "?"} | {advisories(v)} |')
+              summary.append("")
+          else:
+              summary += ["### :white_check_mark: No un-baselined production High/Critical findings", ""]
+
+          if accepted:
+              summary += ["### Accepted (baselined) production High/Critical", "",
+                          "| Package | Severity | Installed | Accepted because | Review by |", "|---|---|---|---|---|"]
+              for name, v, versions in accepted:
+                  b = BASELINE[name]
+                  summary.append(f'| `{name}` | {v["severity"]} | {", ".join(versions)} | {b["reason"]} | {b["review_by"]} |')
+              summary.append("")
+
+          # Dev-scope findings: shown, never blocking (RULE 2).
+          dev_only = sorted(set(full.get("vulnerabilities", {})) - set(prod["vulnerabilities"]))
+          dev_high = [n for n in dev_only if full["vulnerabilities"][n].get("severity") in BLOCKING]
+          if dev_high:
+              summary += ["### Dev-dependency findings - reported, not blocking (RULE 2)", "",
+                          "| Package | Severity |", "|---|---|"]
+              summary += [f'| `{n}` | {full["vulnerabilities"][n]["severity"]} |' for n in dev_high]
+              summary += ["",
+                          "_These are build/test tooling and never reach a browser or server. "
+                          "They are still a supply-chain risk on the runner; Dependabot opens PRs for them._",
+                          ""]
+
+          today = date.today().isoformat()
+          stale = [n for n, b in BASELINE.items() if b["review_by"] < today]
+          if stale:
+              summary += ["### :warning: Baseline entries past their review-by date", ""]
+              summary += [f"- `{n}` (review by {BASELINE[n]['review_by']})" for n in stale] + [""]
+              for n in stale:
+                  print(f"::warning::npm baseline entry {n} is past its review-by date ({BASELINE[n]['review_by']})")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(summary) + "\n")
+
+          for name, v, versions in blocking:
+              print(f'::error::{name}@{",".join(versions) or "?"} has an un-baselined '
+                    f'{v["severity"]} advisory in {app} production dependencies')
+          if blocking:
+              print("\nA High or Critical advisory is present in this app's production dependency "
+                    "tree and is not recorded in this workflow's baseline. Upgrade it (preferred), "
+                    "or - if it is genuinely not exploitable here - add it to BASELINE in "
+                    ".github/workflows/security.yml with a written reason and a review-by date. "
+                    "Do not raise the threshold and do not add continue-on-error.")
+              sys.exit(1)
+          print(f"npm scan passed for {app}: no un-baselined production High/Critical advisories.")
+          PY

@@ -1,0 +1,199 @@
+name: Security - container images
+
+# Vulnerability scanning of the three API container images
+# (task #388, docs/PRODUCTION-READINESS.md §4.4).
+#
+# ---------------------------------------------------------------------------
+# WHY A SEPARATE SCANNER FROM security.yml
+# ---------------------------------------------------------------------------
+# security.yml scans manifests: package-lock.json and project.assets.json. It
+# can only see packages this repo declares. What actually ships to production
+# is an image built `FROM mcr.microsoft.com/dotnet/aspnet:8.0` - a Debian
+# userland with openssl, zlib, libgcc, glibc and the ICU stack in it, none of
+# which appears in any manifest in this repo. That layer has historically been
+# where the remotely-exploitable Criticals live (Heartbleed, the glibc
+# resolver, xz-utils), and §4.4 names "no container image scan" as its own
+# gap for exactly that reason.
+#
+# Trivy is the scanner because it reads OS package databases and the .NET
+# `*.deps.json` inside the published image in one pass, needs no registry to
+# push to (this repo has no container registry yet - docs/DEVOPS.md OPEN
+# DECISIONS), and emits SARIF for GitHub code scanning.
+#
+# ---------------------------------------------------------------------------
+# ALL THREE IMAGES, NOT TWO
+# ---------------------------------------------------------------------------
+# ci.yml's `docker` job builds consumer-api and admin-api only; provider-api
+# has a Dockerfile that nothing builds. That is the #366 failure mode again
+# (provider-* silently missing from a list that reads as "all of them"), and
+# an unbuilt image is an unscanned one. This workflow covers all three.
+# Making ci.yml's docker job build the third image is a change to a file
+# #388 must not touch - it is written up in the task report instead.
+#
+# ---------------------------------------------------------------------------
+# THE THRESHOLD DECISION
+# ---------------------------------------------------------------------------
+# `ignore-unfixed: true` is the single most important setting in this file.
+# A stock Debian-based .NET image reports dozens of CVEs for which the distro
+# has published no fixed package. There is no action a developer can take on
+# those - you cannot upgrade to a version that does not exist - so including
+# them converts this job into a permanent wall of red, and the next person
+# adds `exit-code: 0` and the scan becomes decoration. Unfixed CVEs are still
+# visible in the uploaded SARIF and in the full report in the job summary;
+# they are just not a merge blocker.
+#
+# The blocking severity is CRITICAL, not HIGH. This is deliberately one notch
+# looser than security.yml's High gate, for a reason specific to this layer:
+#   - Remediation here is not "bump a dependency", it is "rebuild on a newer
+#     base image tag", which is entirely outside this repo's control and is
+#     already automated weekly by .github/dependabot.yml's `docker` entry. A
+#     High that Microsoft has not yet rebuilt for is not actionable on a PR
+#     timescale.
+#   - The application layer inside the image is NOT unguarded at High:
+#     security.yml already gates the same NuGet graph at High/Critical before
+#     it can reach an image. Trivy's job here is the OS layer that
+#     security.yml structurally cannot see, plus a cross-check that what was
+#     published matches what was scanned.
+# Escalating to HIGH once the images sit clean is the intended next step, and
+# is a one-word change to `severity` in the gate step below.
+#
+# ---------------------------------------------------------------------------
+# SCHEDULING
+# ---------------------------------------------------------------------------
+# On PRs, only when something that can change an image changes (see `paths`
+# below) - three `docker build`s cost several minutes and a frontend-only or
+# docs-only PR cannot alter these images.
+#
+# Nightly at 04:00 UTC is the run that matters most for this layer, and is
+# precisely §4.4's complaint: base-image CVEs are published against images
+# that have not been rebuilt, so no code change triggers them and no
+# PR-triggered scan will ever notice. Offset from security.yml (02:15) and
+# codeql.yml (03:00 Mondays) so the three do not queue behind each other.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "backend/**"
+      - "global.json"
+      - "Nestly.sln"
+      - ".dockerignore"
+      - ".github/workflows/container-scan.yml"
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      security-events: write
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: consumer-api
+            dockerfile: backend/consumer-api/ConsumerApi/Dockerfile
+          - image: admin-api
+            dockerfile: backend/admin-api/AdminApi/Dockerfile
+          - image: provider-api
+            dockerfile: backend/provider-api/ProviderApi/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        # Build context is the repo root, matching ci.yml's `docker` job and
+        # what the Dockerfiles expect (they COPY global.json and
+        # backend/shared/** by repo-relative path).
+        #
+        # The image is scanned from the local daemon and never pushed - this
+        # repo has no container registry yet (docs/DEVOPS.md OPEN DECISIONS),
+        # and scanning the locally built artifact is what makes this a
+        # pre-merge gate rather than a post-deploy audit.
+        run: |
+          docker build \
+            -f ${{ matrix.dockerfile }} \
+            -t nestly/${{ matrix.image }}:scan \
+            .
+
+      - name: Trivy - full report (informational, never fails)
+        # Runs first and unconditionally so the job summary carries the whole
+        # picture - including the unfixed CVEs the gate below deliberately
+        # ignores. Without this step, "ignore-unfixed" would mean "invisible",
+        # which is not the intent.
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: nestly/${{ matrix.image }}:scan
+          format: table
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+          output: trivy-full.txt
+
+      - name: Publish full report to job summary
+        if: always()
+        run: |
+          {
+            echo "## Container scan - ${{ matrix.image }}"
+            echo ""
+            echo "Full findings, including unfixed CVEs that the gate does not block on:"
+            echo ""
+            echo '```'
+            # Cap the excerpt: a base-image report can run to hundreds of
+            # lines and GitHub truncates a step summary over 1 MiB, which
+            # would silently drop the gate's own output appended later.
+            head -c 60000 trivy-full.txt || echo "(no report produced)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trivy - SARIF for code scanning
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: nestly/${{ matrix.image }}:scan
+          format: sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          output: trivy-results.sarif
+
+      - name: Upload SARIF
+        # `continue-on-error` here and NOWHERE else in these security
+        # workflows. Justification: code scanning upload requires GitHub
+        # Advanced Security on a private repository, and fork PRs cannot
+        # write security events at all. Neither is a security finding, and
+        # neither should turn this job red. The actual gate is the next step,
+        # which is not tolerant of anything - so a repo without GHAS still
+        # gets a real blocking scan, just without the Security-tab history.
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-${{ matrix.image }}
+
+      - name: Trivy - blocking gate (fixable CRITICAL)
+        # See THE THRESHOLD DECISION in the header. If this step starts
+        # failing, the fix is a base-image bump (Dependabot's `docker` entry
+        # opens that PR weekly) or a dependency bump - not a change to
+        # `severity` or `exit-code`.
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: nestly/${{ matrix.image }}:scan
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

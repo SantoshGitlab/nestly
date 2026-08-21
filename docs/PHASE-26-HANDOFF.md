@@ -12,16 +12,28 @@ rules that keep the merges clean. Read it before touching anything.
 
 `main` is at `3faf0e2` (the Phase 26 filing commit), pushed to `origin/main`.
 
-Five of the seventeen rows were started, each by its own agent in its own
-worktree under `.claude/worktrees/`, each on its own branch:
+Five of the seventeen rows were started. **All four in-flight agents hit the
+account session limit mid-task on 2026-08-21 and stopped.** Their working trees
+were preserved as commits and pushed, so nothing was lost — but with one
+exception the branches are **incomplete and unverified**, and their commit
+messages say so:
 
-| Row | Branch | Scope |
+| Row | Branch (pushed to origin) | State |
 |---|---|---|
-| 385 | `feature/385-e2e-in-ci` | Run the Playwright suites in CI; write provider-web's missing suite |
-| 388 | `feature/388-security-scanning` | Dependabot, dependency/SAST/image scanning |
-| 389 | `feature/389-bootstrap-readiness` | Bootstrap data + a loud signal for an unbookable database |
-| 387 | `feature/387-load-harness` | Real load harness + recorded baseline |
-| 386 | *not yet started* | Split `Catalog.Tests`; re-verify `CustomerManagement.Tests` |
+| 388 | `feature/388-security-scanning` | **DONE and merged to `main`.** All four scan types run locally to verify; both baselines match the observed findings key-for-key, so the gate is green on merge. Row closed. Remediation of the six baselined advisories filed as **#393**. |
+| 385 | `feature/385-e2e-in-ci` | **DONE and merged to `main`.** provider-web suite green (5, twice); admin-web verified at 7; matrixed `e2e` job added to ci.yml. customer-web held out of the matrix as unverified — see **#395**. Row closed. |
+| 389 | `feature/389-bootstrap-readiness` | **DONE and merged to `main`.** Probe + `/health/bootstrap` + `bootstrap-bookability.sql` + runbook section. Verified against a scratch database, both the positive and the negative path. Row closed. |
+| 387 | `feature/387-load-harness` | **WIP.** k6 harness scaffold under `load/`. Agent stopped before writing the scenarios. |
+| 386 | *not started* | Split `Catalog.Tests`; re-verify `CustomerManagement.Tests`. |
+
+All four forked from `3faf0e2`, one commit before this document existed, so a
+diff against `main` shows this file as deleted. That is an artifact of the fork
+point, not a deletion — merging will not remove it.
+
+**Finish each branch before merging it.** 389, 388 and 385 have since been
+completed, verified and merged. Only **387** (`feature/387-load-harness`, a k6
+scaffold with no scenarios written) remains an unverified draft — treat it as
+one, not as a deliverable.
 
 **386 is deliberately last.** It rewrites `backend/tests/**` and `Nestly.sln`,
 and 389 adds tests into that same tree — running them concurrently would
@@ -30,7 +42,8 @@ merged, so it splits the final state rather than a stale one.
 
 ## 2. MERGE ORDER
 
-**388 -> 385 -> 387 -> 389**, then start 386.
+**388 -> 385 -> 387 -> 389**, then start 386. (388, 389 and 385 are done; 387
+and 386 remain.)
 
 The order is not arbitrary. It runs from least-entangled to most: 388 touches
 only new files, 385 owns `ci.yml`, 387 owns a new top-level directory, 389

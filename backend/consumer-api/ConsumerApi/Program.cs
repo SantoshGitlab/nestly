@@ -6,6 +6,7 @@ using Nestly.Application;
 using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence.Readiness;
 using Nestly.Infrastructure.Realtime;
 using Serilog;
 
@@ -105,6 +106,16 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Task 389 (PRODUCTION-READINESS.md 5.1, QA-REPORT-2026-08-18 Phase 1): says
+// out loud whether this database can serve a booking at all. A deployment
+// restored from migrations plus the seed scripts has no service/pincode
+// mappings and no slot-window rules, which every API reports as a correct,
+// empty answer - so without this line the first signal is a customer who
+// cannot book. Reports and returns; it never blocks startup, since an
+// un-seeded database is the legitimate state of a deployment that has been
+// migrated and not yet bootstrapped. See BookabilityProbe.
+app.ReportBookabilityReadiness();
+
 // Pipeline order: correlation first so all downstream logs carry the id,
 // then exception shielding, then request logging.
 app.UseMiddleware<CorrelationIdMiddleware>();
@@ -147,6 +158,10 @@ app.MapHub<BookingTrackingHub>(HubRoutes.TrackingPath);
 // Liveness: process is up. Readiness: critical dependencies reachable.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+// Bootstrap: the database holds enough data for a customer to book something
+// (task 389). Separate from /health/ready because the plain-text writer those
+// two use reports only an aggregate word - this one names each missing link.
+app.MapBookabilityHealthCheck();
 
 // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): Prometheus scrape
 // endpoint for the payment/booking/notification counters and histograms
