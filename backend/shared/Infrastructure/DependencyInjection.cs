@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
@@ -63,6 +64,7 @@ using Nestly.Infrastructure.Observability;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
+using Nestly.Infrastructure.Persistence.Readiness;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Realtime;
 using Nestly.Infrastructure.Services;
@@ -302,9 +304,21 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
                     serviceProvider.GetRequiredService<NewOwnedChildEntityInterceptor>()));
 
+        // Task 389 (PRODUCTION-READINESS.md 5.1): reports a database in which
+        // nothing can be booked, which every API otherwise answers correctly
+        // and emptily. Degraded rather than Unhealthy, and on both the
+        // existing "ready" tag and its own "bootstrap" tag - see
+        // BookabilityHealthCheck for why an unbootstrapped database must not
+        // read as a failed readiness probe.
+        services.AddScoped<BookabilityProbe>();
+
         services
             .AddHealthChecks()
-            .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+            .AddNpgSql(connectionString, name: "postgres", tags: ["ready"])
+            .AddCheck<BookabilityHealthCheck>(
+                BookabilityHealthCheck.Name,
+                failureStatus: HealthStatus.Degraded,
+                tags: ["ready", BookabilityReadinessExtensions.BootstrapTag]);
 
         // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): singleton so the
         // underlying Meter and rolling failure-rate windows accumulate across
