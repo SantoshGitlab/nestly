@@ -35,7 +35,12 @@ test.describe("Provider jobs list", () => {
     await expect(card.getByText("Assigned")).toBeVisible();
     await expect(card.getByText(fixture.customerName)).toBeVisible();
     await expect(card.getByText(fixture.addressLine1)).toBeVisible();
-    await expect(card.getByText(fixture.slotTimeRange)).toBeVisible();
+    // The card renders `{date} · {start}–{end}`, where jobs/page.tsx formats
+    // each time as a bare `value.slice(0, 5)` (src/lib/format.ts formatTime).
+    // Asserting the HH:MM–HH:MM shape rather than an exact string keeps this
+    // from re-implementing that formatting in the test, where it would drift
+    // silently the day the card starts showing 12-hour times.
+    await expect(card).toContainText(/\d{2}:\d{2}–\d{2}:\d{2}/);
   });
 
   test("filters the list by status and by day", async ({ page }) => {

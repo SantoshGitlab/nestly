@@ -93,7 +93,10 @@ test.describe("Provider job lifecycle", () => {
         timeout: 30_000,
       });
 
-      await page.getByLabel("Checklist item 1").fill("Deep cleaned the whole flat");
+      // exact: true is load-bearing - the checkbox beside this field is labelled
+      // "Mark checklist item 1 as done", which getByLabel's default substring
+      // match also resolves, giving a strict-mode violation on two elements.
+      await page.getByLabel("Checklist item 1", { exact: true }).fill("Deep cleaned the whole flat");
       await page.getByLabel("Mark checklist item 1 as done").check();
 
       await page.getByRole("button", { name: "Submit verification" }).click();
