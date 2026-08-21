@@ -52,6 +52,7 @@ Every topic has exactly **one authoritative document**.
 | [PHASE-12-HANDOFF.md](PHASE-12-HANDOFF.md) · [PHASE-16-CLOUD-BRIEF.md](PHASE-16-CLOUD-BRIEF.md) | Historical phase handoff notes — superseded, kept for provenance |
 | [PROVIDER.md](PROVIDER.md) | Provider / Vendor module specification (Phase 7) |
 | [REFERRAL.md](REFERRAL.md) | Referral (Refer & Earn) module specification (Phase 9) |
+| [PROVIDER-REFERRAL.md](PROVIDER-REFERRAL.md) | Provider Referral (provider-refers-provider growth program) module specification (Phase 27) |
 | [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md) | Subscription, Recurring Bookings, In-App Chat, Completion Verification specification (Phase 10) |
 | [NESTLY-COINS.md](NESTLY-COINS.md) | Nestly Coins (reorder loyalty currency for customers and providers) specification (Phase 11) |
 | [AMC.md](AMC.md) | Annual Maintenance Contract module specification: prepaid entitlement drawdown, redemption, renewal pipeline (Phase 20) |

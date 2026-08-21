@@ -9,6 +9,11 @@ Referral (Refer & Earn) module specification.
 program configuration, fraud review, and the customer `refer-earn` surface are
 all live, with dedicated permission and notification-template migrations.
 
+See [PROVIDER-REFERRAL.md](PROVIDER-REFERRAL.md) (Phase 27) for the
+supply-side counterpart this module's design was mirrored into - a separate
+module, not an extension of this one, since the two programs reward opposite
+sides of the marketplace.
+
 This document is the **specification**, not a status record.
 [ORIENTATION.md](ORIENTATION.md) is the single owner of current repository
 state — consult it, not this header, for what is built.

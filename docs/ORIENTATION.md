@@ -90,7 +90,7 @@ module rows have.
 | Frontends | `customer-web`, `admin-web`, `provider-web` — all three are real product apps, not scaffolds |
 | Persistence | EF Core + PostgreSQL, snake_case, configuration-by-assembly-scan, 76 migrations, 94 entity configurations, 72 `DbSet`s, replayable from an empty database (task 207) |
 | Domain | 93 entity classes; 15 derive from `AggregateRoot` and raise domain events |
-| Modules live | Identity, catalog, serviceability, slots, booking, payments, wallet, coupons, cancellation/reschedule, reviews, support, notifications, admin panel + RBAC, provider/partner, referral, Nestly Coins, subscriptions, recurring bookings, chat, live tracking, completion verification |
+| Modules live | Identity, catalog, serviceability, slots, booking, payments, wallet, coupons, cancellation/reschedule, reviews, support, notifications, admin panel + RBAC, provider/partner, referral, provider referral, Nestly Coins, subscriptions, recurring bookings, chat, live tracking, completion verification |
 | Tests | 2073 across `Catalog.Tests` (1698), `Identity.Tests` (355), `CustomerManagement.Tests` (12), `Performance.Tests` (8) — SQLite-backed integration, not just unit. Note the distribution: `Catalog.Tests` is in practice the whole-platform suite under one module's name (`#386`), and browser E2E does not run in CI at all (`#385`) |
 | Caching | `ICacheService` over Redis with in-process fallback — in real use (catalog, notification templates) |
 | Background jobs | Hangfire on PostgreSQL — in real use (expiry sweeps, recurring-booking scheduling, notification intents) |

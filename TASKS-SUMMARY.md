@@ -32,9 +32,21 @@ Auto-generated from `tasks.csv` at phase boundaries. Do not hand-edit — regene
 | Phase 24 - Provider Auth Parity | 1 | 0 | 0 | 0 | 1 |
 | Phase 25 - QA Sweep (tasks #369-372) | 1 | 0 | 0 | 0 | 1 |
 | Phase 26 - Production Readiness | 0 | 17 | 0 | 0 | 17 |
-| **Overall** | **638** | **17** | **50** | **0** | **705** |
+| Phase 27 - Provider Referral Program | 1 | 0 | 0 | 0 | 1 |
+| **Overall** | **639** | **17** | **50** | **0** | **706** |
 
-Last updated: 2026-08-20. Regenerated on filing **Phase 26 - Production
+Last updated: 2026-08-20. Filed and completed **Phase 27 - Provider Referral
+Program** (task #392): a provider-refers-provider growth program, structurally
+mirroring Phase 9's customer Referral module for the supply side - see
+[docs/PROVIDER-REFERRAL.md](docs/PROVIDER-REFERRAL.md) for the full spec and
+what was deliberately left for a later phase (funnel/cost reports, milestone
+bonuses). New RBAC module auto-seeds via the Phase-26-adjacent
+`AdminPermissionReconciler` mechanism rather than a dedicated migration.
+14 new backend tests; dotnet build 0 errors/0 warnings, full suite 2087/2087
+passing. Both new frontend screens (provider-web Refer & Earn, admin-web
+config/list/detail/fraud-review) verified end-to-end in-browser.
+
+Previously, 2026-08-20: Regenerated on filing **Phase 26 - Production
 Readiness** (tasks 375-391), the 17 rows that separate a green build from a
 deployable system - see [docs/PRODUCTION-READINESS.md](docs/PRODUCTION-READINESS.md)
 for the file:line evidence behind each. Phase 26 is the only phase with open
