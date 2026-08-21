@@ -3286,6 +3286,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("provider_type");
 
+                    b.Property<string>("ReferralCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referral_code");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -3305,6 +3310,11 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("PhotoModerationStatus")
                         .HasDatabaseName("ix_provider_photo_moderation_status");
+
+                    b.HasIndex("ReferralCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_provider_referral_code")
+                        .HasFilter("referral_code IS NOT NULL");
 
                     b.ToTable("provider", (string)null);
                 });
@@ -3809,6 +3819,161 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_provider_payout_provider_id_period_start_period_end");
 
                     b.ToTable("provider_payout", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderReferral", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<string>("FraudReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("fraud_review_note");
+
+                    b.Property<DateTime?>("FraudReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fraud_reviewed_at_utc");
+
+                    b.Property<Guid?>("FraudReviewedByAdminUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("fraud_reviewed_by_admin_user_id");
+
+                    b.Property<bool>("IsFraudFlagged")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_fraud_flagged");
+
+                    b.Property<DateTime?>("QualifiedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("qualified_at_utc");
+
+                    b.Property<Guid?>("QualifyingBookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("qualifying_booking_id");
+
+                    b.Property<int>("QualifyingCompletedJobsCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("qualifying_completed_jobs_count");
+
+                    b.Property<Guid?>("RefereeEarningEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referee_earning_entry_id");
+
+                    b.Property<Guid>("RefereeProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referee_provider_id");
+
+                    b.Property<decimal>("RefereeRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referee_reward_value");
+
+                    b.Property<string>("ReferralCodeUsed")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referral_code_used");
+
+                    b.Property<Guid?>("ReferrerEarningEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referrer_earning_entry_id");
+
+                    b.Property<Guid>("ReferrerProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referrer_provider_id");
+
+                    b.Property<decimal>("ReferrerRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referrer_reward_value");
+
+                    b.Property<DateTime>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at_utc");
+
+                    b.Property<DateTime?>("RewardedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("rewarded_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_referral");
+
+                    b.HasIndex("IsFraudFlagged")
+                        .HasDatabaseName("ix_provider_referral_is_fraud_flagged");
+
+                    b.HasIndex("RefereeProviderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_provider_referral_referee_provider_id");
+
+                    b.HasIndex("ReferrerProviderId")
+                        .HasDatabaseName("ix_provider_referral_referrer_provider_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_provider_referral_status");
+
+                    b.HasIndex("Status", "ExpiresAtUtc")
+                        .HasDatabaseName("ix_provider_referral_status_expires_at_utc");
+
+                    b.ToTable("provider_referral", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderReferralProgramConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int?>("MaxReferralsPerProvider")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_referrals_per_provider");
+
+                    b.Property<int>("QualifyingCompletedJobsCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("qualifying_completed_jobs_count");
+
+                    b.Property<decimal>("RefereeRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referee_reward_value");
+
+                    b.Property<int>("ReferralExpiryDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("referral_expiry_days");
+
+                    b.Property<decimal>("ReferrerRewardValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("referrer_reward_value");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<Guid?>("UpdatedByAdminUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_admin_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_referral_program_config");
+
+                    b.ToTable("provider_referral_program_config", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.ProviderServiceArea", b =>

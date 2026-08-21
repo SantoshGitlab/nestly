@@ -18,6 +18,8 @@ public class AuthController : ControllerBase
     private readonly ICustomerLoginService _loginService;
     private readonly IValidator<RequestRegistrationOtpRequest> _otpRequestValidator;
     private readonly IValidator<RegisterCustomerRequest> _registerValidator;
+    private readonly IValidator<RequestRegistrationEmailOtpRequest> _emailOtpRequestValidator;
+    private readonly IValidator<RegisterCustomerWithEmailRequest> _registerWithEmailValidator;
     private readonly IValidator<RequestLoginOtpRequest> _loginOtpRequestValidator;
     private readonly IValidator<LoginWithOtpRequest> _loginWithOtpValidator;
     private readonly IValidator<LoginWithPasswordRequest> _loginWithPasswordValidator;
@@ -33,6 +35,8 @@ public class AuthController : ControllerBase
         ICustomerPasswordResetService passwordResetService,
         IValidator<RequestRegistrationOtpRequest> otpRequestValidator,
         IValidator<RegisterCustomerRequest> registerValidator,
+        IValidator<RequestRegistrationEmailOtpRequest> emailOtpRequestValidator,
+        IValidator<RegisterCustomerWithEmailRequest> registerWithEmailValidator,
         IValidator<RequestLoginOtpRequest> loginOtpRequestValidator,
         IValidator<LoginWithOtpRequest> loginWithOtpValidator,
         IValidator<LoginWithPasswordRequest> loginWithPasswordValidator,
@@ -48,6 +52,8 @@ public class AuthController : ControllerBase
         _resetPasswordValidator = resetPasswordValidator;
         _otpRequestValidator = otpRequestValidator;
         _registerValidator = registerValidator;
+        _emailOtpRequestValidator = emailOtpRequestValidator;
+        _registerWithEmailValidator = registerWithEmailValidator;
         _loginOtpRequestValidator = loginOtpRequestValidator;
         _loginWithOtpValidator = loginWithOtpValidator;
         _loginWithPasswordValidator = loginWithPasswordValidator;
@@ -87,6 +93,41 @@ public class AuthController : ControllerBase
         }
 
         var result = await _registrationService.RegisterAsync(request);
+        return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Email-first registration step 1: send an OTP to an email address instead of a mobile number.</summary>
+    [EnableRateLimiting("otp")]
+    [HttpPost("registration/email-otp")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RequestRegistrationEmailOtp([FromBody] RequestRegistrationEmailOtpRequest request)
+    {
+        var validation = await _emailOtpRequestValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _registrationService.RequestEmailOtpAsync(request);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
+    /// <summary>Email-first registration step 2: complete registration once the email OTP has been verified.</summary>
+    [HttpPost("registration/email")]
+    [ProducesResponseType(typeof(CustomerSummaryResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> RegisterWithEmail([FromBody] RegisterCustomerWithEmailRequest request)
+    {
+        var validation = await _registerWithEmailValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _registrationService.RegisterWithEmailAsync(request);
         return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : result.ToProblemResult();
     }
 

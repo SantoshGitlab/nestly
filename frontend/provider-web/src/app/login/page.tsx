@@ -56,6 +56,13 @@ const SIGN_IN_MODES = [
 ];
 
 /**
+ * Mobile OTP sign-in is hidden for now (email + password is the primary
+ * path) - flip this back to true to bring the toggle back. Nothing else
+ * needs to change: OtpLogin and its backend endpoints are untouched.
+ */
+const SHOW_MOBILE_OTP_LOGIN = false;
+
+/**
  * Provider sign-in. Task 372 added an email+password mode alongside the
  * original OTP-only flow (docs/PROVIDER.md), mirroring customer-web's own
  * OTP/password toggle exactly.
@@ -67,7 +74,7 @@ const SIGN_IN_MODES = [
  */
 export default function ProviderLoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<SignInMode>("otp");
+  const [mode, setMode] = useState<SignInMode>(SHOW_MOBILE_OTP_LOGIN ? "otp" : "password");
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   // Already signed in (e.g. back-button to /login with a live session) -
@@ -132,7 +139,9 @@ export default function ProviderLoginPage() {
         {infoMessage ? <Alert tone="info">{infoMessage}</Alert> : null}
         {devError ? <Alert>{devError}</Alert> : null}
 
-        <Segmented name="sign-in-mode" label="Sign-in method" options={SIGN_IN_MODES} value={mode} onChange={setMode} />
+        {SHOW_MOBILE_OTP_LOGIN ? (
+          <Segmented name="sign-in-mode" label="Sign-in method" options={SIGN_IN_MODES} value={mode} onChange={setMode} />
+        ) : null}
 
         {mode === "otp" ? <OtpLogin /> : <PasswordLogin />}
 
@@ -291,7 +300,10 @@ function PasswordLogin() {
     try {
       const session = await loginWithPassword(values);
       storeSession(session);
-      router.push("/jobs");
+      // /install-app shows the "add to home screen" steps on a mobile
+      // browser that hasn't seen them before, then forwards on to /jobs
+      // itself - see that page for the skip conditions.
+      router.push("/install-app?next=%2Fjobs");
     } catch (err) {
       setError(describeLoginError(err, "password"));
     }

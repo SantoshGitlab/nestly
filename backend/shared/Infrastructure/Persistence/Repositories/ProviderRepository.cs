@@ -68,6 +68,12 @@ public class ProviderRepository : IProviderRepository
     public Task<bool> ExistsByEmailAsync(string email) =>
         _context.Set<Provider>().AnyAsync(p => p.Email == email);
 
+    public Task<bool> ExistsByReferralCodeAsync(string referralCode) =>
+        _context.Set<Provider>().AnyAsync(p => p.ReferralCode == referralCode);
+
+    public Task<Provider?> GetByReferralCodeAsync(string referralCode) =>
+        _context.Set<Provider>().FirstOrDefaultAsync(p => p.ReferralCode == referralCode);
+
     /// <summary>
     /// Search/filter with pagination (task 150a). String filters use
     /// ToLower()+Contains rather than Npgsql's ILike so the same LINQ

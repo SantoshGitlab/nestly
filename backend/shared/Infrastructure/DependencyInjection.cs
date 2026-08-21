@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
@@ -39,6 +40,7 @@ using Nestly.Application.ProviderManagement;
 using Nestly.Application.ProviderProfile;
 using Nestly.Application.NestlyCoins;
 using Nestly.Application.Referral;
+using Nestly.Application.ProviderReferral;
 using Nestly.Application.Routing;
 using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
@@ -62,6 +64,7 @@ using Nestly.Infrastructure.Observability;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Interceptors;
+using Nestly.Infrastructure.Persistence.Readiness;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Realtime;
 using Nestly.Infrastructure.Services;
@@ -205,6 +208,12 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(ReferralOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Mirrors ReferralOptions above, for the provider-side program.
+        services
+            .AddOptions<ProviderReferralOptions>()
+            .Bind(configuration.GetSection(ProviderReferralOptions.SectionName))
+            .ValidateDataAnnotations();
+
         // Job-completion photo / CMS media upload: Supabase Storage when
         // configured, local disk otherwise - see FileStorageRegistration.
         services.AddFileStorage(configuration);
@@ -295,9 +304,21 @@ public static class DependencyInjection
                     serviceProvider.GetRequiredService<DomainEventDispatchInterceptor>(),
                     serviceProvider.GetRequiredService<NewOwnedChildEntityInterceptor>()));
 
+        // Task 389 (PRODUCTION-READINESS.md 5.1): reports a database in which
+        // nothing can be booked, which every API otherwise answers correctly
+        // and emptily. Degraded rather than Unhealthy, and on both the
+        // existing "ready" tag and its own "bootstrap" tag - see
+        // BookabilityHealthCheck for why an unbootstrapped database must not
+        // read as a failed readiness probe.
+        services.AddScoped<BookabilityProbe>();
+
         services
             .AddHealthChecks()
-            .AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+            .AddNpgSql(connectionString, name: "postgres", tags: ["ready"])
+            .AddCheck<BookabilityHealthCheck>(
+                BookabilityHealthCheck.Name,
+                failureStatus: HealthStatus.Degraded,
+                tags: ["ready", BookabilityReadinessExtensions.BootstrapTag]);
 
         // Task 137a-c (SRS 29.6, DEVOPS.md OBSERVABILITY): singleton so the
         // underlying Meter and rolling failure-rate windows accumulate across
@@ -675,6 +696,15 @@ public static class DependencyInjection
         services.AddScoped<IReferralProgramConfigAdminService, ReferralProgramConfigAdminService>();
         services.AddScoped<IReferralCustomerService, ReferralCustomerService>();
         services.AddScoped<IReferralAdminService, ReferralAdminService>();
+        services.AddScoped<IProviderReferralCodeService, ProviderReferralCodeService>();
+        services.AddScoped<IProviderReferralRepository, ProviderReferralRepository>();
+        services.AddScoped<IProviderReferralProgramConfigRepository, ProviderReferralProgramConfigRepository>();
+        services.AddScoped<IProviderReferralRewardService, ProviderReferralRewardService>();
+        services.AddScoped<IProviderReferralFraudReviewService, ProviderReferralFraudReviewService>();
+        services.AddScoped<IProviderReferralProgramConfigAdminService, ProviderReferralProgramConfigAdminService>();
+        services.AddScoped<IProviderReferralProviderService, ProviderReferralProviderService>();
+        services.AddScoped<IProviderReferralAdminService, ProviderReferralAdminService>();
+        services.AddScoped<IProviderReferralExpirySweepService, ProviderReferralExpirySweepService>();
         services.AddScoped<IRefundTransactionRepository, RefundTransactionRepository>();
         services.AddScoped<IRefundService, RefundService>();
 

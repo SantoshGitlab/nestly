@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/ui";
 import { KycSection } from "./_components/KycSection";
 import { PhotoSection } from "./_components/PhotoSection";
 import { ProfileDetailsSection } from "./_components/ProfileDetailsSection";
+import { ReferralPromoSection } from "./_components/ReferralPromoSection";
 import { ServiceAreasSection } from "./_components/ServiceAreasSection";
 import { SkillsSection } from "./_components/SkillsSection";
 
@@ -27,6 +28,7 @@ export default function ProfilePage() {
       <KycSection />
       <ServiceAreasSection />
       <SkillsSection />
+      <ReferralPromoSection />
     </div>
   );
 }

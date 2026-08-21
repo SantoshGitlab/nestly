@@ -182,3 +182,74 @@ good tag from the GHCR package list), optional `target_migration`.
 - **What on-call is not:** a substitute for fixing the root cause during
   business hours — mitigation (rollback, forward-fix) restores service;
   the incident write-up (142c step 6) is what turns into a real fix.
+
+## 389 — First-boot: making a new database bookable
+
+A database built from migrations is **unbookable and silent about it**. Slot
+and serviceability lookups fail closed by design, so every API returns a
+correct, empty answer and nothing looks broken —
+[QA-REPORT-2026-08-18.md](QA-REPORT-2026-08-18.md) Phase 1 found exactly this
+state in the seeded dev database, where no customer could book any service.
+
+Run this immediately after the first deploy to any new environment, before
+announcing it to anyone.
+
+### Step 1 — Ask the platform
+
+    curl -s https://<host>/health/bootstrap
+
+`Healthy` means a customer can find and book something. `Degraded` names every
+broken link in `gaps`, each with the remedy. The same verdict is written to the
+log once per process start — a `Warning` from
+`Nestly.Infrastructure.Persistence.Readiness.BookabilityProbe` beginning
+`NOTHING CAN BE BOOKED`.
+
+The endpoint is deliberately **not** part of `/health/ready`. An unseeded
+database is the correct state of a freshly migrated deployment, and failing
+readiness would pull the host out of rotation before an operator could reach
+the admin API to seed it — the check would prevent its own remedy.
+
+### Step 2 — Create the catalog
+
+Categories, services and pricing are product data and are entered through
+admin-web. Nothing in `database/seed/` creates them: putting unreviewed
+commercial content into a production database by script is not a thing this
+runbook will ask you to do.
+
+### Step 3 — Close the geography, serviceability and slot chain
+
+    psql "$DATABASE_URL" \
+      -v state_name="Karnataka" -v state_code="KA" \
+      -v city_name="Bengaluru" \
+      -v pincodes="560001,560002,560034" \
+      -v capacity=5 \
+      -f database/seed/bootstrap-bookability.sql
+
+Once per city you serve. Idempotent — re-run it after adding services and it
+will map the new ones and change nothing else.
+
+It creates the state, city, a default zone, the pincodes and one locality per
+pincode; maps every active service into those pincodes; lists their categories
+in the city; and creates three standard slot windows with rules for all seven
+days. Narrowing coverage, subdividing zones and removing unserved days are
+admin-UI decisions afterwards.
+
+### Step 4 — Confirm
+
+Re-run step 1 and expect `Healthy`. Then book something through customer-web
+end to end. Row counts are not proof: the endpoint walks the real chain, which
+is why step 1 and not a `SELECT count(*)` is the check that closes this out.
+
+### Gap codes
+
+| Code | What it means |
+|---|---|
+| `bookability.no_active_city` | Geography never seeded — run step 3 |
+| `bookability.no_active_pincode` | City exists with no pincodes — run step 3 |
+| `bookability.no_locality` | Pincodes with no locality. Addresses join geography through locality and the slot API is entered by locality id, so both break |
+| `bookability.no_active_service` | Catalog is empty — step 2, not step 3 |
+| `bookability.no_service_pincode_mapping` | Catalog and geography exist but are not joined — the QA sweep's finding |
+| `bookability.no_slot_window` | No booking windows for the city |
+| `bookability.no_slot_window_rule` | Windows exist but no day-of-week rules, so they are never offered. Subtle: the admin UI shows the window as present |
+| `bookability.chain_disjoint` | Everything exists but not in one city — check `slot_window.city_id` against `pincode.city_id` |
+| `bookability.no_category_city_mapping` | Bookable by API, invisible in the app: the category is not listed in that city |

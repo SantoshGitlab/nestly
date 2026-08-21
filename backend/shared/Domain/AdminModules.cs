@@ -100,11 +100,23 @@ public static class AdminModules
     /// </summary>
     public const string Payments = "payments";
 
-    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Provider, Phase 9 Referral, Phase 10 Chat/Subscription, Phase 11 Nestly Coins, and Phase 18 Payments module additions (tasks 150c, 173, 194, 180, 202, 311).</summary>
+    /// <summary>
+    /// Provider referral program config, provider-referral list/fraud-review
+    /// (PROVIDER-REFERRAL.md RBAC ADDITIONS). Collapses to the existing two
+    /// tiers (Read/Write) for the same reason <see cref="Referral"/> already
+    /// does - see its doc comment for the full reasoning. A separate module
+    /// from <see cref="Referral"/> itself: the two programs reward opposite
+    /// sides of the marketplace (customer acquisition vs. provider supply),
+    /// have independent config/fraud-review surfaces, and are owned by
+    /// different admin roles below (Operations, not Marketing).
+    /// </summary>
+    public const string ProviderReferral = "provider-referral";
+
+    /// <summary>Every module, in the order they appear in SRS section 12, followed by the Phase 7 Provider, Phase 9 Referral, Phase 10 Chat/Subscription, Phase 11 Nestly Coins, Phase 18 Payments, and the provider-referral program module additions (tasks 150c, 173, 194, 180, 202, 311).</summary>
     public static readonly IReadOnlyList<string> All =
     [
         Dashboard, Customers, Catalog, Pricing, Serviceability, Slots, Bookings,
         Coupons, Support, Reviews, Cms, Notifications, Reports, Audit, Settings,
-        Provider, Payout, Referral, Chat, NestlyCoins, Subscription, Payments
+        Provider, Payout, Referral, Chat, NestlyCoins, Subscription, Payments, ProviderReferral
     ];
 }

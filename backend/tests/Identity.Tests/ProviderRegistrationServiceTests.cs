@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Nestly.Application.ProviderIdentity;
@@ -41,6 +42,9 @@ public class ProviderRegistrationServiceTests : IDisposable
             new ProviderRepository(context),
             new ProviderAuthIdentityRepository(context),
             _otpService.Object,
+            new ProviderReferralRepository(context),
+            new ProviderReferralProgramConfigRepository(context),
+            NullLogger<ProviderRegistrationService>.Instance,
             Options.Create(options ?? new ProviderAccountOptions()));
 
     private static RegisterProviderRequest ValidRequest(string mobile = Mobile) => new(

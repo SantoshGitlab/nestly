@@ -87,6 +87,25 @@ export interface RegisterProviderRequest {
   password?: string;
 }
 
+export interface RequestRegistrationEmailOtpRequest {
+  email: string;
+}
+
+/**
+ * Email-first registration: the OTP proves ownership of the email address
+ * instead of the mobile number. Mobile is still collected and stored but is
+ * not itself OTP-verified on this path.
+ */
+export interface RegisterProviderWithEmailRequest {
+  email: string;
+  otpCode: string;
+  legalName: string;
+  displayName: string;
+  mobile: string;
+  password: string;
+  consentAccepted: boolean;
+}
+
 export interface VerifyLoginOtpRequest {
   mobile: string;
   otpCode: string;

@@ -11,6 +11,12 @@ public interface IProviderRepository : IRepository<Provider>
     /// <summary>Task 372: email-uniqueness check for provider registration, mirroring <c>ICustomerRepository.ExistsByEmailAsync</c>.</summary>
     Task<bool> ExistsByEmailAsync(string email);
 
+    /// <summary>Provider-referral code uniqueness check, mirroring <c>ICustomerRepository.ExistsByReferralCodeAsync</c>.</summary>
+    Task<bool> ExistsByReferralCodeAsync(string referralCode);
+
+    /// <summary>Resolves a shared referral code back to the referrer, mirroring <c>ICustomerRepository.GetByReferralCodeAsync</c>.</summary>
+    Task<Provider?> GetByReferralCodeAsync(string referralCode);
+
     /// <summary>Search/filter with pagination for the admin provider list (task 150a) - mirrors <c>ICustomerRepository.SearchAsync</c>.</summary>
     Task<ProviderSearchResult> SearchAsync(ProviderSearchFilter filter);
 

@@ -69,6 +69,14 @@ const SIGN_IN_MODES = [
 ];
 
 /**
+ * Mobile OTP sign-in is hidden for now (email + password is the primary
+ * path) - flip this back to true to bring the toggle back. Nothing else
+ * needs to change: OtpLogin/ProviderOtpLoginUnified and their backend
+ * endpoints are untouched.
+ */
+const SHOW_MOBILE_OTP_LOGIN = false;
+
+/**
  * Single sign-in entry point for all three Nestly apps (task 206). Before
  * this, customer-web, admin-web and provider-web each had their own
  * independent `/login` at their own origin with no way to reach the other
@@ -109,7 +117,7 @@ function usePostLoginPath(): string {
 
 function LoginScreen() {
   const [accountType, setAccountType] = useState<AccountType>("customer");
-  const [mode, setMode] = useState<Mode>("otp");
+  const [mode, setMode] = useState<Mode>(SHOW_MOBILE_OTP_LOGIN ? "otp" : "password");
 
   return (
     <AuthShell
@@ -140,13 +148,15 @@ function LoginScreen() {
 
         {accountType === "customer" ? (
           <>
-            <Segmented
-              name="sign-in-mode"
-              label="Sign-in method"
-              options={SIGN_IN_MODES}
-              value={mode}
-              onChange={setMode}
-            />
+            {SHOW_MOBILE_OTP_LOGIN ? (
+              <Segmented
+                name="sign-in-mode"
+                label="Sign-in method"
+                options={SIGN_IN_MODES}
+                value={mode}
+                onChange={setMode}
+              />
+            ) : null}
             {mode === "otp" ? <OtpLogin /> : <PasswordLogin />}
           </>
         ) : accountType === "admin" ? (
@@ -308,7 +318,10 @@ function PasswordLogin() {
         body: JSON.stringify(values),
       });
       storeSession(session);
-      router.push(postLoginPath);
+      // /install-app shows the "add to home screen" steps on a mobile
+      // browser that hasn't seen them before, then forwards on to
+      // postLoginPath itself - see that page for the skip conditions.
+      router.push(`/install-app?next=${encodeURIComponent(postLoginPath)}`);
     } catch (err) {
       setError(describeError(err));
     }
@@ -397,17 +410,19 @@ function AdminLoginUnified() {
  * OTP/password toggle above.
  */
 function ProviderLoginUnified() {
-  const [mode, setMode] = useState<Mode>("otp");
+  const [mode, setMode] = useState<Mode>(SHOW_MOBILE_OTP_LOGIN ? "otp" : "password");
 
   return (
     <>
-      <Segmented
-        name="provider-sign-in-mode"
-        label="Sign-in method"
-        options={SIGN_IN_MODES}
-        value={mode}
-        onChange={setMode}
-      />
+      {SHOW_MOBILE_OTP_LOGIN ? (
+        <Segmented
+          name="provider-sign-in-mode"
+          label="Sign-in method"
+          options={SIGN_IN_MODES}
+          value={mode}
+          onChange={setMode}
+        />
+      ) : null}
       {mode === "otp" ? <ProviderOtpLoginUnified /> : <ProviderPasswordLoginUnified />}
     </>
   );

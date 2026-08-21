@@ -36,6 +36,7 @@ Every topic has exactly **one authoritative document**.
 | [SECURITY.md](SECURITY.md) | Authentication, authorization, secrets and security practices |
 | [TESTING.md](TESTING.md) | Unit, integration, API and end-to-end testing strategy |
 | [DEVOPS.md](DEVOPS.md) | Docker, CI/CD, deployment, monitoring and operations |
+| [LAUNCH-COST.md](LAUNCH-COST.md) | Production launch rollout plan and infra cost sizing/minimization for the Jaipur launch (companion to DEVOPS.md's open decisions; pending infra/ops sign-off) |
 | [RUNBOOK-BACKUP-RESTORE.md](RUNBOOK-BACKUP-RESTORE.md) | Tested PostgreSQL backup/restore procedure (companion to DEVOPS.md's backup requirement) |
 | [RUNBOOK-DEPLOYMENT.md](RUNBOOK-DEPLOYMENT.md) | Deployment procedure (companion to DEVOPS.md) |
 | [QA-REPORT-2026-08-07.md](QA-REPORT-2026-08-07.md) | Feature inventory and static findings S1–S11 (still open). Its release verdict is **superseded by QA-REPORT-2026-08-18.md** — kept for the inventory and static findings only |
@@ -43,6 +44,7 @@ Every topic has exactly **one authoritative document**.
 | [audits/mobile-ux-customer-web-2026-08-18.md](audits/mobile-ux-customer-web-2026-08-18.md) · [-provider-web-](audits/mobile-ux-provider-web-2026-08-18.md) · [-admin-web-](audits/mobile-ux-admin-web-2026-08-18.md) | Per-app mobile/tablet UX findings (Phase 22, tasks #337–339) that scoped the rest of the mobile-first batch, plus each app's #351 safe-area audit appended |
 | [ENHANCEMENT-BACKLOG-2026-08-08.md](ENHANCEMENT-BACKLOG-2026-08-08.md) | Verified spec-vs-code gaps with file:line evidence. **Closed** — its items became rows #303–#320; kept for its reasoning |
 | [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md) | What stands between a green build and a production deployment, with file:line evidence (2026-08-20). Rows #375–#391. Per ORIENTATION.md, this is where the next task comes from |
+| [PHASE-26-HANDOFF.md](PHASE-26-HANDOFF.md) | Execution plan for Phase 26 — branches in flight, merge order, per-agent file-ownership boundaries, and the verification gate before any row is closed |
 | [UAT-REPORT.md](UAT-REPORT.md) | User acceptance testing results |
 | [BOOKING-FLOW-AUDIT.md](BOOKING-FLOW-AUDIT.md) | Point-in-time audit of the booking funnel (source of the Phase 13 defect rows) |
 | [CATALOG-ARCHITECTURE-REVIEW.md](CATALOG-ARCHITECTURE-REVIEW.md) | Point-in-time review of the catalog hierarchy (service groups, variants, add-on groups) |
@@ -50,6 +52,7 @@ Every topic has exactly **one authoritative document**.
 | [PHASE-12-HANDOFF.md](PHASE-12-HANDOFF.md) · [PHASE-16-CLOUD-BRIEF.md](PHASE-16-CLOUD-BRIEF.md) | Historical phase handoff notes — superseded, kept for provenance |
 | [PROVIDER.md](PROVIDER.md) | Provider / Vendor module specification (Phase 7) |
 | [REFERRAL.md](REFERRAL.md) | Referral (Refer & Earn) module specification (Phase 9) |
+| [PROVIDER-REFERRAL.md](PROVIDER-REFERRAL.md) | Provider Referral (provider-refers-provider growth program) module specification (Phase 27) |
 | [PRODUCT-ENHANCEMENTS.md](PRODUCT-ENHANCEMENTS.md) | Subscription, Recurring Bookings, In-App Chat, Completion Verification specification (Phase 10) |
 | [NESTLY-COINS.md](NESTLY-COINS.md) | Nestly Coins (reorder loyalty currency for customers and providers) specification (Phase 11) |
 | [AMC.md](AMC.md) | Annual Maintenance Contract module specification: prepaid entitlement drawdown, redemption, renewal pipeline (Phase 20) |

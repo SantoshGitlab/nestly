@@ -1,0 +1,164 @@
+name: Security - CodeQL
+
+# Static application security testing (SAST) over this repo's own code
+# (task #388, docs/PRODUCTION-READINESS.md §4.4).
+#
+# ---------------------------------------------------------------------------
+# WHY CODEQL AND NOT SOMETHING ELSE
+# ---------------------------------------------------------------------------
+# §4.4's gap is that tasks 133a-g's manual OWASP review - injection, XSS,
+# CSRF, IDOR, broken access control, payment callback abuse, OTP brute force -
+# examined one commit and nothing has re-examined the code since. Dependency
+# scanning (security.yml) cannot close that: it only knows about other
+# people's code. This job is the part that reads ours.
+#
+# CodeQL is the choice because it is the only scanner that covers BOTH of this
+# repo's first-party languages (C# across nine projects, TypeScript across
+# three Next.js apps) in one configuration, needs no third-party token or
+# service, and writes findings into GitHub's native code-scanning UI where
+# they can be triaged, dismissed with a recorded reason, and gated on through
+# branch protection. Bringing in a second vendor for either language would
+# mean two triage inboxes for the same class of finding, which is how findings
+# stop being read.
+#
+# ---------------------------------------------------------------------------
+# PREREQUISITE - THIS WORKFLOW WILL NOT RUN UNTIL SOMEONE ENABLES IT
+# ---------------------------------------------------------------------------
+# Code scanning is free on public repositories. On a PRIVATE repository it
+# requires GitHub Advanced Security to be enabled for the repo
+# (Settings > Code security and analysis). If Nestly is private and GHAS is
+# not enabled, the `upload-sarif` step fails with an explicit "Advanced
+# Security must be enabled for this repository" error. That is a
+# configuration prerequisite, not a bug in this file - do not "fix" it by
+# deleting the upload step, because the upload IS the product.
+#
+# ---------------------------------------------------------------------------
+# HOW THIS GATES - read before assuming a green check means "no findings"
+# ---------------------------------------------------------------------------
+# This workflow deliberately does NOT `exit 1` on an alert. CodeQL's model is
+# to publish alerts to the Security tab and expose a `Code scanning results`
+# status check that branch protection can require. That is strictly better
+# than a hard failure here, because it supports dismissal-with-reason (a
+# false positive gets recorded once, not re-litigated on every PR) and
+# distinguishes alerts introduced BY the PR from pre-existing ones.
+#
+# So a green tick on this job means "CodeQL ran and uploaded results", not
+# "the code is clean". To make it a real gate, the repo admin must:
+#   Settings > Branches > protect `main` and `develop`
+#     > Require status checks to pass > add `Code scanning results / CodeQL`
+# Until that is configured, this workflow reports and does not block. That is
+# a deliberate, stated limitation, not an oversight.
+#
+# ---------------------------------------------------------------------------
+# QUERY SUITE - the noise decision
+# ---------------------------------------------------------------------------
+# CodeQL's default security suite is used (by omitting `queries:` below),
+# NOT `security-extended` and NOT
+# `security-and-quality`. Same reasoning as security.yml's RULE 1: the
+# extended suites trade precision for recall, and a first SAST rollout that
+# opens with a few hundred low-confidence alerts gets muted rather than
+# triaged. The correct escalation is: run the default suite, drive it to zero
+# open alerts, THEN switch `queries:` below to `security-extended` and repeat.
+# Skipping straight to extended is how a Security tab becomes wallpaper.
+#
+# ---------------------------------------------------------------------------
+# SCHEDULING
+# ---------------------------------------------------------------------------
+# PRs and pushes to the protected branches: attributes a finding to the change
+# that introduced it. The C# analysis needs a real build of Nestly.sln, so
+# this is the slowest of the three security workflows - hence PR-triggered
+# rather than push-to-any-branch.
+#
+# Weekly (Mondays 03:00 UTC) rather than nightly: unlike a dependency
+# advisory, a CodeQL finding on unchanged code can only appear when the CodeQL
+# *query pack* is updated, which happens on a scale of weeks. A nightly run
+# would burn ~9 minutes of runner time a day to re-derive an identical result.
+# Monday morning means a refreshed query pack lands before the week's PRs.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      # Job-scoped rather than workflow-scoped: only this job needs to write
+      # to the code-scanning API, and `security-events: write` is a
+      # meaningfully privileged token.
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: csharp
+            build-mode: manual
+          - language: javascript-typescript
+            # JS/TS is interpreted - CodeQL extracts straight from source and
+            # needs neither `npm ci` nor `next build`. This covers all three
+            # apps under frontend/ plus the Playwright e2e suite in one pass.
+            build-mode: none
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          # Same pin as ci.yml. CodeQL's C# extractor traces a real compile,
+          # so it must be the same SDK that compiles in CI - a different
+          # SDK can resolve different source files into the build and
+          # produce findings that do not correspond to what ships.
+          global-json-file: global.json
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # `queries:` is deliberately ABSENT, which selects CodeQL's default
+          # security suite. Adding `queries: security-extended` here is the
+          # documented escalation - see the QUERY SUITE note in the header for
+          # why that should wait until the default suite sits at zero open
+          # alerts.
+
+      - name: Build backend for CodeQL tracing
+        if: matrix.language == 'csharp'
+        # `build-mode: manual` (a traced real build) rather than
+        # `build-mode: none` (source-only extraction): none is faster but
+        # loses the resolved type information that the injection and
+        # access-control queries - exactly the 133a-g classes §4.4 is worried
+        # about - depend on to follow data through EF Core and MediatR
+        # handlers.
+        #
+        # NOTE the missing /warnaserror, which ci.yml's backend job does pass.
+        # That is intentional: this build exists to feed the extractor, and
+        # failing it on a compiler warning would turn a style regression into
+        # a missing security scan. ci.yml remains the authority on warnings.
+        run: |
+          dotnet restore Nestly.sln
+          dotnet build Nestly.sln --no-restore --configuration Release
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
