@@ -39,6 +39,15 @@ public class BookingProviderAssignmentRepository : IBookingProviderAssignmentRep
             .OrderByDescending(a => a.AssignedAt)
             .FirstOrDefaultAsync();
 
+    public Task<BookingProviderAssignment?> GetCurrentByBookingAsync(Guid bookingId) =>
+        _context.BookingProviderAssignments
+            .Where(a => a.BookingId == bookingId &&
+                (a.Status == BookingProviderAssignmentStatus.Assigned ||
+                 a.Status == BookingProviderAssignmentStatus.Accepted ||
+                 a.Status == BookingProviderAssignmentStatus.Completed))
+            .OrderByDescending(a => a.AssignedAt)
+            .FirstOrDefaultAsync();
+
     public async Task<IReadOnlyList<BookingProviderAssignment>> ListByBookingAsync(Guid bookingId) =>
         await _context.BookingProviderAssignments
             .Where(a => a.BookingId == bookingId)

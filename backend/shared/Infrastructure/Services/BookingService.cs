@@ -338,7 +338,13 @@ public class BookingService : IBookingService
                 // one-off.
                 recurringBookingPlanId,
                 amcContract is null ? summary.Wallet.AppliedAmount : null,
-                amcContract?.Id);
+                amcContract?.Id,
+                // Provider-commitment snapshot: the variant's duration when one
+                // is selected, else the service's own, plus whether the service
+                // is time-based - frozen here so later catalog edits never
+                // change this booking's commitment (see Booking's snapshots).
+                summary.Service.VariantDurationMinutes ?? summary.Service.DurationMinutes,
+                summary.Service.IsDurationBased);
 
             // Add-on line items come from the price breakdown, not summary.AddOns:
             // the breakdown already carries each selection's quantity and
@@ -478,8 +484,13 @@ public class BookingService : IBookingService
             return Error.NotFound("Booking.NotFound", "The specified booking does not exist.");
         }
 
-        var activeAssignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
-        return Result.Success(ToDetailResponse(booking, activeAssignment?.Status, await ProviderSummaryFor(activeAssignment)));
+        // GetCurrentByBookingAsync, not GetActiveByBookingAsync: this is a read
+        // path (the customer's own view of their booking), and a just-finished
+        // job's assignment is still the right one to show "who did this" - the
+        // fallback for a null assignment ("Not assigned yet") would otherwise
+        // wrongly apply to a job that already completed.
+        var currentAssignment = await _assignmentRepository.GetCurrentByBookingAsync(bookingId);
+        return Result.Success(ToDetailResponse(booking, currentAssignment?.Status, await ProviderSummaryFor(currentAssignment)));
     }
 
     private static BookingListItemResponse ToListItem(Booking booking) => new(
@@ -536,7 +547,8 @@ public class BookingService : IBookingService
             new BookingServiceSummary(
                 item?.ServiceId ?? Guid.Empty, item?.NameSnapshot ?? string.Empty, item?.SlugSnapshot ?? string.Empty,
                 item?.ServiceVariantId, item?.VariantNameSnapshot, item?.VariantDurationMinutesSnapshot,
-                item?.ServiceGroupId, item?.ServiceGroupNameSnapshot),
+                item?.ServiceGroupId, item?.ServiceGroupNameSnapshot,
+                booking.ServiceDurationMinutesSnapshot, booking.IsDurationBasedSnapshot),
             addOns,
             new BookingAddressSummary(
                 booking.SourceAddressId ?? Guid.Empty, booking.AddressLabelSnapshot, booking.AddressLine1Snapshot,

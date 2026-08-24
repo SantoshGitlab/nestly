@@ -36,7 +36,20 @@ public enum BookingProviderAssignmentStatus
     Accepted,
     Rejected,
     Reassigned,
-    Withdrawn
+    Withdrawn,
+
+    /// <summary>
+    /// The provider finished the job and it was verified (completion proof /
+    /// OTP - see <c>ProviderJobService.CompleteAsync</c>). Terminal, and the
+    /// point at which the provider stops counting as committed to this job for
+    /// scheduling: unlike <see cref="Accepted"/>, a Completed assignment no
+    /// longer occupies the provider for the remainder of its slot window, which
+    /// is what lets a provider who finishes early become eligible for the next
+    /// order (subject to travel/buffer/duration - see the eligibility service).
+    /// Appended last so the persisted string values and any ordinal mirrors of
+    /// the earlier members are unchanged.
+    /// </summary>
+    Completed
 }
 
 /// <summary>
@@ -73,6 +86,9 @@ public class BookingProviderAssignment : AggregateRoot<Guid>
     public DateTime? ResponseDeadline { get; private set; }
 
     public DateTime? RespondedAt { get; private set; }
+
+    /// <summary>When the job was verified-complete (see <see cref="Complete"/>) - null until then. The provider's actual finish time, which the scheduler uses as the "free from" instant for a non-duration-based service.</summary>
+    public DateTime? CompletedAt { get; private set; }
 
     /// <summary>Rejection reason or admin notes, set when the provider responds or the assignment is superseded.</summary>
     public string? Notes { get; private set; }
@@ -193,10 +209,13 @@ public class BookingProviderAssignment : AggregateRoot<Guid>
     }
 
     /// <summary>
-    /// Attaches/replaces the completion evidence reference (task 149a). Only
-    /// legal once the provider has actually accepted the job - an assignment
-    /// still awaiting a response, or one that was rejected/superseded, has no
-    /// job execution to attach evidence to.
+    /// Attaches/replaces the completion evidence reference (task 149a). Legal
+    /// while the provider is actively on the job (<see cref="BookingProviderAssignmentStatus.Accepted"/>)
+    /// or just after (<see cref="BookingProviderAssignmentStatus.Completed"/>) -
+    /// supplementary evidence uploaded moments after tapping "complete" is a
+    /// real flow this must not block. An assignment still awaiting a response,
+    /// or one that was rejected/superseded, has no job execution to attach
+    /// evidence to.
     /// </summary>
     public void SetCompletionProof(string proofRef)
     {
@@ -205,12 +224,32 @@ public class BookingProviderAssignment : AggregateRoot<Guid>
             throw new ArgumentException("A completion proof reference is required.", nameof(proofRef));
         }
 
-        if (Status != BookingProviderAssignmentStatus.Accepted)
+        if (Status is not (BookingProviderAssignmentStatus.Accepted or BookingProviderAssignmentStatus.Completed))
         {
             throw new InvalidOperationException($"Cannot attach completion proof to an assignment in status {Status}.");
         }
 
         CompletionProofRef = proofRef;
+    }
+
+    /// <summary>
+    /// Marks the job verified-complete at <paramref name="completedAtUtc"/>
+    /// (the provider's actual finish time). Legal only from
+    /// <see cref="BookingProviderAssignmentStatus.Accepted"/> - the provider
+    /// must have taken and been working the job. The caller is responsible for
+    /// the verification itself (completion proof / OTP); this records the
+    /// terminal state and the finish time the scheduler reads to release the
+    /// provider early (subject to travel/buffer/duration).
+    /// </summary>
+    public void Complete(DateTime completedAtUtc)
+    {
+        if (Status != BookingProviderAssignmentStatus.Accepted)
+        {
+            throw new InvalidOperationException($"Cannot complete an assignment in status {Status}.");
+        }
+
+        Status = BookingProviderAssignmentStatus.Completed;
+        CompletedAt = completedAtUtc;
     }
 
     private void EnsureOutstanding()

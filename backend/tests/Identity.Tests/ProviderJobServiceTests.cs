@@ -44,20 +44,21 @@ public class ProviderJobServiceTests : IDisposable
         CreateAssignmentService(context),
         new BookingCompletionProofRepository(context),
         new NoOpBookingEtaService(),
-        new RecurringBookingPlanRepository(context), new NoOpFileStorageService());
+        new RecurringBookingPlanRepository(context), new NoOpFileStorageService(),
+        TestServices.ActiveJobLimit(context), TestServices.OverrunReassignment(context), TestServices.Clock());
 
     private BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
-        new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);
+        new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context);
 
-    private static Booking NewAwaitingFulfilmentBooking(Guid customerId, Guid? recurringBookingPlanId = null)
+    private static Booking NewAwaitingFulfilmentBooking(Guid customerId, Guid? recurringBookingPlanId = null, TimeSpan? slotStart = null, TimeSpan? slotEnd = null)
     {
         var booking = new Booking(
             Guid.NewGuid(), customerId,
             new CustomerSnapshot("Asha Rao", "9876543210"),
             null,
             new AddressSnapshot("Home", "221B Baker Street", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Asha Rao", "9876543210"),
-            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow), "Morning", slotStart ?? TimeSpan.FromHours(9), slotEnd ?? TimeSpan.FromHours(13)),
             new PriceSnapshot(999m, 1, 999m, 0m, 0m, 999m, 0m, 0m, 0m, 999m),
             recurringBookingPlanId: recurringBookingPlanId);
         booking.AddItem(Guid.NewGuid(), Guid.NewGuid(), "Deep Cleaning", "deep-cleaning", 999m, 1);
@@ -67,13 +68,13 @@ public class ProviderJobServiceTests : IDisposable
         return booking;
     }
 
-    /// <summary>Seeds a booking already Assigned to <see cref="_providerId"/> via a real <see cref="BookingProviderAssignmentService.AssignAsync"/> call, so the assignment row is created exactly the way task 147's admin flow creates it.</summary>
-    private async Task<Guid> SeedAssignedBookingAsync(NestlyDbContext context)
+    /// <summary>Seeds a booking already Assigned to <see cref="_providerId"/> via a real <see cref="BookingProviderAssignmentService.AssignAsync"/> call, so the assignment row is created exactly the way task 147's admin flow creates it. Callers assigning a second booking to the same provider must pass a non-overlapping slot - task 288's own double-booking guard refuses the assignment otherwise, before this test ever reaches the one-active-job rule it means to exercise.</summary>
+    private async Task<Guid> SeedAssignedBookingAsync(NestlyDbContext context, TimeSpan? slotStart = null, TimeSpan? slotEnd = null)
     {
         var customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active);
         await context.AddAsync(customer);
 
-        var booking = NewAwaitingFulfilmentBooking(customer.Id);
+        var booking = NewAwaitingFulfilmentBooking(customer.Id, slotStart: slotStart, slotEnd: slotEnd);
         await context.AddAsync(booking);
         await context.SaveChangesAsync();
 
@@ -646,6 +647,75 @@ public class ProviderJobServiceTests : IDisposable
 
         var completed = await service.CompleteAsync(_providerId, bookingId);
         completed.IsSuccess.Should().BeTrue();
+    }
+
+    // ---------------------------------------------------------------------
+    // Provider-queue model: the one-active-job rule
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task StartAsync_refuses_when_the_provider_has_another_job_already_in_progress()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+
+        var firstBookingId = await SeedAssignedBookingAsync(context, TimeSpan.FromHours(9), TimeSpan.FromHours(11));
+        (await service.AcceptAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+        (await service.StartAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+
+        // A later, non-overlapping slot - task 288's double-booking guard would
+        // otherwise refuse the assignment before this test ever reached the
+        // one-active-job rule it means to exercise.
+        var secondBookingId = await SeedAssignedBookingAsync(context, TimeSpan.FromHours(14), TimeSpan.FromHours(16));
+        (await service.AcceptAsync(_providerId, secondBookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.StartAsync(_providerId, secondBookingId);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderJob.AnotherJobActive");
+    }
+
+    [Fact]
+    public async Task MarkEnRouteAsync_refuses_when_the_provider_has_another_job_already_active()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+
+        var firstBookingId = await SeedAssignedBookingAsync(context, TimeSpan.FromHours(9), TimeSpan.FromHours(11));
+        (await service.AcceptAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+        (await service.MarkEnRouteAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+
+        var secondBookingId = await SeedAssignedBookingAsync(context, TimeSpan.FromHours(14), TimeSpan.FromHours(16));
+        (await service.AcceptAsync(_providerId, secondBookingId)).IsSuccess.Should().BeTrue();
+
+        var result = await service.MarkEnRouteAsync(_providerId, secondBookingId);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("ProviderJob.AnotherJobActive");
+    }
+
+    [Fact]
+    public async Task StartAsync_succeeds_once_the_providers_other_job_has_been_completed()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateJobService(context);
+
+        var firstBookingId = await SeedAssignedBookingAsync(context, TimeSpan.FromHours(9), TimeSpan.FromHours(11));
+        (await service.AcceptAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+        (await service.StartAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+        (await service.SubmitCompletionProofAsync(
+            _providerId, firstBookingId, new SubmitCompletionProofRequest(["s3://proofs/first.jpg"], []))).IsSuccess.Should().BeTrue();
+        (await service.CompleteAsync(_providerId, firstBookingId)).IsSuccess.Should().BeTrue();
+
+        var secondBookingId = await SeedAssignedBookingAsync(context, TimeSpan.FromHours(14), TimeSpan.FromHours(16));
+        (await service.AcceptAsync(_providerId, secondBookingId)).IsSuccess.Should().BeTrue();
+
+        // The one-active-job rule only ever blocks a *second* active job - once
+        // the first is verified-complete, it no longer counts (the same
+        // release the schedule-conflict/travel-feasibility checks apply).
+        var result = await service.StartAsync(_providerId, secondBookingId);
+
+        result.IsSuccess.Should().BeTrue();
     }
 
     public void Dispose() => _database.Dispose();

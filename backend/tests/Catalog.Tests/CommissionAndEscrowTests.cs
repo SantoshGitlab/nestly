@@ -324,7 +324,7 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 bookingRepository, new ProviderRepository(assignContext), new ServiceRepository(assignContext),
-                new BookingProviderAssignmentRepository(assignContext), new ProviderScheduleConflictService(assignContext), assignContext);
+                new BookingProviderAssignmentRepository(assignContext), new ProviderScheduleConflictService(assignContext, TestServices.Occupancy()), assignContext);
             var assignResult = await assignmentService.AssignAsync(fixture.BookingId, Guid.NewGuid(), new AssignProviderRequest(providerId, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }

@@ -433,7 +433,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()), setupContext);
             (await assignmentService.AssignAsync(fixture.BookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null)))
                 .IsSuccess.Should().BeTrue();
             (await assignmentService.AcceptAsync(fixture.BookingId, providerId)).IsSuccess.Should().BeTrue();
@@ -457,11 +457,14 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new BookingRepository(readContext), assignmentRepository,
             new BookingProviderAssignmentService(
                 new BookingRepository(readContext), new ProviderRepository(readContext), new ServiceRepository(readContext),
-                assignmentRepository, new ProviderScheduleConflictService(readContext), readContext),
+                assignmentRepository, new ProviderScheduleConflictService(readContext, TestServices.Occupancy()), readContext),
             new BookingCompletionProofRepository(readContext),
             new NoOpBookingEtaService(),
             new RecurringBookingPlanRepository(readContext),
-            new NoOpFileStorageService());
+            new NoOpFileStorageService(),
+            TestServices.ActiveJobLimit(readContext),
+            TestServices.OverrunReassignment(readContext),
+            TestServices.Clock());
         var jobDetail = await jobService.GetDetailAsync(providerId, fixture.BookingId);
         jobDetail.IsSuccess.Should().BeTrue();
         jobDetail.Value.Status.Should().Be(Nestly.Application.ProviderJobs.ProviderJobStatus.Withdrawn);

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application.Abstractions.Time;
+using Nestly.Application.ProviderManagement;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
@@ -27,6 +28,34 @@ internal static class TestServices
         new BusinessClock(
             timeProvider ?? TimeProvider.System,
             Options.Create(new BusinessTimeOptions { TimeZoneId = "UTC" }));
+
+    /// <summary>
+    /// The provider-queue early-release model's occupancy calculator (a
+    /// verified-complete, non-duration-based job's actual finish time rather
+    /// than its slot's own end), over <see cref="Clock"/> so it shares the
+    /// same UTC-pinned "now" every other collaborator in this file does.
+    /// </summary>
+    public static IProviderJobOccupancyService Occupancy(TimeProvider? timeProvider = null) =>
+        new ProviderJobOccupancyService(Clock(timeProvider));
+
+    /// <summary>The provider-queue model's one-active-job gate, for suites that construct <see cref="ProviderJobService"/> directly.</summary>
+    public static IProviderActiveJobLimitService ActiveJobLimit(NestlyDbContext context) =>
+        new ProviderActiveJobLimitService(context);
+
+    /// <summary>
+    /// The provider-queue model's overrun-reassignment follow-up, for suites
+    /// that construct <see cref="ProviderJobService"/> directly and are not
+    /// themselves testing the overrun rule. Sandbox-backed travel feasibility
+    /// (no network, no key) so it never fires for a suite whose bookings share
+    /// one address.
+    /// </summary>
+    public static IOverrunReassignmentService OverrunReassignment(NestlyDbContext context) =>
+        new OverrunReassignmentService(
+            context,
+            new BookingRepository(context),
+            new BookingProviderAssignmentRepository(context),
+            TravelFeasibilityFactory.Sandbox(context),
+            NullLogger<OverrunReassignmentService>.Instance);
 
     public static SlotAvailabilityService SlotAvailability(NestlyDbContext context, TimeProvider? timeProvider = null) =>
         new(

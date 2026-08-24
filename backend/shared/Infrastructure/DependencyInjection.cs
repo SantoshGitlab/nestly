@@ -516,10 +516,17 @@ public static class DependencyInjection
         // provider-identity registrations above, which are the provider's own
         // self-service auth/onboarding (tasks 145a-146c).
         services.AddScoped<IBookingProviderAssignmentRepository, BookingProviderAssignmentRepository>();
+        // Provider-queue early-release model: when a verified-complete,
+        // non-duration-based job stops occupying the provider's schedule -
+        // registered before the two services below, which both depend on it.
+        services.AddScoped<IProviderJobOccupancyService, ProviderJobOccupancyService>();
         // Task 288: the "one person, one place at a time" invariant, shared by
         // the manual admin path below and the automatic engine's eligibility
         // gate - registered before both, since both depend on it.
         services.AddScoped<IProviderScheduleConflictService, ProviderScheduleConflictService>();
+        // Provider-queue model: at most one job actively underway at a time,
+        // enforced at activation (en-route/start), not at accept time.
+        services.AddScoped<IProviderActiveJobLimitService, ProviderActiveJobLimitService>();
         // Task 321: the reporting counterpart to the invariant above - the
         // gate answers "may this provider take this booking?", this answers
         // "who is already double-booked?", which no gate can.
@@ -537,6 +544,10 @@ public static class DependencyInjection
         // rather than each candidate separately.
         services.AddScoped<IProviderTravelFeasibilityService, ProviderTravelFeasibilityService>();
         services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
+        // Provider-queue model: when a job overran, re-checks this provider's
+        // other same-day queued jobs against the new, later "free from"
+        // instant and returns any now-infeasible one for reassignment.
+        services.AddScoped<IOverrunReassignmentService, OverrunReassignmentService>();
         // Task 297: the single "ranked candidates that pass the gate" walk,
         // shared by the auto-assignment engine and the recurring generator so
         // there is only ever one answer to "who can take this booking".
@@ -789,6 +800,7 @@ public static class DependencyInjection
         services.AddScoped<ICmsPageService, CmsPageService>();
         services.AddScoped<IBannerRepository, BannerRepository>();
         services.AddScoped<IBannerService, BannerService>();
+        services.AddScoped<IBannerQueryService, BannerQueryService>();
         services.AddScoped<ICmsFaqRepository, CmsFaqRepository>();
         services.AddScoped<ICmsFaqService, CmsFaqService>();
 

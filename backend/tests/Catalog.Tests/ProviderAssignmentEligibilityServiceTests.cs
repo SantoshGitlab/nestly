@@ -34,7 +34,7 @@ public sealed class ProviderAssignmentEligibilityServiceTests : IClassFixture<Te
         new ProviderAvailabilityWindowRepository(context),
         new ProviderBlackoutDateRepository(context),
         new ProviderCapacityRepository(context),
-        new ProviderScheduleConflictService(context),
+        new ProviderScheduleConflictService(context, TestServices.Occupancy()),
         // Task 289's travel check on the sandbox estimator (no HTTP, no key).
         // Every booking here shares one address, so every leg is zero-length
         // and the check never fires - these tests are about availability,

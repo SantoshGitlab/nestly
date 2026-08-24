@@ -170,7 +170,7 @@ public sealed class ProviderTravelBufferTests : IClassFixture<TestDatabase>
             new ProviderAvailabilityWindowRepository(context),
             new ProviderBlackoutDateRepository(context),
             new ProviderCapacityRepository(context),
-            new ProviderScheduleConflictService(context),
+            new ProviderScheduleConflictService(context, TestServices.Occupancy()),
             travelFeasibilityService,
             context);
 

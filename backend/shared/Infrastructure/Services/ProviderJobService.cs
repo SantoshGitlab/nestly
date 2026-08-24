@@ -1,4 +1,5 @@
 using Nestly.Application;
+using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
@@ -20,6 +21,16 @@ public class ProviderJobService : IProviderJobService
     private readonly IBookingEtaService _etaService;
     private readonly IRecurringBookingPlanRepository _recurringPlanRepository;
     private readonly IFileStorageService _fileStorageService;
+    private readonly IProviderActiveJobLimitService _activeJobLimitService;
+    private readonly IOverrunReassignmentService _overrunReassignmentService;
+    private readonly IBusinessClock _clock;
+
+    private static readonly BookingStatus[] ActiveJobStatuses =
+    [
+        BookingStatus.ProviderEnRoute,
+        BookingStatus.ProviderArrived,
+        BookingStatus.InProgress
+    ];
 
     public ProviderJobService(
         IBookingRepository bookingRepository,
@@ -28,7 +39,10 @@ public class ProviderJobService : IProviderJobService
         IBookingCompletionProofRepository completionProofRepository,
         IBookingEtaService etaService,
         IRecurringBookingPlanRepository recurringPlanRepository,
-        IFileStorageService fileStorageService)
+        IFileStorageService fileStorageService,
+        IProviderActiveJobLimitService activeJobLimitService,
+        IOverrunReassignmentService overrunReassignmentService,
+        IBusinessClock clock)
     {
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
@@ -37,6 +51,9 @@ public class ProviderJobService : IProviderJobService
         _etaService = etaService;
         _recurringPlanRepository = recurringPlanRepository;
         _fileStorageService = fileStorageService;
+        _activeJobLimitService = activeJobLimitService;
+        _overrunReassignmentService = overrunReassignmentService;
+        _clock = clock;
     }
 
     public async Task<Result<ProviderJobSearchResponse>> ListAsync(Guid providerId, ProviderJobStatus? status, DateOnly? date)
@@ -85,7 +102,7 @@ public class ProviderJobService : IProviderJobService
                 booking.Id,
                 jobStatus,
                 booking.CustomerNameSnapshot,
-                booking.CustomerMobileSnapshot,
+                MaskMobileUntilAccepted(assignment, booking.CustomerMobileSnapshot),
                 booking.AddressLine1Snapshot,
                 booking.AddressCitySnapshot,
                 booking.AddressPincodeSnapshot,
@@ -174,6 +191,19 @@ public class ProviderJobService : IProviderJobService
         }
 
         var (assignment, booking) = resolved.Value;
+
+        // One-active-job rule (provider-queue model): a provider may hold
+        // several accepted future jobs, but only ever be actively working one.
+        // Checked here rather than at accept time, since holding a queue is
+        // the entire point of the model - this is the moment of activation.
+        if (!ActiveJobStatuses.Contains(booking.Status)
+            && await _activeJobLimitService.HasAnotherActiveJobAsync(providerId, bookingId))
+        {
+            return Error.Business(
+                "ProviderJob.AnotherJobActive",
+                "Complete your current active job before starting another one.");
+        }
+
         try
         {
             booking.TransitionTo(BookingStatus.InProgress, "Provider started the job.");
@@ -266,6 +296,20 @@ public class ProviderJobService : IProviderJobService
             return ToDetailResponse(assignment, booking);
         }
 
+        // One-active-job rule (provider-queue model). Only relevant for the
+        // en-route target: arrived's own precondition (en-route) is already an
+        // active status, so this is always false by the time MarkArrivedAsync
+        // reaches here - the check still runs uniformly rather than special-
+        // casing by target, since "already active" is exactly the condition
+        // that should let it through either way.
+        if (!ActiveJobStatuses.Contains(booking.Status)
+            && await _activeJobLimitService.HasAnotherActiveJobAsync(providerId, bookingId))
+        {
+            return Error.Business(
+                "ProviderJob.AnotherJobActive",
+                "Complete your current active job before starting another one.");
+        }
+
         try
         {
             booking.TransitionTo(targetStatus, reason);
@@ -312,14 +356,44 @@ public class ProviderJobService : IProviderJobService
             return Error.Business("ProviderJob.InvalidTransition", ex.Message);
         }
 
+        // The completion is verified at this point (booking is InProgress and a
+        // completion proof exists, checked above), so move the assignment to its
+        // terminal Completed state and stamp the finish time. This is what frees
+        // the provider from occupying the rest of this job's slot window, so the
+        // eligibility engine can offer them the next order (task: verified-
+        // completion release, subject to travel/buffer/duration).
+        var completedAtUtc = DateTime.UtcNow;
+        assignment.Complete(completedAtUtc);
+
         await _bookingRepository.UpdateAsync(booking);
+        await _assignmentRepository.UpdateAsync(assignment);
+
+        // Overrun handling: a duration-based job's occupancy is always its
+        // booked slot regardless of actual finish time (see
+        // IProviderJobOccupancyService), so only a non-duration-based job that
+        // finished after its slot's own end can have overrun anyone else's
+        // schedule - re-check this provider's other same-day queued jobs only
+        // in that case.
+        if (!booking.IsDurationBasedSnapshot)
+        {
+            var completedLocal = _clock.ToBusinessLocal(completedAtUtc);
+            bool overran = DateOnly.FromDateTime(completedLocal) > booking.SlotDate
+                || (DateOnly.FromDateTime(completedLocal) == booking.SlotDate && completedLocal.TimeOfDay > booking.SlotEndTimeSnapshot);
+
+            if (overran)
+            {
+                await _overrunReassignmentService.ReassignInfeasibleQueuedJobsAsync(providerId, booking.SlotDate, booking.Id);
+            }
+        }
 
         return ToDetailResponse(assignment, booking);
     }
 
     public async Task<Result<ProviderJobDetailResponse>> UploadCompletionProofAsync(Guid providerId, Guid bookingId, UploadJobCompletionProofRequest request)
     {
-        var resolved = await ResolveAcceptedAsync(providerId, bookingId);
+        // Accepted-or-Completed: supplementary evidence uploaded moments after
+        // tapping "complete" is a real flow (see BookingProviderAssignment.SetCompletionProof).
+        var resolved = await ResolveAcceptedOrCompletedAsync(providerId, bookingId);
         if (resolved is null)
         {
             return NotFoundError();
@@ -342,7 +416,7 @@ public class ProviderJobService : IProviderJobService
 
     public async Task<Result<UploadCompletionPhotoResponse>> UploadCompletionPhotoAsync(Guid providerId, Guid bookingId, Stream content, string fileNameHint, string contentType)
     {
-        var resolved = await ResolveAcceptedAsync(providerId, bookingId);
+        var resolved = await ResolveAcceptedOrCompletedAsync(providerId, bookingId);
         if (resolved is null)
         {
             return NotFoundError();
@@ -379,7 +453,7 @@ public class ProviderJobService : IProviderJobService
 
     public async Task<Result<BookingCompletionProofResponse?>> GetCompletionProofAsync(Guid providerId, Guid bookingId)
     {
-        var resolved = await ResolveAcceptedAsync(providerId, bookingId);
+        var resolved = await ResolveAcceptedOrCompletedAsync(providerId, bookingId);
         if (resolved is null)
         {
             return NotFoundError();
@@ -408,11 +482,24 @@ public class ProviderJobService : IProviderJobService
         return (assignment, booking);
     }
 
-    /// <summary>Same as <see cref="ResolveAsync"/> but only returns a result when the resolved assignment is this provider's currently <see cref="BookingProviderAssignmentStatus.Accepted"/> one - the precondition for start/complete/proof-upload.</summary>
+    /// <summary>Same as <see cref="ResolveAsync"/> but only returns a result when the resolved assignment is this provider's currently <see cref="BookingProviderAssignmentStatus.Accepted"/> one - the precondition for start/en-route/arrived/complete, none of which make sense to repeat once the job is done.</summary>
     private async Task<(BookingProviderAssignment Assignment, Booking Booking)?> ResolveAcceptedAsync(Guid providerId, Guid bookingId)
     {
         var resolved = await ResolveAsync(providerId, bookingId);
         if (resolved is null || resolved.Value.Assignment.Status != BookingProviderAssignmentStatus.Accepted)
+        {
+            return null;
+        }
+
+        return resolved;
+    }
+
+    /// <summary>Same as <see cref="ResolveAcceptedAsync"/> but also allows <see cref="BookingProviderAssignmentStatus.Completed"/> - the precondition for viewing or attaching completion evidence, which a provider must still be able to do for a job they just finished.</summary>
+    private async Task<(BookingProviderAssignment Assignment, Booking Booking)?> ResolveAcceptedOrCompletedAsync(Guid providerId, Guid bookingId)
+    {
+        var resolved = await ResolveAsync(providerId, bookingId);
+        if (resolved is null || resolved.Value.Assignment.Status is not
+            (BookingProviderAssignmentStatus.Accepted or BookingProviderAssignmentStatus.Completed))
         {
             return null;
         }
@@ -429,6 +516,10 @@ public class ProviderJobService : IProviderJobService
         BookingProviderAssignmentStatus.Rejected => ProviderJobStatus.Rejected,
         BookingProviderAssignmentStatus.Reassigned => ProviderJobStatus.Reassigned,
         BookingProviderAssignmentStatus.Withdrawn => ProviderJobStatus.Withdrawn,
+        // The assignment now carries its own terminal Completed state (set when
+        // the job is verified-complete), so it maps straight through rather than
+        // relying on the booking-status fallback below.
+        BookingProviderAssignmentStatus.Completed => ProviderJobStatus.Completed,
         BookingProviderAssignmentStatus.Accepted => booking.Status switch
         {
             BookingStatus.Completed => ProviderJobStatus.Completed,
@@ -445,7 +536,7 @@ public class ProviderJobService : IProviderJobService
         booking.Id,
         ToJobStatus(assignment, booking),
         booking.CustomerNameSnapshot,
-        booking.CustomerMobileSnapshot,
+        MaskMobileUntilAccepted(assignment, booking.CustomerMobileSnapshot),
         booking.AddressLabelSnapshot,
         booking.AddressLine1Snapshot,
         booking.AddressLine2Snapshot,
@@ -454,7 +545,7 @@ public class ProviderJobService : IProviderJobService
         booking.AddressStateSnapshot,
         booking.AddressPincodeSnapshot,
         booking.AddressContactNameSnapshot,
-        booking.AddressContactMobileSnapshot,
+        MaskMobileUntilAccepted(assignment, booking.AddressContactMobileSnapshot),
         booking.SlotDate,
         booking.SlotStartTimeSnapshot,
         booking.SlotEndTimeSnapshot,
@@ -465,4 +556,18 @@ public class ProviderJobService : IProviderJobService
         assignment.ResponseDeadline,
         assignment.Notes,
         assignment.CompletionProofRef);
+
+    /// <summary>
+    /// Privacy gate for the customer's phone number(s): a provider can see a
+    /// job's summary/detail before deciding whether to accept it (so they can
+    /// judge location/payout), but should not be able to contact the customer
+    /// until they have actually committed to the job by accepting it. Masked
+    /// for every non-accepted state (Assigned/Rejected/Reassigned/Withdrawn),
+    /// not just the "awaiting response" one - a provider who declined or was
+    /// reassigned away from a job never earned visibility into it either.
+    /// </summary>
+    private static string MaskMobileUntilAccepted(BookingProviderAssignment assignment, string mobile) =>
+        assignment.Status is BookingProviderAssignmentStatus.Accepted or BookingProviderAssignmentStatus.Completed
+            ? mobile
+            : "Hidden until accepted";
 }

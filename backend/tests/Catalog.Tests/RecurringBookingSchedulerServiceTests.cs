@@ -160,7 +160,7 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
         new ProviderAvailabilityWindowRepository(context),
         new ProviderBlackoutDateRepository(context),
         new ProviderCapacityRepository(context),
-        new ProviderScheduleConflictService(context),
+        new ProviderScheduleConflictService(context, TestServices.Occupancy()),
         TravelFeasibilityFactory.Sandbox(context),
         context);
 
@@ -174,7 +174,7 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
         BuildEligibilityService(context),
         new BookingProviderAssignmentService(
             new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
-            new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context),
+            new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context),
         new BookingProviderAssignmentRepository(context),
         new BookingRepository(context),
         new RecurringPlanProviderContinuityService(new BookingRepository(context)),

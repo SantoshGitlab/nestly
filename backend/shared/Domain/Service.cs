@@ -84,6 +84,18 @@ public class Service : AggregateRoot<Guid>
     /// <summary>Whether the customer may attach a free-text note when booking (SRS 12.6.3).</summary>
     public bool IsCustomerNoteAllowed { get; private set; }
 
+    /// <summary>
+    /// Whether this service is sold as a block of <em>time</em> the provider
+    /// owes the customer (e.g. "2 hours of cleaning"), as opposed to a
+    /// fixed-scope job that is done when the work is done (e.g. an AC repair).
+    /// It governs early release: for a duration-based service the provider stays
+    /// committed for the whole booked window even if the checklist finishes
+    /// early, whereas a fixed-scope service frees the provider on verified
+    /// completion. Snapshotted onto the booking at creation so a later change
+    /// here never alters an existing booking's commitment.
+    /// </summary>
+    public bool IsDurationBased { get; private set; }
+
     protected Service() { }
 
     public Service(Guid id, Guid categoryId, string name, string slug, string description, decimal price) : base(id)
@@ -105,6 +117,7 @@ public class Service : AggregateRoot<Guid>
         IsSlotRequired = true;
         IsAddressRequired = true;
         IsCustomerNoteAllowed = true;
+        IsDurationBased = false;
         RaiseDomainEvent(new ServiceCreatedEvent(Id, CategoryId));
     }
 
@@ -156,7 +169,8 @@ public class Service : AggregateRoot<Guid>
         bool isInspectionBased,
         bool isSlotRequired,
         bool isAddressRequired,
-        bool isCustomerNoteAllowed)
+        bool isCustomerNoteAllowed,
+        bool isDurationBased = false)
     {
         IsTaxApplicable = isTaxApplicable;
         IsAddOnAllowed = isAddOnAllowed;
@@ -165,6 +179,7 @@ public class Service : AggregateRoot<Guid>
         IsSlotRequired = isSlotRequired;
         IsAddressRequired = isAddressRequired;
         IsCustomerNoteAllowed = isCustomerNoteAllowed;
+        IsDurationBased = isDurationBased;
     }
 
     public void Feature() => IsFeatured = true;

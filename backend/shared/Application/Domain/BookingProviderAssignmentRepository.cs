@@ -9,8 +9,11 @@ public interface IBookingProviderAssignmentRepository
     Task UpdateAsync(BookingProviderAssignment entity);
     Task<BookingProviderAssignment?> GetByIdAsync(Guid id);
 
-    /// <summary>The currently outstanding assignment for a booking (status Assigned or Accepted), or null if none - PROVIDER.md OPEN DECISIONS #5, only one row is ever "live" at a time.</summary>
+    /// <summary>The currently outstanding assignment for a booking (status Assigned or Accepted), or null if none - PROVIDER.md OPEN DECISIONS #5, only one row is ever "live" at a time. Deliberately excludes <see cref="BookingProviderAssignmentStatus.Completed"/>: callers that withdraw/reassign/cancel the live assignment (cancellation, reschedule) must not touch a job that already finished.</summary>
     Task<BookingProviderAssignment?> GetActiveByBookingAsync(Guid bookingId);
+
+    /// <summary>Same as <see cref="GetActiveByBookingAsync"/> but also returns a just-<see cref="BookingProviderAssignmentStatus.Completed"/> assignment - for read paths (a customer's/provider's own view of "who is/was on this job") where a finished job's assignment is still the right one to show, as opposed to write paths that must never act on a job that is already done.</summary>
+    Task<BookingProviderAssignment?> GetCurrentByBookingAsync(Guid bookingId);
 
     /// <summary>Full assignment history for a booking, newest first (task 159 - shows prior rejections leading to the current state).</summary>
     Task<IReadOnlyList<BookingProviderAssignment>> ListByBookingAsync(Guid bookingId);

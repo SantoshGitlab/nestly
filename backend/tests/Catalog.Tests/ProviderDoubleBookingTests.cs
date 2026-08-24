@@ -119,7 +119,7 @@ public sealed class ProviderDoubleBookingTests : IClassFixture<TestDatabase>
         new ProviderRepository(context),
         new ServiceRepository(context),
         new BookingProviderAssignmentRepository(context),
-        new ProviderScheduleConflictService(context),
+        new ProviderScheduleConflictService(context, TestServices.Occupancy()),
         context);
 
     private static ProviderAssignmentEligibilityService BuildEligibilityService(NestlyDbContext context) => new(
@@ -127,7 +127,7 @@ public sealed class ProviderDoubleBookingTests : IClassFixture<TestDatabase>
         new ProviderAvailabilityWindowRepository(context),
         new ProviderBlackoutDateRepository(context),
         new ProviderCapacityRepository(context),
-        new ProviderScheduleConflictService(context),
+        new ProviderScheduleConflictService(context, TestServices.Occupancy()),
         // Task 289 on the sandbox estimator: every booking here shares one
         // address, so every leg is zero-length and the travel check never
         // fires - including for the back-to-back case below, which stays legal

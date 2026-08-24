@@ -52,6 +52,7 @@ public class ProviderTravelFeasibilityService : IProviderTravelFeasibilityServic
     private readonly SandboxRouteEstimateProvider _sandboxRouteEstimateProvider;
     private readonly IOptions<AutoAssignmentOptions> _options;
     private readonly ILogger<ProviderTravelFeasibilityService> _logger;
+    private readonly IProviderJobOccupancyService _occupancyService;
 
     private int _routeLookupsSpent;
     private bool _budgetExhaustionLogged;
@@ -61,12 +62,14 @@ public class ProviderTravelFeasibilityService : IProviderTravelFeasibilityServic
         IRouteEstimateProvider routeEstimateProvider,
         SandboxRouteEstimateProvider sandboxRouteEstimateProvider,
         IOptions<AutoAssignmentOptions> options,
-        ILogger<ProviderTravelFeasibilityService> logger)
+        ILogger<ProviderTravelFeasibilityService> logger,
+        IProviderJobOccupancyService occupancyService)
     {
         _context = context;
         _routeEstimateProvider = routeEstimateProvider;
         _sandboxRouteEstimateProvider = sandboxRouteEstimateProvider;
         _options = options;
+        _occupancyService = occupancyService;
         _logger = logger;
     }
 
@@ -140,11 +143,18 @@ public class ProviderTravelFeasibilityService : IProviderTravelFeasibilityServic
     /// </summary>
     private async Task<List<AdjacentJob>> FindAdjacentJobsAsync(Guid providerId, Booking booking, CancellationToken cancellationToken)
     {
-        // "Live" mirrors BookingProviderAssignmentStatus's own doc comment, the
-        // same way ProviderScheduleConflictService reads it - a
-        // Rejected/Reassigned/Withdrawn row is nobody's commitment any more and
-        // is nowhere anybody has to drive to.
-        var liveStatuses = new[] { BookingProviderAssignmentStatus.Assigned, BookingProviderAssignmentStatus.Accepted };
+        // Statuses that still put the provider at a place that day - the same
+        // set ProviderScheduleConflictService occupies on. Completed is included
+        // so a just-finished job still counts as a leg to drive from, exactly as
+        // it did while it stayed Accepted; using the actual finish time rather
+        // than the slot end as the "free from" instant is the early-release
+        // follow-up. A Rejected/Reassigned/Withdrawn row is nowhere anybody drives to.
+        var liveStatuses = new[]
+        {
+            BookingProviderAssignmentStatus.Assigned,
+            BookingProviderAssignmentStatus.Accepted,
+            BookingProviderAssignmentStatus.Completed
+        };
 
         // Narrowed in SQL to this provider's live jobs on this one date, then
         // ordered and compared in memory: TimeSpan comparisons don't reliably
@@ -163,6 +173,9 @@ public class ProviderTravelFeasibilityService : IProviderTravelFeasibilityServic
                 x.Booking.Id,
                 StartTime = x.Booking.SlotStartTimeSnapshot,
                 EndTime = x.Booking.SlotEndTimeSnapshot,
+                x.Assignment.Status,
+                x.Assignment.CompletedAt,
+                x.Booking.IsDurationBasedSnapshot,
                 Latitude = x.Booking.AddressLatitudeSnapshot,
                 Longitude = x.Booking.AddressLongitudeSnapshot,
             })
@@ -170,13 +183,27 @@ public class ProviderTravelFeasibilityService : IProviderTravelFeasibilityServic
 
         var adjacent = new List<AdjacentJob>(2);
 
+        // Effective end (IProviderJobOccupancyService): a verified-complete,
+        // non-duration-based job's actual finish time rather than its slot's
+        // own end - the early-release/overrun step. Only the previous leg
+        // needs it: the following job's own start time is fixed and unaffected
+        // by anyone else's completion.
+        //
         // Ties broken by Id so a provider with two jobs ending at the same
         // instant produces the same answer on every pass. Any job that neither
         // ends before this slot nor starts after it overlaps it, and is task
         // 288's refusal rather than this one's.
         var previous = sameDayJobs
-            .Where(job => job.EndTime <= booking.SlotStartTimeSnapshot)
-            .OrderByDescending(job => job.EndTime)
+            .Select(job => new
+            {
+                job.Id,
+                job.Latitude,
+                job.Longitude,
+                EffectiveEndTime = _occupancyService.EffectiveEndTime(new JobOccupancy(
+                    job.Status, job.CompletedAt, job.IsDurationBasedSnapshot, booking.SlotDate, job.StartTime, job.EndTime)),
+            })
+            .Where(job => job.EffectiveEndTime <= booking.SlotStartTimeSnapshot)
+            .OrderByDescending(job => job.EffectiveEndTime)
             .ThenBy(job => job.Id)
             .FirstOrDefault();
         if (previous is not null)
@@ -184,7 +211,7 @@ public class ProviderTravelFeasibilityService : IProviderTravelFeasibilityServic
             adjacent.Add(new AdjacentJob(
                 previous.Id,
                 ProviderTravelDirection.FromPreviousBooking,
-                ToWholeSeconds(booking.SlotStartTimeSnapshot - previous.EndTime),
+                ToWholeSeconds(booking.SlotStartTimeSnapshot - previous.EffectiveEndTime),
                 new GeoCoordinate(previous.Latitude, previous.Longitude)));
         }
 

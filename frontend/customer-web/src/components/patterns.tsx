@@ -179,6 +179,8 @@ export function providerAssignmentLabel(status: BookingProviderAssignmentStatus)
       return "Reassigned to another professional";
     case BookingProviderAssignmentStatus.Withdrawn:
       return "Assignment withdrawn — finding you another";
+    case BookingProviderAssignmentStatus.Completed:
+      return "Job completed";
     default:
       return "Professional assignment updating";
   }
@@ -187,6 +189,7 @@ export function providerAssignmentLabel(status: BookingProviderAssignmentStatus)
 export function providerAssignmentTone(status: BookingProviderAssignmentStatus): BadgeTone {
   switch (status) {
     case BookingProviderAssignmentStatus.Accepted:
+    case BookingProviderAssignmentStatus.Completed:
       return "success";
     case BookingProviderAssignmentStatus.Assigned:
       return "brand";
@@ -451,7 +454,7 @@ export function PriceBreakdownList({
   return (
     <dl className="flex flex-col gap-2.5">
       <PriceLine
-        label={`Base price × ${breakdown.quantity}`}
+        label={breakdown.quantity > 1 ? `Base price × ${breakdown.quantity}` : "Base price"}
         value={inr(breakdown.baseTotal)}
         tone="strong"
       />

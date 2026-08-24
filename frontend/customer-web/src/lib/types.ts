@@ -89,6 +89,25 @@ export interface CategorySummary {
   isFeatured: boolean;
 }
 
+/**
+ * A live storefront home banner (SRS 11.1.2/11.1.3), as returned by
+ * `GET /api/v1/banners/home`. Admin-managed via the CMS banners screen; the
+ * home hero renders these in `sortOrder`, one slide each. Mirrors the backend
+ * `HomeBannerResponse` field for field.
+ */
+export interface HomeBanner {
+  id: string;
+  /** Headline shown on the slide. */
+  title: string;
+  /** Optional supporting line beneath the headline; null renders headline only. */
+  subtitle: string | null;
+  imageUrl: string;
+  /** Media alt text for accessibility; falls back to the title when null. */
+  imageAltText: string | null;
+  /** Optional destination when the banner is tapped; null makes it non-interactive. */
+  linkUrl: string | null;
+}
+
 export interface ServiceAddOnSummary {
   id: string;
   name: string;
@@ -195,6 +214,8 @@ export interface ServiceDetail {
   addOnGroups: ServiceAddOnGroupSummary[];
   coverImageUrl: string | null;
   durationMinutes: number;
+  /** Whether this service is measured in units (AC units, rooms, seats). Only then does the price calculator show a quantity stepper; flat-rate services book at quantity 1. */
+  isQuantityAllowed: boolean;
 }
 
 /** One recent review in a service's rating summary (SRS 11.6.1). */
@@ -469,6 +490,8 @@ export enum BookingProviderAssignmentStatus {
   Rejected = 2,
   Reassigned = 3,
   Withdrawn = 4,
+  /** The provider finished the job and it was verified (completion proof/OTP). */
+  Completed = 5,
 }
 
 export interface BookingStatusTimelineEntry {

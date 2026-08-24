@@ -44,6 +44,7 @@ public class ServiceConfiguration : IEntityTypeConfiguration<Service>
         builder.Property(x => x.IsSlotRequired).IsRequired().HasDefaultValue(true);
         builder.Property(x => x.IsAddressRequired).IsRequired().HasDefaultValue(true);
         builder.Property(x => x.IsCustomerNoteAllowed).IsRequired().HasDefaultValue(true);
+        builder.Property(x => x.IsDurationBased).IsRequired().HasDefaultValue(false);
 
         // SetNull (not Restrict/Cascade), mirroring ServiceAddOn.GroupId:
         // deleting a group ungroups its services rather than orphaning or

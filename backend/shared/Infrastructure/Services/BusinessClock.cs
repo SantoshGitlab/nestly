@@ -49,4 +49,12 @@ public class BusinessClock : IBusinessClock
 
         return TimeZoneInfo.ConvertTimeToUtc(local, _timeZone);
     }
+
+    public DateTime ToBusinessLocal(DateTime utcInstant) =>
+        // SpecifyKind, not trust the caller's Kind: a value round-tripped
+        // through Npgsql's timestamptz is Utc already, but a value built by
+        // hand in a test (DateTime.UtcNow is Utc too, but nothing stops a
+        // caller passing Unspecified) must not silently be treated as
+        // business-local, which is what ConvertTimeFromUtc would otherwise do.
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utcInstant, DateTimeKind.Utc), _timeZone);
 }

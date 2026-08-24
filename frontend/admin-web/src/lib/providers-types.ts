@@ -74,6 +74,8 @@ export enum BookingProviderAssignmentStatus {
   Rejected = 2,
   Reassigned = 3,
   Withdrawn = 4,
+  /** The provider finished the job and it was verified (completion proof/OTP) - see the C# enum's doc comment for how this frees the provider for their next order. */
+  Completed = 5,
 }
 
 /** Mirrors Nestly.Domain.ProviderEarningEntryType's declaration order exactly. */

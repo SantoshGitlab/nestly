@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Routing;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
@@ -33,10 +34,12 @@ public static class TravelFeasibilityFactory
         NestlyDbContext context,
         IRouteEstimateProvider routeEstimateProvider,
         SandboxRouteEstimateProvider sandboxRouteEstimateProvider,
-        AutoAssignmentOptions? options = null) => new(
+        AutoAssignmentOptions? options = null,
+        IBusinessClock? clock = null) => new(
             context,
             routeEstimateProvider,
             sandboxRouteEstimateProvider,
             Options.Create(options ?? new AutoAssignmentOptions()),
-            NullLogger<ProviderTravelFeasibilityService>.Instance);
+            NullLogger<ProviderTravelFeasibilityService>.Instance,
+            new ProviderJobOccupancyService(clock ?? TestServices.Clock()));
 }

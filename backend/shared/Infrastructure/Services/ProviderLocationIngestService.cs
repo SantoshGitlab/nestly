@@ -68,7 +68,21 @@ public class ProviderLocationIngestService : IProviderLocationIngestService
         // until all of them have passed. Widening any of these conditions
         // widens surveillance of the provider - treat a change here as a
         // privacy decision, not a bug fix.
-        var assignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+        // GetActiveByBookingAsync deliberately excludes a Completed assignment
+        // (it means "still outstanding", the set CancellationService/
+        // RescheduleService withdraw from) - reading it here would make a just-
+        // finished job report ProviderLocation.NotAssigned instead of the
+        // booking-trackability check below refusing it as NotTrackable, which is
+        // the one source of truth for "is this job still trackable" (see the
+        // BookingLifecycle.IsTrackable comment). Assigned/Accepted/Completed
+        // together are this endpoint's own "the assignment I should check
+        // belongs to this provider" set - a Rejected/Reassigned/Withdrawn row
+        // is superseded and never authorises anything.
+        var assignment = (await _assignmentRepository.ListByBookingAsync(bookingId))
+            .Where(a => a.Status is BookingProviderAssignmentStatus.Assigned
+                or BookingProviderAssignmentStatus.Accepted
+                or BookingProviderAssignmentStatus.Completed)
+            .MaxBy(a => a.AssignedAt);
         if (assignment is null || assignment.ProviderId != providerId)
         {
             return Error.Forbidden(
@@ -79,8 +93,11 @@ public class ProviderLocationIngestService : IProviderLocationIngestService
         // The booking sits in Assigned both before and after the provider
         // responds, so the trackable-state list alone would let the platform
         // start tracking someone who has merely been offered the job and may
-        // yet decline it. Consent to be located begins at accept.
-        if (assignment.Status != BookingProviderAssignmentStatus.Accepted)
+        // yet decline it. Consent to be located begins at accept, and - once
+        // given - is not withdrawn just because the job finished a moment ago;
+        // BookingLifecycle.IsTrackable below is what actually stops tracking a
+        // completed job, so it alone decides that, not this check.
+        if (assignment.Status is not (BookingProviderAssignmentStatus.Accepted or BookingProviderAssignmentStatus.Completed))
         {
             return Error.Conflict(
                 "ProviderLocation.NotAccepted",

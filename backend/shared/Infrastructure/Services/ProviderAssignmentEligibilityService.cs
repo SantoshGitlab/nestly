@@ -110,11 +110,17 @@ public class ProviderAssignmentEligibilityService : IProviderAssignmentEligibili
             return true;
         }
 
-        // "Live" mirrors BookingProviderAssignmentStatus's own doc comment
-        // (Assigned/Accepted are the only statuses ever "outstanding" at
-        // once) - a Rejected/Reassigned/Withdrawn row must not still count
-        // against the provider's load.
-        var liveStatuses = new[] { BookingProviderAssignmentStatus.Assigned, BookingProviderAssignmentStatus.Accepted };
+        // Statuses that count against the provider's configured load. Completed
+        // is included so a finished job keeps counting exactly as it did while
+        // it stayed Accepted - releasing that count once the job is genuinely
+        // done is part of the early-release follow-up, kept separate so this
+        // change is behaviour-neutral. Rejected/Reassigned/Withdrawn never count.
+        var liveStatuses = new[]
+        {
+            BookingProviderAssignmentStatus.Assigned,
+            BookingProviderAssignmentStatus.Accepted,
+            BookingProviderAssignmentStatus.Completed
+        };
 
         if (capacity.MaxJobsPerDay is { } maxPerDay)
         {

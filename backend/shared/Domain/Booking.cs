@@ -47,6 +47,12 @@ public class Booking : AggregateRoot<Guid>
     public TimeSpan SlotStartTimeSnapshot { get; private set; }
     public TimeSpan SlotEndTimeSnapshot { get; private set; }
 
+    /// <summary>The service's booked duration at the moment this booking was created (minutes). Snapshotted so a later change to the service's duration never alters this booking's provider commitment.</summary>
+    public int ServiceDurationMinutesSnapshot { get; private set; }
+
+    /// <summary>Whether the service was time-based (see <see cref="Service.IsDurationBased"/>) when this booking was created. Snapshotted, so toggling the service later never changes whether the provider on an existing booking may be released early.</summary>
+    public bool IsDurationBasedSnapshot { get; private set; }
+
     public decimal BasePriceSnapshot { get; private set; }
     public int QuantitySnapshot { get; private set; }
     public decimal BaseTotalSnapshot { get; private set; }
@@ -159,7 +165,9 @@ public class Booking : AggregateRoot<Guid>
         string? idempotencyKey = null,
         Guid? recurringBookingPlanId = null,
         decimal? walletCreditApplied = null,
-        Guid? amcContractId = null)
+        Guid? amcContractId = null,
+        int serviceDurationMinutes = 0,
+        bool isDurationBased = false)
         : base(id)
     {
         ArgumentNullException.ThrowIfNull(customer);
@@ -189,6 +197,9 @@ public class Booking : AggregateRoot<Guid>
         SlotWindowNameSnapshot = slot.WindowName ?? string.Empty;
         SlotStartTimeSnapshot = slot.StartTime;
         SlotEndTimeSnapshot = slot.EndTime;
+
+        ServiceDurationMinutesSnapshot = serviceDurationMinutes;
+        IsDurationBasedSnapshot = isDurationBased;
 
         BasePriceSnapshot = price.BasePrice;
         QuantitySnapshot = price.Quantity > 0 ? price.Quantity : throw new ArgumentOutOfRangeException(nameof(price), "Quantity must be positive.");

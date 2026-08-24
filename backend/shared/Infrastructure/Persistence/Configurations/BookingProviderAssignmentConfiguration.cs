@@ -29,6 +29,7 @@ public class BookingProviderAssignmentConfiguration : IEntityTypeConfiguration<B
         builder.Property(x => x.Status).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.ResponseDeadline);
         builder.Property(x => x.RespondedAt);
+        builder.Property(x => x.CompletedAt);
         builder.Property(x => x.Notes).HasMaxLength(500);
         builder.Property(x => x.CompletionProofRef).HasMaxLength(500);
 

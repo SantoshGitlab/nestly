@@ -230,7 +230,8 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
             aria-hidden
             className={cx(
               "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-              assignment === BookingProviderAssignmentStatus.Accepted
+              assignment === BookingProviderAssignmentStatus.Accepted ||
+                assignment === BookingProviderAssignmentStatus.Completed
                 ? "bg-success-soft text-success"
                 : assignment === null
                   ? "bg-surface-3 text-fg-subtle"
@@ -275,7 +276,11 @@ function StatusSummaryCard({ booking }: { booking: BookingDetail }) {
           </div>
           {assignment !== null ? (
             <Badge tone={providerAssignmentTone(assignment)} className="ml-auto shrink-0">
-              {assignment === BookingProviderAssignmentStatus.Accepted ? "Confirmed" : "In progress"}
+              {assignment === BookingProviderAssignmentStatus.Accepted
+                ? "Confirmed"
+                : assignment === BookingProviderAssignmentStatus.Completed
+                  ? "Completed"
+                  : "In progress"}
             </Badge>
           ) : null}
         </div>

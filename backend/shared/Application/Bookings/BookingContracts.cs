@@ -75,7 +75,11 @@ public record BookingSummaryRequest(
 public record BookingServiceSummary(
     Guid Id, string Name, string Slug,
     Guid? VariantId = null, string? VariantName = null, int? VariantDurationMinutes = null,
-    Guid? GroupId = null, string? GroupName = null);
+    Guid? GroupId = null, string? GroupName = null,
+    // Carried so the booking can snapshot the provider-commitment at creation
+    // (duration + whether the service is time-based) - see Booking's
+    // ServiceDurationMinutesSnapshot / IsDurationBasedSnapshot.
+    int DurationMinutes = 0, bool IsDurationBased = false);
 
 public record BookingAddressSummary(
     Guid Id,

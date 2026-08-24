@@ -49,7 +49,7 @@ public sealed class ProviderChatServiceTests : IDisposable
 
     private BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
-        new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context);
+        new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context);
 
     private static Booking NewAwaitingFulfilmentBooking(Guid customerId)
     {

@@ -31,4 +31,12 @@ public interface IBusinessClock
     /// compared with <see cref="TimeProvider.GetUtcNow"/>.
     /// </summary>
     DateTime ToUtc(DateOnly date, TimeSpan timeOfDay);
+
+    /// <summary>
+    /// The inverse of <see cref="ToUtc"/>: converts a real UTC instant (a
+    /// <c>BookingProviderAssignment.CompletedAt</c>, for example) to the
+    /// business-local wall-clock date and time it falls on, so it can be
+    /// compared against a stored slot window's own local start/end times.
+    /// </summary>
+    DateTime ToBusinessLocal(DateTime utcInstant);
 }

@@ -338,7 +338,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                 new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
-            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
+            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
 
         var result = await service.GetEligibilityAsync(customer.Id, bookingId);
 
@@ -357,7 +357,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                 new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
-            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
+            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()));
 
         var result = await service.GetEligibilityAsync(customer.Id, bookingId);
 

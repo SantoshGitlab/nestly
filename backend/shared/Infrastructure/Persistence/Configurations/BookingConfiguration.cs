@@ -45,6 +45,8 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(x => x.SlotWindowNameSnapshot).IsRequired().HasMaxLength(100);
         builder.Property(x => x.SlotStartTimeSnapshot).IsRequired();
         builder.Property(x => x.SlotEndTimeSnapshot).IsRequired();
+        builder.Property(x => x.ServiceDurationMinutesSnapshot).IsRequired().HasDefaultValue(0);
+        builder.Property(x => x.IsDurationBasedSnapshot).IsRequired().HasDefaultValue(false);
 
         builder.Property(x => x.BasePriceSnapshot).IsRequired().HasPrecision(12, 2);
         builder.Property(x => x.QuantitySnapshot).IsRequired();

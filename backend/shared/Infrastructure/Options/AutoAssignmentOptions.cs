@@ -125,11 +125,11 @@ public class AutoAssignmentOptions
 
     /// <summary>
     /// Fixed allowance added on top of the measured drive between two adjacent
-    /// jobs: parking, finding the door, and handover at both ends. Fifteen
-    /// minutes is a working guess with no production data behind it yet -
-    /// hence configurable rather than a constant - and errs towards the
-    /// provider, since the cost of being wrong is a late arrival at a
-    /// customer's home.
+    /// jobs: parking, finding the door, and handover at both ends. Twenty
+    /// minutes is the agreed default (provider-queue model) with no production
+    /// data behind it yet - hence configurable rather than a constant - and
+    /// errs towards the provider, since the cost of being wrong is a late
+    /// arrival at a customer's home.
     /// </summary>
     /// <remarks>
     /// Added only when there is a drive to buffer. A zero-length leg (the next
@@ -140,7 +140,7 @@ public class AutoAssignmentOptions
     /// still enforced.
     /// </remarks>
     [Range(0, 240)]
-    public int TravelHandoverBufferMinutes { get; set; } = 15;
+    public int TravelHandoverBufferMinutes { get; set; } = 20;
 
     /// <summary>
     /// The cost cap on task 289: how many route lookups one eligibility pass

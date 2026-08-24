@@ -14,21 +14,32 @@ public class ProviderScheduleConflictService : IProviderScheduleConflictService
     // BookingProviderAssignmentService/RefundService do for their own
     // cross-aggregate needs.
     private readonly NestlyDbContext _context;
+    private readonly IProviderJobOccupancyService _occupancyService;
 
-    public ProviderScheduleConflictService(NestlyDbContext context)
+    public ProviderScheduleConflictService(NestlyDbContext context, IProviderJobOccupancyService occupancyService)
     {
         _context = context;
+        _occupancyService = occupancyService;
     }
 
     public async Task<ProviderScheduleConflict?> FindConflictAsync(Guid providerId, Booking booking)
     {
         ArgumentNullException.ThrowIfNull(booking);
 
-        // "Live" mirrors BookingProviderAssignmentStatus's own doc comment
-        // (Assigned/Accepted are the only statuses ever "outstanding" at
-        // once) - a Rejected/Reassigned/Withdrawn row is nobody's commitment
-        // any more and must not block a new assignment.
-        var liveStatuses = new[] { BookingProviderAssignmentStatus.Assigned, BookingProviderAssignmentStatus.Accepted };
+        // Statuses that still occupy the provider's schedule. Assigned/Accepted
+        // are the outstanding ones; Completed is included so a finished job goes
+        // on blocking its slot window exactly as it did before the assignment
+        // gained its own terminal state (it used to stay Accepted). Refining
+        // that window down to the actual finish time for a non-duration service
+        // - the early-release step - is a deliberate follow-up, kept separate so
+        // this change alters no scheduling behaviour on its own. A
+        // Rejected/Reassigned/Withdrawn row is nobody's commitment and never blocks.
+        var liveStatuses = new[]
+        {
+            BookingProviderAssignmentStatus.Assigned,
+            BookingProviderAssignmentStatus.Accepted,
+            BookingProviderAssignmentStatus.Completed
+        };
 
         // Narrowed in SQL to this one provider's live jobs on this one date -
         // a handful of rows at most - and only then compared as intervals in
@@ -53,14 +64,32 @@ public class ProviderScheduleConflictService : IProviderScheduleConflictService
                 x.Booking.SlotDate,
                 StartTime = x.Booking.SlotStartTimeSnapshot,
                 EndTime = x.Booking.SlotEndTimeSnapshot,
+                x.Assignment.Status,
+                x.Assignment.CompletedAt,
+                x.Booking.IsDurationBasedSnapshot,
             })
             .ToListAsync();
 
-        // Half-open [start, end) overlap - see FindConflictAsync's doc
-        // comment. Earliest-first so the booking named in the admin's error
-        // message is deterministic when more than one job clashes.
+        // Half-open [start, effective end) overlap - see FindConflictAsync's
+        // doc comment. The effective end (IProviderJobOccupancyService) is the
+        // slot's own end for anything not yet verified-complete or duration-
+        // based, and the job's actual finish time otherwise - the early-
+        // release/overrun step. It is used only for the overlap boundary, not
+        // in the returned conflict: the booking's own booked slot end is what
+        // an admin reading the resulting error message needs, not an inferred
+        // completion time. Earliest-first so the booking named in that message
+        // is deterministic when more than one job clashes.
         var conflict = sameDayJobs
-            .Where(job => booking.SlotStartTimeSnapshot < job.EndTime && job.StartTime < booking.SlotEndTimeSnapshot)
+            .Select(job => new
+            {
+                job.Id,
+                job.SlotDate,
+                job.StartTime,
+                job.EndTime,
+                EffectiveEndTime = _occupancyService.EffectiveEndTime(new JobOccupancy(
+                    job.Status, job.CompletedAt, job.IsDurationBasedSnapshot, job.SlotDate, job.StartTime, job.EndTime)),
+            })
+            .Where(job => booking.SlotStartTimeSnapshot < job.EffectiveEndTime && job.StartTime < booking.SlotEndTimeSnapshot)
             .OrderBy(job => job.StartTime)
             .FirstOrDefault();
 

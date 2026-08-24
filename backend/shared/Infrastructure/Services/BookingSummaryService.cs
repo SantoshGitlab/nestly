@@ -217,7 +217,8 @@ public class BookingSummaryService : IBookingSummaryService
             new BookingServiceSummary(
                 service.Id, service.Name, service.Slug,
                 priceResult.Value.SelectedVariantId, priceResult.Value.SelectedVariantName, priceResult.Value.SelectedVariantDurationMinutes,
-                service.ServiceGroupId, serviceGroupName),
+                service.ServiceGroupId, serviceGroupName,
+                service.DurationMinutes, service.IsDurationBased),
             addOnSummaries,
             new BookingAddressSummary(
                 address.Id, address.Label, address.Line1, address.Line2, address.Landmark,
