@@ -127,6 +127,7 @@ const ASSIGNMENT_STATUS_LABELS: Record<BookingProviderAssignmentStatus, string> 
   [BookingProviderAssignmentStatus.Rejected]: "Rejected",
   [BookingProviderAssignmentStatus.Reassigned]: "Superseded (reassigned)",
   [BookingProviderAssignmentStatus.Withdrawn]: "Withdrawn (booking cancelled)",
+  [BookingProviderAssignmentStatus.Completed]: "Completed",
 };
 
 /**
@@ -192,6 +193,7 @@ export default function BookingDetailPage() {
   const [assignProviderId, setAssignProviderId] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [confirmReject, setConfirmReject] = useState(false);
+  const [confirmAssignOverAccepted, setConfirmAssignOverAccepted] = useState(false);
 
   const invalidateDetail = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-booking-detail", bookingId] });
@@ -269,6 +271,7 @@ export default function BookingDetailPage() {
       setActionError(null);
       setActionNotice("Provider assigned.");
       setAssignProviderId("");
+      setConfirmAssignOverAccepted(false);
       invalidateDetail();
     },
     onError: (err) => setActionError(describeError(err)),
@@ -315,6 +318,21 @@ export default function BookingDetailPage() {
   const booking = detailQuery.data;
   const isAssignableStatus =
     booking.status === BookingStatus.AwaitingFulfilment || booking.status === BookingStatus.Assigned;
+
+  // The one assignment row still "live" for this booking, if any (every
+  // other row is a settled Rejected/Reassigned/Withdrawn/Completed). Backend
+  // (BookingProviderAssignmentService.MarkReassigned) already permits
+  // superseding an Accepted assignment, not just a pending Assigned one - ops
+  // needs that override for a provider who drops out after accepting - but
+  // the picker below should not let that happen with the same single click
+  // as assigning an unanswered booking, so this flags when the click needs a
+  // confirmation step instead of firing immediately.
+  const liveAssignment = assignmentHistoryQuery.data?.find(
+    (a) =>
+      a.status === BookingProviderAssignmentStatus.Assigned ||
+      a.status === BookingProviderAssignmentStatus.Accepted,
+  );
+  const wouldOverrideAcceptedProvider = liveAssignment?.status === BookingProviderAssignmentStatus.Accepted;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
@@ -465,7 +483,8 @@ export default function BookingDetailPage() {
                   </span>
                   <Badge
                     tone={
-                      assignment.status === BookingProviderAssignmentStatus.Accepted
+                      assignment.status === BookingProviderAssignmentStatus.Accepted ||
+                      assignment.status === BookingProviderAssignmentStatus.Completed
                         ? "success"
                         : assignment.status === BookingProviderAssignmentStatus.Rejected
                           ? "danger"
@@ -494,6 +513,11 @@ export default function BookingDetailPage() {
                 A provider can only be assigned once this booking reaches{" "}
                 {BOOKING_STATUS_LABELS[BookingStatus.AwaitingFulfilment]} (current status:{" "}
                 {booking.statusLabel}).
+              </Alert>
+            ) : wouldOverrideAcceptedProvider ? (
+              <Alert tone="warning">
+                {liveAssignment?.providerDisplayName} has already accepted this job. Assigning someone else
+                removes them from it and notifies the customer their provider changed.
               </Alert>
             ) : null}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -538,7 +562,9 @@ export default function BookingDetailPage() {
               <Button
                 disabled={!isAssignableStatus || !assignProviderId.trim()}
                 loading={assignProviderMutation.isPending}
-                onClick={() => assignProviderMutation.mutate()}
+                onClick={() =>
+                  wouldOverrideAcceptedProvider ? setConfirmAssignOverAccepted(true) : assignProviderMutation.mutate()
+                }
               >
                 Assign provider
               </Button>
@@ -774,6 +800,17 @@ export default function BookingDetailPage() {
         error={rejectAssignmentMutation.isError ? describeError(rejectAssignmentMutation.error) : null}
         onCancel={() => setConfirmReject(false)}
         onConfirm={() => rejectAssignmentMutation.mutate()}
+      />
+
+      <ConfirmDialog
+        open={confirmAssignOverAccepted}
+        title="Reassign an already-accepted job?"
+        description={`${liveAssignment?.providerDisplayName ?? "The current provider"} has already accepted this job. Assigning a different provider removes them from it and notifies the customer their provider changed.`}
+        confirmLabel="Reassign anyway"
+        loading={assignProviderMutation.isPending}
+        error={assignProviderMutation.isError ? describeError(assignProviderMutation.error) : null}
+        onCancel={() => setConfirmAssignOverAccepted(false)}
+        onConfirm={() => assignProviderMutation.mutate()}
       />
     </div>
   );

@@ -368,24 +368,50 @@ export default function JobDetailPage() {
           <dl className="flex flex-col gap-4">
             <DetailRow label="Customer">
               <span className="font-medium text-fg">{job.customerNameSnapshot}</span>
-              <a
-                href={`tel:${job.customerMobileSnapshot}`}
-                className="mt-1 flex w-fit items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-sm font-medium text-brand-600 transition-colors duration-fast ease-out hover:bg-surface-3 dark:text-brand-400"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-4 w-4"
-                  aria-hidden
+              {job.status === JobStatus.Accepted ||
+              job.status === JobStatus.EnRoute ||
+              job.status === JobStatus.Arrived ||
+              job.status === JobStatus.InProgress ||
+              job.status === JobStatus.Completed ? (
+                <a
+                  href={`tel:${job.customerMobileSnapshot}`}
+                  className="mt-1 flex w-fit items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-sm font-medium text-brand-600 transition-colors duration-fast ease-out hover:bg-surface-3 dark:text-brand-400"
                 >
-                  <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" />
-                </svg>
-                <span className="nums">{job.customerMobileSnapshot}</span>
-              </a>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4"
+                    aria-hidden
+                  >
+                    <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" />
+                  </svg>
+                  <span className="nums">{job.customerMobileSnapshot}</span>
+                </a>
+              ) : (
+                // The number is masked server-side until the job is accepted
+                // (see MaskMobileUntilAccepted in ProviderJobService) - this
+                // just renders that placeholder as plain text instead of a
+                // clickable tel: link, since there is nothing to call.
+                <span className="mt-1 flex w-fit items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-sm font-medium text-fg-muted">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4"
+                    aria-hidden
+                  >
+                    <path d="M3 3l18 18M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z" />
+                  </svg>
+                  Visible after you accept
+                </span>
+              )}
             </DetailRow>
 
             <DetailRow label="Address">

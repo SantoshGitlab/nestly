@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, forwardRef, useContext, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -26,24 +27,30 @@ import type {
  * The three are NOT byte-identical, and have not been since customer-web grew
  * UI the other two never needed. This comment used to claim they were, which
  * sent a reader looking for a drift bug that was really a deliberate feature
- * (tasks.csv 336, 362). The truth: admin-web and provider-web ARE byte-
- * identical to each other; customer-web is that same file plus five intended
- * additions, listed here so nobody "restores" them by syncing the files:
+ * (tasks.csv 336, 362). Current known deltas, listed here so nobody "fixes"
+ * them by re-syncing the files:
  *
- *   1. `hideLabel` on `FieldShell`/`Field` - renders the label `sr-only`, for
- *      the inline coupon-code field.
- *   2. `LinkButton` - a `next/link` anchor sharing `BUTTON_VARIANTS` and
- *      `BUTTON_SIZES`, so a navigation control can look like a button without
- *      pretending to be one.
- *   3. A `danger-soft` entry in `BUTTON_VARIANTS`.
+ *   1. `hideLabel` on `FieldShell`/`Field` (customer-web only) - renders the
+ *      label `sr-only`, for the inline coupon-code field.
+ *   2. `LinkButton` (customer-web only) - a `next/link` anchor sharing
+ *      `BUTTON_VARIANTS` and `BUTTON_SIZES`, so a navigation control can look
+ *      like a button without pretending to be one.
+ *   3. A `danger-soft` entry in `BUTTON_VARIANTS` (customer-web only).
  *   4. `Modal` portals to `document.body` via `createPortal` - a
- *      `backdrop-blur-md` ancestor makes `fixed inset-0` position against that
- *      ancestor rather than the viewport.
- *   5. The imports those four need: `next/link`, `createPortal`,
- *      `AnchorHTMLAttributes`.
+ *      `transform`/`filter`/`backdrop-filter` ancestor (e.g. `backdrop-blur-md`
+ *      on customer-web's SiteHeader, or the persistent `transform` an
+ *      `animate-rise` root leaves behind via `animation-fill-mode: both` on
+ *      provider-web's pages) makes `fixed inset-0` position against that
+ *      ancestor rather than the viewport. customer-web and provider-web both
+ *      have this fix; admin-web does not yet and carries the same latent bug
+ *      wherever a Modal opens under a transformed/filtered ancestor.
+ *   5. The imports those need: `next/link`, `createPortal`,
+ *      `AnchorHTMLAttributes` (customer-web only needs `next/link` and
+ *      `AnchorHTMLAttributes`; `createPortal` is now shared by customer-web
+ *      and provider-web).
  *
- * Porting one of those INTO another app is fine. Deleting it from customer-web
- * to make a diff come out clean is not.
+ * Porting one of those INTO another app is fine. Deleting it to make a diff
+ * come out clean is not.
  */
 
 /** Joins conditional class names, dropping falsy entries. */
@@ -1130,7 +1137,17 @@ export function Modal({
 
   const sizes = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" } as const;
 
-  return (
+  // Portalled to <body> rather than rendered in place: `fixed inset-0` only
+  // covers the actual viewport if every ancestor is un-filtered/untransformed
+  // - a `transform`/`filter`/`backdrop-filter` anywhere up the tree (e.g. a
+  // page root wrapped in the `animate-rise` entrance animation, which leaves
+  // a persistent `transform: matrix(...)` behind via `animation-fill-mode:
+  // both`) makes that ancestor the containing block instead, so a Modal
+  // opened from inside it renders squashed into that ancestor's box instead
+  // of centered on the page. A portal sidesteps the whole class of bug
+  // instead of requiring every future trigger location to stay
+  // filter/transform-free above it. (Same fix as customer-web's Modal.)
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
       <div
         className="absolute inset-0 animate-fade-in bg-overlay/50 backdrop-blur-[2px]"
@@ -1206,7 +1223,8 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

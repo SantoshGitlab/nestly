@@ -284,8 +284,15 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         await _assignmentRepository.UpdateAsync(assignment);
 
         // Needs reassignment (task 159): clear the display field and return
-        // the booking to the assignable pool. No auto-match - PROVIDER.md
-        // OPEN DECISIONS #1 - an admin must call AssignAsync again.
+        // the booking to the assignable pool. This used to mean a purely
+        // manual admin queue (PROVIDER.md OPEN DECISIONS #1), but task 247's
+        // ProviderAutoAssignmentHandler now reacts to the AwaitingFulfilment
+        // transition raised below identically to a fresh booking - see that
+        // class's doc comment for the retry-cap/exclusion/standing-provider
+        // behaviour. Manual admin assignment remains the fallback, not the
+        // only path: it only takes over once auto-assignment is disabled
+        // (AutoAssignmentOptions.Enabled), exhausts its retry cap, or finds
+        // no eligible candidate.
         booking.AssignProvider(null);
         if (booking.Status == BookingStatus.Assigned)
         {
