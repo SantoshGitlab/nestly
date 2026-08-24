@@ -142,11 +142,25 @@
     color: rgb(var(--fg));
     font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
       "Segoe UI", Roboto, sans-serif;
+    /* Comfortable base reading rhythm; headings/utilities tighten from here. */
+    line-height: 1.5;
+    /* A hair of negative tracking so body copy reads "set" rather than spaced —
+       the same optical intent as the heading tracking below, dialled right down
+       for text sizes. */
+    letter-spacing: -0.006em;
     /* Contextual alternates + kerning; disable the default lining/oldstyle
        ambiguity so ₹ amounts and dates render consistently. */
     font-feature-settings: "cv11", "ss01";
     font-variation-settings: normal;
     text-rendering: optimizeLegibility;
+    /* Crisp, lighter-weight glyphs on Retina/macOS — the single biggest
+       perceived-quality gap between a default page and a polished product
+       surface (Linear, Stripe, Vercel all ship this). */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Geist is a variable font: never let the browser fake a missing weight or
+       slant — synthesized bold/italic renders muddy next to the real cuts. */
+    font-synthesis: none;
   }
 
   /* Optical corrections: large type needs negative tracking to look set
