@@ -123,7 +123,8 @@ public class ServiceQueryService : IServiceQueryService
                     variants.Select(ToVariantSummary).ToList(),
                     addOnGroupResponses,
                     service.CoverImageUrl,
-                    service.DurationMinutes);
+                    service.DurationMinutes,
+                    service.IsQuantityAllowed);
             },
             DetailTtl);
 

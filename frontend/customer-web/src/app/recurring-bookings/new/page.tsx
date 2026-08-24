@@ -280,16 +280,20 @@ function NewRecurringBookingPlanScreen() {
         )}
       </Card>
 
-      <Card title="Quantity">
-        <Field
-          label="Units per visit"
-          type="number"
-          min={1}
-          className="max-w-[8rem]"
-          value={quantity}
-          onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-        />
-      </Card>
+      {/* Quantity only for unit-measured services (AC units, rooms, seats);
+          a flat-rate service books one per visit and hides the field. */}
+      {service.isQuantityAllowed ? (
+        <Card title="Quantity">
+          <Field
+            label="Units per visit"
+            type="number"
+            min={1}
+            className="max-w-[8rem]"
+            value={quantity}
+            onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+          />
+        </Card>
+      ) : null}
 
       {service.addOns.length > 0 ? (
         <Card title="Add-ons" description="Applied to every visit in the plan.">

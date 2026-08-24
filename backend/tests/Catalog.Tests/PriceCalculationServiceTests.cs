@@ -26,6 +26,18 @@ public sealed class PriceCalculationServiceTests : IClassFixture<TestDatabase>
     {
         var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", basePrice);
+        // A unit-measured service so the base-price-times-quantity path is
+        // exercised: the pricing engine now forces quantity to 1 for services
+        // where IsQuantityAllowed is false (the constructor default), so a
+        // quantity multiplication test needs a service that actually allows it.
+        service.SetOptions(
+            isTaxApplicable: true,
+            isAddOnAllowed: true,
+            isQuantityAllowed: true,
+            isInspectionBased: false,
+            isSlotRequired: true,
+            isAddressRequired: true,
+            isCustomerNoteAllowed: true);
         var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
         var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
 
@@ -50,6 +62,46 @@ public sealed class PriceCalculationServiceTests : IClassFixture<TestDatabase>
         result.Value.BasePrice.Should().Be(500m);
         result.Value.BaseTotal.Should().Be(1000m);
         result.Value.TotalPayable.Should().Be(1000m);
+    }
+
+    [Fact]
+    public async Task Quantity_is_forced_to_one_for_a_service_that_is_not_unit_measured()
+    {
+        using var context = _db.CreateContext();
+        var (_, service, _, city) = SeedServiceAndCity(context, 500m);
+        // A flat-rate service: quantity must never multiply its price, even
+        // when a (tampered or buggy) client sends one.
+        service.SetOptions(
+            isTaxApplicable: true,
+            isAddOnAllowed: true,
+            isQuantityAllowed: false,
+            isInspectionBased: false,
+            isSlotRequired: true,
+            isAddressRequired: true,
+            isCustomerNoteAllowed: true);
+        context.SaveChanges();
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(service.Id, city.Id, 5, []));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Quantity.Should().Be(1);
+        result.Value.BaseTotal.Should().Be(500m);
+        result.Value.TotalPayable.Should().Be(500m);
+    }
+
+    [Fact]
+    public async Task Quantity_is_capped_at_the_maximum_for_a_unit_measured_service()
+    {
+        using var context = _db.CreateContext();
+        // SeedServiceAndCity enables quantity; 10 x 99 (the cap) = 990, proving
+        // a runaway 1000 is clamped rather than multiplied straight through.
+        var (_, service, _, city) = SeedServiceAndCity(context, 10m);
+
+        var result = await BuildService(context).CalculateAsync(new PriceCalculationRequest(service.Id, city.Id, 1000, []));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Quantity.Should().Be(99);
+        result.Value.BaseTotal.Should().Be(990m);
     }
 
     [Fact]

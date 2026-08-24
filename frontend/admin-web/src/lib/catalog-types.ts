@@ -72,6 +72,8 @@ export interface ServiceAdminResponse {
   isSlotRequired: boolean;
   isAddressRequired: boolean;
   isCustomerNoteAllowed: boolean;
+  /** Whether the service is sold as a block of time (provider stays for the booked duration) rather than fixed-scope (freed on completion). Governs early release of the provider for their next job. */
+  isDurationBased: boolean;
   /** Null when the service renders directly under its category with no section header (the default). Appliance/Service Group catalog redesign. */
   serviceGroupId: string | null;
 }
@@ -100,6 +102,7 @@ export interface ServiceCreateRequest {
   isSlotRequired: boolean;
   isAddressRequired: boolean;
   isCustomerNoteAllowed: boolean;
+  isDurationBased: boolean;
   serviceGroupId: string | null;
 }
 

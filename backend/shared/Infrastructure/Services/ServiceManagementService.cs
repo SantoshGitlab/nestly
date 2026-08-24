@@ -79,7 +79,7 @@ public class ServiceManagementService : IServiceManagementService
             request.CancellationPolicy, request.ReschedulePolicy, request.DurationMinutes, request.SortOrder,
             request.SeoTitle, request.SeoMetaDescription, request.PricingType, request.IsTaxApplicable,
             request.IsAddOnAllowed, request.IsQuantityAllowed, request.IsInspectionBased, request.IsSlotRequired,
-            request.IsAddressRequired, request.IsCustomerNoteAllowed, request.CoverImageUrl, request.ServiceGroupId);
+            request.IsAddressRequired, request.IsCustomerNoteAllowed, request.IsDurationBased, request.CoverImageUrl, request.ServiceGroupId);
 
         // Staged before AddAsync so its own SaveChangesAsync commits the
         // audit row in the same transaction as the new service.
@@ -135,7 +135,7 @@ public class ServiceManagementService : IServiceManagementService
             request.CancellationPolicy, request.ReschedulePolicy, request.DurationMinutes, request.SortOrder,
             request.SeoTitle, request.SeoMetaDescription, request.PricingType, request.IsTaxApplicable,
             request.IsAddOnAllowed, request.IsQuantityAllowed, request.IsInspectionBased, request.IsSlotRequired,
-            request.IsAddressRequired, request.IsCustomerNoteAllowed, request.CoverImageUrl, request.ServiceGroupId);
+            request.IsAddressRequired, request.IsCustomerNoteAllowed, request.IsDurationBased, request.CoverImageUrl, request.ServiceGroupId);
         service.MarkUpdated(oldCategoryId);
 
         await _auditLogWriter.WriteAsync(new AuditEntry(
@@ -274,6 +274,7 @@ public class ServiceManagementService : IServiceManagementService
         bool isSlotRequired,
         bool isAddressRequired,
         bool isCustomerNoteAllowed,
+        bool isDurationBased,
         string? coverImageUrl,
         Guid? serviceGroupId)
     {
@@ -289,7 +290,7 @@ public class ServiceManagementService : IServiceManagementService
         service.SetSeo(seoTitle, seoMetaDescription);
         service.SetPricingType(Enum.Parse<ServicePricingType>(pricingType));
         service.SetOptions(isTaxApplicable, isAddOnAllowed, isQuantityAllowed, isInspectionBased,
-            isSlotRequired, isAddressRequired, isCustomerNoteAllowed);
+            isSlotRequired, isAddressRequired, isCustomerNoteAllowed, isDurationBased);
     }
 
     // Task NESTLY-011: one batched lookup instead of a GetByIdAsync per
@@ -334,6 +335,7 @@ public class ServiceManagementService : IServiceManagementService
         service.IsSlotRequired,
         service.IsAddressRequired,
         service.IsCustomerNoteAllowed,
+        service.IsDurationBased,
         service.CoverImageUrl,
         service.ServiceGroupId);
 

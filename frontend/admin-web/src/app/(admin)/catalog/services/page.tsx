@@ -35,6 +35,7 @@ const serviceSchema = z.object({
   isTaxApplicable: z.boolean(),
   isAddOnAllowed: z.boolean(),
   isQuantityAllowed: z.boolean(),
+  isDurationBased: z.boolean(),
   isInspectionBased: z.boolean(),
   isSlotRequired: z.boolean(),
   isAddressRequired: z.boolean(),
@@ -83,6 +84,7 @@ export default function CatalogServicesPage() {
       isTaxApplicable: true,
       isAddOnAllowed: true,
       isQuantityAllowed: false,
+      isDurationBased: false,
       isInspectionBased: false,
       isSlotRequired: true,
       isAddressRequired: true,
@@ -137,6 +139,7 @@ export default function CatalogServicesPage() {
       isTaxApplicable: values.isTaxApplicable,
       isAddOnAllowed: values.isAddOnAllowed,
       isQuantityAllowed: values.isQuantityAllowed,
+      isDurationBased: values.isDurationBased,
       isInspectionBased: values.isInspectionBased,
       isSlotRequired: values.isSlotRequired,
       isAddressRequired: values.isAddressRequired,
@@ -352,6 +355,11 @@ export default function CatalogServicesPage() {
                 label="Quantity allowed"
                 checked={form.watch("isQuantityAllowed")}
                 onChange={(v) => form.setValue("isQuantityAllowed", v)}
+              />
+              <CheckboxField
+                label="Duration-based (time is what's booked, e.g. hourly)"
+                checked={form.watch("isDurationBased")}
+                onChange={(v) => form.setValue("isDurationBased", v)}
               />
               <CheckboxField
                 label="Inspection required before scheduling"

@@ -719,28 +719,34 @@ function BookingSummaryScreen() {
             <span className="nums text-sm text-fg-muted">{inr(service.price)}</span>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-4">
-            <span className="text-sm font-medium text-fg">Quantity</span>
-            <div className="flex items-center gap-2">
-              <QuantityButton
-                label="Decrease quantity"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
-              >
-                −
-              </QuantityButton>
-              <span className="nums w-8 text-center text-sm font-medium text-fg" aria-live="polite">
-                {quantity}
-              </span>
-              <QuantityButton
-                label="Increase quantity"
-                onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
-                disabled={quantity >= MAX_QUANTITY}
-              >
-                +
-              </QuantityButton>
+          {/* Quantity only for unit-measured services (AC units, rooms,
+              seats). A flat-rate service stays at quantity 1 and hides the
+              control - the server rejects any other quantity for it anyway
+              (Booking.QuantityNotAllowed). */}
+          {service.isQuantityAllowed ? (
+            <div className="mt-4 flex items-center justify-between gap-4">
+              <span className="text-sm font-medium text-fg">Quantity</span>
+              <div className="flex items-center gap-2">
+                <QuantityButton
+                  label="Decrease quantity"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={quantity <= 1}
+                >
+                  −
+                </QuantityButton>
+                <span className="nums w-8 text-center text-sm font-medium text-fg" aria-live="polite">
+                  {quantity}
+                </span>
+                <QuantityButton
+                  label="Increase quantity"
+                  onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))}
+                  disabled={quantity >= MAX_QUANTITY}
+                >
+                  +
+                </QuantityButton>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {service.variants.length > 0 ? (
             <div className="mt-5 border-t border-line pt-4">

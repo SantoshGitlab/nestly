@@ -30,12 +30,20 @@ export function PriceCalculator({
   cityId,
   variants = [],
   addOnGroups = [],
+  quantityAllowed = false,
 }: {
   serviceId: string;
   addOns: ServiceAddOnSummary[];
   cityId: string | null;
   variants?: ServiceVariantSummary[];
   addOnGroups?: ServiceAddOnGroupSummary[];
+  /**
+   * Whether this service is measured in units (AC units, rooms, seats). Only
+   * then is the quantity stepper shown; a flat-rate service books at quantity
+   * 1, matching the server, which forces quantity to 1 for such services
+   * regardless of what the client sends (see PriceCalculationService).
+   */
+  quantityAllowed?: boolean;
 }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set());
@@ -90,30 +98,36 @@ export function PriceCalculator({
     <div className="flex flex-col gap-5 rounded-2xl border border-line bg-surface p-5 shadow-sm">
       <VariantPicker variants={variants} selectedId={selectedVariantId} onSelect={setSelectedVariantId} />
 
-      {/* A group, not a label: the value is a <span>, and htmlFor on a
-          non-labelable element leaves the control unlabelled. */}
-      <div
-        role="group"
-        aria-label="Quantity"
-        className="flex items-center justify-between gap-3"
-      >
-        <span className="text-sm font-medium text-fg">Quantity</span>
-        <div className="flex items-center gap-1">
-          <StepperButton
-            label="Decrease quantity"
-            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-            disabled={quantity <= 1}
-          >
-            −
-          </StepperButton>
-          <span className="nums w-8 text-center text-sm font-medium text-fg" aria-live="polite">
-            {quantity}
-          </span>
-          <StepperButton label="Increase quantity" onClick={() => setQuantity((q) => q + 1)}>
-            +
-          </StepperButton>
+      {/* Quantity only applies to services measured in units (AC units, rooms,
+          seats). A flat-rate service books at quantity 1, so the stepper is
+          hidden entirely rather than shown locked - and the server enforces the
+          same, ignoring any quantity a tampered client might still send. */}
+      {quantityAllowed ? (
+        // A group, not a label: the value is a <span>, and htmlFor on a
+        // non-labelable element leaves the control unlabelled.
+        <div
+          role="group"
+          aria-label="Quantity"
+          className="flex items-center justify-between gap-3"
+        >
+          <span className="text-sm font-medium text-fg">Quantity</span>
+          <div className="flex items-center gap-1">
+            <StepperButton
+              label="Decrease quantity"
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              disabled={quantity <= 1}
+            >
+              −
+            </StepperButton>
+            <span className="nums w-8 text-center text-sm font-medium text-fg" aria-live="polite">
+              {quantity}
+            </span>
+            <StepperButton label="Increase quantity" onClick={() => setQuantity((q) => q + 1)}>
+              +
+            </StepperButton>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {addOnGroups.map((group) => (
         <AddOnGroupSelector key={group.id} group={group} selectedIds={selectedAddOnIds} onToggle={toggleAddOn} />
@@ -207,7 +221,10 @@ function StepperButton({
 function PriceSummary({ breakdown }: { breakdown: PriceBreakdown }) {
   return (
     <dl className="flex flex-col gap-2 text-sm">
-      <Row label={`Base price × ${breakdown.quantity}`} value={breakdown.baseTotal} />
+      <Row
+        label={breakdown.quantity > 1 ? `Base price × ${breakdown.quantity}` : "Base price"}
+        value={breakdown.baseTotal}
+      />
       {breakdown.addOnLineItems.map((item) => (
         <Row key={item.addOnId} label={`${item.name} × ${item.quantity}`} value={item.lineTotal} />
       ))}

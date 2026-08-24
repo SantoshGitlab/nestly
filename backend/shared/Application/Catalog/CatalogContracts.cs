@@ -131,7 +131,9 @@ public record ServiceDetailResponse(
     IReadOnlyList<ServiceVariantSummaryResponse> Variants,
     IReadOnlyList<ServiceAddOnGroupSummaryResponse> AddOnGroups,
     string? CoverImageUrl,
-    int DurationMinutes);
+    int DurationMinutes,
+    /// <summary>Whether this service is measured in units, so the storefront should offer a quantity stepper (SRS 12.6.3). False for flat-rate services, which book at a single fixed quantity - the customer UI hides the stepper and the pricing engine forces quantity to 1.</summary>
+    bool IsQuantityAllowed);
 
 /// <summary>One recent review shown in a service's rating summary (task 52f, SRS 11.6.1).</summary>
 public record ServiceReviewItemResponse(Guid Id, int Rating, string? ReviewText, DateTime CreatedAtUtc);

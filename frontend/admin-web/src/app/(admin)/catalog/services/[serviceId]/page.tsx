@@ -66,6 +66,7 @@ const serviceSchema = z.object({
   isTaxApplicable: z.boolean(),
   isAddOnAllowed: z.boolean(),
   isQuantityAllowed: z.boolean(),
+  isDurationBased: z.boolean(),
   isInspectionBased: z.boolean(),
   isSlotRequired: z.boolean(),
   isAddressRequired: z.boolean(),
@@ -114,6 +115,7 @@ export default function EditServicePage() {
       isSlotRequired: false,
       isAddressRequired: false,
       isCustomerNoteAllowed: false,
+      isDurationBased: false,
     },
     values: serviceQuery.data
       ? {
@@ -141,6 +143,7 @@ export default function EditServicePage() {
           isSlotRequired: serviceQuery.data.isSlotRequired,
           isAddressRequired: serviceQuery.data.isAddressRequired,
           isCustomerNoteAllowed: serviceQuery.data.isCustomerNoteAllowed,
+          isDurationBased: serviceQuery.data.isDurationBased,
         }
       : undefined,
   });
@@ -183,6 +186,7 @@ export default function EditServicePage() {
         isSlotRequired: values.isSlotRequired,
         isAddressRequired: values.isAddressRequired,
         isCustomerNoteAllowed: values.isCustomerNoteAllowed,
+        isDurationBased: values.isDurationBased,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["services"] }),
   });
@@ -460,6 +464,15 @@ export default function EditServicePage() {
           </FormGrid>
 
           <Select
+            // The group list loads async (gated on the selected category), so it
+            // can still be just "No group" when RHF's reset() applies the saved
+            // serviceGroupId to this uncontrolled <select> — the browser silently
+            // falls back to the first option since the real one doesn't exist yet,
+            // and RHF never re-syncs the DOM value once the missing option shows
+            // up. Remounting when the option count changes forces the register()
+            // ref callback to re-run and re-apply the current form value against
+            // the now-complete option list.
+            key={serviceGroupOptions.length}
             label="Service group"
             hint="Optional section header shown on the customer-facing listing (e.g. &ldquo;Repair &amp; gas refill&rdquo;). Leave as No group to show this service directly under the category."
             options={serviceGroupOptions}
@@ -495,6 +508,12 @@ export default function EditServicePage() {
               label="Quantity allowed"
               checked={form.watch("isQuantityAllowed")}
               onChange={(v) => form.setValue("isQuantityAllowed", v)}
+              disabled={!canWrite}
+            />
+            <CheckboxField
+              label="Duration-based (time is what's booked, e.g. hourly)"
+              checked={form.watch("isDurationBased")}
+              onChange={(v) => form.setValue("isDurationBased", v)}
               disabled={!canWrite}
             />
             <CheckboxField

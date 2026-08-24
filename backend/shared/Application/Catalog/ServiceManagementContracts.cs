@@ -32,6 +32,7 @@ public sealed record ServiceAdminResponse(
     bool IsSlotRequired,
     bool IsAddressRequired,
     bool IsCustomerNoteAllowed,
+    bool IsDurationBased = false,
     string? CoverImageUrl = null,
     Guid? ServiceGroupId = null);
 
@@ -59,6 +60,7 @@ public sealed record ServiceCreateRequest(
     bool IsSlotRequired,
     bool IsAddressRequired,
     bool IsCustomerNoteAllowed,
+    bool IsDurationBased = false,
     string? CoverImageUrl = null,
     Guid? ServiceGroupId = null);
 
@@ -91,6 +93,7 @@ public sealed record ServiceUpdateRequest(
     bool IsSlotRequired,
     bool IsAddressRequired,
     bool IsCustomerNoteAllowed,
+    bool IsDurationBased = false,
     string? CoverImageUrl = null,
     Guid? ServiceGroupId = null);
 

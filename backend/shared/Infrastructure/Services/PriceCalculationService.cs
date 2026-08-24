@@ -16,6 +16,9 @@ namespace Nestly.Infrastructure.Services;
 /// </summary>
 public class PriceCalculationService : IPriceCalculationService
 {
+    /// <summary>Upper bound on a unit-measured service's quantity - a guardrail against a runaway value inflating a total, not a per-service limit (that would live on Service if the business needed one).</summary>
+    private const int MaxQuantity = 99;
+
     private readonly IServiceRepository _serviceRepository;
     private readonly IServiceAddOnRepository _addOnRepository;
     private readonly IServiceabilityRepository _serviceabilityRepository;
@@ -54,6 +57,17 @@ public class PriceCalculationService : IPriceCalculationService
         {
             return Error.NotFound("Pricing.ServiceNotFound", "The specified service does not exist.");
         }
+
+        // Quantity is only meaningful for services measured in units (AC units,
+        // rooms, seats - Service.IsQuantityAllowed). For everything else it is
+        // forced to 1 here rather than trusted from the request: the price is
+        // calculated server-side (SRS 11.9), so a client that sends a quantity
+        // for a flat-rate service - a UI bug or deliberate tampering - must
+        // never be able to multiply the base price. Allowed quantities are
+        // still capped so a runaway value can't inflate a total unbounded.
+        int effectiveQuantity = service.IsQuantityAllowed
+            ? Math.Min(request.Quantity, MaxQuantity)
+            : 1;
 
         if (!await _serviceabilityRepository.CityExistsAsync(request.CityId))
         {
@@ -123,7 +137,7 @@ public class PriceCalculationService : IPriceCalculationService
             basePrice = cityOverride?.Price ?? service.Price;
         }
 
-        decimal baseTotal = basePrice * request.Quantity;
+        decimal baseTotal = basePrice * effectiveQuantity;
         decimal addOnTotal = addOnLineItems.Sum(a => a.LineTotal);
 
         var pricingPolicy = await _pricingPolicyRepository.GetByCityAsync(request.CityId);
@@ -140,7 +154,7 @@ public class PriceCalculationService : IPriceCalculationService
 
         return new PriceBreakdownResponse(
             basePrice,
-            request.Quantity,
+            effectiveQuantity,
             baseTotal,
             addOnLineItems,
             addOnTotal,
