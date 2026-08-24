@@ -4,8 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
-import { AddressForm, toUpsertBody } from "@/components/AddressForm";
+import { AddressForm, AddressHelpCard, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
 import { BannerBreadcrumb, STICKY_BAR_SPACER } from "@/components/patterns";
 import { PageBanner } from "@/components/PageBanner";
@@ -75,80 +76,125 @@ function EditAddress() {
           STICKY_BAR_SPACER,
         )}
       >
-      {query.isPending ? (
-        <AddressFormSkeleton />
-      ) : query.isError ? (
-        <Alert
-          tone="error"
-          title="Couldn't load this address"
-          action={
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={query.isRefetching}
-              onClick={() => query.refetch()}
-            >
-              Retry
-            </Button>
-          }
-        >
-          {describeError(query.error)}
-        </Alert>
-      ) : !address ? (
-        // Not an error — the address was deleted, most likely in another tab.
-        // The only useful move from here is back to the book, so offer it as
-        // the action rather than leaving the footer link as the sole way out.
-        <EmptyState
-          title="That address no longer exists"
-          description="It may have been deleted from your address book on another device."
-          action={<LinkButton href="/addresses">Back to address book</LinkButton>}
-        />
-      ) : (
-        <Card title="Address details">
-          <AddressForm
-            initial={address}
-            submitLabel="Save changes"
-            error={error}
-            isSubmitting={mutation.isPending}
-            onSubmit={(values) => mutation.mutate(values)}
-          />
-        </Card>
-      )}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* 8 of 12: the form (or its loading/error/empty stand-ins). Its own
+              column - not the full max-w-7xl width - keeps the short fields
+              from reading as unreasonably long boxes, matching addresses/new. */}
+          <div className="flex flex-col gap-6 lg:col-span-8">
+            {query.isPending ? (
+              <AddressFormSkeleton />
+            ) : query.isError ? (
+              <Alert
+                tone="error"
+                title="Couldn't load this address"
+                action={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={query.isRefetching}
+                    onClick={() => query.refetch()}
+                  >
+                    Retry
+                  </Button>
+                }
+              >
+                {describeError(query.error)}
+              </Alert>
+            ) : !address ? (
+              // Not an error — the address was deleted, most likely in another
+              // tab. The only useful move from here is back to the book, so
+              // offer it as the action rather than leaving the footer link as
+              // the sole way out.
+              <EmptyState
+                title="That address no longer exists"
+                description="It may have been deleted from your address book on another device."
+                action={<LinkButton href="/addresses">Back to address book</LinkButton>}
+              />
+            ) : (
+              <Card title="Address details">
+                <AddressForm
+                  initial={address}
+                  submitLabel="Save changes"
+                  error={error}
+                  isSubmitting={mutation.isPending}
+                  onSubmit={(values) => mutation.mutate(values)}
+                />
+              </Card>
+            )}
 
-      <p className="mt-6 text-sm">
-        <Link href="/addresses" className="underline">
-          Back to address book
-        </Link>
-      </p>
+            <p className="text-sm">
+              <Link href="/addresses" className="underline">
+                Back to address book
+              </Link>
+            </p>
+          </div>
+
+          {/* 4 of 12: the same reassurance panel the add screen shows. */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-20 lg:self-start">
+            <AddressHelpCard />
+          </aside>
+        </div>
       </div>
     </main>
   );
 }
 
 /**
- * Mirrors AddressForm inside its Card: nine stacked fields, the lat/long pair
- * on one row, then the checkbox and submit button. Sized to the real controls
- * (20px label + 6px gap + 38px input) so the form does not jump into place
- * when the address arrives.
+ * Mirrors AddressForm inside its Card: three titled sections (Address, Location
+ * pin, Contact) with the same field pairing, so the form does not jump into
+ * place when the address arrives. Sized to the real controls (20px label + 6px
+ * gap + 38px input).
  */
 function AddressFormSkeleton() {
   return (
     <Card title="Address details">
-      <div className="flex flex-col gap-4" aria-hidden>
-        {Array.from({ length: 9 }, (_, index) => (
-          <FieldSkeleton key={index} />
-        ))}
-        <div className="grid grid-cols-2 gap-4">
+      <div className="flex flex-col gap-7" aria-hidden>
+        <SectionSkeleton>
           <FieldSkeleton />
           <FieldSkeleton />
-        </div>
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-3.5 w-48" />
-        </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FieldSkeleton />
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </div>
+        </SectionSkeleton>
+
+        <SectionSkeleton>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </div>
+        </SectionSkeleton>
+
+        <SectionSkeleton>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </div>
+          <div className="flex items-center gap-2.5">
+            <Skeleton className="h-4 w-4 rounded" />
+            <Skeleton className="h-3.5 w-48" />
+          </div>
+        </SectionSkeleton>
+
         <Skeleton className="h-10 w-full rounded-lg" />
       </div>
     </Card>
+  );
+}
+
+function SectionSkeleton({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="border-b border-line pb-2">
+        <Skeleton className="h-3.5 w-40" />
+      </div>
+      {children}
+    </div>
   );
 }
 

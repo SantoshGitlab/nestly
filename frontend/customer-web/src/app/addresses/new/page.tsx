@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
-import { AddressForm, toUpsertBody } from "@/components/AddressForm";
+import { AddressForm, AddressHelpCard, toUpsertBody } from "@/components/AddressForm";
 import type { AddressPayload } from "@/components/AddressForm";
 import { BannerBreadcrumb, STICKY_BAR_SPACER, ScreenSkeleton } from "@/components/patterns";
 import { PageBanner } from "@/components/PageBanner";
@@ -80,20 +80,32 @@ function NewAddress() {
       />
 
       <div className={cx("mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14", STICKY_BAR_SPACER)}>
-      <Card title="Address details">
-        <AddressForm
-          submitLabel="Save address"
-          error={error}
-          isSubmitting={mutation.isPending}
-          onSubmit={(values) => mutation.mutate(values)}
-        />
-      </Card>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* 8 of 12: the form itself. Its own column - not the full max-w-7xl
+              width - is what stops the short fields reading as unreasonably
+              long single-line boxes (same fix the profile page uses). */}
+          <div className="flex flex-col gap-6 lg:col-span-8">
+            <Card title="Address details">
+              <AddressForm
+                submitLabel="Save address"
+                error={error}
+                isSubmitting={mutation.isPending}
+                onSubmit={(values) => mutation.mutate(values)}
+              />
+            </Card>
 
-      <p className="mt-6 text-sm">
-        <Link href={returnTo ?? "/addresses"} className="underline">
-          {returnTo ? "Back to your booking" : "Back to address book"}
-        </Link>
-      </p>
+            <p className="text-sm">
+              <Link href={returnTo ?? "/addresses"} className="underline">
+                {returnTo ? "Back to your booking" : "Back to address book"}
+              </Link>
+            </p>
+          </div>
+
+          {/* 4 of 12: reassurance and tips, sticky beside a form this tall. */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-20 lg:self-start">
+            <AddressHelpCard />
+          </aside>
+        </div>
       </div>
     </main>
   );
