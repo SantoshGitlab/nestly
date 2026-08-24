@@ -12,6 +12,7 @@ public class BannerConfiguration : IEntityTypeConfiguration<Banner>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Title).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.Subtitle).HasMaxLength(300);
         builder.Property(x => x.MediaId).IsRequired();
         builder.HasOne<CmsMedia>()
             .WithMany()

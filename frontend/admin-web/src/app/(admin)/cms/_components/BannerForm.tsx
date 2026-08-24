@@ -26,6 +26,7 @@ import { PLACEMENT_OPTIONS, datetimeLocalToUtc, utcToDatetimeLocal } from "./cms
 const bannerFormSchema = z
   .object({
     title: z.string().min(1, "Title is required").max(200, "Title must be 200 characters or fewer"),
+    subtitle: z.string().max(300, "Subtitle must be 300 characters or fewer"),
     mediaId: z.string().min(1, "An image is required"),
     linkUrl: z
       .string()
@@ -57,6 +58,7 @@ function defaultValuesFor(banner: BannerResponse | null): BannerFormValues {
   if (!banner) {
     return {
       title: "",
+      subtitle: "",
       mediaId: "",
       linkUrl: "",
       placement: CmsPlacement.Home,
@@ -69,6 +71,7 @@ function defaultValuesFor(banner: BannerResponse | null): BannerFormValues {
 
   return {
     title: banner.title,
+    subtitle: banner.subtitle ?? "",
     mediaId: banner.mediaId,
     linkUrl: banner.linkUrl ?? "",
     placement: banner.placement,
@@ -154,6 +157,7 @@ export function BannerForm({
     const isCategoryScoped = values.placement === CmsPlacement.CategoryPage;
     onSubmit({
       title: values.title.trim(),
+      subtitle: values.subtitle.trim() === "" ? null : values.subtitle.trim(),
       mediaId: values.mediaId,
       linkUrl: values.linkUrl.trim() === "" ? null : values.linkUrl.trim(),
       placement: values.placement as CmsPlacement,
@@ -213,6 +217,13 @@ export function BannerForm({
           {...form.register("linkUrl")}
         />
       </FormGrid>
+
+      <Field
+        label="Subtitle"
+        hint="Optional — the supporting line shown beneath the title on the storefront banner."
+        error={form.formState.errors.subtitle?.message}
+        {...form.register("subtitle")}
+      />
 
       <fieldset className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4">
         <legend className="px-1 text-sm font-medium text-fg">Image</legend>

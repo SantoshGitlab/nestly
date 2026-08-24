@@ -85,6 +85,7 @@ public class BannerCreateRequestValidator : AbstractValidator<BannerCreateReques
     public BannerCreateRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Subtitle).MaximumLength(300);
         RuleFor(x => x.MediaId).NotEqual(Guid.Empty).WithMessage("A media asset is required.");
         RuleFor(x => x.LinkUrl).MaximumLength(2000);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);
@@ -103,6 +104,7 @@ public class BannerUpdateRequestValidator : AbstractValidator<BannerUpdateReques
     public BannerUpdateRequestValidator()
     {
         RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Subtitle).MaximumLength(300);
         RuleFor(x => x.MediaId).NotEqual(Guid.Empty).WithMessage("A media asset is required.");
         RuleFor(x => x.LinkUrl).MaximumLength(2000);
         RuleFor(x => x.SortOrder).GreaterThanOrEqualTo(0);

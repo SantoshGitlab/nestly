@@ -74,6 +74,7 @@ public sealed record BannerAdminSearchRequest(CmsPlacement? Placement, CmsConten
 public sealed record BannerResponse(
     Guid Id,
     string Title,
+    string? Subtitle,
     Guid MediaId,
     string MediaUrl,
     string? LinkUrl,
@@ -94,6 +95,7 @@ public sealed record BannerAdminSearchResponse(IReadOnlyList<BannerResponse> Ite
 /// <summary>Create request - references an existing media asset by id (task 124e's media library) rather than a bare URL, so a banner's image is always a managed, reusable asset.</summary>
 public sealed record BannerCreateRequest(
     string Title,
+    string? Subtitle,
     Guid MediaId,
     string? LinkUrl,
     CmsPlacement Placement,
@@ -104,6 +106,7 @@ public sealed record BannerCreateRequest(
 
 public sealed record BannerUpdateRequest(
     string Title,
+    string? Subtitle,
     Guid MediaId,
     string? LinkUrl,
     CmsPlacement Placement,
@@ -111,6 +114,21 @@ public sealed record BannerUpdateRequest(
     int SortOrder,
     DateTime? PublishStartUtc,
     DateTime? PublishEndUtc);
+
+/// <summary>
+/// Public, storefront-facing projection of a live banner (SRS 11.1.2/11.1.3):
+/// only the fields the customer web home banner renders, with the media asset
+/// already resolved to its URL and alt text. Deliberately omits the admin
+/// workflow fields (status, publish window, sort order, category scoping) -
+/// those decide <em>whether</em> a banner is returned here, they are not shown.
+/// </summary>
+public sealed record HomeBannerResponse(
+    Guid Id,
+    string Title,
+    string? Subtitle,
+    string ImageUrl,
+    string? ImageAltText,
+    string? LinkUrl);
 
 // ---------------------------------------------------------------------
 // FAQs (task 124c)

@@ -15,6 +15,9 @@ public class Banner : Entity<Guid>
 {
     public string Title { get; private set; } = string.Empty;
 
+    /// <summary>Optional supporting line shown beneath <see cref="Title"/> on the storefront banner (SRS 11.1.3 "content shall be admin-configurable"). Null when the banner is a headline only.</summary>
+    public string? Subtitle { get; private set; }
+
     public Guid MediaId { get; private set; }
 
     public string? LinkUrl { get; private set; }
@@ -41,6 +44,7 @@ public class Banner : Entity<Guid>
     public Banner(
         Guid id,
         string title,
+        string? subtitle,
         Guid mediaId,
         string? linkUrl,
         CmsPlacement placement,
@@ -51,9 +55,10 @@ public class Banner : Entity<Guid>
         DateTime? publishEndUtc)
         : base(id)
     {
-        Validate(title, mediaId, placement, categoryId, sortOrder, publishStartUtc, publishEndUtc);
+        Validate(title, subtitle, mediaId, placement, categoryId, sortOrder, publishStartUtc, publishEndUtc);
 
         Title = title.Trim();
+        Subtitle = NormalizeSubtitle(subtitle);
         MediaId = mediaId;
         LinkUrl = linkUrl;
         Placement = placement;
@@ -69,6 +74,7 @@ public class Banner : Entity<Guid>
     /// <summary>Edits every mutable field. <see cref="Status"/> is deliberately excluded - see <see cref="Publish"/>/<see cref="Unpublish"/>.</summary>
     public void Update(
         string title,
+        string? subtitle,
         Guid mediaId,
         string? linkUrl,
         CmsPlacement placement,
@@ -77,9 +83,10 @@ public class Banner : Entity<Guid>
         DateTime? publishStartUtc,
         DateTime? publishEndUtc)
     {
-        Validate(title, mediaId, placement, categoryId, sortOrder, publishStartUtc, publishEndUtc);
+        Validate(title, subtitle, mediaId, placement, categoryId, sortOrder, publishStartUtc, publishEndUtc);
 
         Title = title.Trim();
+        Subtitle = NormalizeSubtitle(subtitle);
         MediaId = mediaId;
         LinkUrl = linkUrl;
         Placement = placement;
@@ -110,8 +117,13 @@ public class Banner : Entity<Guid>
         && (!PublishStartUtc.HasValue || nowUtc >= PublishStartUtc.Value)
         && (!PublishEndUtc.HasValue || nowUtc <= PublishEndUtc.Value);
 
+    /// <summary>Blank/whitespace subtitle collapses to null so "no subtitle" has one representation, not two.</summary>
+    private static string? NormalizeSubtitle(string? subtitle) =>
+        string.IsNullOrWhiteSpace(subtitle) ? null : subtitle.Trim();
+
     private static void Validate(
         string title,
+        string? subtitle,
         Guid mediaId,
         CmsPlacement placement,
         Guid? categoryId,
@@ -122,6 +134,11 @@ public class Banner : Entity<Guid>
         if (string.IsNullOrWhiteSpace(title))
         {
             throw new ArgumentException("Banner title is required.", nameof(title));
+        }
+
+        if (subtitle is not null && subtitle.Trim().Length > 300)
+        {
+            throw new ArgumentException("Banner subtitle must be 300 characters or fewer.", nameof(subtitle));
         }
 
         if (mediaId == Guid.Empty)

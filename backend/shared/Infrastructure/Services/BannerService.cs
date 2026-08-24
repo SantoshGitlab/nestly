@@ -65,6 +65,7 @@ public class BannerService : IBannerService
         var banner = new Banner(
             Guid.NewGuid(),
             request.Title,
+            request.Subtitle,
             request.MediaId,
             request.LinkUrl,
             request.Placement,
@@ -94,6 +95,7 @@ public class BannerService : IBannerService
 
         banner.Update(
             request.Title,
+            request.Subtitle,
             request.MediaId,
             request.LinkUrl,
             request.Placement,
@@ -165,6 +167,7 @@ public class BannerService : IBannerService
         return new BannerResponse(
             banner.Id,
             banner.Title,
+            banner.Subtitle,
             banner.MediaId,
             media?.Url ?? string.Empty,
             banner.LinkUrl,

@@ -73,6 +73,35 @@ public class BannerRepository : IBannerRepository
         return new BannerSearchResult(items, totalCount);
     }
 
+    public async Task<IReadOnlyList<HomeBannerResponse>> ListLiveAsync(CmsPlacement placement, DateTime nowUtc)
+    {
+        // Mirrors Banner.IsLive, expressed as a translatable query so the
+        // publish-window filter runs in the database rather than in memory.
+        var live = await _context.Banners
+            .Where(b => b.Placement == placement
+                && b.Status == CmsContentStatus.Published
+                && (b.PublishStartUtc == null || b.PublishStartUtc <= nowUtc)
+                && (b.PublishEndUtc == null || b.PublishEndUtc >= nowUtc))
+            .OrderBy(b => b.SortOrder)
+            .ThenByDescending(b => b.CreatedAtUtc)
+            // Join to media in the same round trip - the storefront needs the
+            // asset URL and its alt text, and a per-row lookup would be N+1.
+            .Join(
+                _context.CmsMediaAssets,
+                banner => banner.MediaId,
+                media => media.Id,
+                (banner, media) => new HomeBannerResponse(
+                    banner.Id,
+                    banner.Title,
+                    banner.Subtitle,
+                    media.Url,
+                    media.AltText,
+                    banner.LinkUrl))
+            .ToListAsync();
+
+        return live;
+    }
+
     /// <summary>Shared with <see cref="Nestly.Infrastructure.Services.BannerService"/> for single-banner reads.</summary>
     internal static BannerResponse ToResponse(
         Banner banner,
@@ -80,6 +109,7 @@ public class BannerRepository : IBannerRepository
         IReadOnlyDictionary<Guid, string> categoryNames) => new(
         banner.Id,
         banner.Title,
+        banner.Subtitle,
         banner.MediaId,
         mediaUrls.TryGetValue(banner.MediaId, out string? url) ? url : string.Empty,
         banner.LinkUrl,

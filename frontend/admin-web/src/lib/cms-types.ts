@@ -118,6 +118,7 @@ export interface CmsPageUpdateRequest {
 export interface BannerResponse {
   id: string;
   title: string;
+  subtitle: string | null;
   mediaId: string;
   mediaUrl: string;
   linkUrl: string | null;
@@ -150,6 +151,7 @@ export interface BannerSearchParams {
 
 export interface BannerCreateRequest {
   title: string;
+  subtitle: string | null;
   mediaId: string;
   linkUrl: string | null;
   placement: CmsPlacement;
@@ -161,6 +163,7 @@ export interface BannerCreateRequest {
 
 export interface BannerUpdateRequest {
   title: string;
+  subtitle: string | null;
   mediaId: string;
   linkUrl: string | null;
   placement: CmsPlacement;
