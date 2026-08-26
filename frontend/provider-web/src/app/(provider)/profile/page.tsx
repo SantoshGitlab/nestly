@@ -18,7 +18,7 @@ import { SkillsSection } from "./_components/SkillsSection";
  */
 export default function ProfilePage() {
   return (
-    <div className="mx-auto flex w-full max-w-4xl animate-rise flex-col gap-6">
+    <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="Profile"
         subtitle="Your identity, verification status, coverage and skills."

@@ -40,6 +40,28 @@ export function isJobDetailPath(pathname: string | null): boolean {
   return /^\/jobs\/[^/]+\/?$/.test(pathname ?? "");
 }
 
+/** Brand mark + wordmark shown once, at the top of the sidebar rail. */
+function SidebarBrand() {
+  return (
+    <div className="flex items-center gap-2 px-3 pb-5 pt-1">
+      <span
+        aria-hidden
+        className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-fg-on-brand shadow-brand"
+      >
+        <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+          <path
+            d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
+            fill="currentColor"
+          />
+        </svg>
+      </span>
+      <span className="text-[0.9375rem] font-semibold tracking-tight text-fg">
+        Nestly <span className="text-fg-muted">Provider</span>
+      </span>
+    </div>
+  );
+}
+
 /** Side rail, `md` and up. */
 export function ProviderSidebar() {
   const isActive = useActiveMatcher();
@@ -47,8 +69,12 @@ export function ProviderSidebar() {
   return (
     <nav
       aria-label="Provider sections"
-      className="hidden w-60 shrink-0 flex-col gap-0.5 border-r border-line bg-surface p-4 md:flex"
+      // bg-surface (white): the MatDash reference's `aside.menu-sidebar` is
+      // explicitly `bg-white`. The tinted region there is the scrollable
+      // content canvas behind the cards (`<main>`, not this rail).
+      className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-surface p-4 md:flex"
     >
+      <SidebarBrand />
       {NAV_ITEMS.map((item) => {
         const active = isActive(item.href);
         return (

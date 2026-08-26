@@ -89,14 +89,15 @@ export function Card({
   return (
     <section
       className={cx(
-        "w-full overflow-hidden rounded-2xl border border-line bg-surface shadow-sm",
+        "w-full overflow-hidden rounded-2xl bg-surface shadow-sm",
         className,
       )}
     >
       {hasHeader ? (
         <div className="flex items-start justify-between gap-4 px-6 pt-6">
           <div className="min-w-0">
-            {title ? <h2 className="text-base font-semibold text-fg">{title}</h2> : null}
+            {/* 18px/600 matches the MatDash reference's card-title typography exactly. */}
+            {title ? <h2 className="text-lg font-semibold text-fg">{title}</h2> : null}
             {description ? (
               <p className="mt-1 text-sm leading-relaxed text-fg-muted">{description}</p>
             ) : null}
@@ -191,13 +192,13 @@ function AlertIcon({ tone }: { tone: keyof typeof ALERT_TONES }) {
 }
 
 const BADGE_TONES = {
-  neutral: "bg-surface-3 text-fg-muted ring-line",
-  brand: "bg-brand-50 text-brand-700 ring-brand-600/20 dark:bg-brand-500/15 dark:text-brand-300",
-  success: "bg-success-soft text-success ring-success/20",
-  warning: "bg-warning-soft text-warning ring-warning/20",
-  danger: "bg-danger-soft text-danger ring-danger/20",
-  info: "bg-info-soft text-info ring-info/20",
-  accent: "bg-accent-100 text-accent-700 ring-accent-600/20 dark:bg-accent-500/15 dark:text-accent-300",
+  neutral: "bg-surface-3 text-fg-muted",
+  brand: "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300",
+  success: "bg-success-soft text-success",
+  warning: "bg-warning-soft text-warning",
+  danger: "bg-danger-soft text-danger",
+  info: "bg-info-soft text-info",
+  accent: "bg-accent-100 text-accent-700 dark:bg-accent-500/15 dark:text-accent-300",
 } as const;
 
 export type BadgeTone = keyof typeof BADGE_TONES;
@@ -215,12 +216,69 @@ export function Badge({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+        // Soft-pill, no border/ring - matches the MatDash reference's
+        // status badges exactly (computed padding/size/weight already did).
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
         BADGE_TONES[tone],
         className,
       )}
     >
       {children}
+    </span>
+  );
+}
+
+const AVATAR_TONES = [
+  "bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300",
+  "bg-accent-100 text-accent-700 dark:bg-accent-500/20 dark:text-accent-300",
+  "bg-success-soft text-success",
+  "bg-info-soft text-info",
+  "bg-danger-soft text-danger",
+  "bg-warning-soft text-warning",
+] as const;
+
+/** Deterministic tone from a name, so the same person always gets the same color. */
+function toneForName(name: string): string {
+  let hash = 0;
+  for (let index = 0; index < name.length; index += 1) {
+    hash = (hash * 31 + name.charCodeAt(index)) | 0;
+  }
+  return AVATAR_TONES[Math.abs(hash) % AVATAR_TONES.length];
+}
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
+  return (first + last).toUpperCase();
+}
+
+/**
+ * Initials avatar chip — the colored-circle-next-to-a-name treatment every
+ * MatDash list row uses. Color is derived from the name (not random) so a
+ * given customer/provider reads consistently across screens.
+ */
+export function Avatar({
+  name,
+  size = "md",
+  className = "",
+}: {
+  name: string;
+  size?: "sm" | "md";
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        "inline-flex shrink-0 items-center justify-center rounded-full font-semibold",
+        size === "sm" ? "h-7 w-7 text-[0.6875rem]" : "h-9 w-9 text-xs",
+        toneForName(name),
+        className,
+      )}
+    >
+      {initialsFor(name)}
     </span>
   );
 }
@@ -330,8 +388,11 @@ export function EmptyState({
  * system. The focus treatment is a ring plus a border shift rather than the
  * browser default outline, and invalid controls carry it in the danger tone.
  */
+// Radius matched to the MatDash reference's form controls (computed
+// `border-radius: 6px`, i.e. this scale's `sm`) - distinct from `Button`'s
+// `rounded-lg`, which already matches MatDash's 12px button radius.
 const CONTROL_BASE =
-  "w-full rounded-lg border bg-surface px-3 py-2 text-sm text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:text-fg-subtle disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-subtle";
+  "w-full rounded-sm border bg-surface px-3 py-2 text-sm text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:text-fg-subtle disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-subtle";
 const CONTROL_IDLE =
   "border-line hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25";
 const CONTROL_INVALID = "border-danger focus:border-danger focus:ring-2 focus:ring-danger/25";
@@ -354,7 +415,7 @@ function FieldShell({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-fg">
+      <label htmlFor={id} className="text-sm font-semibold text-fg">
         {label}
         {required ? (
           <span className="ml-0.5 text-danger" aria-hidden>
@@ -749,10 +810,10 @@ export function PageHeading({
   breadcrumbs?: ReactNode;
 }) {
   return (
-    <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="mb-6 flex w-full flex-col gap-4 rounded-2xl bg-surface p-6 shadow-sm sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {breadcrumbs ? <div className="mb-2">{breadcrumbs}</div> : null}
-        <h1 className="text-display-sm font-semibold text-fg">{title}</h1>
+        <h1 className="text-sm font-semibold text-fg sm:text-base">{title}</h1>
         {subtitle ? (
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-fg-muted">{subtitle}</p>
         ) : null}
@@ -774,18 +835,34 @@ export function StatTile({
   title,
   hint,
   delta,
+  tone,
 }: {
   label: string;
   value: string;
   title?: string;
   hint?: string;
   delta?: { value: string; direction: "up" | "down" };
+  /** Whole-tile pastel tint, matching `KpiCard` (task: Modernize dashboard
+   *  reference's stat-card row). Omit for the plain neutral tile every
+   *  report/summary screen already used before that pass. */
+  tone?: ChartTone;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
-      <p className="text-sm font-medium text-fg-muted">{label}</p>
+    <div
+      className={cx(
+        "rounded-2xl p-5 shadow-sm",
+        tone ? KPI_CARD_TONES[tone] : "bg-surface",
+      )}
+    >
+      <p className={cx("text-sm font-medium", tone ? KPI_TEXT_TONES[tone] : "text-fg-muted")}>{label}</p>
       <div className="mt-2 flex items-baseline gap-2">
-        <p className="nums min-w-0 truncate text-3xl font-semibold text-fg" title={title}>
+        <p
+          className={cx(
+            "nums min-w-0 truncate text-3xl font-semibold",
+            tone ? KPI_TEXT_TONES[tone] : "text-fg",
+          )}
+          title={title}
+        >
           {value}
         </p>
         {delta ? (
@@ -799,7 +876,302 @@ export function StatTile({
           </span>
         ) : null}
       </div>
-      {hint ? <p className="mt-1 text-xs text-fg-subtle">{hint}</p> : null}
+      {hint ? (
+        <p className={cx("mt-1 text-xs", tone ? KPI_TEXT_TONES[tone] : "text-fg-subtle")}>{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Charts                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Hand-rolled SVG chart primitives rather than a charting dependency: the
+ * product ships three of these numbers-and-trend surfaces per dashboard at
+ * most, all fed by data the caller already fetched, so a full charting
+ * library would be paid for once and used for axis ticks and legends this
+ * app doesn't want. Every chart here is presentational only — no tooltips,
+ * no interactivity — matching the KPI dashboards it decorates.
+ */
+
+const CHART_TONES = {
+  brand: "rgb(var(--brand-600))",
+  accent: "rgb(var(--accent-500))",
+  success: "rgb(var(--success))",
+  danger: "rgb(var(--danger))",
+  info: "rgb(var(--info))",
+  warning: "rgb(var(--warning))",
+} as const;
+
+export type ChartTone = keyof typeof CHART_TONES;
+
+function normalizePoints(values: readonly number[], width: number, height: number, pad = 2) {
+  if (values.length === 0) return [] as { x: number; y: number }[];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = values.length > 1 ? (width - pad * 2) / (values.length - 1) : 0;
+  return values.map((value, index) => ({
+    x: values.length > 1 ? pad + index * step : width / 2,
+    y: pad + (height - pad * 2) * (1 - (value - min) / range),
+  }));
+}
+
+/** Tiny inline trend line — the mark inside a `KpiCard`, not a standalone chart. */
+export function Sparkline({
+  values,
+  tone = "brand",
+  width = 96,
+  height = 32,
+  className = "",
+}: {
+  values: readonly number[];
+  tone?: ChartTone;
+  width?: number;
+  height?: number;
+  className?: string;
+}) {
+  const points = normalizePoints(values, width, height);
+  if (points.length < 2) return null;
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width={width}
+      height={height}
+      className={cx("overflow-visible", className)}
+      aria-hidden
+    >
+      <path d={path} fill="none" stroke={CHART_TONES[tone]} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={2} fill={CHART_TONES[tone]} />
+    </svg>
+  );
+}
+
+/**
+ * Filled trend chart for a dashboard's headline series (bookings/revenue over
+ * time). `labels` render along the x-axis when given; omit them for a dense
+ * sparkline-scale chart with no axis.
+ */
+export function AreaChart({
+  values,
+  labels,
+  tone = "brand",
+  height = 220,
+  className = "",
+}: {
+  values: readonly number[];
+  labels?: readonly string[];
+  tone?: ChartTone;
+  height?: number;
+  className?: string;
+}) {
+  const width = 640;
+  const padBottom = labels ? 24 : 4;
+  const points = normalizePoints(values, width, height - padBottom, 4);
+  const gradientId = useId().replace(/:/g, "");
+
+  if (points.length < 2) {
+    return (
+      <div
+        className={cx("flex items-center justify-center text-sm text-fg-subtle", className)}
+        style={{ height }}
+      >
+        Not enough data yet
+      </div>
+    );
+  }
+
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+  const areaPath = `${linePath} L${points[points.length - 1].x} ${height - padBottom} L${points[0].x} ${height - padBottom} Z`;
+  const color = CHART_TONES[tone];
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className={cx("w-full", className)} preserveAspectRatio="none" role="img" aria-label="Trend chart">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${gradientId})`} />
+      <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {labels
+        ? labels.map((label, index) => {
+            const point = points[index];
+            if (!point || (labels.length > 8 && index % Math.ceil(labels.length / 8) !== 0)) return null;
+            return (
+              <text
+                key={index}
+                x={point.x}
+                y={height - 6}
+                textAnchor="middle"
+                className="fill-fg-subtle text-[10px]"
+              >
+                {label}
+              </text>
+            );
+          })
+        : null}
+    </svg>
+  );
+}
+
+/** Proportional breakdown (revenue by category, jobs by status) as a ring. */
+export function DonutChart({
+  data,
+  size = 140,
+  strokeWidth = 18,
+}: {
+  data: readonly { label: string; value: number; tone: ChartTone }[];
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const total = data.reduce((sum, slice) => sum + slice.value, 0);
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  return (
+    <div className="flex items-center gap-5">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90" role="img" aria-label="Breakdown chart">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgb(var(--surface-3))" strokeWidth={strokeWidth} />
+        {total > 0
+          ? data.map((slice, index) => {
+              const fraction = slice.value / total;
+              const dash = fraction * circumference;
+              const circle = (
+                <circle
+                  key={index}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={CHART_TONES[slice.tone]}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${dash} ${circumference - dash}`}
+                  strokeDashoffset={-offset}
+                  strokeLinecap="butt"
+                />
+              );
+              offset += dash;
+              return circle;
+            })
+          : null}
+      </svg>
+      <ul className="flex min-w-0 flex-col gap-2 text-sm">
+        {data.map((slice, index) => (
+          <li key={index} className="flex items-center gap-2 text-fg-muted">
+            <span
+              aria-hidden
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: CHART_TONES[slice.tone] }}
+            />
+            <span className="min-w-0 truncate">{slice.label}</span>
+            <span className="ml-auto shrink-0 nums font-medium text-fg">
+              {total > 0 ? Math.round((slice.value / total) * 100) : 0}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* KPI cards                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const KPI_ICON_TONES = {
+  brand: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300",
+  accent: "bg-accent-100 text-accent-700 dark:bg-accent-500/15 dark:text-accent-300",
+  success: "bg-success-soft text-success",
+  danger: "bg-danger-soft text-danger",
+  info: "bg-info-soft text-info",
+  warning: "bg-warning-soft text-warning",
+} as const;
+
+/**
+ * Whole-card pastel treatment (task: match the Modernize dashboard
+ * reference's stat-card row - `.MuiCardContent` on a solid tint, icon sitting
+ * directly on it, label and number both set in the tone's saturated color).
+ * Reuses the same `-soft`/`-50` tokens as `KPI_ICON_TONES` above, just
+ * applied to the whole card instead of an icon chip.
+ */
+const KPI_CARD_TONES = {
+  brand: "bg-brand-50 dark:bg-brand-500/15",
+  accent: "bg-accent-100 dark:bg-accent-500/15",
+  success: "bg-success-soft",
+  danger: "bg-danger-soft",
+  info: "bg-info-soft",
+  warning: "bg-warning-soft",
+} as const;
+
+const KPI_TEXT_TONES = {
+  brand: "text-brand-600 dark:text-brand-300",
+  accent: "text-accent-700 dark:text-accent-300",
+  success: "text-success",
+  danger: "text-danger",
+  info: "text-info",
+  warning: "text-warning",
+} as const;
+
+/**
+ * Dashboard KPI card: a solid pastel tint per card with the icon sitting
+ * directly on it and the label/number set in that same saturated tone -
+ * matches the Modernize dashboard reference's stat-card row. Sits alongside
+ * `StatTile` rather than replacing it — `StatTile` is the plain, chart-free
+ * tile already used across list-screen headers, and this is the richer
+ * dashboard-grade variant.
+ */
+export function KpiCard({
+  icon,
+  tone = "brand",
+  label,
+  value,
+  delta,
+  trend,
+  className = "",
+}: {
+  icon: ReactNode;
+  tone?: ChartTone;
+  label: string;
+  value: string;
+  delta?: { value: string; direction: "up" | "down" };
+  trend?: readonly number[];
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-2xl p-6 shadow-sm transition-shadow duration-fast ease-out hover:shadow-md",
+        KPI_CARD_TONES[tone],
+        className,
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span aria-hidden className={cx("flex h-10 w-10 shrink-0 items-center justify-center", KPI_TEXT_TONES[tone])}>
+          {icon}
+        </span>
+        {trend && trend.length > 1 ? <Sparkline values={trend} tone={tone} /> : null}
+      </div>
+      <p className={cx("mt-4 text-sm font-medium", KPI_TEXT_TONES[tone])}>{label}</p>
+      <div className="mt-1 flex items-baseline gap-2">
+        <p className={cx("nums truncate text-2xl font-semibold", KPI_TEXT_TONES[tone])}>{value}</p>
+        {delta ? (
+          <span
+            className={cx(
+              "inline-flex items-center gap-0.5 text-xs font-medium",
+              delta.direction === "up" ? "text-success" : "text-danger",
+            )}
+          >
+            {delta.direction === "up" ? "↑" : "↓"} {delta.value}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -827,7 +1199,7 @@ export function Table({ children, className = "" }: { children: ReactNode; class
 
 export function THead({ children }: { children: ReactNode }) {
   return (
-    <thead className="border-b border-line bg-surface-2 text-left">
+    <thead className="border-b border-line text-left">
       {children}
     </thead>
   );
@@ -846,7 +1218,7 @@ export function TH({
     <th
       scope="col"
       className={cx(
-        "whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-fg-muted",
+        "whitespace-nowrap px-4 py-3 text-sm font-bold text-fg",
         numeric && "text-right",
         className,
       )}
@@ -1162,7 +1534,9 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cx(
-          "relative w-full animate-pop rounded-t-2xl border border-line bg-surface shadow-xl outline-none sm:rounded-2xl",
+          // Borderless, shadow-only - matches the Card/DataTable treatment
+          // (and the MatDash reference's card style generally).
+          "relative w-full animate-pop rounded-t-2xl bg-surface shadow-xl outline-none sm:rounded-2xl",
           // Clears an iPhone's home-indicator bar in the bottom-sheet state;
           // reset on desktop where the dialog is centered, not sheet-anchored.
           "pb-[env(safe-area-inset-bottom)] sm:pb-0",
@@ -1191,7 +1565,7 @@ export function Modal({
 
         <div className="flex items-start justify-between gap-4 px-6 pt-6">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-semibold text-fg">
+            <h2 id={titleId} className="text-lg font-semibold text-fg">
               {title}
             </h2>
             {description ? (

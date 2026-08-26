@@ -256,7 +256,7 @@ export default function JobDetailPage() {
       <PageHeading
         breadcrumbs={backLink}
         title={job.customerNameSnapshot}
-        subtitle={`${formatIsoDate(job.slotDate)} · ${formatTime(job.slotStartTimeSnapshot)}–${formatTime(job.slotEndTimeSnapshot)}`}
+        subtitle={`${job.bookingReference} · ${formatIsoDate(job.slotDate)} · ${formatTime(job.slotStartTimeSnapshot)}–${formatTime(job.slotEndTimeSnapshot)}`}
         actions={<JobStatusBadge status={job.status} />}
       />
 
@@ -911,12 +911,12 @@ function JobDetailSkeleton({ backLink }: { backLink: ReactNode }) {
         <Skeleton className="h-9 w-56" />
         <Skeleton className="mt-2 h-4 w-44" />
       </div>
-      <div className="mb-6 rounded-2xl border border-line bg-surface p-5 shadow-sm">
+      <div className="mb-6 rounded-2xl bg-surface p-5 shadow-sm">
         <Skeleton className="h-5 w-48" />
         <Skeleton className="mt-4 h-12 w-full rounded-lg" />
         <Skeleton className="mt-2.5 h-12 w-full rounded-lg" />
       </div>
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+      <div className="rounded-2xl bg-surface p-6 shadow-sm">
         <Skeleton className="h-5 w-28" />
         <SkeletonText lines={6} className="mt-5" />
       </div>

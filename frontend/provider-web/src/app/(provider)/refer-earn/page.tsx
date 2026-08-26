@@ -35,7 +35,7 @@ export default function ReferEarnPage() {
   const historyQuery = useQuery({ queryKey: ["provider-referral-history"], queryFn: getReferralHistory });
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl animate-rise flex-col gap-6">
+    <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="Refer & Earn"
         subtitle="Invite another provider to Nestly and earn once they complete their first few jobs."
@@ -181,10 +181,10 @@ function StatsRow({ query }: { query: UseQueryResult<ProviderReferralSummary> })
 
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <StatTile label="Invited" value={`${summary.invitedCount}`} />
-      <StatTile label="Qualified" value={`${summary.qualifiedCount}`} />
-      <StatTile label="Rewarded" value={`${summary.rewardedCount}`} />
-      <StatTile label="Total earned" value={formatInr(summary.totalEarned)} />
+      <StatTile tone="brand" label="Invited" value={`${summary.invitedCount}`} />
+      <StatTile tone="warning" label="Qualified" value={`${summary.qualifiedCount}`} />
+      <StatTile tone="success" label="Rewarded" value={`${summary.rewardedCount}`} />
+      <StatTile tone="accent" label="Total earned" value={formatInr(summary.totalEarned)} />
     </div>
   );
 }

@@ -206,6 +206,7 @@ function JobCard({ job }: { job: JobListItem }) {
             {formatIsoDate(job.slotDate)} · {formatTime(job.slotStartTimeSnapshot)}–
             {formatTime(job.slotEndTimeSnapshot)}
           </p>
+          <p className="nums mt-0.5 text-xs text-fg-subtle">{job.bookingReference}</p>
         </div>
 
         <p className="line-clamp-2 text-sm leading-relaxed text-fg-subtle">
@@ -241,7 +242,7 @@ function JobListSkeleton() {
       {Array.from({ length: 4 }, (_, index) => (
         <li
           key={index}
-          className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm"
+          className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-sm"
         >
           <div className="flex items-start justify-between gap-3">
             <Skeleton className="h-5 w-20 rounded-full" />

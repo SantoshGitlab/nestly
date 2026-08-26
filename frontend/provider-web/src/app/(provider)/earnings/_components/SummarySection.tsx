@@ -82,7 +82,7 @@ function latestEntryTimestamp(entries: EarningLedgerEntry[]): string | null {
 function SummarySkeleton() {
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-line bg-surface p-6 shadow-sm sm:p-7"
+      className="overflow-hidden rounded-2xl bg-surface p-6 shadow-sm sm:p-7"
       aria-hidden
     >
       <Skeleton className="h-4 w-28" />

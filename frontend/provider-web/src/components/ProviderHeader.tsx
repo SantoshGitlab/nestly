@@ -63,8 +63,10 @@ export function ProviderHeader({ claims }: { claims: ProviderSessionClaims | nul
   const mobile = claims?.mobile ?? null;
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-md sm:px-6">
-      <span className="flex items-center gap-2">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-md sm:px-6">
+      {/* Sidebar carries this same lockup from `md` up (ProviderSidebar's
+          SidebarBrand) - shown here only where that rail is hidden. */}
+      <span className="flex items-center gap-2 md:hidden">
         <span
           aria-hidden
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient text-fg-on-brand shadow-brand"

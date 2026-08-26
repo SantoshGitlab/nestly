@@ -74,33 +74,39 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
 
   return (
     <RequireProviderAuth>
-      <div className="flex min-h-screen flex-col bg-bg">
-        {/* One sticky ancestor for both rows, not two independent
-            `sticky top-0` siblings - see OfflineBanner's header comment for
-            why that distinction matters once the page is scrolled.
-            Task #351: `pt-[env(safe-area-inset-top)]` lives here, on the
-            shared ancestor, rather than on `OfflineBanner`/`ProviderHeader`
-            individually - whichever of the two is topmost varies (the
-            banner only when offline), and this app installs as a standalone
-            PWA (manifest.json's `display: "standalone"`), so whichever one
-            is first needs the same clearance from a notch/punch-hole
-            camera. A single ancestor padding handles both without double-
-            padding when both are stacked and visible together. */}
-        <div className="sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
-          <OfflineBanner />
-          <ProviderHeader claims={claims} />
-        </div>
+      <div className="flex min-h-screen bg-bg">
+        <ProviderSidebar />
 
-        <div className="flex flex-1">
-          <ProviderSidebar />
+        {/* bg-surface (white): matches the MatDash reference's
+            `body-wrapper` class (`bg-white dark:bg-darkgray`) exactly. */}
+        <div className="flex min-w-0 flex-1 flex-col bg-surface">
+          {/* One sticky ancestor for both rows, not two independent
+              `sticky top-0` siblings - see OfflineBanner's header comment for
+              why that distinction matters once the page is scrolled.
+              Task #351: `pt-[env(safe-area-inset-top)]` lives here, on the
+              shared ancestor, rather than on `OfflineBanner`/`ProviderHeader`
+              individually - whichever of the two is topmost varies (the
+              banner only when offline), and this app installs as a standalone
+              PWA (manifest.json's `display: "standalone"`), so whichever one
+              is first needs the same clearance from a notch/punch-hole
+              camera. A single ancestor padding handles both without double-
+              padding when both are stacked and visible together. */}
+          <div className="sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
+            <OfflineBanner />
+            <ProviderHeader claims={claims} />
+          </div>
 
           {/* Bottom padding clears whatever is fixed to the viewport's
               bottom edge so the last element on a page is never trapped
               underneath it: the tab bar everywhere else, the job detail
               screen's (taller, up-to-two-button) StickyActionBar there. */}
+          {/* bg-bg: the MatDash reference nests a tinted scroll canvas
+              behind the page's cards inside the white body-wrapper column -
+              that's what makes a borderless white Card read as a distinct
+              surface instead of blending into the page. */}
           <main
             className={cx(
-              "min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8",
+              "min-w-0 flex-1 bg-bg px-4 py-6 sm:px-6 lg:px-8",
               isJobDetail ? STICKY_BAR_SPACER : "pb-24 md:pb-6",
             )}
           >

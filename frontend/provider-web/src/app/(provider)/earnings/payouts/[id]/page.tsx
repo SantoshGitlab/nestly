@@ -58,7 +58,7 @@ export default function PayoutDetailPage() {
 
   if (query.isError && isNotImplemented(query.error)) {
     return (
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="w-full max-w-2xl">
         <PageHeading title="Payout" breadcrumbs={backLink} />
         <NotYetAvailable
           title="This payout isn't available yet"
@@ -75,7 +75,7 @@ export default function PayoutDetailPage() {
 
   if (query.isError) {
     return (
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="w-full max-w-2xl">
         <PageHeading title="Payout" breadcrumbs={backLink} />
         <ErrorState
           title="Couldn't load this payout"
@@ -90,7 +90,7 @@ export default function PayoutDetailPage() {
   const payout = query.data;
 
   return (
-    <div className="mx-auto w-full max-w-2xl animate-rise">
+    <div className="w-full max-w-2xl animate-rise">
       <PageHeading
         breadcrumbs={backLink}
         title={formatInr(payout.totalAmount)}
@@ -156,13 +156,13 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
 /** Mirrors the loaded screen's shape so nothing jumps when the payout lands. */
 function PayoutDetailSkeleton({ backLink }: { backLink: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="w-full max-w-2xl">
       <div className="mb-6">
         <div className="mb-2">{backLink}</div>
         <Skeleton className="h-9 w-44" />
         <Skeleton className="mt-2 h-4 w-64" />
       </div>
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+      <div className="rounded-2xl bg-surface p-6 shadow-sm">
         <Skeleton className="h-5 w-32" />
         <SkeletonText lines={5} className="mt-5" />
       </div>

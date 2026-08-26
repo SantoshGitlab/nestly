@@ -16,7 +16,7 @@ import { SummarySection } from "./_components/SummarySection";
  */
 export default function EarningsPage() {
   return (
-    <div className="mx-auto flex w-full max-w-4xl animate-rise flex-col gap-6">
+    <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading title="Earnings" subtitle="What you've earned, and your payout history." />
       <SummarySection />
       <LedgerSection />
