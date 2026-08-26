@@ -113,11 +113,13 @@ function BookingDetailScreen() {
   return (
     <main className="flex w-full flex-col animate-rise">
       {/* The title is the service name and the description carries the
-          booking id as one text node - both are addressed by name in the
-          E2E suite, so neither shape changes. */}
+          booking reference as one text node - both are addressed by name in
+          the E2E suite, so neither shape changes. Shows `reference` (the
+          short human-facing code), not `id` (the raw GUID) - see
+          Booking.BookingReference's doc comment on the backend. */}
       <PageBanner
         title={booking.service.name}
-        description={`Booking ID: ${booking.id}`}
+        description={`Booking ID: ${booking.reference}`}
         breadcrumb={
           <BannerBreadcrumb
             items={[{ label: "Home", href: "/" }, { label: "My bookings", href: "/bookings" }, { label: booking.service.name }]}

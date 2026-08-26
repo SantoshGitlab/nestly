@@ -248,7 +248,7 @@ function BookingPaymentScreen() {
         <Card title="Booking">
           <DetailList>
             <DetailRow label="Booking ID" numeric>
-              <span className="break-all">{booking.id}</span>
+              <span className="break-all">{booking.reference}</span>
             </DetailRow>
             <DetailRow label="Status">
               <BookingStatusBadge status={booking.status} label={booking.statusLabel} />

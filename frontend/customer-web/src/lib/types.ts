@@ -528,6 +528,8 @@ export interface BookingDetail {
    * showing here immediately.
    */
   provider: BookingProviderSummary | null;
+  /** Short human-facing code ("NST-260825-K7F3M") - what to show instead of `id`. */
+  reference: string;
 }
 
 /**
@@ -550,6 +552,8 @@ export interface BookingListItem {
   status: BookingStatus;
   statusLabel: string;
   createdAtUtc: string;
+  /** Short human-facing code ("NST-260825-K7F3M") - what to show instead of `id`. */
+  reference: string;
 }
 
 /** Mirrors Nestly.Application.Bookings.BookingListResponse - a page of the customer's own bookings, newest first. */

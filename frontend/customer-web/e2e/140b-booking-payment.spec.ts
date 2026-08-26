@@ -11,12 +11,16 @@ test.describe("Slot selection to booking to payment", () => {
     const bookingId = await createBookingViaUi(page, fixture);
     expect(bookingId).toMatch(/^[0-9a-f-]{36}$/);
 
-    await expect(page.getByText(`Booking ID: ${bookingId}`)).toBeVisible();
+    // The page shows the short human-facing reference ("NST-YYMMDD-XXXXX"),
+    // not the raw GUID captured above - the URL is still keyed by the GUID
+    // (asserted via waitForURL below), only the display text changed.
+    const referencePattern = /^Booking ID: NST-\d{6}-[0-9A-Z]{5}$/;
+    await expect(page.getByText(referencePattern)).toBeVisible();
 
     await page.getByRole("link", { name: "View booking details" }).click();
     await page.waitForURL(new RegExp(`/bookings/${bookingId}$`));
     await expect(page.getByRole("heading", { name: fixture.serviceName })).toBeVisible();
-    await expect(page.getByText(`Booking ID: ${bookingId}`)).toBeVisible();
+    await expect(page.getByText(referencePattern)).toBeVisible();
   });
 
   test("the new booking appears in the Upcoming bookings list", async ({ page }) => {
@@ -34,6 +38,6 @@ test.describe("Slot selection to booking to payment", () => {
       timeout: 15_000,
     });
     await page.goto(`/bookings/${bookingId}`);
-    await expect(page.getByText(`Booking ID: ${bookingId}`)).toBeVisible();
+    await expect(page.getByText(/^Booking ID: NST-\d{6}-[0-9A-Z]{5}$/)).toBeVisible();
   });
 });

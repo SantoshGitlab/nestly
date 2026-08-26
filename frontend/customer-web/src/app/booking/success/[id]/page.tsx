@@ -98,7 +98,7 @@ function BookingSuccessScreen() {
           which is why PageBanner's own title stays exactly that string. */}
       <PageBanner
         title="Booking placed!"
-        description={`Booking ID: ${booking.id}`}
+        description={`Booking ID: ${booking.reference}`}
         breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Booking placed!" }]} />}
         badge={<BookingStatusBadge status={booking.status} label={booking.statusLabel} />}
       />
