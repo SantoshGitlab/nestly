@@ -284,14 +284,15 @@ export function DataTable<T>({
   return (
     <section
       className={cx(
-        "w-full animate-fade-in overflow-hidden rounded-2xl border border-line bg-surface shadow-sm",
+        "w-full animate-fade-in overflow-hidden rounded-2xl bg-surface shadow-sm",
         className,
       )}
     >
       {hasHeader ? (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="min-w-0">
-            {title ? <h2 className="text-base font-semibold text-fg">{title}</h2> : null}
+            {/* 18px/600 matches the MatDash reference's card-title typography exactly. */}
+            {title ? <h2 className="text-lg font-semibold text-fg">{title}</h2> : null}
             {description ? (
               <p className="mt-1 text-sm leading-relaxed text-fg-muted">{description}</p>
             ) : null}
@@ -373,10 +374,11 @@ export function DataTable<T>({
           {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead
             className={cx(
-              "bg-surface-2 text-left",
-              // Sticky only matters once the body can scroll under it. The
-              // border lives on the cells, not the row: a `<thead>` border
-              // disappears under `position: sticky` in Chrome.
+              // No header shading (matches the MatDash reference: the
+              // header sits on the same white card surface as the body) -
+              // bg-surface still needed under `sticky` so body rows don't
+              // show through as they scroll underneath it.
+              "bg-surface text-left",
               maxHeight && "sticky top-0 z-10",
             )}
           >
@@ -397,7 +399,9 @@ export function DataTable<T>({
                         : undefined
                     }
                     className={cx(
-                      "whitespace-nowrap border-b border-line text-xs font-semibold uppercase tracking-wide text-fg-muted",
+                      // 14px/700, normal case, near-fg color - matches the
+                      // MatDash reference's header cells exactly.
+                      "whitespace-nowrap border-b border-line text-sm font-bold text-fg",
                       cellPadding,
                       column.numeric && "text-right",
                       column.headerClassName,
@@ -428,7 +432,7 @@ export function DataTable<T>({
                 <th
                   scope="col"
                   className={cx(
-                    "whitespace-nowrap border-b border-line text-right text-xs font-semibold uppercase tracking-wide text-fg-muted",
+                    "whitespace-nowrap border-b border-line text-right text-sm font-bold text-fg",
                     cellPadding,
                   )}
                 >
@@ -626,7 +630,7 @@ export function FilterBar({
   return (
     <form
       onSubmit={submit}
-      className={cx("rounded-2xl border border-line bg-surface p-4 shadow-sm sm:p-5", className)}
+      className={cx("rounded-2xl bg-surface p-4 shadow-sm sm:p-5", className)}
       aria-label="Filters"
     >
       <div className={cx("grid grid-cols-1 gap-4", grid)}>{children}</div>
@@ -882,7 +886,8 @@ export function FormGrid({
   className?: string;
 }) {
   const grid = columns === 1 ? "" : columns === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3";
-  return <div className={cx("grid grid-cols-1 gap-4", grid, className)}>{children}</div>;
+  // gap-6 (24px) matches the MatDash reference's form-layout grids exactly.
+  return <div className={cx("grid grid-cols-1 gap-6", grid, className)}>{children}</div>;
 }
 
 /**

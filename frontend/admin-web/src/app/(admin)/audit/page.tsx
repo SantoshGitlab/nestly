@@ -141,7 +141,7 @@ export default function AuditLogPage() {
   const activeCount = activeFilterCount(draft);
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Audit Log"
         subtitle="Every critical business and admin action recorded to the audit trail (SRS 21), filterable by actor, date range, entity/action, and outcome."
@@ -169,18 +169,24 @@ export default function AuditLogPage() {
           />
           <Field
             label="Actor ID"
+            name="actorId"
+            autoComplete="on"
             placeholder="Admin user GUID"
             value={draft.actorId}
             onChange={(event) => setDraft({ ...draft, actorId: event.target.value })}
           />
           <Field
             label="Entity / module"
+            name="entityName"
+            autoComplete="on"
             placeholder="e.g. AdminUser, AdminPermissionCheck"
             value={draft.entityName}
             onChange={(event) => setDraft({ ...draft, entityName: event.target.value })}
           />
           <Field
             label="Action contains"
+            name="action"
+            autoComplete="on"
             placeholder="e.g. Login, PermissionDenied"
             value={draft.action}
             onChange={(event) => setDraft({ ...draft, action: event.target.value })}

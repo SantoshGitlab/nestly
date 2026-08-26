@@ -103,7 +103,11 @@ const config: Config = {
         md: "0.625rem",
         lg: "0.75rem",
         xl: "1rem",
-        "2xl": "1.25rem",
+        // Card radius, matched exactly to the MatDash reference's `.card`
+        // class (computed `border-radius: 7px`) - every card-shaped surface
+        // in the app (`Card`, `KpiCard`, `StatTile`, `DataTable`'s wrapper,
+        // ...) uses `rounded-2xl`, so this one token carries the match.
+        "2xl": "7px",
         "3xl": "1.5rem",
         "4xl": "2rem",
       },

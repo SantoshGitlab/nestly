@@ -94,7 +94,7 @@ export default function ProviderReferralConfigPage() {
   const configQuery = useQuery({ queryKey: ["provider-referral-config"], queryFn: getProviderReferralConfig });
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full max-w-5xl">
       <PageHeading
         title="Provider referral program"
         subtitle="Reward values per side, the qualifying completed-job count, and expiry."

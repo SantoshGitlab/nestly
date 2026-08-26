@@ -605,7 +605,7 @@ function CouponSettingsSection({ initial, queryClient, canWrite }: { initial: Co
  */
 function SettingsCardSkeleton({ fields = 4 }: { fields?: number }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+    <div className="rounded-2xl bg-surface p-6 shadow-sm">
       <Skeleton className="h-4 w-40" />
       <Skeleton className="mt-2 h-3.5 w-72 max-w-full" />
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -630,7 +630,7 @@ export default function SystemSettingsPage() {
   const { data, isPending, isError, error, refetch } = useAllSettings();
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl animate-rise flex-col gap-6">
+    <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="System settings"
         subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet and coupon rules (SRS 12.19)."

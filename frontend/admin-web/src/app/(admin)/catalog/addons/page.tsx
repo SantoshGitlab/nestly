@@ -99,7 +99,7 @@ export default function CatalogAddOnsPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <div>
         <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
         <CatalogTabs />
@@ -236,7 +236,7 @@ export default function CatalogAddOnsPage() {
               {...form.register("groupId")}
             />
 
-            <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <fieldset className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <legend className="mb-2 text-sm font-medium text-fg">Add-on options</legend>
               <CheckboxField
                 label="Quantity allowed"

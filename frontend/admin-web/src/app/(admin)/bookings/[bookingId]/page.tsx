@@ -295,7 +295,7 @@ export default function BookingDetailPage() {
 
   if (detailQuery.isError) {
     return (
-      <div className="mx-auto w-full max-w-4xl">
+      <div className="w-full max-w-7xl">
         <PageHeading
           title="Booking"
           breadcrumbs={<Breadcrumbs items={[{ label: "Bookings", href: "/bookings" }, { label: "Detail" }]} />}
@@ -319,6 +319,23 @@ export default function BookingDetailPage() {
   const isAssignableStatus =
     booking.status === BookingStatus.AwaitingFulfilment || booking.status === BookingStatus.Assigned;
 
+  // Mirrors BookingLifecycle's transition table server-side (only these
+  // source statuses have a CancelledByAdmin edge) - the "Cancel booking" card
+  // used to render unconditionally, so an admin could fill out a reason and
+  // hit submit on an Expired/Completed/already-cancelled booking only to have
+  // the API reject it with "A booking in status 'X' can no longer be
+  // cancelled." Gating the card itself surfaces that up front instead.
+  const isCancellableByAdmin = [
+    BookingStatus.PaymentFailed,
+    BookingStatus.Confirmed,
+    BookingStatus.AwaitingFulfilment,
+    BookingStatus.Assigned,
+    BookingStatus.ProviderEnRoute,
+    BookingStatus.ProviderArrived,
+    BookingStatus.InProgress,
+    BookingStatus.Rescheduled,
+  ].includes(booking.status);
+
   // The one assignment row still "live" for this booking, if any (every
   // other row is a settled Rejected/Reassigned/Withdrawn/Completed). Backend
   // (BookingProviderAssignmentService.MarkReassigned) already permits
@@ -335,10 +352,10 @@ export default function BookingDetailPage() {
   const wouldOverrideAcceptedProvider = liveAssignment?.status === BookingProviderAssignmentStatus.Accepted;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
         title={booking.customer.name}
-        subtitle={`Booking ${booking.id}`}
+        subtitle={`Booking ${booking.reference}`}
         breadcrumbs={
           <Breadcrumbs items={[{ label: "Bookings", href: "/bookings" }, { label: booking.customer.name }]} />
         }
@@ -380,50 +397,58 @@ export default function BookingDetailPage() {
         </p>
       </Card>
 
-      <Card title="Services booked">
-        <ul className="flex flex-col gap-2 text-sm">
-          {booking.items.map((item) => (
-            <li key={item.id} className="rounded-xl border border-line p-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-fg">{item.name}</span>
-                <span className="nums text-fg">{formatCurrency(item.lineTotal)}</span>
-              </div>
-              {item.addOns.length > 0 ? (
-                <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-fg-muted">
-                  {item.addOns.map((addOn) => (
-                    <li key={addOn.id} className="flex items-center justify-between gap-3">
-                      <span>{addOn.name}</span>
-                      <span className="nums">{formatCurrency(addOn.lineTotal)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {/* Paired, not thirded with Status timeline below: both of these are
+          compact, fixed-shape summaries, but the timeline renders one row
+          per status transition (up to 8-10 for a booking that has been
+          through most of the lifecycle) - an equal-width row with that would
+          either cramp the history or leave these two towering-empty to match
+          its height under CSS grid's default row-stretch. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card title="Services booked">
+          <ul className="flex flex-col gap-2 text-sm">
+            {booking.items.map((item) => (
+              <li key={item.id} className="rounded-xl border border-line p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-fg">{item.name}</span>
+                  <span className="nums text-fg">{formatCurrency(item.lineTotal)}</span>
+                </div>
+                {item.addOns.length > 0 ? (
+                  <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-fg-muted">
+                    {item.addOns.map((addOn) => (
+                      <li key={addOn.id} className="flex items-center justify-between gap-3">
+                        <span>{addOn.name}</span>
+                        <span className="nums">{formatCurrency(addOn.lineTotal)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </Card>
 
-      <Card title="Payment">
-        {booking.payment === null ? (
-          <p className="text-sm text-fg-muted">No payment transaction yet.</p>
-        ) : (
-          <DescriptionList
-            columns={3}
-            items={[
-              {
-                label: "Amount",
-                value: (
-                  <span className="nums">
-                    {booking.payment.currency} {booking.payment.amount.toFixed(2)}
-                  </span>
-                ),
-              },
-              { label: "Gateway ref", value: booking.payment.gatewayPaymentRef ?? "—" },
-              { label: "Updated", value: formatDateTime(booking.payment.updatedAtUtc) },
-            ]}
-          />
-        )}
-      </Card>
+        <Card title="Payment">
+          {booking.payment === null ? (
+            <p className="text-sm text-fg-muted">No payment transaction yet.</p>
+          ) : (
+            <DescriptionList
+              columns={1}
+              items={[
+                {
+                  label: "Amount",
+                  value: (
+                    <span className="nums">
+                      {booking.payment.currency} {booking.payment.amount.toFixed(2)}
+                    </span>
+                  ),
+                },
+                { label: "Gateway ref", value: booking.payment.gatewayPaymentRef ?? "—" },
+                { label: "Updated", value: formatDateTime(booking.payment.updatedAtUtc) },
+              ]}
+            />
+          )}
+        </Card>
+      </div>
 
       {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
 
@@ -520,7 +545,7 @@ export default function BookingDetailPage() {
                 removes them from it and notifies the customer their provider changed.
               </Alert>
             ) : null}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 {eligibleProvidersQuery.isPending ? (
                   <SkeletonText />
@@ -570,7 +595,7 @@ export default function BookingDetailPage() {
               </Button>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <Field
                   label="Rejection reason (optional)"
@@ -645,7 +670,11 @@ export default function BookingDetailPage() {
       {canWrite ? (
         <>
           <Card title="Update status" description="General operational status transitions (task 115d)">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            {/* max-w-2xl: this Card is now as wide as the page (matched to
+                the list it's reached from), but a status dropdown and a
+                one-line reason don't need that width just because their
+                container has it. */}
+            <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <Select
                   label="New status"
@@ -664,15 +693,21 @@ export default function BookingDetailPage() {
           </Card>
 
           <Card title="Cancel booking" description="Admin-initiated cancellation (SRS 12.11.3, task 117a)">
-            <div className="flex flex-col gap-4">
-              <Field label="Reason" required value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
-              <Textarea label="Internal notes (optional)" value={cancelNotes} onChange={(e) => setCancelNotes(e.target.value)} />
-              <FormActions align="start">
-                <Button variant="danger" disabled={!cancelReason.trim()} onClick={() => setConfirmCancel(true)}>
-                  Cancel booking
-                </Button>
-              </FormActions>
-            </div>
+            {isCancellableByAdmin ? (
+              <div className="flex max-w-2xl flex-col gap-4">
+                <Field label="Reason" required value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+                <Textarea label="Internal notes (optional)" value={cancelNotes} onChange={(e) => setCancelNotes(e.target.value)} />
+                <FormActions align="start">
+                  <Button variant="danger" disabled={!cancelReason.trim()} onClick={() => setConfirmCancel(true)}>
+                    Cancel booking
+                  </Button>
+                </FormActions>
+              </div>
+            ) : (
+              <Alert tone="info">
+                A booking in status &lsquo;{booking.statusLabel}&rsquo; can no longer be cancelled.
+              </Alert>
+            )}
           </Card>
 
           <Card title="Reschedule booking" description="Admin-initiated reschedule (SRS 12.11.3, task 117b)">
@@ -818,14 +853,14 @@ export default function BookingDetailPage() {
 
 function BookingDetailSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full max-w-7xl flex-col gap-6">
       <div>
         <Skeleton className="h-3 w-32" />
         <Skeleton className="mt-3 h-8 w-64" />
         <Skeleton className="mt-2 h-4 w-80" />
       </div>
       {Array.from({ length: 3 }, (_, index) => (
-        <div key={index} className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+        <div key={index} className="rounded-2xl bg-surface p-6 shadow-sm">
           <Skeleton className="h-4 w-40" />
           <div className="mt-5">
             <SkeletonText lines={3} />

@@ -106,7 +106,7 @@ export default function CouponsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Coupons & Campaigns"
         subtitle="Discount codes with every rule dimension - type, value, caps, limits, validity, and applicability (SRS 12.12.1)."
@@ -150,6 +150,8 @@ export default function CouponsPage() {
         >
           <Field
             label="Code"
+            name="code"
+            autoComplete="on"
             placeholder="Search by code…"
             value={filters.code}
             onChange={(event) => setFilters((current) => ({ ...current, code: event.target.value }))}

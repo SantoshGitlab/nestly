@@ -77,7 +77,7 @@ export default function AdminRolesPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full max-w-5xl">
       <PageHeading
         title="Roles & permissions"
         subtitle="The permission matrix behind every admin account (SRS 12.2.2, 12.2.3): create roles and edit exactly which modules each one can read or write."

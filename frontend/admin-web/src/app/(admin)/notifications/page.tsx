@@ -158,7 +158,7 @@ export default function NotificationTemplatesPage() {
   const activeFilterCount = countActiveFilters(appliedFilters);
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Notification templates"
         subtitle="Channel-specific templates with variable placeholders, preview/test rendering, and full change history (SRS 12.17)."

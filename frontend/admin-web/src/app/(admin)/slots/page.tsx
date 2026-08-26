@@ -23,7 +23,7 @@ export default function SlotsPage() {
   const canWrite = canWriteModule(claims, "slots");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Slots & Availability"
         subtitle="Slot windows, blackouts, booking cutoffs, capacity and one-off availability overrides (SRS 12.10)."

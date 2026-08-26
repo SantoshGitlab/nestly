@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
+import { Manrope } from "next/font/google";
 import localFont from "next/font/local";
 import { ToastProvider } from "@/components/ui";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
+/** MatDash's reference typeface — see globals.css's top-of-file note. */
+const manrope = Manrope({
+  subsets: ["latin"],
   variable: "--font-geist-sans",
-  weight: "100 900",
+  weight: ["400", "500", "600", "700", "800"],
 });
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
@@ -54,7 +56,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${manrope.variable} ${geistMono.variable} antialiased`}>
         <Providers>
           <ToastProvider>{children}</ToastProvider>
         </Providers>

@@ -102,7 +102,7 @@ export default function SupportTicketsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Support Tickets"
         subtitle="Search, assign, respond to and resolve customer support tickets across every customer (SRS 12.14)."
@@ -142,18 +142,24 @@ export default function SupportTicketsPage() {
         />
         <Field
           label="Customer ID"
+          name="customerId"
+          autoComplete="on"
           placeholder="Customer GUID"
           value={draft.customerId}
           onChange={(e) => setDraft((f) => ({ ...f, customerId: e.target.value }))}
         />
         <Field
           label="Booking ID"
+          name="bookingId"
+          autoComplete="on"
           placeholder="Booking GUID"
           value={draft.bookingId}
           onChange={(e) => setDraft((f) => ({ ...f, bookingId: e.target.value }))}
         />
         <Field
           label="Assigned admin ID"
+          name="assignedAdminUserId"
+          autoComplete="on"
           placeholder="Admin user GUID"
           value={draft.assignedAdminUserId}
           onChange={(e) => setDraft((f) => ({ ...f, assignedAdminUserId: e.target.value }))}

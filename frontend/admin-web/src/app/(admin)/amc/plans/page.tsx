@@ -90,7 +90,7 @@ export default function AmcPlansPage() {
   ) : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex w-full max-w-6xl flex-col gap-6">
       <PageHeading
         title="Subscription Plans"
         subtitle="AMC plans: prepaid entitlement to a fixed number of service visits for one appliance, over a fixed term (docs/AMC.md)."

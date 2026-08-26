@@ -143,7 +143,7 @@ export default function CustomerDetailPage() {
   ];
 
   if (detailQuery.isPending) {
-    return <DetailSkeleton cards={4} className="mx-auto flex w-full max-w-4xl flex-col gap-6" />;
+    return <DetailSkeleton cards={4} className="flex w-full max-w-7xl flex-col gap-6" />;
   }
 
   if (detailQuery.isError) {
@@ -153,7 +153,7 @@ export default function CustomerDetailPage() {
         breadcrumbs={breadcrumbs}
         error={detailQuery.error}
         onRetry={() => detailQuery.refetch()}
-        className="mx-auto w-full max-w-4xl"
+        className="w-full max-w-7xl"
       />
     );
   }
@@ -161,7 +161,7 @@ export default function CustomerDetailPage() {
   const customer = detailQuery.data;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
         title={customer.name}
         subtitle={`${customer.mobile}${customer.email ? ` · ${customer.email}` : ""}`}

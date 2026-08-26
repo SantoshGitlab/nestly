@@ -109,7 +109,7 @@ export default function CmsFaqsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="CMS & Content"
         subtitle="Static pages, banners, and site-level FAQs with draft/publish, scheduling, and placement (SRS 12.16)."

@@ -121,7 +121,7 @@ export default function AmcRenewalReportPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Bookings"
         subtitle="AMC renewal pipeline: contracts expiring or exhausted within a horizon — the customers worth a renewal conversation."
@@ -133,13 +133,14 @@ export default function AmcRenewalReportPage() {
         {report ? (
           <Reveal className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <motion.div variants={revealItem}>
-              <StatTile label="Total contracts" value={report.totalContracts.toLocaleString("en-IN")} />
+              <StatTile tone="brand" label="Total contracts" value={report.totalContracts.toLocaleString("en-IN")} />
             </motion.div>
             <motion.div variants={revealItem}>
-              <StatTile label="Active" value={countFor(CustomerAmcContractStatus.Active).toLocaleString("en-IN")} />
+              <StatTile tone="success" label="Active" value={countFor(CustomerAmcContractStatus.Active).toLocaleString("en-IN")} />
             </motion.div>
             <motion.div variants={revealItem}>
               <StatTile
+                tone="info"
                 label="Exhausted"
                 value={countFor(CustomerAmcContractStatus.Exhausted).toLocaleString("en-IN")}
                 hint="Used every visit — a customer who got full value."
@@ -147,6 +148,7 @@ export default function AmcRenewalReportPage() {
             </motion.div>
             <motion.div variants={revealItem}>
               <StatTile
+                tone="danger"
                 label="Expired"
                 value={countFor(CustomerAmcContractStatus.Expired).toLocaleString("en-IN")}
                 hint="Term ran out with visits still unused."
@@ -234,7 +236,7 @@ export default function AmcRenewalReportPage() {
 /** Matches a `StatTile`'s height so the tiles do not jump when the report lands. */
 function StatTileSkeleton() {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+    <div className="rounded-2xl bg-surface p-5 shadow-sm">
       <Skeleton className="h-4 w-28" />
       <Skeleton className="mt-3 h-9 w-16" />
     </div>

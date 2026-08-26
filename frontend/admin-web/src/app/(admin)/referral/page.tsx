@@ -117,7 +117,7 @@ export default function ReferralsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Referrals"
         subtitle="Every referral, its reward progress, and the queue of referrals flagged for fraud review."
@@ -146,6 +146,8 @@ export default function ReferralsPage() {
           >
             <Field
               label="Customer"
+              name="customerSearch"
+              autoComplete="name"
               placeholder="Referrer or referee name…"
               value={filters.customerSearch}
               onChange={(event) =>

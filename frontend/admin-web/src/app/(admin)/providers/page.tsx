@@ -188,7 +188,7 @@ export default function ProvidersPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Providers"
         subtitle="Manage service providers: profile, KYC approval and performance (PROVIDER.md)."
@@ -206,11 +206,15 @@ export default function ProvidersPage() {
       >
         <Field
           label="Name"
+          name="name"
+          autoComplete="name"
           value={filters.name}
           onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
         />
         <Field
           label="Phone"
+          name="phone"
+          autoComplete="tel"
           value={filters.phone}
           onChange={(e) => setFilters((f) => ({ ...f, phone: e.target.value }))}
         />

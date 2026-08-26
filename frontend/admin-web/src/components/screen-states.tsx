@@ -19,7 +19,11 @@ import { describeError } from "@/lib/api";
 /** Loading placeholder shaped like a heading plus N cards. */
 export function DetailSkeleton({
   cards = 2,
-  className = "mx-auto flex w-full max-w-3xl flex-col gap-6",
+  // Left-aligned, not mx-auto: this backs every [id]/page.tsx detail screen
+  // (task 222), and centering it inside the wide layout content column made
+  // the detail float ~180px right of where the list it was reached from
+  // starts - the same left edge the list's own content uses.
+  className = "flex w-full max-w-3xl flex-col gap-6",
 }: {
   cards?: number;
   className?: string;
@@ -32,7 +36,7 @@ export function DetailSkeleton({
         <Skeleton className="mt-2 h-4 w-96 max-w-full" />
       </div>
       {Array.from({ length: cards }, (_, index) => (
-        <div key={index} className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+        <div key={index} className="rounded-2xl bg-surface p-6 shadow-sm">
           <Skeleton className="h-4 w-40" />
           <div className="mt-5">
             <SkeletonText lines={4} />
@@ -54,7 +58,7 @@ export function DetailError({
   error,
   message,
   onRetry,
-  className = "mx-auto w-full max-w-3xl",
+  className = "w-full max-w-3xl",
 }: {
   title: string;
   breadcrumbs?: readonly { label: string; href?: string }[];

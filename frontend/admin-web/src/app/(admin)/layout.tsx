@@ -53,28 +53,39 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
 
   return (
     <RequireAdminAuth>
-      <div className="flex min-h-screen flex-col bg-bg">
-        <AdminHeader claims={claims} onOpenNav={() => setNavOpen(true)} />
+      <div className="flex min-h-screen bg-bg">
+        <div className="sticky top-0 hidden h-screen lg:flex">
+          <AdminSidebar claims={claims} />
+        </div>
 
-        <div className="flex flex-1">
-          <div className="hidden lg:flex">
-            <AdminSidebar claims={claims} />
-          </div>
-
-          {navOpen ? (
-            <div className="fixed inset-0 z-50 lg:hidden">
-              <div
-                className="absolute inset-0 animate-fade-in bg-overlay/50 backdrop-blur-[2px]"
-                onClick={() => setNavOpen(false)}
-                aria-hidden
-              />
-              <div className="absolute inset-y-0 left-0 flex animate-rise">
-                <AdminSidebar claims={claims} onNavigate={() => setNavOpen(false)} />
-              </div>
+        {navOpen ? (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div
+              className="absolute inset-0 animate-fade-in bg-overlay/50 backdrop-blur-[2px]"
+              onClick={() => setNavOpen(false)}
+              aria-hidden
+            />
+            <div className="absolute inset-y-0 left-0 flex animate-rise">
+              <AdminSidebar claims={claims} onNavigate={() => setNavOpen(false)} />
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
-          <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        {/* bg-surface (white): matches the MatDash reference's
+            `body-wrapper` class (`bg-white dark:bg-darkgray`) exactly - this
+            column is white behind the header; the tinted canvas is `<main>`
+            below, not this wrapper. */}
+        <div className="flex min-w-0 flex-1 flex-col bg-surface">
+          <AdminHeader claims={claims} onOpenNav={() => setNavOpen(true)} />
+
+          {/* bg-bg: the MatDash reference nests a tinted scroll canvas
+              (computed rgb(244,247,251), i.e. this app's --bg) directly
+              behind the page's cards, inside the white body-wrapper column -
+              that's what makes a borderless white Card read as a distinct
+              surface instead of blending into the page. Padding matched to
+              the reference's `.container` (computed 30px on every side at
+              desktop; smaller below `lg`, where 30px is a lot to give up). */}
+          <main className="min-w-0 flex-1 bg-bg px-4 py-6 sm:px-6 lg:px-[30px] lg:py-[30px]">
             <div className="mx-auto w-full max-w-7xl">{children}</div>
           </main>
         </div>

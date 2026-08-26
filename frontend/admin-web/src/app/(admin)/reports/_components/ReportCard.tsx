@@ -89,7 +89,7 @@ export function StatGrid({ children, columns = 3 }: { children: ReactNode; colum
 /** Matches a `StatTile`'s height so the tiles do not jump when the numbers land. */
 export function StatTileSkeleton() {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+    <div className="rounded-2xl bg-surface p-5 shadow-sm">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="mt-3 h-9 w-24" />
     </div>
@@ -114,7 +114,7 @@ export function StatGridSkeleton({ count = 3, columns = 3 }: { count?: number; c
  */
 export function TableSkeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
+    <div className="overflow-hidden rounded-2xl bg-surface shadow-sm">
       <div className="border-b border-line px-4 py-3">
         <Skeleton className="h-4 w-32" />
       </div>

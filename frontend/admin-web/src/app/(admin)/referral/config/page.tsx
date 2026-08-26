@@ -157,7 +157,7 @@ export default function ReferralConfigPage() {
   const milestonesQuery = useQuery({ queryKey: ["referral-milestones"], queryFn: listReferralMilestones });
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full max-w-5xl">
       <PageHeading
         title="Referral program"
         subtitle="Reward values per side, the qualifying order amount, expiry, and the milestone bonus tiers."

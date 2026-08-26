@@ -18,7 +18,7 @@ export default function ServiceabilityMappingsPage() {
   const canWrite = canWriteModule(claims, "serviceability");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Serviceability Mapping"
         subtitle="Category/city and service/pincode serviceability, including blackout and suspension (SRS 12.9.2)."

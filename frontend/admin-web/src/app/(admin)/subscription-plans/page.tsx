@@ -91,7 +91,7 @@ export default function SubscriptionPlansPage() {
   ) : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className="flex w-full max-w-6xl flex-col gap-6">
       <PageHeading
         title="Subscription Plans"
         subtitle="Price, billing cycle and benefits for the Nestly Plus tiers (PRODUCT-ENHANCEMENTS.md #1)."

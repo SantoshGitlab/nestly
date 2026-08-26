@@ -101,7 +101,7 @@ export default function EditServiceAddOnPage() {
   ];
 
   if (addOnQuery.isPending) {
-    return <DetailSkeleton className="mx-auto flex w-full max-w-2xl flex-col gap-6" />;
+    return <DetailSkeleton className="flex w-full max-w-5xl flex-col gap-6" />;
   }
 
   if (addOnQuery.error || !addOnQuery.data) {
@@ -112,7 +112,7 @@ export default function EditServiceAddOnPage() {
         error={addOnQuery.error}
         message={addOnQuery.error ? undefined : "This add-on no longer exists."}
         onRetry={() => addOnQuery.refetch()}
-        className="mx-auto w-full max-w-2xl"
+        className="w-full max-w-5xl"
       />
     );
   }
@@ -120,7 +120,7 @@ export default function EditServiceAddOnPage() {
   const addOn = addOnQuery.data;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <PageHeading
         title={addOn.name}
         subtitle="Add-on details — SRS 12.7.2, full field set and service mapping."
@@ -153,7 +153,7 @@ export default function EditServiceAddOnPage() {
       ) : null}
 
       <Card title="Details" description={canWrite ? undefined : "Read-only — you do not hold catalog write access."}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        <form onSubmit={onSubmit} className="flex max-w-2xl flex-col gap-4" noValidate>
           {updateMutation.isError ? <Alert>{describeError(updateMutation.error)}</Alert> : null}
           {updateMutation.isSuccess ? <Alert tone="success">Add-on saved.</Alert> : null}
 
@@ -205,7 +205,7 @@ export default function EditServiceAddOnPage() {
             disabled={!canWrite}
           />
 
-          <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <fieldset className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-medium text-fg">Add-on options</legend>
             <CheckboxField
               label="Quantity allowed"

@@ -39,7 +39,7 @@ function redemptionsPerCustomer(row: CouponRedemptionReportRow): number | null {
  */
 export default function CouponRedemptionReportPage() {
   return (
-    <Suspense fallback={<div className="mx-auto w-full max-w-6xl px-6 py-10" />}>
+    <Suspense fallback={<div className="w-full max-w-6xl px-6 py-10" />}>
       <CouponRedemptionReport />
     </Suspense>
   );
@@ -141,7 +141,7 @@ function CouponRedemptionReport() {
   const hasTotals = reportQuery.data !== undefined;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Coupons & Campaigns"
         subtitle="Redemption reporting: redemptions, discount total, booking count, and usage concentration (SRS 12.12.2)."
@@ -182,12 +182,14 @@ function CouponRedemptionReport() {
           <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <motion.div variants={revealItem}>
               <StatTile
+                tone="brand"
                 label="Total redemptions"
                 value={reportQuery.data.totalRedemptions.toLocaleString("en-IN")}
               />
             </motion.div>
             <motion.div variants={revealItem}>
               <StatTile
+                tone="accent"
                 label="Total discount given"
                 value={formatCurrency(reportQuery.data.totalDiscountAmount)}
                 title={formatCurrency(reportQuery.data.totalDiscountAmount)}
@@ -228,7 +230,7 @@ function CouponRedemptionReport() {
 /** Matches a `StatTile`'s height so the tiles do not jump when the totals land. */
 function StatTileSkeleton() {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+    <div className="rounded-2xl bg-surface p-5 shadow-sm">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="mt-3 h-9 w-24" />
     </div>

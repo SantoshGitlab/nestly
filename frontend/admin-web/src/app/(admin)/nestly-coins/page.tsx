@@ -22,7 +22,7 @@ import { AUDIENCE_TABS, NestlyCoinsAudience, getCoinsConfig } from "./_lib/coins
 /** Shaped like `ProgramConfigCard`: a header, a two-column field grid, two toggles. */
 function ConfigCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+    <div className="rounded-2xl bg-surface p-6 shadow-sm">
       <Skeleton className="h-4 w-36" />
       <Skeleton className="mt-2 h-3.5 w-80 max-w-full" />
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -53,7 +53,7 @@ export default function NestlyCoinsPage() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full max-w-4xl flex-col gap-6">
       <div>
         <PageHeading
           title="Nestly Coins"

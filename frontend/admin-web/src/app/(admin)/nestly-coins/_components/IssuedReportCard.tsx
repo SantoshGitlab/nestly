@@ -13,7 +13,7 @@ import { NestlyCoinsAudience, getCoinsIssuedReport } from "../_lib/coins-api";
 /** Matches a `StatTile`'s height so the row does not jump when the numbers land. */
 function StatTileSkeleton() {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+    <div className="rounded-2xl bg-surface p-5 shadow-sm">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="mt-3 h-9 w-24" />
     </div>
@@ -98,6 +98,7 @@ export function IssuedReportCard({ audience }: { audience: NestlyCoinsAudience }
           <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <motion.div variants={revealItem}>
               <StatTile
+                tone="brand"
                 label="Issued"
                 value={formatCurrency(reportQuery.data.totalIssued)}
                 title={formatCurrency(reportQuery.data.totalIssued)}
@@ -105,6 +106,7 @@ export function IssuedReportCard({ audience }: { audience: NestlyCoinsAudience }
             </motion.div>
             <motion.div variants={revealItem}>
               <StatTile
+                tone="danger"
                 label="Clawed back"
                 value={formatCurrency(reportQuery.data.totalClawedBack)}
                 title={formatCurrency(reportQuery.data.totalClawedBack)}
@@ -112,6 +114,7 @@ export function IssuedReportCard({ audience }: { audience: NestlyCoinsAudience }
             </motion.div>
             <motion.div variants={revealItem}>
               <StatTile
+                tone="success"
                 label="Net outstanding"
                 value={formatCurrency(reportQuery.data.netOutstanding)}
                 title={formatCurrency(reportQuery.data.netOutstanding)}

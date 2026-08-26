@@ -27,7 +27,7 @@ export default function PricingPage() {
   const canWrite = canWriteModule(claims, "pricing");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Pricing"
         subtitle="Base, add-on, city-wise and promotional pricing, plus per-city tax rate, visit charge and platform fee (SRS 12.8)."

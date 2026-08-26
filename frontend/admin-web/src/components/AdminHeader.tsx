@@ -64,7 +64,7 @@ export function AdminHeader({
   const initial = email?.trim()?.[0]?.toUpperCase() ?? "?";
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-md sm:px-6">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur-md sm:px-6">
       {onOpenNav ? (
         <button
           type="button"
@@ -85,23 +85,6 @@ export function AdminHeader({
           </svg>
         </button>
       ) : null}
-
-      <span className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient text-fg-on-brand shadow-brand"
-        >
-          <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
-            <path
-              d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
-              fill="currentColor"
-            />
-          </svg>
-        </span>
-        <span className="text-[0.9375rem] font-semibold tracking-tight text-fg">
-          Nestly <span className="text-fg-muted">Admin</span>
-        </span>
-      </span>
 
       <div className="flex-1" />
 

@@ -146,7 +146,7 @@ export default function EditCategoryPage() {
   ];
 
   if (categoryQuery.isPending) {
-    return <DetailSkeleton />;
+    return <DetailSkeleton className="flex w-full max-w-5xl flex-col gap-6" />;
   }
 
   if (categoryQuery.error || !categoryQuery.data) {
@@ -157,6 +157,7 @@ export default function EditCategoryPage() {
         error={categoryQuery.error}
         message={categoryQuery.error ? undefined : "This category no longer exists."}
         onRetry={() => categoryQuery.refetch()}
+        className="w-full max-w-5xl"
       />
     );
   }
@@ -164,7 +165,7 @@ export default function EditCategoryPage() {
   const category = categoryQuery.data;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <PageHeading
         title={category.name}
         subtitle="Category details — SRS 12.5.2, full field set."
@@ -215,7 +216,7 @@ export default function EditCategoryPage() {
       ) : null}
 
       <Card title="Details" description={canWrite ? undefined : "Read-only — you do not hold catalog write access."}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        <form onSubmit={onSubmit} className="flex max-w-2xl flex-col gap-4" noValidate>
           {updateMutation.isError ? <Alert>{describeError(updateMutation.error)}</Alert> : null}
           {updateMutation.isSuccess ? <Alert tone="success">Category saved.</Alert> : null}
 

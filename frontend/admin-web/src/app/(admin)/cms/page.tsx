@@ -102,7 +102,7 @@ export default function CmsPagesPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="CMS & Content"
         subtitle="Static pages, banners, and site-level FAQs with draft/publish, scheduling, and placement (SRS 12.16)."
@@ -142,6 +142,8 @@ export default function CmsPagesPage() {
         >
           <Field
             label="Title"
+            name="title"
+            autoComplete="on"
             placeholder="Search by title…"
             value={filters.title}
             onChange={(event) => setFilters((current) => ({ ...current, title: event.target.value }))}

@@ -108,7 +108,7 @@ export default function ProviderReferralsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Provider referrals"
         subtitle="Every provider referral, its reward progress, and the queue flagged for fraud review."
@@ -137,6 +137,8 @@ export default function ProviderReferralsPage() {
           >
             <Field
               label="Provider"
+              name="providerSearch"
+              autoComplete="name"
               placeholder="Referrer or referee name…"
               value={filters.providerSearch}
               onChange={(event) =>

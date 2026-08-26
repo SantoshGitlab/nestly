@@ -151,7 +151,7 @@ export default function AdminUserDetailPage() {
   ];
 
   if (detailQuery.isPending) {
-    return <DetailSkeleton cards={3} />;
+    return <DetailSkeleton cards={3} className="flex w-full max-w-6xl flex-col gap-6" />;
   }
 
   if (detailQuery.error || !detailQuery.data) {
@@ -162,6 +162,7 @@ export default function AdminUserDetailPage() {
         error={detailQuery.error}
         message={detailQuery.error ? undefined : "This account no longer exists."}
         onRetry={() => detailQuery.refetch()}
+        className="w-full max-w-6xl"
       />
     );
   }
@@ -177,7 +178,7 @@ export default function AdminUserDetailPage() {
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full max-w-6xl flex-col gap-6">
       <PageHeading
         title={adminUser.fullName}
         subtitle={adminUser.email}
@@ -283,21 +284,28 @@ export default function AdminUserDetailPage() {
             </SectionError>
           ) : null}
 
-          <Select
-            label="Role"
-            options={roleOptions}
-            disabled={!canWrite || rolesQuery.isPending || assignRoleMutation.isPending}
-            hint={assignRoleMutation.isPending ? "Saving…" : undefined}
-            // While the assignment is in flight the server copy still holds the
-            // old role, so binding straight to it snapped the control back to
-            // the previous value and made the change look like it had failed.
-            value={
-              assignRoleMutation.isPending
-                ? assignRoleMutation.variables ?? ""
-                : adminUser.roleId ?? ""
-            }
-            onChange={(event) => assignRoleMutation.mutate(event.target.value || null)}
-          />
+          {/* max-w-sm: this Card is now as wide as the rest of the page
+              (matched to the list it's reached from), but a single dropdown
+              has no reason to stretch full width just because its container
+              got wider - unlike FormGrid's paired fields, nothing here needs
+              the room. */}
+          <div className="max-w-sm">
+            <Select
+              label="Role"
+              options={roleOptions}
+              disabled={!canWrite || rolesQuery.isPending || assignRoleMutation.isPending}
+              hint={assignRoleMutation.isPending ? "Saving…" : undefined}
+              // While the assignment is in flight the server copy still holds the
+              // old role, so binding straight to it snapped the control back to
+              // the previous value and made the change look like it had failed.
+              value={
+                assignRoleMutation.isPending
+                  ? assignRoleMutation.variables ?? ""
+                  : adminUser.roleId ?? ""
+              }
+              onChange={(event) => assignRoleMutation.mutate(event.target.value || null)}
+            />
+          </div>
         </div>
       </Card>
 

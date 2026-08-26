@@ -25,7 +25,7 @@ export default function ServiceabilityPage() {
   const canWrite = canWriteModule(claims, "serviceability");
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Serviceability"
         subtitle="Geography master: state, city, zone, locality and pincode (SRS 12.9.1)."

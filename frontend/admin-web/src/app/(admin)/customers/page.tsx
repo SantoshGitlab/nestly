@@ -130,7 +130,7 @@ export default function CustomersPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading title="Customers" subtitle="Search and manage customer accounts (SRS 12.4)." />
 
       <FilterBar
@@ -142,22 +142,30 @@ export default function CustomersPage() {
       >
         <Field
           label="Name"
+          name="name"
+          autoComplete="name"
           value={filters.name}
           onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
         />
         <Field
           label="Mobile"
+          name="mobile"
+          autoComplete="tel"
           value={filters.mobile}
           onChange={(e) => setFilters((f) => ({ ...f, mobile: e.target.value }))}
         />
         <Field
           label="Email"
           type="email"
+          name="email"
+          autoComplete="email"
           value={filters.email}
           onChange={(e) => setFilters((f) => ({ ...f, email: e.target.value }))}
         />
         <Field
           label="City"
+          name="city"
+          autoComplete="address-level2"
           value={filters.city}
           onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
         />

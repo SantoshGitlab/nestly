@@ -97,7 +97,7 @@ export default function ChatInboxPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full max-w-5xl">
       <PageHeading
         title="Chat"
         subtitle="Every customer conversation across bookings and support tickets, most recent first (PRODUCT-ENHANCEMENTS.md IN-APP CHAT)."

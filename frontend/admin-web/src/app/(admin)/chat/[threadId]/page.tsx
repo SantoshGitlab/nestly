@@ -130,7 +130,7 @@ function AdminChatThreadScreen() {
   const contextLabel = contextType !== null ? (Number(contextType) === ChatContextType.Booking ? "booking" : "support ticket") : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <div className="flex w-full max-w-3xl flex-col gap-4">
       <PageHeading
         title={customerName ?? "Chat"}
         actions={
@@ -284,12 +284,12 @@ function ChatSkeleton() {
 
 function ChatThreadSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <div className="flex w-full max-w-3xl flex-col gap-4">
       <div>
         <Skeleton className="h-3 w-24" />
         <Skeleton className="mt-3 h-8 w-56" />
       </div>
-      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
+      <div className="rounded-2xl bg-surface p-6 shadow-sm">
         <Skeleton className="h-4 w-32" />
         <div className="mt-5">
           <ChatSkeleton />

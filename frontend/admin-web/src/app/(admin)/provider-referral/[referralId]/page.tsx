@@ -56,7 +56,7 @@ export default function ProviderReferralDetailPage() {
   ];
 
   if (referralQuery.isPending) {
-    return <DetailSkeleton cards={2} />;
+    return <DetailSkeleton cards={2} className="flex w-full max-w-7xl flex-col gap-6" />;
   }
 
   if (referralQuery.error || !referralQuery.data) {
@@ -67,6 +67,7 @@ export default function ProviderReferralDetailPage() {
         error={referralQuery.error}
         message={referralQuery.error ? undefined : "This provider referral no longer exists."}
         onRetry={() => referralQuery.refetch()}
+        className="w-full max-w-7xl"
       />
     );
   }
@@ -76,7 +77,7 @@ export default function ProviderReferralDetailPage() {
   const pendingAction = isPending ? reviewMutation.variables : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
         title={`${referral.referrerName} → ${referral.refereeName}`}
         subtitle={`Referral code ${referral.referralCodeUsed}`}

@@ -71,7 +71,7 @@ export default function ReferralReportsPage() {
   const isBusy = funnelQuery.isFetching || costQuery.isFetching;
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full max-w-5xl">
       <PageHeading
         title="Referral reports"
         subtitle="How far referrals get through the funnel, and what the programme has paid out."
@@ -116,13 +116,14 @@ export default function ReferralReportsPage() {
           ) : (
             <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <motion.div variants={revealItem}>
-                <StatTile label="Invited" value={count(funnelQuery.data.invitedCount)} hint="Same as registered — invite clicks are not tracked." />
+                <StatTile tone="brand" label="Invited" value={count(funnelQuery.data.invitedCount)} hint="Same as registered — invite clicks are not tracked." />
               </motion.div>
               <motion.div variants={revealItem}>
-                <StatTile label="Registered" value={count(funnelQuery.data.registeredCount)} />
+                <StatTile tone="info" label="Registered" value={count(funnelQuery.data.registeredCount)} />
               </motion.div>
               <motion.div variants={revealItem}>
                 <StatTile
+                  tone="warning"
                   label="Qualified"
                   value={count(funnelQuery.data.qualifiedCount)}
                   hint={share(funnelQuery.data.qualifiedCount, funnelQuery.data.registeredCount)}
@@ -130,6 +131,7 @@ export default function ReferralReportsPage() {
               </motion.div>
               <motion.div variants={revealItem}>
                 <StatTile
+                  tone="success"
                   label="Rewarded"
                   value={count(funnelQuery.data.rewardedCount)}
                   hint={share(funnelQuery.data.rewardedCount, funnelQuery.data.registeredCount)}
@@ -147,13 +149,14 @@ export default function ReferralReportsPage() {
           ) : (
             <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <motion.div variants={revealItem}>
-                <StatTile label="Wallet credit" value={formatCurrency(costQuery.data.totalWalletCreditCost)} />
+                <StatTile tone="accent" label="Wallet credit" value={formatCurrency(costQuery.data.totalWalletCreditCost)} />
               </motion.div>
               <motion.div variants={revealItem}>
-                <StatTile label="Coupons" value={formatCurrency(costQuery.data.totalCouponCost)} />
+                <StatTile tone="brand" label="Coupons" value={formatCurrency(costQuery.data.totalCouponCost)} />
               </motion.div>
               <motion.div variants={revealItem}>
                 <StatTile
+                  tone="danger"
                   label="Total cost"
                   value={formatCurrency(costQuery.data.totalCost)}
                   hint={`${count(costQuery.data.rewardedReferralCount)} referral rewards · ${count(
@@ -184,7 +187,7 @@ function StatTileSkeleton({ count: tiles }: { count: number }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {Array.from({ length: tiles }, (_, index) => (
-        <div key={index} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+        <div key={index} className="rounded-2xl bg-surface p-5 shadow-sm">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="mt-3 h-8 w-20" />
         </div>

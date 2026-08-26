@@ -116,11 +116,13 @@ export default function BookingConflictsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatTile
+          tone="danger"
           label="Open conflicts"
           value={countQuery.isPending ? "—" : String(countQuery.data?.conflictCount ?? 0)}
           hint="Provider-days with overlapping live jobs, from the start date onward"
         />
         <StatTile
+          tone="brand"
           label="Shown in this range"
           value={listQuery.isPending ? "—" : String(totalCount)}
           hint="Matching the filter below"

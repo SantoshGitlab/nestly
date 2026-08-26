@@ -284,7 +284,7 @@ export default function EditServicePage() {
   ];
 
   if (serviceQuery.isPending) {
-    return <DetailSkeleton cards={3} />;
+    return <DetailSkeleton cards={3} className="flex w-full max-w-5xl flex-col gap-6" />;
   }
 
   if (serviceQuery.error || !serviceQuery.data) {
@@ -295,6 +295,7 @@ export default function EditServicePage() {
         error={serviceQuery.error}
         message={serviceQuery.error ? undefined : "This service no longer exists."}
         onRetry={() => serviceQuery.refetch()}
+        className="w-full max-w-5xl"
       />
     );
   }
@@ -302,7 +303,7 @@ export default function EditServicePage() {
   const service = serviceQuery.data;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <PageHeading
         title={service.name}
         subtitle="Service details — SRS 12.6.2/12.6.3, full field set and option flags."
@@ -353,7 +354,7 @@ export default function EditServicePage() {
       ) : null}
 
       <Card title="Details" description={canWrite ? undefined : "Read-only — you do not hold catalog write access."}>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        <form onSubmit={onSubmit} className="flex max-w-2xl flex-col gap-4" noValidate>
           {updateMutation.isError ? <Alert>{describeError(updateMutation.error)}</Alert> : null}
           {updateMutation.isSuccess ? <Alert tone="success">Service saved.</Alert> : null}
 
@@ -490,7 +491,7 @@ export default function EditServicePage() {
             />
           </FormGrid>
 
-          <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <fieldset className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-medium text-fg">Booking options</legend>
             <CheckboxField
               label="Tax applicable"
@@ -732,7 +733,7 @@ export default function EditServicePage() {
         )}
 
         {canWrite ? (
-          <form onSubmit={onAddMedia} className="mt-5 flex flex-wrap items-end gap-3 border-t border-line pt-5" noValidate>
+          <form onSubmit={onAddMedia} className="mt-5 flex max-w-2xl flex-wrap items-end gap-3 border-t border-line pt-5" noValidate>
             {addMediaMutation.isError ? (
               <div className="w-full">
                 <Alert>{describeError(addMediaMutation.error)}</Alert>

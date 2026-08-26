@@ -214,7 +214,7 @@ export default function AdminRoleDetailPage() {
   ];
 
   if (detailQuery.isPending) {
-    return <DetailSkeleton cards={2} />;
+    return <DetailSkeleton cards={2} className="flex w-full max-w-5xl flex-col gap-6" />;
   }
 
   if (detailQuery.error || !detailQuery.data) {
@@ -225,6 +225,7 @@ export default function AdminRoleDetailPage() {
         error={detailQuery.error}
         message={detailQuery.error ? undefined : "This role no longer exists."}
         onRetry={() => detailQuery.refetch()}
+        className="w-full max-w-5xl"
       />
     );
   }
@@ -236,7 +237,7 @@ export default function AdminRoleDetailPage() {
   const removedCodes = role.permissionCodes.filter((code) => !selectedCodes.has(code));
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <PageHeading
         title={role.name}
         subtitle="Role details and the exact permission-matrix row it grants (SRS 12.2.2, 12.2.3)."
@@ -246,7 +247,7 @@ export default function AdminRoleDetailPage() {
       <Card title="Role" description={canWrite ? undefined : "Read-only — you do not hold settings write access."}>
         <form
           onSubmit={form.handleSubmit((values) => updateMutation.mutate(values))}
-          className="flex flex-col gap-5"
+          className="flex max-w-2xl flex-col gap-5"
           noValidate
         >
           {updateMutation.isError ? <Alert>{describeError(updateMutation.error)}</Alert> : null}

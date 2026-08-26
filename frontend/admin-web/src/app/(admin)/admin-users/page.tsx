@@ -156,7 +156,7 @@ export default function AdminUsersPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Admin users"
         subtitle="Back-office operator accounts: create, assign roles, activate/deactivate and reset passwords (SRS 12.2.1)."
@@ -183,12 +183,16 @@ export default function AdminUsersPage() {
         >
           <Field
             label="Name"
+            name="name"
+            autoComplete="name"
             placeholder="Search by name…"
             value={filters.name}
             onChange={(event) => setFilters((current) => ({ ...current, name: event.target.value }))}
           />
           <Field
             label="Email"
+            name="email"
+            autoComplete="email"
             placeholder="Search by email…"
             value={filters.email}
             onChange={(event) => setFilters((current) => ({ ...current, email: event.target.value }))}

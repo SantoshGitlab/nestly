@@ -6,15 +6,17 @@ import Link from "next/link";
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { Reveal, revealItem } from "@/components/motion";
-import { Alert, Button, Field, PageHeading, Skeleton, StatTile, cx } from "@/components/ui";
+import { Alert, Avatar, Button, Card, DonutChart, Field, KpiCard, PageHeading, Skeleton, cx } from "@/components/ui";
+import type { ChartTone } from "@/components/ui";
 import {
+  Breadcrumbs,
   DataTable,
   FilterBar,
   countActiveFilters,
   formatCurrency,
 } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
-import { BookingStatusBadge } from "@/components/status-badges";
+import { BookingStatusBadge, bookingStatusTone } from "@/components/status-badges";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { searchBookings } from "@/lib/bookings-api";
 import type { AdminBookingListItem } from "@/lib/bookings-types";
@@ -136,6 +138,28 @@ export default function DashboardPage() {
     placeholderData: keepPreviousData,
   });
 
+  // Status mix for the donut below - derived from the same rows the table
+  // renders (never a separate fetch, never invented counts): whatever page
+  // of "recent bookings" is on screen is what the chart summarizes.
+  const statusBreakdown = (() => {
+    const toChartTone = (status: AdminBookingListItem["status"]): ChartTone => {
+      const tone = bookingStatusTone(status);
+      // ChartTone has no "neutral" swatch (dashboard charts are never gray) -
+      // the rare Initiated/Refunded/Expired rows fall back to "info".
+      return tone === "neutral" ? "info" : tone;
+    };
+    const counts = new Map<string, { count: number; tone: ChartTone }>();
+    for (const booking of recentBookings.data?.items ?? []) {
+      const existing = counts.get(booking.statusLabel);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        counts.set(booking.statusLabel, { count: 1, tone: toChartTone(booking.status) });
+      }
+    }
+    return Array.from(counts, ([label, { count, tone }]) => ({ label, value: count, tone }));
+  })();
+
   const applyPreset = (preset: DatePreset) => {
     const range = preset.range();
     setDraftFrom(range.dateFrom);
@@ -174,15 +198,18 @@ export default function DashboardPage() {
       header: "Customer",
       sortValue: (booking) => booking.customerName,
       cell: (booking) => (
-        <>
-          <Link
-            href={`/bookings/${booking.id}`}
-            className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
-          >
-            {booking.customerName}
-          </Link>
-          <div className="nums text-xs text-fg-subtle">{booking.customerMobile}</div>
-        </>
+        <div className="flex items-center gap-3">
+          <Avatar name={booking.customerName} size="sm" />
+          <div className="min-w-0">
+            <Link
+              href={`/bookings/${booking.id}`}
+              className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+            >
+              {booking.customerName}
+            </Link>
+            <div className="nums text-xs text-fg-subtle">{booking.customerMobile}</div>
+          </div>
+        </div>
       ),
     },
     {
@@ -219,10 +246,11 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Dashboard"
         subtitle="Bookings, revenue, cancellations, refunds, and support activity."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Home", href: "/dashboard" }, { label: "Dashboard" }]} />}
       />
 
       <FilterBar
@@ -252,12 +280,16 @@ export default function DashboardPage() {
         <Field label="To" type="date" value={draftTo} onChange={onDraftDateChange(setDraftTo)} />
         <Field
           label="City"
+          name="city"
+          autoComplete="address-level2"
           placeholder="e.g. Bengaluru"
           value={draftCity}
           onChange={(event) => setDraftCity(event.target.value)}
         />
         <Field
           label="Category"
+          name="category"
+          autoComplete="on"
           placeholder="e.g. cleaning"
           value={draftCategory}
           onChange={(event) => setDraftCategory(event.target.value)}
@@ -268,7 +300,7 @@ export default function DashboardPage() {
         {query.isPending ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {Array.from({ length: 5 }, (_, index) => (
-              <div key={index} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+              <div key={index} className="rounded-2xl bg-surface p-5 shadow-sm">
                 <Skeleton className="h-4 w-20" />
                 <Skeleton className="mt-3 h-8 w-24" />
               </div>
@@ -300,27 +332,41 @@ export default function DashboardPage() {
               )}
             >
               <motion.div variants={revealItem}>
-                <StatTile label="Bookings" value={query.data.bookingsCount.toLocaleString("en-IN")} />
+                <KpiCard
+                  icon={<CalendarIcon />}
+                  tone="brand"
+                  label="Bookings"
+                  value={query.data.bookingsCount.toLocaleString("en-IN")}
+                />
               </motion.div>
               <motion.div variants={revealItem}>
-                <StatTile
+                <KpiCard
+                  icon={<RupeeIcon />}
+                  tone="success"
                   label="Revenue"
                   value={formatCurrency(query.data.revenueTotal)}
-                  title={formatCurrency(query.data.revenueTotal)}
                 />
               </motion.div>
               <motion.div variants={revealItem}>
-                <StatTile label="Cancellations" value={query.data.cancellationsCount.toLocaleString("en-IN")} />
+                <KpiCard
+                  icon={<CrossCircleIcon />}
+                  tone="danger"
+                  label="Cancellations"
+                  value={query.data.cancellationsCount.toLocaleString("en-IN")}
+                />
               </motion.div>
               <motion.div variants={revealItem}>
-                <StatTile
+                <KpiCard
+                  icon={<ReturnIcon />}
+                  tone="warning"
                   label="Refund amount"
                   value={formatCurrency(query.data.refundAmountTotal)}
-                  title={formatCurrency(query.data.refundAmountTotal)}
                 />
               </motion.div>
               <motion.div variants={revealItem}>
-                <StatTile
+                <KpiCard
+                  icon={<HeadsetIcon />}
+                  tone="info"
                   label="Open support tickets"
                   value={query.data.openSupportTicketsCount.toLocaleString("en-IN")}
                 />
@@ -329,6 +375,14 @@ export default function DashboardPage() {
           </>
         )}
       </section>
+
+      {canReadBookings && statusBreakdown.length > 0 ? (
+        <div className="mt-6">
+          <Card title="Bookings by status" description="Status mix of the bookings listed below.">
+            <DonutChart data={statusBreakdown} />
+          </Card>
+        </div>
+      ) : null}
 
       {canReadBookings ? (
         <div className="mt-6">
@@ -372,5 +426,62 @@ export default function DashboardPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+const ICON_PROPS = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: "1.75",
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  className: "h-5 w-5",
+  "aria-hidden": true,
+};
+
+function CalendarIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+      <path d="M3.5 9.5h17M8 2.5v4M16 2.5v4" />
+    </svg>
+  );
+}
+
+function RupeeIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M6 4.5h12M6 9.5h12M6 4.5c4 0 6.5 1.5 6.5 4.5S10 13.5 6 13.5h1l7 6.5" />
+    </svg>
+  );
+}
+
+function CrossCircleIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m9.2 9.2 5.6 5.6M14.8 9.2l-5.6 5.6" />
+    </svg>
+  );
+}
+
+function ReturnIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M9 6 4.5 10.5 9 15" />
+      <path d="M4.5 10.5H14a5.5 5.5 0 0 1 5.5 5.5v2" />
+    </svg>
+  );
+}
+
+function HeadsetIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M4 13v-1a8 8 0 0 1 16 0v1" />
+      <rect x="3" y="13" width="4.5" height="6" rx="1.5" />
+      <rect x="16.5" y="13" width="4.5" height="6" rx="1.5" />
+      <path d="M18.5 19v.5a3 3 0 0 1-3 3h-2.4" />
+    </svg>
   );
 }

@@ -55,7 +55,7 @@ export function AuthShell({
           ) : null}
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-6 shadow-md sm:p-7">
+        <div className="rounded-2xl bg-surface p-6 shadow-md sm:p-7">
           {children}
         </div>
 

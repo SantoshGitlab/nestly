@@ -106,7 +106,7 @@ export default function CatalogServiceGroupsPage() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <div>
         <PageHeading title="Catalog" subtitle="Categories, services and add-ons (SRS 12.5-12.7)." />
         <CatalogTabs />

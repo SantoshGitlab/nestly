@@ -160,7 +160,7 @@ export default function ReviewModerationPage() {
   const items = query.data?.items;
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full max-w-5xl">
       <PageHeading
         title="Review Moderation"
         subtitle="View, hide/unhide, flag and export customer reviews (SRS 12.15). The original rating and text are always retained, even once hidden or flagged."
@@ -229,12 +229,16 @@ export default function ReviewModerationPage() {
         />
         <Field
           label="Service ID"
+          name="serviceId"
+          autoComplete="on"
           placeholder="Service GUID"
           value={draft.serviceId}
           onChange={(e) => setDraft((f) => ({ ...f, serviceId: e.target.value }))}
         />
         <Field
           label="Category ID"
+          name="categoryId"
+          autoComplete="on"
           placeholder="Category GUID"
           value={draft.categoryId}
           onChange={(e) => setDraft((f) => ({ ...f, categoryId: e.target.value }))}
@@ -249,7 +253,7 @@ export default function ReviewModerationPage() {
 
         {query.isPending ? (
           Array.from({ length: 4 }, (_, index) => (
-            <div key={index} className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+            <div key={index} className="rounded-2xl bg-surface p-5 shadow-sm">
               <Skeleton className="h-5 w-48" />
               <Skeleton className="mt-3 h-4 w-64" />
               <Skeleton className="mt-4 h-4 w-full" />
@@ -357,7 +361,7 @@ export default function ReviewModerationPage() {
             ))}
 
             {query.data ? (
-              <div className="rounded-2xl border border-line bg-surface px-4 py-3 shadow-sm sm:px-5">
+              <div className="rounded-2xl bg-surface px-4 py-3 shadow-sm sm:px-5">
                 <Pagination
                   page={page}
                   pageSize={PAGE_SIZE}

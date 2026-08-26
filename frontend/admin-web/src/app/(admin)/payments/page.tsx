@@ -147,7 +147,7 @@ export default function PaymentsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Payments"
         subtitle="Every payment transaction, filterable by booking and gateway status - the reconciliation surface for ops (SRS 12.13.1)."
@@ -161,6 +161,8 @@ export default function PaymentsPage() {
       >
         <Field
           label="Booking ID"
+          name="bookingId"
+          autoComplete="on"
           value={filters.bookingId}
           onChange={(e) => setFilters((f) => ({ ...f, bookingId: e.target.value }))}
           placeholder="Exact booking ID"

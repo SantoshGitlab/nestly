@@ -209,7 +209,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full max-w-6xl">
       <PageHeading
         title="Reports & Exports"
         subtitle="Standard admin reports over one shared date range with CSV export, plus an async export queue for large ranges (SRS 12.18)."
@@ -284,10 +284,12 @@ export default function ReportsPage() {
         >
           <StatGrid columns={2}>
             <StatTile
+              tone="brand"
               label="Bookings"
               value={(bookingRevenueQuery.data?.totalBookingsCount ?? 0).toLocaleString("en-IN")}
             />
             <StatTile
+              tone="success"
               label="Revenue"
               value={formatCurrency(bookingRevenueQuery.data?.totalRevenue ?? 0)}
               title={formatCurrency(bookingRevenueQuery.data?.totalRevenue ?? 0)}
@@ -307,10 +309,12 @@ export default function ReportsPage() {
         >
           <StatGrid columns={2}>
             <StatTile
+              tone="danger"
               label="Refunds"
               value={(refundQuery.data?.totalCount ?? 0).toLocaleString("en-IN")}
             />
             <StatTile
+              tone="warning"
               label="Total refunded"
               value={formatCurrency(refundQuery.data?.totalRefundedAmount ?? 0)}
               title={formatCurrency(refundQuery.data?.totalRefundedAmount ?? 0)}
@@ -338,10 +342,12 @@ export default function ReportsPage() {
           <div className="flex flex-col gap-5">
             <StatGrid columns={2}>
               <StatTile
+                tone="brand"
                 label="Redemptions"
                 value={(couponUsageQuery.data?.totalRedemptions ?? 0).toLocaleString("en-IN")}
               />
               <StatTile
+                tone="accent"
                 label="Total discount"
                 value={formatCurrency(couponUsageQuery.data?.totalDiscountAmount ?? 0)}
                 title={formatCurrency(couponUsageQuery.data?.totalDiscountAmount ?? 0)}
@@ -390,6 +396,7 @@ export default function ReportsPage() {
           <div className="flex flex-col gap-5">
             <StatGrid columns={2}>
               <StatTile
+                tone="info"
                 label="Customers registered"
                 value={(segmentationQuery.data?.totalCustomers ?? 0).toLocaleString("en-IN")}
               />
@@ -446,14 +453,17 @@ export default function ReportsPage() {
           <div className="flex flex-col gap-5">
             <StatGrid>
               <StatTile
+                tone="brand"
                 label="Total tickets"
                 value={(supportTicketQuery.data?.totalTickets ?? 0).toLocaleString("en-IN")}
               />
               <StatTile
+                tone="success"
                 label="Resolved or closed"
                 value={(supportTicketQuery.data?.resolvedCount ?? 0).toLocaleString("en-IN")}
               />
               <StatTile
+                tone="info"
                 label="Avg. resolution time"
                 value={
                   supportTicketQuery.data?.averageResolutionHours == null

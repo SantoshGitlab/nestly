@@ -210,7 +210,7 @@ export default function SupportTicketDetailPage() {
   };
 
   if (detailQuery.isPending) {
-    return <DetailSkeleton cards={4} className="mx-auto flex w-full max-w-4xl flex-col gap-6" />;
+    return <DetailSkeleton cards={4} className="flex w-full max-w-7xl flex-col gap-6" />;
   }
 
   if (detailQuery.isError || !ticket) {
@@ -220,7 +220,7 @@ export default function SupportTicketDetailPage() {
         breadcrumbs={BREADCRUMBS}
         error={detailQuery.error}
         onRetry={() => detailQuery.refetch()}
-        className="mx-auto w-full max-w-4xl"
+        className="w-full max-w-7xl"
       />
     );
   }
@@ -228,7 +228,7 @@ export default function SupportTicketDetailPage() {
   const isClosed = ticket.status === SupportTicketStatus.Closed;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
         title={ticket.subject}
         subtitle={`${ticket.customerName} · ${categoryLabel(ticket.category)}`}
@@ -383,7 +383,7 @@ export default function SupportTicketDetailPage() {
                   {describeError(assignableAdminsQuery.error)}
                 </Alert>
               ) : null}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Select
                     label="Assign to"
@@ -428,7 +428,7 @@ export default function SupportTicketDetailPage() {
           </div>
 
           {canResolve(ticket.status) ? (
-            <form onSubmit={onResolve} className="mt-5 flex flex-col gap-3 border-t border-line pt-5">
+            <form onSubmit={onResolve} className="mt-5 flex max-w-2xl flex-col gap-3 border-t border-line pt-5">
               {resolveMutation.isError ? <Alert>{describeError(resolveMutation.error)}</Alert> : null}
               <Textarea
                 label="Resolution summary"
@@ -468,7 +468,7 @@ export default function SupportTicketDetailPage() {
         )}
 
         {canWrite && !isClosed ? (
-          <form onSubmit={onRespond} className="mt-5 flex flex-col gap-3 border-t border-line pt-5">
+          <form onSubmit={onRespond} className="mt-5 flex max-w-2xl flex-col gap-3 border-t border-line pt-5">
             {respondMutation.isError ? <Alert>{describeError(respondMutation.error)}</Alert> : null}
             <Textarea
               label="Add a response"

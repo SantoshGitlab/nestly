@@ -140,6 +140,9 @@
   body {
     background-color: rgb(var(--bg));
     color: rgb(var(--fg));
+    /* --font-geist-sans now loads Manrope (see app/layout.tsx) - matching the
+       MatDash reference's typeface. The CSS variable kept its Geist-era name
+       to avoid touching every call site; only the font it resolves to changed. */
     font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
       "Segoe UI", Roboto, sans-serif;
     /* Comfortable base reading rhythm; headings/utilities tighten from here. */

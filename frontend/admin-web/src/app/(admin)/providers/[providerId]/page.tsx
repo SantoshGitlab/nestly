@@ -350,7 +350,7 @@ export default function ProviderDetailPage() {
   ];
 
   if (detailQuery.isPending) {
-    return <DetailSkeleton cards={4} className="mx-auto flex w-full max-w-4xl flex-col gap-6" />;
+    return <DetailSkeleton cards={4} className="flex w-full max-w-7xl flex-col gap-6" />;
   }
 
   if (detailQuery.isError) {
@@ -360,7 +360,7 @@ export default function ProviderDetailPage() {
         breadcrumbs={breadcrumbs}
         error={detailQuery.error}
         onRetry={() => detailQuery.refetch()}
-        className="mx-auto w-full max-w-4xl"
+        className="w-full max-w-7xl"
       />
     );
   }
@@ -371,7 +371,7 @@ export default function ProviderDetailPage() {
     (provider.onboardingStatus === ProviderOnboardingStatus.KycVerified || provider.onboardingStatus === ProviderOnboardingStatus.Completed);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
         title={provider.displayName}
         subtitle={`${provider.phone}${provider.email ? ` · ${provider.email}` : ""}`}
@@ -629,7 +629,7 @@ export default function ProviderDetailPage() {
         )}
 
         {canWriteProvider ? (
-          <div className="mt-5 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end">
+          <div className="mt-5 flex max-w-2xl flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end">
             <Select
               label="Outcome"
               value={bgStatus}
@@ -653,7 +653,7 @@ export default function ProviderDetailPage() {
         {performanceQuery.isPending ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }, (_, index) => (
-              <div key={index} className="rounded-2xl border border-line bg-surface p-5">
+              <div key={index} className="rounded-2xl bg-surface p-5">
                 <SkeletonText lines={2} />
               </div>
             ))}
@@ -663,22 +663,22 @@ export default function ProviderDetailPage() {
         ) : (
           <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <motion.div variants={revealItem}>
-              <StatTile label="Total assignments" value={String(performanceQuery.data.totalAssignments)} />
+              <StatTile tone="brand" label="Total assignments" value={String(performanceQuery.data.totalAssignments)} />
             </motion.div>
             <motion.div variants={revealItem}>
-              <StatTile label="Accepted" value={String(performanceQuery.data.acceptedAssignments)} />
+              <StatTile tone="success" label="Accepted" value={String(performanceQuery.data.acceptedAssignments)} />
             </motion.div>
             <motion.div variants={revealItem}>
-              <StatTile label="Rejected" value={String(performanceQuery.data.rejectedAssignments)} />
+              <StatTile tone="danger" label="Rejected" value={String(performanceQuery.data.rejectedAssignments)} />
             </motion.div>
             <motion.div variants={revealItem}>
-              <StatTile label="Completed jobs" value={String(performanceQuery.data.completedJobs)} />
+              <StatTile tone="success" label="Completed jobs" value={String(performanceQuery.data.completedJobs)} />
             </motion.div>
             <motion.div variants={revealItem}>
-              <StatTile label="In-progress jobs" value={String(performanceQuery.data.inProgressJobs)} />
+              <StatTile tone="info" label="In-progress jobs" value={String(performanceQuery.data.inProgressJobs)} />
             </motion.div>
             <motion.div variants={revealItem}>
-              <StatTile label="Lifetime earnings" value={formatCurrency(performanceQuery.data.lifetimeEarnings)} />
+              <StatTile tone="accent" label="Lifetime earnings" value={formatCurrency(performanceQuery.data.lifetimeEarnings)} />
             </motion.div>
           </Reveal>
         )}
@@ -723,7 +723,7 @@ export default function ProviderDetailPage() {
         )}
 
         {canWritePayout ? (
-          <div className="mt-5 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end">
+          <div className="mt-5 flex max-w-2xl flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end">
             <Select
               label="Type"
               value={adjustmentType}
@@ -837,7 +837,7 @@ export default function ProviderDetailPage() {
         )}
 
         {canWritePayout ? (
-          <div className="mt-5 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end">
+          <div className="mt-5 flex max-w-2xl flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-end">
             <Field label="Period start" type="date" value={payoutPeriodStart} onChange={(e) => setPayoutPeriodStart(e.target.value)} />
             <Field label="Period end" type="date" value={payoutPeriodEnd} onChange={(e) => setPayoutPeriodEnd(e.target.value)} />
             <Button

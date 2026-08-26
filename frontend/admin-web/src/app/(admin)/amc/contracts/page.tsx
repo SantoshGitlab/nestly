@@ -138,7 +138,7 @@ export default function AmcContractsPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="w-full max-w-7xl">
       <PageHeading
         title="Bookings"
         subtitle="AMC contracts: prepaid entitlement to a fixed number of service visits, drawn down as the customer redeems them."
@@ -161,6 +161,8 @@ export default function AmcContractsPage() {
           />
           <Field
             label="Customer"
+            name="customerSearch"
+            autoComplete="name"
             placeholder="Name or mobile number"
             value={filters.customerSearch}
             onChange={(e) => setFilters((f) => ({ ...f, customerSearch: e.target.value }))}
