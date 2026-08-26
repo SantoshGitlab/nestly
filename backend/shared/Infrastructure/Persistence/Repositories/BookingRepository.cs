@@ -150,6 +150,16 @@ public class BookingRepository : IBookingRepository
             query = query.Where(b => b.Id == filter.BookingId.Value);
         }
 
+        // Substring, not exact match: an admin pasting from a support chat or
+        // reading it off a screenshot may only have part of it, or extra
+        // whitespace around it - same tolerance CustomerName/CustomerMobile
+        // already get below.
+        if (!string.IsNullOrWhiteSpace(filter.Reference))
+        {
+            string term = filter.Reference.Trim().ToLower();
+            query = query.Where(b => b.BookingReference.ToLower().Contains(term));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.CustomerName))
         {
             string term = filter.CustomerName.ToLower();

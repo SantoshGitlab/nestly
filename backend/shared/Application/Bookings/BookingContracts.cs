@@ -223,7 +223,10 @@ public record BookingDetailResponse(
     BookingProviderSummary? Provider,
     // Wallet balance applied at checkout (task 310), mirroring
     // Domain.Booking.WalletCreditAppliedSnapshot. Null when none was applied.
-    decimal? WalletCreditApplied = null);
+    decimal? WalletCreditApplied = null,
+    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // doc comment. What the customer reads/quotes, never the GUID in Id.
+    string Reference = "");
 
 /// <summary>A row in the booking list (SRS 11.13, task 60b) - a lighter shape than the detail, for a list screen.</summary>
 public record BookingListItemResponse(
@@ -233,7 +236,10 @@ public record BookingListItemResponse(
     decimal TotalPayable,
     BookingStatus Status,
     string StatusLabel,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // doc comment. Appended last: this is a positional record.
+    string Reference);
 
 /// <summary>A page of the customer's own booking list, newest first, plus the total match count for that bucket - the same Items/TotalCount/Page/PageSize shape the admin booking search already uses.</summary>
 public record BookingListResponse(IReadOnlyList<BookingListItemResponse> Items, int TotalCount, int Page, int PageSize);

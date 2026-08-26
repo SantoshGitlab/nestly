@@ -500,7 +500,8 @@ public class BookingService : IBookingService
         booking.TotalPayableSnapshot,
         booking.Status,
         BookingStatusMapper.LabelFor(booking.Status),
-        booking.CreatedAtUtc);
+        booking.CreatedAtUtc,
+        booking.BookingReference);
 
     /// <summary>
     /// Who is coming, for a booking that has a live assignment (task 275).
@@ -575,6 +576,7 @@ public class BookingService : IBookingService
             booking.TotalPayableSnapshot,
             providerAssignmentStatus,
             provider,
-            booking.WalletCreditAppliedSnapshot);
+            booking.WalletCreditAppliedSnapshot,
+            booking.BookingReference);
     }
 }

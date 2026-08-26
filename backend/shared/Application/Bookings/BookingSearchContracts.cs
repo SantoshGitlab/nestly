@@ -25,7 +25,8 @@ public sealed record BookingSearchFilter(
     Guid? CategoryId,
     string? CouponCode,
     int Page,
-    int PageSize);
+    int PageSize,
+    string? Reference = null);
 
 /// <summary>A page of admin booking search results, with the loaded aggregates and the total match count.</summary>
 public sealed record BookingSearchResult(IReadOnlyList<Booking> Rows, int TotalCount);

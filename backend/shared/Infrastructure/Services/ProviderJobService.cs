@@ -120,7 +120,8 @@ public class ProviderJobService : IProviderJobService
                 // than one that throws the whole list away.
                 booking.RecurringBookingPlanId is { } planId && frequencyByPlanId.TryGetValue(planId, out var frequency)
                     ? frequency
-                    : null));
+                    : null,
+                booking.BookingReference));
         }
 
         return new ProviderJobSearchResponse(items);
@@ -555,7 +556,8 @@ public class ProviderJobService : IProviderJobService
         assignment.RespondedAt,
         assignment.ResponseDeadline,
         assignment.Notes,
-        assignment.CompletionProofRef);
+        assignment.CompletionProofRef,
+        booking.BookingReference);
 
     /// <summary>
     /// Privacy gate for the customer's phone number(s): a provider can see a

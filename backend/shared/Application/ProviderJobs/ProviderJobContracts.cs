@@ -85,7 +85,10 @@ public sealed record ProviderJobSummaryResponse(
     DateTime AssignedAt,
     DateTime? ResponseDeadline,
     Guid? RecurringBookingPlanId,
-    RecurringBookingRecurrenceFrequency? RecurringFrequency);
+    RecurringBookingRecurrenceFrequency? RecurringFrequency,
+    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // doc comment. Appended last: this is a positional record.
+    string BookingReference);
 
 public sealed record ProviderJobSearchResponse(IReadOnlyList<ProviderJobSummaryResponse> Items);
 
@@ -114,7 +117,10 @@ public sealed record ProviderJobDetailResponse(
     DateTime? RespondedAt,
     DateTime? ResponseDeadline,
     string? Notes,
-    string? CompletionProofRef);
+    string? CompletionProofRef,
+    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // doc comment. Appended last: this is a positional record.
+    string BookingReference);
 
 /// <summary>Provider rejects an offered job (task 149a "reject job"), same shape as the admin-facing <c>RejectAssignmentRequest</c>.</summary>
 public sealed record RejectJobRequest(string? Reason);

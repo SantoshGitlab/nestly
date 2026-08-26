@@ -19,7 +19,12 @@ public sealed record AdminBookingSearchRequest(
     Guid? CategoryId,
     string? CouponCode,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    // Short human-facing code ("NST-260825-K7F3M") or any substring of one -
+    // see Booking.BookingReference's doc comment. Separate from BookingId
+    // (exact GUID match) rather than replacing it: existing API callers that
+    // already search by GUID keep working unchanged.
+    string? Reference = null);
 
 /// <summary>One row of the admin booking list - a lighter shape than the detail (SRS 12.11.1).</summary>
 public sealed record AdminBookingListItemResponse(
@@ -33,7 +38,10 @@ public sealed record AdminBookingListItemResponse(
     string StatusLabel,
     decimal TotalPayable,
     string? CouponCode,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // doc comment. Appended last: this is a positional record.
+    string Reference);
 
 public sealed record AdminBookingSearchResponse(IReadOnlyList<AdminBookingListItemResponse> Items, int TotalCount, int Page, int PageSize);
 
@@ -109,7 +117,10 @@ public sealed record AdminBookingDetailResponse(
     AdminBookingCancellationResponse? Cancellation,
     IReadOnlyList<AdminBookingRescheduleResponse> Reschedules,
     IReadOnlyList<AdminBookingRefundResponse> Refunds,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // doc comment. Appended last: this is a positional record.
+    string Reference);
 
 // ---- Actions (SRS 12.11.3, tasks 115d, 117a-c) ----
 

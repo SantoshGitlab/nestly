@@ -15,6 +15,12 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(x => x.Status).IsRequired().HasConversion<string>().HasMaxLength(30);
         builder.Property(x => x.CreatedAtUtc).IsRequired();
 
+        // "NST-YYMMDD-XXXXX" - see the property's doc comment on Booking.
+        // Unique, not just indexed: two bookings sharing a reference would be
+        // a support/search collision, not merely a slow query.
+        builder.Property(x => x.BookingReference).IsRequired().HasMaxLength(20);
+        builder.HasIndex(x => x.BookingReference).IsUnique();
+
         builder.Property(x => x.CustomerId).IsRequired();
         builder.HasOne<Customer>()
             .WithMany()

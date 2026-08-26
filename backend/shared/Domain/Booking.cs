@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Nestly.BuildingBlocks.Primitives;
 using Nestly.Domain.Events;
 
@@ -134,6 +135,17 @@ public class Booking : AggregateRoot<Guid>
     public DateTime CreatedAtUtc { get; private set; }
 
     /// <summary>
+    /// Short human-facing booking code (e.g. "NST-260825-K7F3M"), distinct
+    /// from <see cref="AggregateRoot{TId}.Id"/> - the GUID stays the real
+    /// primary key everywhere internally (URLs, foreign keys, API calls);
+    /// this is only ever what a customer reads over the phone, a support
+    /// agent searches by, or an invoice prints. Generated once here, at
+    /// construction, from the same instant as <see cref="CreatedAtUtc"/> -
+    /// never regenerated, never exposed as editable.
+    /// </summary>
+    public string BookingReference { get; private set; } = string.Empty;
+
+    /// <summary>
     /// Denormalized display field only (PROVIDER.md SCOPE BOUNDARY: "one
     /// denormalized display field (assigned_provider_id) on booking"). The
     /// authoritative record of who was assigned, by whom, and how they
@@ -226,6 +238,7 @@ public class Booking : AggregateRoot<Guid>
 
         Status = BookingStatus.Initiated;
         CreatedAtUtc = DateTime.UtcNow;
+        BookingReference = GenerateReference(CreatedAtUtc);
         RecordStatusHistory(null, BookingStatus.Initiated, reason: null);
         RaiseDomainEvent(new BookingCreatedEvent(Id, CustomerId));
     }
@@ -440,4 +453,31 @@ public class Booking : AggregateRoot<Guid>
 
     private void RecordStatusHistory(BookingStatus? from, BookingStatus to, string? reason) =>
         _statusHistory.Add(new BookingStatusHistory(Guid.NewGuid(), Id, from, to, reason, DateTime.UtcNow));
+
+    // Excludes 0/O/1/I - the four glyphs that get misread over a phone call or
+    // a low-res screenshot, the two situations this reference exists for.
+    private const string ReferenceAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+    /// <summary>
+    /// "NST-YYMMDD-XXXXX": brand prefix, creation date (sorts and reads
+    /// chronologically at a glance), then a 5-character random suffix from a
+    /// 32-symbol alphabet - roughly 33.5M combinations per day, which makes a
+    /// same-day collision astronomically unlikely at this product's volume
+    /// without needing a DB round-trip to check. No retry-on-collision here
+    /// for the same reason IdempotencyKey's doc comment gives for not
+    /// worrying about it: the risk this is guarding against is negligible,
+    /// and BookingConfiguration's unique index is the actual backstop if it
+    /// is ever wrong.
+    /// </summary>
+    private static string GenerateReference(DateTime createdAtUtc)
+    {
+        Span<byte> randomBytes = stackalloc byte[5];
+        RandomNumberGenerator.Fill(randomBytes);
+        Span<char> suffix = stackalloc char[5];
+        for (int i = 0; i < suffix.Length; i++)
+        {
+            suffix[i] = ReferenceAlphabet[randomBytes[i] % ReferenceAlphabet.Length];
+        }
+        return $"NST-{createdAtUtc:yyMMdd}-{new string(suffix)}";
+    }
 }

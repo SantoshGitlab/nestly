@@ -130,7 +130,8 @@ public class BookingManagementService : IBookingManagementService
             request.CategoryId,
             request.CouponCode,
             request.Page,
-            request.PageSize);
+            request.PageSize,
+            request.Reference);
 
         var result = await _bookingRepository.SearchAsync(filter);
 
@@ -327,7 +328,8 @@ public class BookingManagementService : IBookingManagementService
                 r.Id, r.Actor, r.Reason, r.FromSlotDate, r.FromSlotStartTime, r.ToSlotDate, r.ToSlotStartTime, r.IsLate, r.FeeAmount, r.CreatedAtUtc)).ToList(),
             refunds.Select(r => new AdminBookingRefundResponse(
                 r.Id, r.FundingSource, r.Type, r.Method, r.Amount, r.Status, r.GatewayRefundRef, r.Reason, r.CreatedAtUtc, r.ProcessedAtUtc)).ToList(),
-            booking.CreatedAtUtc);
+            booking.CreatedAtUtc,
+            booking.BookingReference);
     }
 
     private static AdminBookingListItemResponse ToListItem(Booking booking) => new(
@@ -341,5 +343,6 @@ public class BookingManagementService : IBookingManagementService
         BookingStatusMapper.LabelFor(booking.Status),
         booking.TotalPayableSnapshot,
         booking.CouponCodeSnapshot,
-        booking.CreatedAtUtc);
+        booking.CreatedAtUtc,
+        booking.BookingReference);
 }

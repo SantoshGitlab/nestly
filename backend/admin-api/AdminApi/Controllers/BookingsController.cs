@@ -101,11 +101,12 @@ public class BookingsController : ControllerBase
         [FromQuery] Guid? categoryId,
         [FromQuery] string? couponCode,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? reference = null)
     {
         var request = new AdminBookingSearchRequest(
             bookingId, customerName, customerMobile, status, city, slotDateFrom, slotDateTo,
-            createdFromUtc, createdToUtc, serviceId, categoryId, couponCode, page, pageSize);
+            createdFromUtc, createdToUtc, serviceId, categoryId, couponCode, page, pageSize, reference);
 
         var validation = await _searchValidator.ValidateAsync(request);
         if (!validation.IsValid)
