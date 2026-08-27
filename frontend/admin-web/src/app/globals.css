@@ -40,7 +40,10 @@
   --accent-700: 180 83 9;
 
   /* Semantic surfaces — light theme */
-  --bg: 250 250 252;
+  /* Matched exactly to the MatDash reference's tinted content canvas
+     (`.bg-lightgray`, computed rgb(244 247 251)) - the page background
+     behind every card, not the white column behind the header. */
+  --bg: 244 247 251;
   --surface: 255 255 255;
   --surface-2: 246 247 250;
   --surface-3: 239 241 246;
@@ -75,7 +78,14 @@
   /* Elevation. Layered rather than single-blur — a soft ambient shadow plus a
      tighter contact shadow is what separates "premium" from "drop shadow". */
   --shadow-xs: 0 1px 2px rgb(16 20 32 / 0.05);
-  --shadow-sm: 0 1px 2px rgb(16 20 32 / 0.04), 0 2px 6px -1px rgb(16 20 32 / 0.06);
+  /* Matched exactly to the MatDash reference's `.card` shadow (computed
+     `rgba(175, 182, 201, 0.2) 0px 2px 4px -1px`) - a cool gray-blue tint
+     rather than near-black, which is what makes a borderless white card
+     read as "floating" on this page's light gray canvas instead of merely
+     looking dirty. Every card-shaped surface in the app (`Card`, `KpiCard`,
+     `StatTile`, `PageHeading`, `FilterBar`, `DataTable`'s wrapper, ...)
+     shares this one token. */
+  --shadow-sm: 0 2px 4px -1px rgb(175 182 201 / 0.2);
   --shadow-md: 0 2px 4px -1px rgb(16 20 32 / 0.05), 0 8px 20px -6px rgb(16 20 32 / 0.10);
   --shadow-lg: 0 4px 8px -4px rgb(16 20 32 / 0.06), 0 16px 40px -12px rgb(16 20 32 / 0.16);
   --shadow-xl: 0 8px 16px -8px rgb(16 20 32 / 0.08), 0 28px 64px -16px rgb(16 20 32 / 0.22);

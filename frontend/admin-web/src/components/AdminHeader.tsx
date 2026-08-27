@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cx } from "@/components/ui";
 import { API_V1, apiFetch } from "@/lib/api";
@@ -88,6 +90,7 @@ export function AdminHeader({
 
       <div className="flex-1" />
 
+      <NotificationBell />
       <ThemeToggle />
 
       <div ref={menuRef} className="relative">
@@ -96,12 +99,12 @@ export function AdminHeader({
           onClick={() => setMenuOpen((current) => !current)}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2 text-sm text-fg shadow-xs transition-colors duration-fast ease-out hover:border-line-strong hover:bg-surface-2"
+          aria-label="Account"
+          className="flex items-center gap-1"
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-fg-on-brand">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-fg-on-brand">
             {initial}
           </span>
-          <span className="hidden max-w-[12rem] truncate sm:inline">{email ?? "Account"}</span>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -109,7 +112,7 @@ export function AdminHeader({
             strokeWidth="2"
             strokeLinecap="round"
             className={cx(
-              "h-3.5 w-3.5 text-fg-subtle transition-transform duration-fast",
+              "h-3 w-3 text-fg-subtle transition-transform duration-fast",
               menuOpen && "rotate-180",
             )}
             aria-hidden
@@ -121,23 +124,47 @@ export function AdminHeader({
         {menuOpen ? (
           <div
             role="menu"
-            className="absolute right-0 top-full z-50 mt-2 w-60 animate-pop overflow-hidden rounded-xl border border-line bg-surface p-1.5 shadow-lg"
+            aria-label="Account"
+            className="absolute right-0 top-full z-50 mt-2 w-[360px] max-w-[calc(100vw-2rem)] animate-pop overflow-hidden rounded-sm bg-surface pb-4 shadow-sm"
           >
-            <div className="px-3 py-2">
-              <p className="truncate text-sm font-medium text-fg">{email ?? "Signed in"}</p>
-              {claims?.role ? (
-                <p className="mt-0.5 text-xs text-fg-muted">{claims.role}</p>
-              ) : null}
+            <div className="mt-5 mb-3 flex items-center gap-4 border-b border-line px-6 pb-5">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-600 text-lg font-semibold text-fg-on-brand">
+                {initial}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-fg">{email ?? "Signed in"}</p>
+                {claims?.role ? (
+                  <p className="mt-0.5 truncate text-sm text-fg-muted">{claims.role}</p>
+                ) : null}
+              </div>
             </div>
-            <div className="my-1 border-t border-line" />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={signOut}
-              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors duration-fast ease-out hover:bg-danger-soft"
-            >
-              Sign out
-            </button>
+
+            <div className="px-6">
+              <Link
+                href="/settings"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-md px-3 py-2 text-sm text-fg transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-brand-600"
+              >
+                My Profile
+              </Link>
+              <Link
+                href="/settings"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-md px-3 py-2 text-sm text-fg transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-brand-600"
+              >
+                Account Settings
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={signOut}
+                className="block w-full rounded-md px-3 py-2 text-left text-sm text-fg transition-colors duration-fast ease-out hover:bg-surface-2 hover:text-brand-600"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         ) : null}
       </div>

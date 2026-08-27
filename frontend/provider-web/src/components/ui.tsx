@@ -385,17 +385,24 @@ export function EmptyState({
 
 /**
  * One control skin for input/select/textarea so a form reads as a single
- * system. The focus treatment is a ring plus a border shift rather than the
- * browser default outline, and invalid controls carry it in the danger tone.
+ * system, matched to the MatDash/shadcn form-input reference
+ * (matdash-nextjs-minisidebar.vercel.app/shadcn-form/input): flat (no
+ * shadow), a plain 1px border with no hover-darken, and a focus state that
+ * is a border-color shift alone - no glow ring - unlike this kit's other
+ * focus treatments. Invalid controls carry the same flat, ring-less
+ * language in the danger tone.
  */
 // Radius matched to the MatDash reference's form controls (computed
 // `border-radius: 6px`, i.e. this scale's `sm`) - distinct from `Button`'s
-// `rounded-lg`, which already matches MatDash's 12px button radius.
+// own reference-matched radius (9px, see BUTTON_VARIANTS' comment).
 const CONTROL_BASE =
-  "w-full rounded-sm border bg-surface px-3 py-2 text-sm text-fg shadow-xs outline-none transition duration-fast ease-out placeholder:text-fg-subtle disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-subtle";
-const CONTROL_IDLE =
-  "border-line hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25";
-const CONTROL_INVALID = "border-danger focus:border-danger focus:ring-2 focus:ring-danger/25";
+  "w-full rounded-sm border bg-surface px-3 py-2 text-sm text-fg outline-none transition duration-fast ease-out placeholder:text-fg-subtle disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-subtle";
+// h-10 (the reference's fixed 40px) is appended only where a control is
+// single-line (Field/Select) - Textarea keeps CONTROL_BASE's height auto so
+// its `rows` prop still controls its size.
+const CONTROL_FIXED_HEIGHT = "h-10";
+const CONTROL_IDLE = "border-line focus:border-brand-600";
+const CONTROL_INVALID = "border-danger focus:border-danger";
 
 /** Shared label/hint/error scaffolding so every control is described identically. */
 function FieldShell({
@@ -414,7 +421,7 @@ function FieldShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <label htmlFor={id} className="text-sm font-semibold text-fg">
         {label}
         {required ? (
@@ -481,6 +488,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
       aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
       className={cx(
         CONTROL_BASE,
+        CONTROL_FIXED_HEIGHT,
         error ? CONTROL_INVALID : CONTROL_IDLE,
         Boolean(leading) && "pl-9",
         className,
@@ -582,6 +590,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           aria-describedby={error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined}
           className={cx(
             CONTROL_BASE,
+            CONTROL_FIXED_HEIGHT,
             // Room for the custom chevron; the native one is hidden so the
             // control matches Field/Textarea across platforms.
             "appearance-none pr-9",
@@ -695,13 +704,24 @@ export function CheckboxField({
 /* Actions                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// Shape matched to the MatDash/shadcn reference's button page
+// (matdash-nextjs-minisidebar.vercel.app/shadcn-ui/buttons: computed
+// `border-radius: 9px`, h-10/px-4/py-2/text-sm on every variant - see the
+// base `Button` className below for the radius/sizing match). The reference
+// itself is flat (`box-shadow: none` on every variant, solid-fill Basic
+// buttons with only a background-color hover shift). Rather than flatten
+// Nestly's buttons to match that exactly, the design call here is to keep
+// this kit's existing brand-glow depth and layer a hover "lift" on top of
+// the reference's crisper corners - more decorative than the flat
+// reference, not less, while still reading as the same visual family as
+// the now-matched inputs/cards.
 const BUTTON_VARIANTS = {
   primary:
-    "bg-brand-600 text-fg-on-brand shadow-brand hover:bg-brand-700 active:bg-brand-800 disabled:shadow-none",
+    "bg-brand-600 text-fg-on-brand shadow-brand hover:bg-brand-700 hover:shadow-lg active:bg-brand-800 active:shadow-brand disabled:shadow-none",
   secondary:
-    "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2 active:bg-surface-3",
+    "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2 hover:shadow-sm active:bg-surface-3 active:shadow-xs",
   danger:
-    "bg-danger text-white shadow-xs hover:brightness-95 active:brightness-90 dark:text-bg",
+    "bg-danger text-white shadow-xs hover:brightness-95 hover:shadow-md active:brightness-90 active:shadow-xs dark:text-bg",
   ghost: "text-fg-muted hover:bg-surface-3 hover:text-fg active:bg-surface-3",
   subtle:
     "bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:hover:bg-brand-500/25",
@@ -748,7 +768,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cx(
-        "inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg font-medium transition duration-fast ease-out",
+        "inline-flex select-none items-center justify-center whitespace-nowrap rounded-[9px] font-medium transition duration-fast ease-out",
         "disabled:cursor-not-allowed disabled:opacity-55",
         // Tiny scale on press reads as physical without moving layout.
         "active:scale-[0.98] disabled:active:scale-100",
@@ -784,7 +804,7 @@ export function IconButton({
       className={cx(
         // 36px box is short of the 44px touch-target minimum; same hit-slop
         // approach as BUTTON_SIZES keeps the icon chip's visual size intact.
-        "relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition duration-fast ease-out disabled:cursor-not-allowed disabled:opacity-55 after:absolute after:-inset-1 after:content-['']",
+        "relative inline-flex h-9 w-9 items-center justify-center rounded-[9px] transition duration-fast ease-out disabled:cursor-not-allowed disabled:opacity-55 after:absolute after:-inset-1 after:content-['']",
         BUTTON_VARIANTS[variant],
         className,
       )}
