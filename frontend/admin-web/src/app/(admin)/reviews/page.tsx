@@ -12,6 +12,7 @@ import {
 } from "@/components/data-table";
 import { SectionError } from "@/components/screen-states";
 import { API_V1, apiFetch, apiFetchBlob, describeError } from "@/lib/api";
+import { listCategories, listServices } from "@/lib/catalog-api";
 import { canWriteModule } from "@/lib/permissions";
 import {
   DEFAULT_REVIEW_MODERATION_FILTERS,
@@ -71,6 +72,23 @@ export default function ReviewModerationPage() {
   const [pendingHide, setPendingHide] = useState<ReviewModerationItem | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Real category/service lists to suggest against the Category ID / Service
+  // ID fields, which stay plain GUID text inputs (never dropdowns) -
+  // ReviewRepository.SearchAsync matches both as exact FK GUIDs
+  // (criteria.CategoryId/ServiceId), exposed here as <datalist>s so the admin
+  // can pick a real name and still see/paste the GUID the field submits.
+  const categoriesQuery = useQuery({
+    queryKey: ["catalog-categories"],
+    queryFn: listCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const servicesQuery = useQuery({
+    queryKey: ["catalog-services"],
+    queryFn: () => listServices(),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const query = useQuery({
     queryKey: ["admin-reviews", applied, page],
@@ -231,18 +249,37 @@ export default function ReviewModerationPage() {
           label="Service ID"
           name="serviceId"
           autoComplete="on"
+          list="reviews-service-suggestions"
           placeholder="Service GUID"
           value={draft.serviceId}
           onChange={(e) => setDraft((f) => ({ ...f, serviceId: e.target.value }))}
         />
+        {/* Options only appear once the admin has typed something - an empty
+            field must not pop the entire service list on click. */}
+        <datalist id="reviews-service-suggestions">
+          {draft.serviceId.trim()
+            ? (servicesQuery.data ?? [])
+                .filter((service) => {
+                  const term = draft.serviceId.trim().toLowerCase();
+                  return service.name.toLowerCase().includes(term) || service.id.toLowerCase().includes(term);
+                })
+                .map((service) => <option key={service.id} value={service.id} label={service.name} />)
+            : null}
+        </datalist>
         <Field
           label="Category ID"
           name="categoryId"
           autoComplete="on"
+          list="reviews-category-suggestions"
           placeholder="Category GUID"
           value={draft.categoryId}
           onChange={(e) => setDraft((f) => ({ ...f, categoryId: e.target.value }))}
         />
+        <datalist id="reviews-category-suggestions">
+          {(categoriesQuery.data ?? []).map((category) => (
+            <option key={category.id} value={category.id} label={category.name} />
+          ))}
+        </datalist>
       </FilterBar>
 
       <div className="mt-6 flex flex-col gap-4">

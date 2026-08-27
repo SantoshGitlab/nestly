@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { Button, Field, PageHeading, Select, Tabs } from "@/components/ui";
@@ -43,6 +43,26 @@ export default function ReferralsPage() {
   const [filters, setFilters] = useState<ReferralFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<ReferralFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+
+  // Live typeahead for Customer - reuses the same searchReferrals call the
+  // list below uses, same pattern as bookings/page.tsx's Booking #
+  // suggestions. Suggests both referrer and referee names since the field
+  // searches across both.
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(
+      () => setDebouncedCustomerSearch(filters.customerSearch.trim()),
+      300,
+    );
+    return () => window.clearTimeout(handle);
+  }, [filters.customerSearch]);
+
+  const customerSuggestionsQuery = useQuery({
+    queryKey: ["referrals", "customer-suggestions", debouncedCustomerSearch] as const,
+    queryFn: () => searchReferrals({ customerSearch: debouncedCustomerSearch, page: 1, pageSize: 8 }),
+    enabled: debouncedCustomerSearch.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const referralsQuery = useQuery({
     // The applied filters, not the live ones: the previous screen re-fetched on
@@ -148,12 +168,19 @@ export default function ReferralsPage() {
               label="Customer"
               name="customerSearch"
               autoComplete="name"
+              list="referral-customer-suggestions"
               placeholder="Referrer or referee name…"
               value={filters.customerSearch}
               onChange={(event) =>
                 setFilters((current) => ({ ...current, customerSearch: event.target.value }))
               }
             />
+            <datalist id="referral-customer-suggestions">
+              {(customerSuggestionsQuery.data?.items ?? []).flatMap((referral) => [
+                <option key={`${referral.id}-referrer`} value={referral.referrerName} />,
+                <option key={`${referral.id}-referee`} value={referral.refereeName} />,
+              ])}
+            </datalist>
             <Select
               label="Status"
               options={STATUS_FILTER_OPTIONS}

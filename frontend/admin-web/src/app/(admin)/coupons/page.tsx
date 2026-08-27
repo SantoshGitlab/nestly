@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card, Field, PageHeading, Select } from "@/components/ui";
 import { FilterBar, Pagination, countActiveFilters } from "@/components/data-table";
 import { describeError } from "@/lib/api";
@@ -45,6 +45,21 @@ export default function CouponsPage() {
 
   const canWrite = canWriteModule(claims, "coupons");
   const queryClient = useQueryClient();
+
+  // Live typeahead for Code - reuses the same searchCoupons call the list
+  // below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  const [debouncedCode, setDebouncedCode] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCode(filters.code.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.code]);
+
+  const codeSuggestionsQuery = useQuery({
+    queryKey: ["coupons", "code-suggestions", debouncedCode] as const,
+    queryFn: () => searchCoupons({ code: debouncedCode, page: 1, pageSize: 8 }),
+    enabled: debouncedCode.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const couponsQuery = useQuery({
     // The code filter used to sit straight in the key, firing a paged search
@@ -152,10 +167,16 @@ export default function CouponsPage() {
             label="Code"
             name="code"
             autoComplete="on"
+            list="coupon-code-suggestions"
             placeholder="Search by code…"
             value={filters.code}
             onChange={(event) => setFilters((current) => ({ ...current, code: event.target.value }))}
           />
+          <datalist id="coupon-code-suggestions">
+            {(codeSuggestionsQuery.data?.items ?? []).map((coupon) => (
+              <option key={coupon.id} value={coupon.code} />
+            ))}
+          </datalist>
           <Select
             label="Status"
             options={STATUS_FILTER_OPTIONS}

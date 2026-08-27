@@ -2,12 +2,13 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Button, Field, PageHeading, Select } from "@/components/ui";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { TicketPriorityBadge, TicketStatusBadge } from "@/components/status-badges";
-import { searchSupportTickets } from "@/lib/support-api";
+import { searchBookings } from "@/lib/bookings-api";
+import { listAssignableAdmins, searchSupportTickets } from "@/lib/support-api";
 import {
   CATEGORY_FILTER_OPTIONS,
   DEFAULT_SUPPORT_TICKET_FILTERS,
@@ -39,6 +40,37 @@ export default function SupportTicketsPage() {
   const [draft, setDraft] = useState<SupportTicketFilters>(DEFAULT_SUPPORT_TICKET_FILTERS);
   const [applied, setApplied] = useState<SupportTicketFilters>(DEFAULT_SUPPORT_TICKET_FILTERS);
   const [page, setPage] = useState(1);
+
+  // Real assignable-admin list to suggest against the "Assigned admin ID"
+  // field, which stays a plain GUID text input (never a dropdown) - the
+  // search endpoint takes an AssignedAdminUserId GUID
+  // (SupportTicketRepository.SearchAsync) and this is the same list the
+  // ticket detail screen's own "Assign" control already offers, exposed here
+  // as a <datalist> so the admin can pick a real name and still see/paste the
+  // GUID the field actually submits.
+  const assignableAdminsQuery = useQuery({
+    queryKey: ["support-assignable-admins"],
+    queryFn: listAssignableAdmins,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // "Booking ID" is also a plain GUID text field matched as an exact FK
+  // equality (SupportTicketRepository.SearchAsync), so it's suggested the
+  // same way as Payments' Booking ID field: search by the booking's
+  // human-readable reference (Contains, already exposed via searchBookings)
+  // and fill the field with the real GUID the search actually needs.
+  const [debouncedBookingSearch, setDebouncedBookingSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedBookingSearch(draft.bookingId.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.bookingId]);
+
+  const bookingSuggestionsQuery = useQuery({
+    queryKey: ["admin-support-booking-suggestions", debouncedBookingSearch],
+    queryFn: () => searchBookings({ reference: debouncedBookingSearch, page: 1, pageSize: 8 }),
+    enabled: debouncedBookingSearch.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const query = useQuery({
     queryKey: ["admin-support-tickets", applied, page],
@@ -152,18 +184,38 @@ export default function SupportTicketsPage() {
           label="Booking ID"
           name="bookingId"
           autoComplete="on"
-          placeholder="Booking GUID"
+          list="support-booking-id-suggestions"
+          placeholder="Booking GUID, or type a reference to search"
           value={draft.bookingId}
           onChange={(e) => setDraft((f) => ({ ...f, bookingId: e.target.value }))}
         />
+        <datalist id="support-booking-id-suggestions">
+          {(bookingSuggestionsQuery.data?.items ?? []).map((booking) => (
+            <option key={booking.id} value={booking.id} label={booking.reference} />
+          ))}
+        </datalist>
         <Field
           label="Assigned admin ID"
           name="assignedAdminUserId"
           autoComplete="on"
+          list="support-assignable-admins"
           placeholder="Admin user GUID"
           value={draft.assignedAdminUserId}
           onChange={(e) => setDraft((f) => ({ ...f, assignedAdminUserId: e.target.value }))}
         />
+        {/* Options only appear once the admin has typed something - an empty
+            field must not pop the entire admin list on click. Matches
+            against the typed text as either a name or a pasted GUID prefix. */}
+        <datalist id="support-assignable-admins">
+          {draft.assignedAdminUserId.trim()
+            ? (assignableAdminsQuery.data ?? [])
+                .filter((admin) => {
+                  const term = draft.assignedAdminUserId.trim().toLowerCase();
+                  return admin.fullName.toLowerCase().includes(term) || admin.id.toLowerCase().includes(term);
+                })
+                .map((admin) => <option key={admin.id} value={admin.id} label={admin.fullName} />)
+            : null}
+        </datalist>
         <Field
           label="Created from"
           type="date"

@@ -3,7 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Field, Modal, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
@@ -79,6 +79,22 @@ export default function ProvidersPage() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const citiesQuery = useQuery({ queryKey: ["cities"], queryFn: () => listCities() });
+
+  // Live typeahead for Name - reuses the same server-side search this page
+  // already calls (searchProviders), same pattern as bookings/page.tsx's
+  // Booking # suggestions.
+  const [debouncedName, setDebouncedName] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.name]);
+
+  const nameSuggestionsQuery = useQuery({
+    queryKey: ["admin-providers-name-suggestions", debouncedName],
+    queryFn: () => searchProviders({ name: debouncedName, page: 1, pageSize: 8 }),
+    enabled: debouncedName.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const query = useQuery({
     queryKey: ["admin-providers", appliedFilters, page],
@@ -208,9 +224,15 @@ export default function ProvidersPage() {
           label="Name"
           name="name"
           autoComplete="name"
+          list="provider-name-suggestions"
           value={filters.name}
           onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
         />
+        <datalist id="provider-name-suggestions">
+          {(nameSuggestionsQuery.data?.items ?? []).map((provider) => (
+            <option key={provider.id} value={provider.displayName} />
+          ))}
+        </datalist>
         <Field
           label="Phone"
           name="phone"

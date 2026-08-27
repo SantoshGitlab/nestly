@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { Button, Field, PageHeading, Select, Tabs } from "@/components/ui";
@@ -39,6 +39,27 @@ export default function ProviderReferralsPage() {
   const [filters, setFilters] = useState<ProviderReferralFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<ProviderReferralFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+
+  // Live typeahead for Provider - reuses the same searchProviderReferrals
+  // call the list below uses, same pattern as bookings/page.tsx's Booking #
+  // suggestions. Suggests both referrer and referee names since the field
+  // searches across both.
+  const [debouncedProviderSearch, setDebouncedProviderSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(
+      () => setDebouncedProviderSearch(filters.providerSearch.trim()),
+      300,
+    );
+    return () => window.clearTimeout(handle);
+  }, [filters.providerSearch]);
+
+  const providerSuggestionsQuery = useQuery({
+    queryKey: ["provider-referrals", "provider-suggestions", debouncedProviderSearch] as const,
+    queryFn: () =>
+      searchProviderReferrals({ providerSearch: debouncedProviderSearch, page: 1, pageSize: 8 }),
+    enabled: debouncedProviderSearch.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const referralsQuery = useQuery({
     queryKey: ["provider-referrals", "search", tab, appliedFilters, page] as const,
@@ -139,12 +160,19 @@ export default function ProviderReferralsPage() {
               label="Provider"
               name="providerSearch"
               autoComplete="name"
+              list="provider-referral-provider-suggestions"
               placeholder="Referrer or referee name…"
               value={filters.providerSearch}
               onChange={(event) =>
                 setFilters((current) => ({ ...current, providerSearch: event.target.value }))
               }
             />
+            <datalist id="provider-referral-provider-suggestions">
+              {(providerSuggestionsQuery.data?.items ?? []).flatMap((referral) => [
+                <option key={`${referral.id}-referrer`} value={referral.referrerName} />,
+                <option key={`${referral.id}-referee`} value={referral.refereeName} />,
+              ])}
+            </datalist>
             <Select
               label="Status"
               options={STATUS_FILTER_OPTIONS}

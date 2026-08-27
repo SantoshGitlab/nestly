@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card, Field, PageHeading, Select } from "@/components/ui";
 import { FilterBar, Pagination, countActiveFilters } from "@/components/data-table";
 import { describeError } from "@/lib/api";
@@ -40,6 +40,21 @@ export default function CmsPagesPage() {
 
   const canWrite = canWriteModule(claims, "cms");
   const queryClient = useQueryClient();
+
+  // Live typeahead for Title - reuses the same searchCmsPages call the list
+  // below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  const [debouncedTitle, setDebouncedTitle] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedTitle(filters.title.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.title]);
+
+  const titleSuggestionsQuery = useQuery({
+    queryKey: ["cms", "pages", "title-suggestions", debouncedTitle] as const,
+    queryFn: () => searchCmsPages({ title: debouncedTitle, page: 1, pageSize: 8 }),
+    enabled: debouncedTitle.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const pagesQuery = useQuery({
     // The title filter used to sit straight in the key, so every keystroke
@@ -144,10 +159,16 @@ export default function CmsPagesPage() {
             label="Title"
             name="title"
             autoComplete="on"
+            list="cms-page-title-suggestions"
             placeholder="Search by title…"
             value={filters.title}
             onChange={(event) => setFilters((current) => ({ ...current, title: event.target.value }))}
           />
+          <datalist id="cms-page-title-suggestions">
+            {(titleSuggestionsQuery.data?.items ?? []).map((page) => (
+              <option key={page.id} value={page.title} />
+            ))}
+          </datalist>
           <Select
             label="Status"
             options={STATUS_FILTER_OPTIONS}

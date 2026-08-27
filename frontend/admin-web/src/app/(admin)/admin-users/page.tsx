@@ -72,6 +72,21 @@ export default function AdminUsersPage() {
 
   const rolesQuery = useQuery({ queryKey: ["admin-user-roles"], queryFn: listAdminRoles });
 
+  // Live typeahead for Name - reuses the same searchAdminUsers call the list
+  // below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  const [debouncedName, setDebouncedName] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.name]);
+
+  const nameSuggestionsQuery = useQuery({
+    queryKey: ["admin-users", "name-suggestions", debouncedName] as const,
+    queryFn: () => searchAdminUsers({ name: debouncedName, page: 1, pageSize: 8 }),
+    enabled: debouncedName.length >= 2,
+    placeholderData: keepPreviousData,
+  });
+
   const listQuery = useQuery({
     queryKey: ["admin-users", "search", appliedFilters, page] as const,
     queryFn: () =>
@@ -185,10 +200,16 @@ export default function AdminUsersPage() {
             label="Name"
             name="name"
             autoComplete="name"
+            list="admin-user-name-suggestions"
             placeholder="Search by name…"
             value={filters.name}
             onChange={(event) => setFilters((current) => ({ ...current, name: event.target.value }))}
           />
+          <datalist id="admin-user-name-suggestions">
+            {(nameSuggestionsQuery.data?.items ?? []).map((adminUser) => (
+              <option key={adminUser.id} value={adminUser.fullName} />
+            ))}
+          </datalist>
           <Field
             label="Email"
             name="email"

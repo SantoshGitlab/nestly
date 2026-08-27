@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BookingsTabs } from "@/components/BookingsTabs";
 import { Badge, Field, PageHeading, Select } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
@@ -53,6 +53,21 @@ export default function AmcContractsPage() {
   const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [openContractId, setOpenContractId] = useState<string | null>(null);
+
+  // Live typeahead for Customer - reuses the same searchAmcContracts call the
+  // list below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCustomerSearch(filters.customerSearch.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.customerSearch]);
+
+  const customerSuggestionsQuery = useQuery({
+    queryKey: ["amc-contracts", "customer-suggestions", debouncedCustomerSearch] as const,
+    queryFn: () => searchAmcContracts({ customerSearch: debouncedCustomerSearch, page: 1, pageSize: 8 }),
+    enabled: debouncedCustomerSearch.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const listQuery = useQuery({
     queryKey: ["amc-contracts", "list", appliedFilters, page] as const,
@@ -163,10 +178,16 @@ export default function AmcContractsPage() {
             label="Customer"
             name="customerSearch"
             autoComplete="name"
+            list="amc-contract-customer-suggestions"
             placeholder="Name or mobile number"
             value={filters.customerSearch}
             onChange={(e) => setFilters((f) => ({ ...f, customerSearch: e.target.value }))}
           />
+          <datalist id="amc-contract-customer-suggestions">
+            {(customerSuggestionsQuery.data?.items ?? []).map((contract) => (
+              <option key={contract.id} value={contract.customerName} />
+            ))}
+          </datalist>
         </FilterBar>
 
         <div className="flex flex-col gap-4">

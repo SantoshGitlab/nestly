@@ -20,7 +20,9 @@ import { BookingStatusBadge, bookingStatusTone } from "@/components/status-badge
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { searchBookings } from "@/lib/bookings-api";
 import type { AdminBookingListItem } from "@/lib/bookings-types";
+import { listCategories } from "@/lib/catalog-api";
 import { getVisibleNavModules } from "@/lib/permissions";
+import { listCities } from "@/lib/serviceability-api";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import type { DashboardKpiFilters, DashboardKpiResponse } from "@/lib/types";
 import { toLocalIsoDate } from "@/lib/date";
@@ -114,6 +116,24 @@ export default function DashboardPage() {
   const [draftTo, setDraftTo] = useState(todayIso);
   const [draftCity, setDraftCity] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
+
+  // Real suggestion lists for the City/Category filters - both stay plain
+  // text inputs (never converted to a dropdown), but the server matches them
+  // as an exact case-insensitive equality (DashboardQueryService.GetKpisAsync:
+  // city against AddressCitySnapshot, category against Category.Slug), so a
+  // <datalist> of the real values guards against a typo silently matching
+  // nothing while still letting the admin type freely.
+  const citiesQuery = useQuery({
+    queryKey: ["serviceability-cities"],
+    queryFn: () => listCities(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: ["catalog-categories"],
+    queryFn: listCategories,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const query = useQuery({
     queryKey: ["dashboard-kpis", filters],
@@ -282,18 +302,37 @@ export default function DashboardPage() {
           label="City"
           name="city"
           autoComplete="address-level2"
+          list="dashboard-city-suggestions"
           placeholder="e.g. Bengaluru"
           value={draftCity}
           onChange={(event) => setDraftCity(event.target.value)}
         />
+        {/* Options only appear once the admin has typed something - an empty
+            field must not pop the entire city list on click. */}
+        <datalist id="dashboard-city-suggestions">
+          {draftCity.trim()
+            ? (citiesQuery.data ?? [])
+                .filter((city) => city.name.toLowerCase().includes(draftCity.trim().toLowerCase()))
+                .map((city) => <option key={city.id} value={city.name} />)
+            : null}
+        </datalist>
         <Field
           label="Category"
           name="category"
           autoComplete="on"
-          placeholder="e.g. cleaning"
+          list="dashboard-category-suggestions"
+          placeholder="e.g. Home Cleaning"
           value={draftCategory}
           onChange={(event) => setDraftCategory(event.target.value)}
         />
+        {/* value is the real Category.Slug the backend matches on; label
+            shows the human-readable name so the admin doesn't have to know
+            or type the slug directly. */}
+        <datalist id="dashboard-category-suggestions">
+          {(categoriesQuery.data ?? []).map((category) => (
+            <option key={category.id} value={category.slug} label={category.name} />
+          ))}
+        </datalist>
       </FilterBar>
 
       <section className="mt-6" aria-label="Key metrics">

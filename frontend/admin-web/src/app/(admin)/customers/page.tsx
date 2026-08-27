@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Field, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
@@ -14,6 +14,7 @@ import {
 import type { DataTableColumn } from "@/components/data-table";
 import { CustomerStatusBadge } from "@/components/status-badges";
 import { API_V1, apiFetch } from "@/lib/api";
+import { listCities } from "@/lib/serviceability-api";
 import { CustomerStatus } from "@/lib/types";
 import type { CustomerSearchParams, CustomerSearchResponse, CustomerSummary } from "@/lib/types";
 
@@ -37,8 +38,16 @@ interface FilterFormState {
 
 const EMPTY_FILTERS: FilterFormState = { name: "", mobile: "", email: "", city: "", status: "" };
 
+function buildParamsQuery(params: CustomerSearchParams): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  return query.toString();
+}
+
 function buildQueryString(filters: FilterFormState, page: number): string {
-  const params: CustomerSearchParams = {
+  return buildParamsQuery({
     name: filters.name || undefined,
     mobile: filters.mobile || undefined,
     email: filters.email || undefined,
@@ -46,13 +55,7 @@ function buildQueryString(filters: FilterFormState, page: number): string {
     status: filters.status === "" ? undefined : (Number(filters.status) as CustomerStatus),
     page,
     pageSize: PAGE_SIZE,
-  };
-
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) query.set(key, String(value));
-  }
-  return query.toString();
+  });
 }
 
 /**
@@ -70,6 +73,37 @@ export default function CustomersPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+
+  // Real city list to suggest against the City field, which stays a plain
+  // text input (never a dropdown) - the search endpoint matches city with a
+  // case-insensitive Contains (CustomerRepository.SearchAsync), so a real
+  // city name posts cleanly whether typed or picked from the datalist.
+  const citiesQuery = useQuery({
+    queryKey: ["cities"],
+    queryFn: () => listCities(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Live typeahead for Name - reuses the same customer search this page
+  // already calls, same pattern as bookings/page.tsx's Booking # suggestions
+  // (there is no standalone exported customer-search client to reuse from
+  // elsewhere, so this reuses the page's own endpoint with a small pageSize).
+  const [debouncedName, setDebouncedName] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.name]);
+
+  const nameSuggestionsQuery = useQuery({
+    queryKey: ["admin-customers-name-suggestions", debouncedName],
+    queryFn: () =>
+      apiFetch<CustomerSearchResponse>(
+        `${API_V1}/customers?${buildParamsQuery({ name: debouncedName, page: 1, pageSize: 8 })}`,
+        { authenticated: true },
+      ),
+    enabled: debouncedName.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const query = useQuery({
     queryKey: ["admin-customers", appliedFilters, page],
@@ -144,9 +178,15 @@ export default function CustomersPage() {
           label="Name"
           name="name"
           autoComplete="name"
+          list="customer-name-suggestions"
           value={filters.name}
           onChange={(e) => setFilters((f) => ({ ...f, name: e.target.value }))}
         />
+        <datalist id="customer-name-suggestions">
+          {(nameSuggestionsQuery.data?.items ?? []).map((customer) => (
+            <option key={customer.id} value={customer.name} />
+          ))}
+        </datalist>
         <Field
           label="Mobile"
           name="mobile"
@@ -166,9 +206,19 @@ export default function CustomersPage() {
           label="City"
           name="city"
           autoComplete="address-level2"
+          list="customer-city-suggestions"
           value={filters.city}
           onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
         />
+        {/* Options only appear once the admin has typed something - an empty
+            field must not pop the entire city list on click. */}
+        <datalist id="customer-city-suggestions">
+          {filters.city.trim()
+            ? (citiesQuery.data ?? [])
+                .filter((city) => city.name.toLowerCase().includes(filters.city.trim().toLowerCase()))
+                .map((city) => <option key={city.id} value={city.name} />)
+            : null}
+        </datalist>
         <Select
           label="Account status"
           options={STATUS_OPTIONS}

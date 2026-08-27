@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Field, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
@@ -97,6 +97,54 @@ export default function BookingsPage() {
     { value: "", label: "Any category" },
     ...(categoriesQuery.data ?? []).map((category) => ({ value: category.id, label: category.name })),
   ];
+
+  // Live typeahead for Booking # - suggests real references as the admin
+  // types, reusing the same server-side Contains match the Search button
+  // submits (BookingRepository.SearchAsync's Reference filter). Debounced
+  // and gated at 2+ chars so it doesn't fire a request per keystroke or on
+  // an empty field.
+  const [debouncedReference, setDebouncedReference] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedReference(filters.reference.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.reference]);
+
+  const referenceSuggestionsQuery = useQuery({
+    queryKey: ["admin-bookings-reference-suggestions", debouncedReference],
+    queryFn: () => searchBookings({ reference: debouncedReference, page: 1, pageSize: 8 }),
+    enabled: debouncedReference.length >= 2,
+    placeholderData: keepPreviousData,
+  });
+
+  // Live typeahead for Customer name/mobile - same reasoning as Booking #
+  // above, reusing searchBookings (there is no standalone customer search
+  // client this page can import; the customers admin screen's own search is
+  // page-local, not an exported function) rather than inventing an endpoint.
+  const [debouncedCustomerName, setDebouncedCustomerName] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCustomerName(filters.customerName.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.customerName]);
+
+  const customerNameSuggestionsQuery = useQuery({
+    queryKey: ["admin-bookings-customer-name-suggestions", debouncedCustomerName],
+    queryFn: () => searchBookings({ customerName: debouncedCustomerName, page: 1, pageSize: 8 }),
+    enabled: debouncedCustomerName.length >= 2,
+    placeholderData: keepPreviousData,
+  });
+
+  const [debouncedCustomerMobile, setDebouncedCustomerMobile] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCustomerMobile(filters.customerMobile.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.customerMobile]);
+
+  const customerMobileSuggestionsQuery = useQuery({
+    queryKey: ["admin-bookings-customer-mobile-suggestions", debouncedCustomerMobile],
+    queryFn: () => searchBookings({ customerMobile: debouncedCustomerMobile, page: 1, pageSize: 8 }),
+    enabled: debouncedCustomerMobile.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const query = useQuery({
     queryKey: ["admin-bookings", appliedFilters, page],
@@ -195,24 +243,42 @@ export default function BookingsPage() {
           label="Booking #"
           name="reference"
           autoComplete="on"
+          list="booking-reference-suggestions"
           value={filters.reference}
           onChange={(e) => setFilters((f) => ({ ...f, reference: e.target.value }))}
           placeholder="e.g. NST-260825-K7F3M"
         />
+        <datalist id="booking-reference-suggestions">
+          {(referenceSuggestionsQuery.data?.items ?? []).map((booking) => (
+            <option key={booking.id} value={booking.reference} />
+          ))}
+        </datalist>
         <Field
           label="Customer name"
           name="customerName"
           autoComplete="name"
+          list="booking-customer-name-suggestions"
           value={filters.customerName}
           onChange={(e) => setFilters((f) => ({ ...f, customerName: e.target.value }))}
         />
+        <datalist id="booking-customer-name-suggestions">
+          {(customerNameSuggestionsQuery.data?.items ?? []).map((booking) => (
+            <option key={booking.id} value={booking.customerName} />
+          ))}
+        </datalist>
         <Field
           label="Customer mobile"
           name="customerMobile"
           autoComplete="tel"
+          list="booking-customer-mobile-suggestions"
           value={filters.customerMobile}
           onChange={(e) => setFilters((f) => ({ ...f, customerMobile: e.target.value }))}
         />
+        <datalist id="booking-customer-mobile-suggestions">
+          {(customerMobileSuggestionsQuery.data?.items ?? []).map((booking) => (
+            <option key={booking.id} value={booking.customerMobile} />
+          ))}
+        </datalist>
         <Select
           label="Status"
           options={STATUS_OPTIONS}

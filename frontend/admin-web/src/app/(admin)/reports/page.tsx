@@ -10,6 +10,7 @@ import { describeError } from "@/lib/api";
 import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
 import { isoDateOffsetFromToday, todayIsoDate } from "@/lib/date";
 import { canWriteModule } from "@/lib/permissions";
+import { listCities } from "@/lib/serviceability-api";
 import { categoryLabel } from "@/lib/support";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import {
@@ -73,6 +74,17 @@ export default function ReportsPage() {
 
   const [exportError, setExportError] = useState<string | null>(null);
   const [runningExport, setRunningExport] = useState<string | null>(null);
+
+  // Real city list to suggest against the City field, which stays a plain
+  // text input (never a dropdown) - ReportingQueryService's Booking &
+  // Revenue report matches city with a case-insensitive exact match (not a
+  // substring search), so a real city name posts cleanly whether typed or
+  // picked from the datalist.
+  const citiesQuery = useQuery({
+    queryKey: ["cities"],
+    queryFn: () => listCities(),
+    staleTime: 5 * 60 * 1000,
+  });
 
   // `applied` is only ever set from a validated range, so these cannot be
   // null in practice; `?? ""` keeps that unreachable branch type-safe and the
@@ -254,11 +266,21 @@ export default function ReportsPage() {
           />
           <Field
             label="City"
+            list="reports-city-suggestions"
             hint="Booking & Revenue only. Leave blank for every city."
             placeholder="Optional"
             value={draft.city}
             onChange={(event) => setDraft({ ...draft, city: event.target.value })}
           />
+          {/* Options only appear once the admin has typed something - an
+              empty field must not pop the entire city list on click. */}
+          <datalist id="reports-city-suggestions">
+            {draft.city.trim()
+              ? (citiesQuery.data ?? [])
+                  .filter((city) => city.name.toLowerCase().includes(draft.city.trim().toLowerCase()))
+                  .map((city) => <option key={city.id} value={city.name} />)
+              : null}
+          </datalist>
         </FilterBar>
 
         {rangeError ? <Alert>{rangeError}</Alert> : null}

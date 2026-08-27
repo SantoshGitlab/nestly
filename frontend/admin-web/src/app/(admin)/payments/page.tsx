@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Field, PageHeading, Select } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import {
@@ -14,6 +14,7 @@ import {
   formatDateTime,
 } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
+import { searchBookings } from "@/lib/bookings-api";
 import { searchPaymentTransactions } from "@/lib/payments-api";
 import { PaymentTransactionStatus } from "@/lib/payments-types";
 import type { AdminPaymentTransactionListItem } from "@/lib/payments-types";
@@ -63,6 +64,28 @@ export default function PaymentsPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
+
+  // "Booking ID" stays a plain GUID text field (PaymentTransactionRepository
+  // matches it as an exact FK equality, so there's no partial-GUID server
+  // search to typeahead against) - but the same booking can be found by
+  // typing part of its human-readable reference instead, reusing the
+  // reference Contains search bookings/page.tsx already has. The datalist
+  // option's value is the real booking GUID the field must submit; its label
+  // is the reference the admin actually recognises. Debounced and gated at
+  // 2+ chars, same as every other live-search datalist in this app - so an
+  // empty/just-clicked field shows nothing, only typing narrows it down.
+  const [debouncedBookingSearch, setDebouncedBookingSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedBookingSearch(filters.bookingId.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.bookingId]);
+
+  const bookingSuggestionsQuery = useQuery({
+    queryKey: ["admin-payments-booking-suggestions", debouncedBookingSearch],
+    queryFn: () => searchBookings({ reference: debouncedBookingSearch, page: 1, pageSize: 8 }),
+    enabled: debouncedBookingSearch.length >= 2,
+    placeholderData: keepPreviousData,
+  });
 
   const query = useQuery({
     queryKey: ["admin-payments", appliedFilters, page],
@@ -163,10 +186,16 @@ export default function PaymentsPage() {
           label="Booking ID"
           name="bookingId"
           autoComplete="on"
+          list="payments-booking-id-suggestions"
           value={filters.bookingId}
           onChange={(e) => setFilters((f) => ({ ...f, bookingId: e.target.value }))}
-          placeholder="Exact booking ID"
+          placeholder="Exact booking ID, or type a reference to search"
         />
+        <datalist id="payments-booking-id-suggestions">
+          {(bookingSuggestionsQuery.data?.items ?? []).map((booking) => (
+            <option key={booking.id} value={booking.id} label={booking.reference} />
+          ))}
+        </datalist>
         <Select
           label="Status"
           options={STATUS_OPTIONS}
