@@ -18,6 +18,7 @@ using Nestly.Application.AdminUserManagement;
 using Nestly.Application.Auditing;
 using Nestly.Application.Chat;
 using Nestly.Application.Identity;
+using Nestly.Application.Landing;
 using Nestly.Application.Profile;
 using Nestly.Application.Bookings;
 using Nestly.Application.BookingManagement;
@@ -394,6 +395,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceVariantRepository, ServiceVariantRepository>();
         services.AddScoped<IServiceAddOnGroupRepository, ServiceAddOnGroupRepository>();
         services.AddScoped<IServiceGroupRepository, ServiceGroupRepository>();
+        services.AddScoped<ILandingSelectionRepository, LandingSelectionRepository>();
         services.AddScoped<IServiceFaqRepository, ServiceFaqRepository>();
         services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
         services.AddScoped<ISlotBookingPolicyRepository, SlotBookingPolicyRepository>();
@@ -453,6 +455,8 @@ public static class DependencyInjection
         services.AddScoped<IServiceVariantManagementService, ServiceVariantManagementService>();
         services.AddScoped<IServiceAddOnGroupManagementService, ServiceAddOnGroupManagementService>();
         services.AddScoped<IServiceGroupManagementService, ServiceGroupManagementService>();
+        services.AddScoped<ILandingManagementService, LandingManagementService>();
+        services.AddScoped<ILandingQueryService, LandingQueryService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
         services
             .AddOptions<BookingOptions>()

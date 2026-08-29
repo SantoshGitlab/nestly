@@ -43,6 +43,19 @@ public class CategoryRepository : ICategoryRepository
             .ToDictionaryAsync(c => c.Id, c => c.Name);
     }
 
+    public async Task<IReadOnlyList<Category>> ListByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await _context.Set<Category>()
+            .AsNoTracking()
+            .Where(c => ids.Contains(c.Id))
+            .ToListAsync();
+    }
+
 
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Category>().AnyAsync(c => c.Id == id);

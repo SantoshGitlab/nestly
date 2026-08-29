@@ -43,6 +43,19 @@ public class ServiceRepository : IServiceRepository
             .ToDictionaryAsync(s => s.Id, s => s.Name);
     }
 
+    public async Task<IReadOnlyList<Service>> ListByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await _context.Set<Service>()
+            .AsNoTracking()
+            .Where(s => ids.Contains(s.Id))
+            .ToListAsync();
+    }
+
 
     public Task<bool> ExistsAsync(Guid id) =>
         _context.Set<Service>().AnyAsync(s => s.Id == id);

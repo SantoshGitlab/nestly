@@ -26,6 +26,13 @@ public interface IServiceRepository : IRepository<Service>
     Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
 
     /// <summary>
+    /// Full services for a set of ids, in one query. The name-only
+    /// <see cref="GetNamesByIdsAsync"/> is not enough for callers that also
+    /// need slug/price/imagery (e.g. assembling the curated home page).
+    /// </summary>
+    Task<IReadOnlyList<Service>> ListByIdsAsync(IReadOnlyCollection<Guid> ids);
+
+    /// <summary>
     /// Every service regardless of active status, optionally filtered to one
     /// category, ordered for the admin management screen (SRS 12.6.1).
     /// </summary>

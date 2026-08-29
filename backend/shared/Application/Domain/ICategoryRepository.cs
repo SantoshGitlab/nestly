@@ -37,6 +37,13 @@ public interface ICategoryRepository : IRepository<Category>
     /// <summary>Names for a set of category ids in one round trip (task 256) - mirrors <c>ICustomerRepository.GetNamesByIdsAsync</c>.</summary>
     Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
 
+    /// <summary>
+    /// Full categories for a set of ids, in one query. The name-only
+    /// <see cref="GetNamesByIdsAsync"/> is not enough for callers that also
+    /// need slug/imagery (e.g. assembling the curated home page).
+    /// </summary>
+    Task<IReadOnlyList<Category>> ListByIdsAsync(IReadOnlyCollection<Guid> ids);
+
     /// <summary>Active subcategories of a parent category (Phase 3 catalog redesign), ordered for display.</summary>
     Task<IReadOnlyList<Category>> ListChildrenAsync(Guid parentCategoryId);
 }
