@@ -46,6 +46,7 @@ export type NavModuleKey =
   | "chat"
   | "reviews"
   | "cms"
+  | "landing"
   | "notifications"
   | "reports"
   | "audit"
@@ -80,6 +81,10 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "chat", label: "Chat", href: "/chat", srsRef: "PRODUCT-ENHANCEMENTS.md IN-APP CHAT", requiredPermission: "chat.read" },
   { key: "reviews", label: "Review Moderation", href: "/reviews", srsRef: "SRS 12.15", requiredPermission: "reviews.read" },
   { key: "cms", label: "CMS & Content", href: "/cms", srsRef: "SRS 12.16", requiredPermission: "cms.read" },
+  // Curates which catalog entries the customer home page features. Shares the
+  // "cms" permission (it is home-page content, not catalog editing), so it
+  // needs no new permission code or role-grant migration.
+  { key: "landing", label: "Landing Page", href: "/landing", srsRef: "SRS 12.16", requiredPermission: "cms.read" },
   { key: "notifications", label: "Notification Templates", href: "/notifications", srsRef: "SRS 12.17", requiredPermission: "notifications.read" },
   { key: "reports", label: "Reports & Exports", href: "/reports", srsRef: "SRS 12.18", requiredPermission: "reports.read" },
   { key: "audit", label: "Audit Log", href: "/audit", srsRef: "SRS 12.1.2, 12.2.3, 21", requiredPermission: "audit.read" },
@@ -121,7 +126,7 @@ const ROLE_MODULE_FALLBACK: Record<string, NavModuleKey[] | "*"> = {
   "Support Admin": ["dashboard", "support", "chat", "customers", "reviews"],
   "Catalog Admin": ["dashboard", "catalog", "pricing"],
   "Pricing Admin": ["dashboard", "pricing", "coupons"],
-  "Marketing Admin": ["dashboard", "coupons", "cms", "notifications", "reviews", "referral", "nestly-coins", "subscription"],
+  "Marketing Admin": ["dashboard", "coupons", "cms", "landing", "notifications", "reviews", "referral", "nestly-coins", "subscription"],
   "Finance Admin": ["dashboard", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments", "provider-referral"],
   "Read-only Analyst": ["dashboard", "reports"],
 };

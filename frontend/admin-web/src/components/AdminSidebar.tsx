@@ -32,7 +32,7 @@ const GROUPS: readonly { label: string; keys: readonly NavModuleKey[] }[] = [
   { label: "Catalog", keys: ["catalog", "pricing", "serviceability"] },
   { label: "People", keys: ["customers", "provider", "provider-referral", "admin-users"] },
   { label: "Growth", keys: ["coupons", "referral", "nestly-coins", "subscription"] },
-  { label: "Content", keys: ["cms", "notifications"] },
+  { label: "Content", keys: ["cms", "landing", "notifications"] },
   { label: "System", keys: ["settings", "audit"] },
 ];
 
@@ -174,6 +174,13 @@ const MODULE_ICONS: Record<NavModuleKey, ReactNode> = {
       <path d="M6.5 2.5h8l4 4v14.5h-12z" />
       <path d="M14 2.5V7h4.5" />
       <path d="M9 12.5h6M9 16h6" />
+    </svg>
+  ),
+  landing: (
+    <svg {...ICON_PROPS}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M7 13h4v4H7zM14 13h3M14 16h3" />
     </svg>
   ),
   notifications: (
