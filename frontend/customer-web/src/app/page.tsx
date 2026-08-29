@@ -1,5 +1,5 @@
-import Link from "next/link";
-import { CategoryTiles } from "@/components/CategoryTiles";
+import { CategoryQuickPicks } from "@/components/CategoryQuickPicks";
+import { CuratedHomeSections } from "@/components/CuratedHomeSections";
 import { HeroBanner } from "@/components/HeroBanner";
 import { TrustMarkers } from "@/components/TrustMarkers";
 
@@ -9,48 +9,21 @@ export default function Home() {
       {/* Full-bleed, edge-to-edge: sits flush under the sticky header with no
           side padding or card chrome, unlike every other section here (which
           is why it's outside the max-w-7xl wrapper below, matching the
-          categories band's existing full-bleed pattern). */}
-      <HeroBanner />
-
-      {/* Full-bleed banded section (Resido reference's "Featured Property For
-          Sale" pattern): a light brand-tinted band, centered heading/subtitle,
-          the category grid, and a centered pill CTA below it — breaks out of
-          the page's max-w wrapper on purpose, unlike every other section here. */}
-      <section aria-labelledby="categories-heading" className="bg-brand-50 py-14 dark:bg-brand-500/[0.06] sm:py-20">
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-10 px-4 sm:px-6">
-          <div className="flex max-w-xl flex-col items-center gap-3 text-center">
-            <h2 id="categories-heading" className="text-display-sm font-bold tracking-tight text-fg">
-              Popular categories
-            </h2>
-            <p className="text-[0.9375rem] leading-relaxed text-fg-muted text-pretty">
-              Everything your home needs, from one place — vetted professionals across every service.
-            </p>
+          categories band's existing full-bleed pattern). The quick-picks rail
+          is a sibling overlay, not a HeroBanner prop - it never touches the
+          banner's own CMS-driven slide/carousel logic. */}
+      <div className="relative">
+        <HeroBanner />
+        <div className="pointer-events-none absolute left-0 top-0 z-20 w-full px-5 pt-6 sm:px-8 sm:pt-8">
+          <div className="pointer-events-auto mx-auto max-w-3xl sm:mx-0">
+            <CategoryQuickPicks />
           </div>
-
-          <div className="w-full">
-            <CategoryTiles />
-          </div>
-
-          <Link
-            href="/categories"
-            className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-semibold text-fg shadow-xs transition-colors duration-fast ease-out hover:border-brand-600/40 hover:text-brand-600"
-          >
-            Browse all categories
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.25"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-3.5 w-3.5"
-              aria-hidden
-            >
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </Link>
         </div>
-      </section>
+      </div>
+
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+        <CuratedHomeSections />
+      </div>
 
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         <section aria-labelledby="why-heading" className="flex flex-col gap-6">
