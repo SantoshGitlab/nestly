@@ -17,7 +17,14 @@ RUN dotnet publish backend/provider-api/ProviderApi/ProviderApi.csproj -c Releas
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
-COPY --from=build /app/publish .
+COPY --from=build --chown=app:app /app/publish .
+
+# LocalDiskFileStorageService (the local-disk fallback used when Supabase
+# Storage isn't configured) creates this directory eagerly on startup - the
+# base image's WORKDIR is root-owned, so without this the non-root `app`
+# user below gets UnauthorizedAccessException before the process ever binds
+# a port. Pre-create and own it so `Directory.CreateDirectory` is a no-op.
+RUN mkdir -p /app/App_Data/uploads && chown -R app:app /app/App_Data
 
 # Run as non-root (user provided by the base image)
 USER app
