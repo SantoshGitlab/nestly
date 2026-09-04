@@ -45,7 +45,7 @@ export function AuthShell({
               </svg>
             </span>
             <span className="text-base font-semibold tracking-tight text-fg">
-              Nestly <span className="text-fg-muted">Admin</span>
+              Glavyx <span className="text-fg-muted">Admin</span>
             </span>
           </span>
 

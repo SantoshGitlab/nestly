@@ -20,10 +20,10 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "Nestly Provider",
-    template: "%s · Nestly Provider",
+    default: "Glavyx Provider",
+    template: "%s · Glavyx Provider",
   },
-  description: "Nestly provider portal.",
+  description: "Glavyx provider portal.",
   // Task #354: Add-to-Home-Screen support. See public/manifest.json, and
   // scripts/generate-pwa-icons.sh for how its PNGs are rasterized from
   // public/icon.svg (task #368). iOS reads src/app/apple-icon.png instead,

@@ -13,11 +13,14 @@ public class CategoryManagementService : ICategoryManagementService
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly ICategoryRepository _categoryRepository;
+    private readonly ICategoryGroupRepository _categoryGroupRepository;
     private readonly IAuditLogWriter _auditLogWriter;
 
-    public CategoryManagementService(ICategoryRepository categoryRepository, IAuditLogWriter auditLogWriter)
+    public CategoryManagementService(
+        ICategoryRepository categoryRepository, ICategoryGroupRepository categoryGroupRepository, IAuditLogWriter auditLogWriter)
     {
         _categoryRepository = categoryRepository;
+        _categoryGroupRepository = categoryGroupRepository;
         _auditLogWriter = auditLogWriter;
     }
 
@@ -55,6 +58,13 @@ public class CategoryManagementService : ICategoryManagementService
             return Result.Failure<CategoryResponse>(parentValidation.Error);
         }
         category.SetParent(request.ParentCategoryId);
+
+        var groupValidation = await ValidateCategoryGroupAsync(request.CategoryGroupId, request.ParentCategoryId);
+        if (groupValidation.IsFailure)
+        {
+            return Result.Failure<CategoryResponse>(groupValidation.Error);
+        }
+        category.SetCategoryGroupId(request.CategoryGroupId);
 
         // Staged before AddAsync so its own SaveChangesAsync commits the
         // audit row in the same transaction as the new category (IAuditLogWriter's
@@ -106,6 +116,14 @@ public class CategoryManagementService : ICategoryManagementService
         {
             return Result.Failure<CategoryResponse>(Error.Validation("Category.SelfParent", ex.Message));
         }
+
+        var groupValidation = await ValidateCategoryGroupAsync(request.CategoryGroupId, request.ParentCategoryId);
+        if (groupValidation.IsFailure)
+        {
+            return Result.Failure<CategoryResponse>(groupValidation.Error);
+        }
+        category.SetCategoryGroupId(request.CategoryGroupId);
+        category.MarkUpdated();
 
         await _auditLogWriter.WriteAsync(new AuditEntry(
             "Category", category.Id.ToString(), "Updated", oldValues, Serialize(category)));
@@ -193,6 +211,42 @@ public class CategoryManagementService : ICategoryManagementService
         return Result.Success();
     }
 
+    /// <summary>
+    /// A category group only makes sense scoped to how one parent organizes
+    /// its own children - so the proposed group (if any) must exist and must
+    /// belong to the same <paramref name="parentCategoryId"/> this category
+    /// is being filed under. A top-level category (null parent) can never
+    /// carry a group, since there is no parent whose subcategory listing it
+    /// could be a section of.
+    /// </summary>
+    private async Task<Result> ValidateCategoryGroupAsync(Guid? categoryGroupId, Guid? parentCategoryId)
+    {
+        if (categoryGroupId is null)
+        {
+            return Result.Success();
+        }
+
+        if (parentCategoryId is null)
+        {
+            return Result.Failure(Error.Validation(
+                "Category.GroupRequiresParent", "A category group can only be assigned to a subcategory (one with a parent)."));
+        }
+
+        var group = await _categoryGroupRepository.GetByIdAsync(categoryGroupId.Value);
+        if (group is null)
+        {
+            return Result.Failure(Error.NotFound("CategoryGroup.NotFound", "The specified category group does not exist."));
+        }
+
+        if (group.CategoryId != parentCategoryId.Value)
+        {
+            return Result.Failure(Error.Validation(
+                "Category.GroupParentMismatch", "This category group belongs to a different parent category."));
+        }
+
+        return Result.Success();
+    }
+
     private static string Serialize(Category category) => JsonSerializer.Serialize(ToResponse(category), JsonOptions);
 
     private static CategoryResponse ToResponse(Category category) => new(
@@ -208,5 +262,6 @@ public class CategoryManagementService : ICategoryManagementService
         category.SortOrder,
         category.SeoTitle,
         category.SeoMetaDescription,
-        category.ParentCategoryId);
+        category.ParentCategoryId,
+        category.CategoryGroupId);
 }

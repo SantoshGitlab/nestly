@@ -38,7 +38,7 @@ export default function ReferEarnPage() {
     <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="Refer & Earn"
-        subtitle="Invite another provider to Nestly and earn once they complete their first few jobs."
+        subtitle="Invite another provider to Glavyx and earn once they complete their first few jobs."
       />
       <ShareCard query={summaryQuery} />
       <StatsRow query={summaryQuery} />
@@ -114,7 +114,7 @@ function ReferralShare({ summary }: { summary: ProviderReferralSummary }) {
     }
 
     try {
-      await navigator.share({ title: "Join Nestly as a provider", url: summary.shareLink });
+      await navigator.share({ title: "Join Glavyx as a provider", url: summary.shareLink });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       await copy(summary.shareLink, "Invite link");

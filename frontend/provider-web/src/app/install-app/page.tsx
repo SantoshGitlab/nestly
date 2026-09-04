@@ -111,7 +111,7 @@ function InstallScreen() {
 
   return (
     <AuthShell
-      title={installed ? "You're all set" : "Add Nestly Provider to your home screen"}
+      title={installed ? "You're all set" : "Add Glavyx Provider to your home screen"}
       subtitle={
         installed
           ? "Open it any time straight from your home screen — no browser tabs, no typing the address again."
@@ -125,7 +125,7 @@ function InstallScreen() {
           </div>
         ) : platform === "android" && deferredPrompt ? (
           <Button size="lg" fullWidth onClick={install}>
-            Install Nestly Provider
+            Install Glavyx Provider
           </Button>
         ) : (
           <ol className="flex flex-col gap-4">

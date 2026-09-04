@@ -12,7 +12,7 @@ export function ReferralPromoSection() {
   return (
     <Card
       title="Refer & Earn"
-      description="Invite another provider to Nestly and earn once they complete their first few jobs."
+      description="Invite another provider to Glavyx and earn once they complete their first few jobs."
     >
       <Link href="/refer-earn">
         <Button type="button" variant="secondary">

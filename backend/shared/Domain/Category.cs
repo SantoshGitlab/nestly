@@ -27,6 +27,17 @@ public class Category : AggregateRoot<Guid>
     /// <summary>Null for a top-level category. Set via <see cref="SetParent"/>, never in the constructor, so an existing category's tree position is always an explicit, event-raising change.</summary>
     public Guid? ParentCategoryId { get; private set; }
 
+    /// <summary>
+    /// Null when this category renders directly under its parent's
+    /// subcategory listing with no section header (the default). Set to
+    /// cluster it under a <see cref="CategoryGroup"/> heading instead (e.g.
+    /// "Large appliances" under "AC &amp; Appliance Repair") - mirrors
+    /// <see cref="Service.ServiceGroupId"/>. Only meaningful for a category
+    /// that itself has a <see cref="ParentCategoryId"/>, since the group is
+    /// scoped to how the parent's own children are organized.
+    /// </summary>
+    public Guid? CategoryGroupId { get; private set; }
+
     protected Category() { }
 
     public Category(Guid id, string name, string slug, string description) : base(id)
@@ -90,4 +101,14 @@ public class Category : AggregateRoot<Guid>
         ParentCategoryId = parentCategoryId;
         RaiseDomainEvent(new CategoryParentChangedEvent(Id, oldParentCategoryId, parentCategoryId));
     }
+
+    public void SetCategoryGroupId(Guid? categoryGroupId) => CategoryGroupId = categoryGroupId;
+
+    /// <summary>
+    /// Raised once per admin edit (mirrors <c>Service.MarkUpdated</c>) so a
+    /// plain-field change - name, description, icon/banner, SEO, sort order,
+    /// category group - busts the cached detail response too, not just the
+    /// structural changes the other events already cover.
+    /// </summary>
+    public void MarkUpdated() => RaiseDomainEvent(new CategoryUpdatedEvent(Id, ParentCategoryId));
 }

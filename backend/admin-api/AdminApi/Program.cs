@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.ProviderManagement;
 using Nestly.Application.Subscriptions;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Middleware;
@@ -178,6 +179,18 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
 {
     RecurringJob.AddOrUpdate<IBookingExpirySweepJob>(
         "booking-expiry-sweep",
+        job => job.SweepAsync(CancellationToken.None),
+        "*/5 * * * *");
+
+    // Expires system-assigned BookingProviderAssignment rows a provider never
+    // answered within AutoAssignmentOptions.ResponseWindowMinutes, and hands
+    // the booking back to ProviderAutoAssignmentHandler for the next
+    // candidate - the automated counterpart to an explicit provider reject.
+    // Same 5-minute cadence as the booking-expiry sweep above: frequent
+    // enough that a timed-out assignment is caught quickly without hammering
+    // the database on every tick.
+    RecurringJob.AddOrUpdate<IAssignmentResponseExpirySweepJob>(
+        "assignment-response-expiry-sweep",
         job => job.SweepAsync(CancellationToken.None),
         "*/5 * * * *");
 }

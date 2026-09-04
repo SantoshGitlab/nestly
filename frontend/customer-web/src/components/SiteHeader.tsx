@@ -63,7 +63,7 @@ export const ACCOUNT_LINKS = [
   { href: "/recurring-bookings", label: "Recurring bookings" },
   { href: "/addresses", label: "Addresses" },
   { href: "/wallet", label: "Wallet" },
-  { href: "/subscription", label: "Nestly Plus" },
+  { href: "/subscription", label: "Glavyx Plus" },
   { href: "/amc", label: "AMC Plans" },
   { href: "/refer-earn", label: "Refer & Earn" },
   { href: "/support", label: "Support" },
@@ -181,16 +181,16 @@ export function SiteHeader() {
         aria-label="Primary"
         className="mx-auto flex h-[4.5rem] w-full max-w-7xl items-center gap-3 px-4 sm:px-6"
       >
-        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Nestly home">
-          <NestlyMark />
+        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Glavyx home">
+          <GlavyxMark />
           <span
             style={transparent ? TEXT_SHADOW : undefined}
             className={cx(
-              "text-[0.9375rem] font-semibold tracking-tight transition-colors duration-300",
+              "text-base font-bold tracking-tight transition-colors duration-300",
               transparent ? "text-white" : "text-fg",
             )}
           >
-            Nestly
+            Glavyx
           </span>
         </Link>
 
@@ -283,17 +283,35 @@ export function SiteHeader() {
 /** Shared with `HeroBanner`'s own overlaid copy, so nav and banner text read as the same treatment. */
 const TEXT_SHADOW = { textShadow: "0 1px 3px rgb(0 0 0 / 0.5), 0 4px 20px rgb(0 0 0 / 0.5)" };
 
-function NestlyMark() {
+/**
+ * Glavyx wordmark glyph: a solid abstract "G" - a filled disc with a wedge
+ * cut from its right edge, plugged by a stubby crossbar - rather than a
+ * literal house/nest shape (that read was specific to "Nestly") or a
+ * thin-stroked ring (which turned into an illegible smudge at real header/
+ * favicon sizes - a solid fill holds its shape under anti-aliasing at those
+ * sizes where a 2-3px stroke does not). Shared 1:1 with `icon.svg` (the
+ * PWA/app icon source) and `auth-ui.tsx`'s standalone login/register logo -
+ * all three must be edited together or the brand mark drifts across
+ * surfaces.
+ */
+function GlavyxMark() {
   return (
     <span
       aria-hidden
-      className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient text-fg-on-brand shadow-brand"
+      className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-fg-on-brand shadow-brand"
     >
-      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
-        <path
-          d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
-          fill="currentColor"
+      <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6">
+        <circle
+          cx="12"
+          cy="12"
+          r="9"
+          stroke="currentColor"
+          strokeWidth="4.5"
+          strokeLinecap="round"
+          strokeDasharray="44 13"
+          transform="rotate(40 12 12)"
         />
+        <line x1="13.5" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" />
       </svg>
     </span>
   );

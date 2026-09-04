@@ -56,7 +56,7 @@ export default function NestlyCoinsPage() {
     <div className="flex w-full max-w-4xl flex-col gap-6">
       <div>
         <PageHeading
-          title="Nestly Coins"
+          title="Glavyx Coins"
           subtitle="Per-audience earn rate, reorder rule, monthly cap, expiry and clawback window (NESTLY-COINS.md)."
         />
         <Tabs

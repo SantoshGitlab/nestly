@@ -8,6 +8,9 @@
 import { API_V1, apiFetch } from "./api";
 import type {
   CategoryCreateRequest,
+  CategoryGroupAdminResponse,
+  CategoryGroupCreateRequest,
+  CategoryGroupUpdateRequest,
   CategoryResponse,
   CategoryUpdateRequest,
   ServiceAddOnAdminResponse,
@@ -34,6 +37,7 @@ const SERVICES_BASE = `${API_V1}/catalog/services`;
 const ADDONS_BASE = `${API_V1}/catalog/addons`;
 const ADDON_GROUPS_BASE = `${API_V1}/catalog/addon-groups`;
 const SERVICE_GROUPS_BASE = `${API_V1}/catalog/service-groups`;
+const CATEGORY_GROUPS_BASE = `${API_V1}/catalog/category-groups`;
 
 function query(params: Record<string, string | undefined>): string {
   const entries = Object.entries(params).filter(([, value]) => value !== undefined);
@@ -245,6 +249,40 @@ export const setServiceGroupActive = (id: string, isActive: boolean) =>
 
 export const deleteServiceGroup = (id: string) =>
   apiFetch<void>(`${SERVICE_GROUPS_BASE}/${id}`, {
+    method: "DELETE",
+    authenticated: true,
+  });
+
+// ---- Category groups (mirrors Service groups, one taxonomy level up) ----
+
+export const listCategoryGroups = (categoryId?: string) =>
+  apiFetch<CategoryGroupAdminResponse[]>(`${CATEGORY_GROUPS_BASE}${query({ categoryId })}`, { authenticated: true });
+
+export const getCategoryGroup = (id: string) =>
+  apiFetch<CategoryGroupAdminResponse>(`${CATEGORY_GROUPS_BASE}/${id}`, { authenticated: true });
+
+export const createCategoryGroup = (request: CategoryGroupCreateRequest) =>
+  apiFetch<CategoryGroupAdminResponse>(CATEGORY_GROUPS_BASE, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const updateCategoryGroup = (id: string, request: CategoryGroupUpdateRequest) =>
+  apiFetch<CategoryGroupAdminResponse>(`${CATEGORY_GROUPS_BASE}/${id}`, {
+    method: "PUT",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+export const setCategoryGroupActive = (id: string, isActive: boolean) =>
+  apiFetch<void>(`${CATEGORY_GROUPS_BASE}/${id}/${isActive ? "activate" : "deactivate"}`, {
+    method: "POST",
+    authenticated: true,
+  });
+
+export const deleteCategoryGroup = (id: string) =>
+  apiFetch<void>(`${CATEGORY_GROUPS_BASE}/${id}`, {
     method: "DELETE",
     authenticated: true,
   });

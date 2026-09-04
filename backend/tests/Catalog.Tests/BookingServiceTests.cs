@@ -1,10 +1,12 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Pricing;
 using Nestly.Application.Serviceability;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
 
@@ -385,7 +387,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()),
+                Options.Create(new AutoAssignmentOptions()), setupContext);
             var assignResult = await assignmentService.AssignAsync(bookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }
@@ -398,7 +401,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         {
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(acceptContext), new ProviderRepository(acceptContext), new ServiceRepository(acceptContext),
-                new BookingProviderAssignmentRepository(acceptContext), new ProviderScheduleConflictService(acceptContext, TestServices.Occupancy()), acceptContext);
+                new BookingProviderAssignmentRepository(acceptContext), new ProviderScheduleConflictService(acceptContext, TestServices.Occupancy()),
+                Options.Create(new AutoAssignmentOptions()), acceptContext);
             var acceptResult = await assignmentService.AcceptAsync(bookingId, providerId);
             acceptResult.IsSuccess.Should().BeTrue();
         }
@@ -588,7 +592,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()),
+                Options.Create(new AutoAssignmentOptions()), setupContext);
             var assignResult = await assignmentService.AssignAsync(bookingId, Guid.NewGuid(), new AssignProviderRequest(provider.Id, ResponseDeadline: null));
             assignResult.IsSuccess.Should().BeTrue();
         }
@@ -643,7 +648,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
 
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
-                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()), setupContext);
+                new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()),
+                Options.Create(new AutoAssignmentOptions()), setupContext);
             await assignmentService.AssignAsync(bookingId, Guid.NewGuid(), new AssignProviderRequest(providerId, ResponseDeadline: null));
         }
 
@@ -654,7 +660,8 @@ public sealed class BookingServiceTests : IClassFixture<TestDatabase>
         {
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(rejectContext), new ProviderRepository(rejectContext), new ServiceRepository(rejectContext),
-                new BookingProviderAssignmentRepository(rejectContext), new ProviderScheduleConflictService(rejectContext, TestServices.Occupancy()), rejectContext);
+                new BookingProviderAssignmentRepository(rejectContext), new ProviderScheduleConflictService(rejectContext, TestServices.Occupancy()),
+                Options.Create(new AutoAssignmentOptions()), rejectContext);
             var rejectResult = await assignmentService.RejectAsync(bookingId, new RejectAssignmentRequest("Unavailable"));
             rejectResult.IsSuccess.Should().BeTrue();
         }

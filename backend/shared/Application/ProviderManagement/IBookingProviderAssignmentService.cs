@@ -61,6 +61,17 @@ public interface IBookingProviderAssignmentService
     /// </summary>
     Task<Result<BookingProviderAssignmentResponse>> RejectByProviderAsync(Guid bookingId, Guid providerId, RejectAssignmentRequest request);
 
+    /// <summary>
+    /// The assignment-response-expiry sweep's action on one unanswered,
+    /// past-deadline assignment: marks it <see cref="Nestly.Domain.BookingProviderAssignmentStatus.Expired"/>
+    /// and returns the booking to <see cref="Nestly.Domain.BookingStatus.AwaitingFulfilment"/>
+    /// exactly like <see cref="RejectAsync"/> does for an explicit decline -
+    /// the same reassignment pool, just triggered by silence instead of a
+    /// choice. A no-op (not an error) if the assignment already moved on by
+    /// the time the sweep reaches it (the provider responded in the interim).
+    /// </summary>
+    Task<Result<BookingProviderAssignmentResponse>> ExpireAsync(Guid assignmentId);
+
     /// <summary>Full assignment history for a booking, newest first (task 159 - lets the admin UI show why a booking needs reassignment).</summary>
     Task<Result<IReadOnlyList<BookingProviderAssignmentResponse>>> GetHistoryAsync(Guid bookingId);
 

@@ -14,9 +14,11 @@ public sealed record CategoryResponse(
     int SortOrder,
     string? SeoTitle,
     string? SeoMetaDescription,
-    Guid? ParentCategoryId = null);
+    Guid? ParentCategoryId = null,
+    /// <summary>Null when this category renders directly under its parent's subcategory listing with no section header (the default).</summary>
+    Guid? CategoryGroupId = null);
 
-/// <summary>Admin create request for a category (SRS 12.5.1/12.5.2). <see cref="ParentCategoryId"/> is null for a top-level category (Phase 3 catalog redesign).</summary>
+/// <summary>Admin create request for a category (SRS 12.5.1/12.5.2). <see cref="ParentCategoryId"/> is null for a top-level category (Phase 3 catalog redesign). <see cref="CategoryGroupId"/>, when set, must belong to <see cref="ParentCategoryId"/>.</summary>
 public sealed record CategoryCreateRequest(
     string Name,
     string Slug,
@@ -27,13 +29,14 @@ public sealed record CategoryCreateRequest(
     int SortOrder,
     string? SeoTitle,
     string? SeoMetaDescription,
-    Guid? ParentCategoryId = null);
+    Guid? ParentCategoryId = null,
+    Guid? CategoryGroupId = null);
 
 /// <summary>
 /// Admin update request for a category. Covers every editable field (SRS
 /// 12.5.2) except <see cref="Category.IsActive"/>/<see cref="Category.IsFeatured"/>,
 /// which are toggled through their own dedicated endpoints so each change is
-/// audited as its own distinct action.
+/// audited as its own distinct action. <see cref="CategoryGroupId"/>, when set, must belong to <see cref="ParentCategoryId"/>.
 /// </summary>
 public sealed record CategoryUpdateRequest(
     string Name,
@@ -45,4 +48,5 @@ public sealed record CategoryUpdateRequest(
     int SortOrder,
     string? SeoTitle,
     string? SeoMetaDescription,
-    Guid? ParentCategoryId = null);
+    Guid? ParentCategoryId = null,
+    Guid? CategoryGroupId = null);

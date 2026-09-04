@@ -34,5 +34,15 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
             .WithMany()
             .HasForeignKey(x => x.ParentCategoryId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Mirrors ServiceConfiguration's ServiceGroupId FK: SetNull is a
+        // safety net only - CategoryGroupManagementService is the primary
+        // guard, refusing to delete a group still assigned to a category.
+        builder.Property(x => x.CategoryGroupId);
+        builder.HasIndex(x => x.CategoryGroupId);
+        builder.HasOne<CategoryGroup>()
+            .WithMany()
+            .HasForeignKey(x => x.CategoryGroupId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

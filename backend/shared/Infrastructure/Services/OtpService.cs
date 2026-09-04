@@ -57,10 +57,10 @@ public class OtpService : IOTPService
         // The plaintext code only ever exists in memory here and on the
         // recipient's device; it is never persisted or logged, matching the
         // no-PII/no-secrets logging rule (the sandbox provider follows suit).
-        string message = $"Your Nestly verification code is {code}";
+        string message = $"Your Glavyx verification code is {code}";
         var sendResult = channel switch
         {
-            NotificationChannel.Email => await _notificationProvider.SendEmailAsync(target, "Your Nestly verification code", message),
+            NotificationChannel.Email => await _notificationProvider.SendEmailAsync(target, "Your Glavyx verification code", message),
             _ => await _notificationProvider.SendSmsAsync(target, message)
         };
 

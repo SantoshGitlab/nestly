@@ -46,4 +46,7 @@ public interface ICategoryRepository : IRepository<Category>
 
     /// <summary>Active subcategories of a parent category (Phase 3 catalog redesign), ordered for display.</summary>
     Task<IReadOnlyList<Category>> ListChildrenAsync(Guid parentCategoryId);
+
+    /// <summary>Whether any category still points at this group - the delete-guard for <c>CategoryGroupManagementService</c>, mirrors <c>IServiceRepository.ExistsByServiceGroupIdAsync</c>.</summary>
+    Task<bool> ExistsByCategoryGroupIdAsync(Guid categoryGroupId);
 }

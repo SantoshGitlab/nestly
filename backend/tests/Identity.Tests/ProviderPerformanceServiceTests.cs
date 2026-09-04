@@ -1,8 +1,10 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -54,7 +56,8 @@ public class ProviderPerformanceServiceTests : IDisposable
         new ProviderServiceAreaRepository(context));
 
     private static BookingProviderAssignmentService CreateAssignmentService(NestlyDbContext context) => new(
-        new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context);
+        new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()),
+        Options.Create(new AutoAssignmentOptions()), context);
 
     private static Booking NewAwaitingFulfilmentBooking(Guid customerId)
     {

@@ -63,6 +63,20 @@ public sealed record CmsPageUpdateRequest(
     DateTime? PublishStartUtc,
     DateTime? PublishEndUtc);
 
+/// <summary>
+/// Public, storefront-facing projection of a live static page - mirrors
+/// <see cref="HomeBannerResponse"/>'s split from the admin CRUD shape: only
+/// what a customer-facing page renders, never the draft/publish-window
+/// workflow fields that decide <em>whether</em> this is returned at all.
+/// </summary>
+public sealed record CmsPageContentResponse(
+    string Title,
+    string Slug,
+    string Body,
+    string? SeoTitle,
+    string? SeoDescription,
+    DateTime UpdatedAtUtc);
+
 // ---------------------------------------------------------------------
 // Banners (task 124b)
 // ---------------------------------------------------------------------

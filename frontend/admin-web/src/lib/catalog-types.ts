@@ -22,6 +22,8 @@ export interface CategoryResponse {
   seoMetaDescription: string | null;
   /** Null for a top-level category (Phase 3 catalog redesign). */
   parentCategoryId: string | null;
+  /** Null when this category renders directly under its parent's subcategory listing with no section header (the default). */
+  categoryGroupId: string | null;
 }
 
 export interface CategoryCreateRequest {
@@ -35,6 +37,7 @@ export interface CategoryCreateRequest {
   seoTitle: string | null;
   seoMetaDescription: string | null;
   parentCategoryId: string | null;
+  categoryGroupId: string | null;
 }
 
 export type CategoryUpdateRequest = CategoryCreateRequest;
@@ -219,3 +222,27 @@ export interface ServiceGroupCreateRequest {
 }
 
 export type ServiceGroupUpdateRequest = ServiceGroupCreateRequest;
+
+// ---- Category groups (mirrors Service groups, one taxonomy level up) ----
+//
+// An optional section header for a subset of a PARENT category's
+// subcategories (e.g. "Large appliances" under "AC & Appliance Repair").
+// `categoryId` here names the parent whose subcategory listing this group
+// organizes, not a subcategory itself.
+
+export interface CategoryGroupAdminResponse {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface CategoryGroupCreateRequest {
+  categoryId: string;
+  name: string;
+  sortOrder: number;
+}
+
+export type CategoryGroupUpdateRequest = CategoryGroupCreateRequest;

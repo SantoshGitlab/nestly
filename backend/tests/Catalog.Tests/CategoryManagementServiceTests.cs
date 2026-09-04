@@ -17,7 +17,7 @@ public sealed class CategoryManagementServiceTests : IClassFixture<TestDatabase>
     public CategoryManagementServiceTests(TestDatabase db) => _db = db;
 
     private static CategoryManagementService CreateService(NestlyDbContext context) =>
-        new(new CategoryRepository(context), new AuditLogWriter(context, new StubAuditContextProvider()));
+        new(new CategoryRepository(context), new CategoryGroupRepository(context), new AuditLogWriter(context, new StubAuditContextProvider()));
 
     private static CategoryCreateRequest ValidCreateRequest(string suffix) => new(
         Name: $"Home Cleaning {suffix}",

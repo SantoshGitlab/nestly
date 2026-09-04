@@ -124,6 +124,10 @@ export default function CatalogCategoriesPage() {
       seoTitle: values.seoTitle || null,
       seoMetaDescription: values.seoMetaDescription || null,
       parentCategoryId: values.parentCategoryId || null,
+      // A brand-new category can't be assigned to a group at creation time -
+      // group membership is set afterward from its own edit page, once it
+      // exists and a parent (which scopes the group) is chosen.
+      categoryGroupId: null,
     }),
   );
 

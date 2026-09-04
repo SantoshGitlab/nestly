@@ -6,6 +6,7 @@ import { CategoryLandingSections } from "@/components/CategoryLandingSections";
 import { MostBookedSection } from "@/components/MostBookedSection";
 import { Reveal, revealItem } from "@/components/motion";
 import { SubCategoryTile } from "@/components/SubCategoryTile";
+import { Divider } from "@/components/ui";
 import { getHomeLanding } from "@/lib/landing-api";
 
 /**
@@ -29,26 +30,45 @@ export function CuratedHomeSections() {
 
   const { newAndTrending, mostBooked, categorySections } = query.data;
 
+  // Every section here is independently optional (an admin may configure
+  // only one of the three), so dividers are placed between whichever ones
+  // actually rendered rather than hard-coded between fixed slots - two
+  // adjacent hairlines with nothing between them would look like a bug, not
+  // a design choice.
+  const blocks = [
+    newAndTrending.length > 0 ? (
+      <section key="new-and-trending" aria-labelledby="new-and-trending-heading" className="flex flex-col gap-6">
+        <h2 id="new-and-trending-heading" className="text-display-sm font-bold tracking-tight text-fg">
+          New &amp; Trending
+        </h2>
+        {/* Responsive wrapping grid, not a fixed-233px flex row: percentage-
+            wide columns mean every row - including a short last row - fills
+            the full container edge to edge, whatever the admin-picked item
+            count or viewport width happens to be. (`SubCategoryTile` itself
+            stretches to its column via `aspect-[4/3] w-full`.) */}
+        <Reveal className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {newAndTrending.map((category) => (
+            <motion.div key={category.id} variants={revealItem}>
+              <SubCategoryTile category={category} />
+            </motion.div>
+          ))}
+        </Reveal>
+      </section>
+    ) : null,
+    mostBooked.length > 0 ? <MostBookedSection key="most-booked" services={mostBooked} /> : null,
+    categorySections.length > 0 ? (
+      <CategoryLandingSections key="category-sections" sections={categorySections} />
+    ) : null,
+  ].filter(Boolean);
+
   return (
     <div className="flex flex-col gap-14">
-      {newAndTrending.length > 0 ? (
-        <section aria-labelledby="new-and-trending-heading" className="flex flex-col gap-6">
-          <h2 id="new-and-trending-heading" className="text-display-sm font-bold tracking-tight text-fg">
-            New &amp; Trending
-          </h2>
-          <Reveal className="flex flex-wrap justify-center gap-5 sm:justify-start">
-            {newAndTrending.map((category) => (
-              <motion.div key={category.id} variants={revealItem}>
-                <SubCategoryTile category={category} />
-              </motion.div>
-            ))}
-          </Reveal>
-        </section>
-      ) : null}
-
-      <MostBookedSection services={mostBooked} />
-
-      <CategoryLandingSections sections={categorySections} />
+      {blocks.map((block, index) => (
+        <div key={index} className="flex flex-col gap-14">
+          {index > 0 ? <Divider /> : null}
+          {block}
+        </div>
+      ))}
     </div>
   );
 }

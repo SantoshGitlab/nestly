@@ -12,6 +12,7 @@ export function CatalogTabs() {
         // live at "/catalog/categories/[id]" rather than under "/catalog"
         // directly — without the prefix they would highlight no tab at all.
         { href: "/catalog", label: "Categories", matchPrefixes: ["/catalog/categories"] },
+        { href: "/catalog/category-groups", label: "Category groups", matchPrefixes: ["/catalog/category-groups"] },
         { href: "/catalog/services", label: "Services", matchPrefixes: ["/catalog/services"] },
         { href: "/catalog/service-groups", label: "Service groups", matchPrefixes: ["/catalog/service-groups"] },
         { href: "/catalog/addons", label: "Add-ons", matchPrefixes: ["/catalog/addons"] },

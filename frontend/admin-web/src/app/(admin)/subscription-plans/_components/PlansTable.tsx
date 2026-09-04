@@ -128,7 +128,7 @@ export function PlansTable({
     <>
       <DataTable
         title="Plans"
-        description="Every Nestly Plus tier. Only active plans are offered to customers."
+        description="Every Glavyx Plus tier. Only active plans are offered to customers."
         columns={columns}
         rows={plans}
         rowKey={(plan) => plan.id}
@@ -141,7 +141,7 @@ export function PlansTable({
         emptyTitle="No plans yet"
         emptyDescription={
           canWrite
-            ? "Create the first tier to start offering Nestly Plus."
+            ? "Create the first tier to start offering Glavyx Plus."
             : "An admin with write access to this module can create one."
         }
         emptyAction={emptyAction}

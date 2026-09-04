@@ -49,7 +49,19 @@ public enum BookingProviderAssignmentStatus
     /// Appended last so the persisted string values and any ordinal mirrors of
     /// the earlier members are unchanged.
     /// </summary>
-    Completed
+    Completed,
+
+    /// <summary>
+    /// The provider never responded (neither <see cref="Accept"/> nor
+    /// <see cref="Reject"/>) before <see cref="ResponseDeadline"/> passed -
+    /// detected by the recurring assignment-response-expiry sweep, not the
+    /// provider's own action. Deliberately distinct from <see cref="Rejected"/>:
+    /// silence and an explicit decline are different signals worth telling
+    /// apart in the assignment history and in any future provider-reliability
+    /// scoring, even though both return the booking to the assignable pool
+    /// identically today.
+    /// </summary>
+    Expired
 }
 
 /// <summary>
@@ -154,6 +166,24 @@ public class BookingProviderAssignment : AggregateRoot<Guid>
         Status = BookingProviderAssignmentStatus.Rejected;
         RespondedAt = DateTime.UtcNow;
         Notes = reason;
+    }
+
+    /// <summary>
+    /// The response window passed with no accept/reject from the provider -
+    /// the assignment-response-expiry sweep's action, not the provider's own.
+    /// <see cref="RespondedAt"/> is deliberately left null: it means exactly
+    /// what it says, the provider never responded, which is what lets the
+    /// sweep's own query (and anyone reading history afterwards) tell an
+    /// expiry apart from a reject without inspecting <see cref="Status"/>
+    /// alone. The booking's own reassignment handling lives in
+    /// <c>IBookingProviderAssignmentService.ExpireAsync</c>, mirroring how
+    /// <see cref="Reject"/> leaves that half to <c>RejectAsync</c>.
+    /// </summary>
+    public void Expire()
+    {
+        EnsureOutstanding();
+        Status = BookingProviderAssignmentStatus.Expired;
+        Notes = "Provider did not respond within the response window.";
     }
 
     /// <summary>

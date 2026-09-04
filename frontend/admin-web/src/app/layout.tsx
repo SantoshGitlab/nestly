@@ -20,10 +20,10 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "Nestly Admin",
-    template: "%s · Nestly Admin",
+    default: "Glavyx Admin",
+    template: "%s · Glavyx Admin",
   },
-  description: "Nestly admin panel.",
+  description: "Glavyx admin panel.",
 };
 
 /** Paints the browser chrome to match the theme on each side of the switch. */

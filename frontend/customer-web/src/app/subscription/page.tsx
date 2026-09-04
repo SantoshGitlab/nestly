@@ -181,7 +181,7 @@ function MySubscriptionView({ subscription }: { subscription: MySubscriptionResp
     <main className="flex w-full flex-col animate-rise">
       <PageBanner
         title="My subscription"
-        description="Your Nestly membership and remaining benefits."
+        description="Your Glavyx membership and remaining benefits."
         badge={<Badge tone={statusTone(subscription.status)}>{statusLabel(subscription.status)}</Badge>}
         breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "My subscription" }]} />}
       />
@@ -364,9 +364,9 @@ function PlanSelectionView() {
   return (
     <main className="flex w-full flex-col animate-rise">
       <PageBanner
-        title="Nestly Plus"
+        title="Glavyx Plus"
         description="Subscribe for free visits and a standing discount on every booking."
-        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Nestly Plus" }]} />}
+        breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Glavyx Plus" }]} />}
       />
 
       <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
@@ -399,7 +399,7 @@ function PlanSelectionView() {
       ) : plansQuery.data.length === 0 ? (
         <EmptyState
           title="No plans available right now"
-          description="Membership plans aren't open in your area yet. Everything on Nestly is still bookable without one."
+          description="Membership plans aren't open in your area yet. Everything on Glavyx is still bookable without one."
           action={
             <Button size="sm" variant="secondary" onClick={() => plansQuery.refetch()}>
               Check again

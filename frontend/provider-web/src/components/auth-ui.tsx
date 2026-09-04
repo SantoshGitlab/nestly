@@ -57,7 +57,7 @@ export function AuthShell({
 
         <div className="w-full max-w-md animate-rise">
           <div className="mb-8 text-center">
-            <Link href="/" className="inline-flex items-center gap-2" aria-label="Nestly Provider home">
+            <Link href="/" className="inline-flex items-center gap-2" aria-label="Glavyx Provider home">
               <span
                 aria-hidden
                 className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-fg-on-brand shadow-brand"
@@ -70,7 +70,7 @@ export function AuthShell({
                 </svg>
               </span>
               <span className="text-base font-semibold tracking-tight text-fg">
-                Nestly <span className="text-fg-muted">Provider</span>
+                Glavyx <span className="text-fg-muted">Provider</span>
               </span>
             </Link>
 

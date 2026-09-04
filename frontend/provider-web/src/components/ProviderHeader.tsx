@@ -81,7 +81,7 @@ export function ProviderHeader({ claims }: { claims: ProviderSessionClaims | nul
           </svg>
         </span>
         <span className="text-[0.9375rem] font-semibold tracking-tight text-fg">
-          Nestly <span className="text-fg-muted">Provider</span>
+          Glavyx <span className="text-fg-muted">Provider</span>
         </span>
       </span>
 

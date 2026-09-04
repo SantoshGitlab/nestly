@@ -387,7 +387,7 @@ function ReferEarnPrompt() {
         Loved the service?
       </p>
       <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-        Share Nestly with a friend and you&apos;ll both get rewarded once they book.
+        Share Glavyx with a friend and you&apos;ll both get rewarded once they book.
       </p>
       <Link
         href="/refer-earn"

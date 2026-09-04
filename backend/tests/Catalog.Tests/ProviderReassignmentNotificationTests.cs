@@ -1,8 +1,10 @@
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.ProviderManagement;
 using Nestly.Domain;
 using Nestly.Domain.Events;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -115,6 +117,7 @@ public sealed class ProviderReassignmentNotificationTests : IClassFixture<TestDa
         new ServiceRepository(context),
         new BookingProviderAssignmentRepository(context),
         new ProviderScheduleConflictService(context, TestServices.Occupancy()),
+        Options.Create(new AutoAssignmentOptions()),
         context);
 
     private sealed record Fixture(Guid BookingId, Guid FirstProviderId, Guid SecondProviderId);

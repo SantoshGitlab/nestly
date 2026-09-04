@@ -118,7 +118,7 @@ export default function ForgotPasswordPage() {
             label="Email"
             type="email"
             autoComplete="email"
-            hint="The email address on your Nestly account."
+            hint="The email address on your Glavyx account."
             error={requestForm.formState.errors.email?.message}
             {...requestForm.register("email")}
           />

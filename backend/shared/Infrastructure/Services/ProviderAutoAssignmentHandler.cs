@@ -34,11 +34,13 @@ namespace Nestly.Infrastructure.Services;
 ///
 /// Ranks candidates via <see cref="IProviderMatchingService"/> (task 244, by
 /// real road travel time since task 267),
-/// excluding every provider with a Rejected row against this booking
-/// (regardless of who assigned them - a rejection means "this provider said
-/// no to this booking," full stop). Stops after <see cref="AutoAssignmentOptions.RetryAttempts"/>
-/// system-attributed rejections and leaves the booking for the manual queue
-/// rather than retrying forever (decision 6). Walks the ranked list applying
+/// excluding every provider with a Rejected or Expired row against this
+/// booking (regardless of who assigned them - a rejection means "this
+/// provider said no to this booking," and an expiry means they never
+/// answered at all; both, full stop). Stops after
+/// <see cref="AutoAssignmentOptions.RetryAttempts"/> system-attributed
+/// rejections/expiries and leaves the booking for the manual queue rather
+/// than retrying forever (decision 6). Walks the ranked list applying
 /// <see cref="IProviderAssignmentEligibilityService"/> (task 245), and
 /// assigns the first eligible one via
 /// <see cref="IBookingProviderAssignmentService.AssignBySystemAsync"/>. No
@@ -113,9 +115,13 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
 
         var history = await _assignmentRepository.ListByBookingAsync(domainEvent.BookingId);
 
-        int systemRejections = history.Count(a =>
-            a.AssignedByType == BookingAssignedByType.System && a.Status == BookingProviderAssignmentStatus.Rejected);
-        if (systemRejections >= _options.Value.RetryAttempts)
+        // Expired counts the same as Rejected here (task: assignment-response
+        // expiry) - a provider who never answered gets exactly one attempt at
+        // this booking too, same as one who explicitly declined it.
+        int systemNonResponses = history.Count(a =>
+            a.AssignedByType == BookingAssignedByType.System
+            && a.Status is BookingProviderAssignmentStatus.Rejected or BookingProviderAssignmentStatus.Expired);
+        if (systemNonResponses >= _options.Value.RetryAttempts)
         {
             _logger.LogInformation(
                 "Booking {BookingId} hit the auto-assignment retry cap ({RetryAttempts}); leaving for manual admin assignment.",
@@ -124,7 +130,7 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
         }
 
         var excludeProviderIds = history
-            .Where(a => a.Status == BookingProviderAssignmentStatus.Rejected)
+            .Where(a => a.Status is BookingProviderAssignmentStatus.Rejected or BookingProviderAssignmentStatus.Expired)
             .Select(a => a.ProviderId)
             .ToList();
 

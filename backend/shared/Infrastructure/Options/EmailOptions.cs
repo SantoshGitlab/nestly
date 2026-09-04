@@ -23,7 +23,7 @@ public class EmailOptions
     /// <summary>Sender address shown to recipients, and the SMTP auth username for Gmail (the two are the same account for Gmail SMTP).</summary>
     public string FromAddress { get; set; } = "Nestly.test123@gmail.com";
 
-    public string FromName { get; set; } = "Nestly";
+    public string FromName { get; set; } = "Glavyx";
 
     /// <summary>
     /// Gmail's 16-character App Password (Google Account -&gt; Security -&gt;

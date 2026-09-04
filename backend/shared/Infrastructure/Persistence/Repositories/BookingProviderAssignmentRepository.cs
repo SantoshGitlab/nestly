@@ -59,4 +59,11 @@ public class BookingProviderAssignmentRepository : IBookingProviderAssignmentRep
             .Where(a => a.ProviderId == providerId)
             .OrderByDescending(a => a.AssignedAt)
             .ToListAsync();
+
+    public async Task<IReadOnlyList<BookingProviderAssignment>> ListUnansweredPastDeadlineAsync(DateTime nowUtc) =>
+        await _context.BookingProviderAssignments
+            .Where(a => a.Status == BookingProviderAssignmentStatus.Assigned
+                && a.ResponseDeadline != null
+                && a.ResponseDeadline < nowUtc)
+            .ToListAsync();
 }

@@ -131,4 +131,7 @@ public class CategoryRepository : ICategoryRepository
             .OrderBy(c => c.SortOrder)
             .ThenBy(c => c.Name)
             .ToListAsync();
+
+    public Task<bool> ExistsByCategoryGroupIdAsync(Guid categoryGroupId) =>
+        _context.Set<Category>().AnyAsync(c => c.CategoryGroupId == categoryGroupId);
 }

@@ -25,8 +25,8 @@ const EARNING_SOURCE_LABELS: Record<EarningSourceType, string> = {
   [EarningSourceType.JobCompletion]: "Job completed",
   [EarningSourceType.Penalty]: "Penalty",
   [EarningSourceType.AdminCorrection]: "Adjustment",
-  [EarningSourceType.NestlyCoinsReward]: "Nestly Coins earned",
-  [EarningSourceType.NestlyCoinsClawback]: "Nestly Coins clawed back",
+  [EarningSourceType.NestlyCoinsReward]: "Glavyx Coins earned",
+  [EarningSourceType.NestlyCoinsClawback]: "Glavyx Coins clawed back",
 };
 
 /** Readable label for a ledger entry's source (task 203). */

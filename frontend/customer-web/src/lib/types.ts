@@ -139,6 +139,13 @@ export interface ServiceGroupSummary {
   services: ServiceSummary[];
 }
 
+/** A named section header for a subset of a category's subcategories (e.g. "Large appliances" under "AC & Appliance Repair"). Mirrors `ServiceGroupSummary`, one taxonomy level up. */
+export interface CategoryGroupSummary {
+  id: string;
+  name: string;
+  subcategories: CategorySummary[];
+}
+
 export interface CategoryDetail {
   id: string;
   name: string;
@@ -151,9 +158,12 @@ export interface CategoryDetail {
   /** Ungrouped services only (Appliance/Service Group catalog redesign) - a service assigned to a group appears in `serviceGroups` instead, never both. */
   services: ServiceSummary[];
   /** Active subcategories, if any (Phase 3 catalog redesign) - empty for a leaf category, unchanged from before this field existed. */
+  /** Ungrouped subcategories only - a subcategory assigned to a group is surfaced under its entry in `subcategoryGroups` instead, never both. */
   subcategories: CategorySummary[];
   /** Empty for every category with no service groups (the default, and every category before this field existed). */
   serviceGroups: ServiceGroupSummary[];
+  /** Empty for every category with no subcategory groups (the default). */
+  subcategoryGroups: CategoryGroupSummary[];
 }
 
 export interface ServiceListItem {

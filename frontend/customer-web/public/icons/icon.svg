@@ -1,11 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nestly">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Glavyx">
   <!--
-    App-icon rendering of the same mark as SiteHeader.tsx's NestlyMark /
-    auth-ui.tsx's AuthShell logo (house glyph on the brand gradient), traced
-    to the brand-gradient stops in tailwind.config.ts / globals.css (the
-    brand-700, brand-500 and brand-400 custom properties) rather than
-    referencing those properties by name, which a standalone SVG file has no
-    cascade to resolve.
+    App-icon rendering of the same mark as SiteHeader.tsx's GlavyxMark /
+    auth-ui.tsx's AuthShell logo (an open ring plugged by a crossbar - a "G")
+    on a flat brand-600 field, traced to that custom property's value in
+    globals.css rather than referencing it by name, which a standalone SVG
+    file has no cascade to resolve. Flat rather than the header's earlier
+    brand-gradient treatment on purpose: a single solid color reads as one
+    deliberate two-tone mark (background + glyph) rather than a gradient
+    patch, and holds up better once rasterized down to favicon size.
 
     Those names are written without their leading dashes on purpose: this is
     an XML comment, and a literal double hyphen inside one is a
@@ -19,19 +21,28 @@
     adaptive-icon system) crops to a circle/squircle/rounded-square of its
     own choosing, and only content within that safe zone is guaranteed to
     survive the crop.
+
+    NOTE: this SVG is the source of truth (scripts/generate-pwa-icons.sh
+    rasterizes it into icon-192.png / icon-512.png / apple-icon.png / the
+    favicon). Those PNG/ICO derivatives were NOT regenerated when this glyph
+    changed from Nestly's house mark to Glavyx's ring-and-bar "G", because no
+    rasterizer (rsvg-convert / ImageMagick) was available in the environment
+    that made this edit - re-run that script on a machine that has one and
+    commit the regenerated files before shipping.
   -->
-  <defs>
-    <linearGradient id="brand" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgb(9,61,128)" />
-      <stop offset="55%" stop-color="rgb(45,111,194)" />
-      <stop offset="100%" stop-color="rgb(96,152,215)" />
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" fill="url(#brand)" />
-  <g transform="translate(256,256) scale(9) translate(-12,-12.5)">
-    <path
-      d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
-      fill="#ffffff"
+  <rect width="512" height="512" fill="rgb(7,77,163)" />
+  <g transform="translate(256,256) scale(9) translate(-12,-12)">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="4.5"
+      stroke-linecap="round"
+      stroke-dasharray="44 13"
+      transform="rotate(40 12 12)"
     />
+    <line x1="13.5" y1="12" x2="21" y2="12" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" />
   </g>
 </svg>

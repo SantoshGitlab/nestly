@@ -88,7 +88,7 @@ function ReferEarnScreen() {
     <main className="flex w-full flex-col">
       <PageBanner
         title="Refer & Earn"
-        description="Share Nestly with friends and earn a reward for every qualifying booking."
+        description="Share Glavyx with friends and earn a reward for every qualifying booking."
         breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Refer & Earn" }]} />}
       />
 
@@ -189,7 +189,7 @@ function ReferralShare({ summary }: { summary: ReferralSummaryResponse }) {
     }
 
     try {
-      await navigator.share({ title: "Join me on Nestly", url: summary.shareLink });
+      await navigator.share({ title: "Join me on Glavyx", url: summary.shareLink });
     } catch (error) {
       // Dismissing the OS share sheet rejects with AbortError. That is the
       // user declining, not a failure, and reporting it as one is worse than

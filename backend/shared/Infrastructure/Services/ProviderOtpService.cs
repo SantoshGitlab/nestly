@@ -59,10 +59,10 @@ public class ProviderOtpService : IProviderOtpService
         // The plaintext code only ever exists in memory here and on the
         // recipient's device; it is never persisted or logged (same
         // no-secrets-in-logs rule OtpService follows).
-        string message = $"Your Nestly provider verification code is {code}";
+        string message = $"Your Glavyx provider verification code is {code}";
         var sendResult = channel switch
         {
-            NotificationChannel.Email => await _notificationProvider.SendEmailAsync(target, "Your Nestly provider verification code", message),
+            NotificationChannel.Email => await _notificationProvider.SendEmailAsync(target, "Your Glavyx provider verification code", message),
             _ => await _notificationProvider.SendSmsAsync(target, message)
         };
 

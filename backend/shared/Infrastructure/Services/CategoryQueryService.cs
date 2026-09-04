@@ -17,6 +17,7 @@ public class CategoryQueryService : ICategoryQueryService
     private readonly IServiceRepository _serviceRepository;
     private readonly IServiceAddOnRepository _addOnRepository;
     private readonly IServiceGroupRepository _serviceGroupRepository;
+    private readonly ICategoryGroupRepository _categoryGroupRepository;
     private readonly IServiceabilityRepository _serviceabilityRepository;
     private readonly ICacheService _cache;
 
@@ -25,6 +26,7 @@ public class CategoryQueryService : ICategoryQueryService
         IServiceRepository serviceRepository,
         IServiceAddOnRepository addOnRepository,
         IServiceGroupRepository serviceGroupRepository,
+        ICategoryGroupRepository categoryGroupRepository,
         IServiceabilityRepository serviceabilityRepository,
         ICacheService cache)
     {
@@ -32,6 +34,7 @@ public class CategoryQueryService : ICategoryQueryService
         _serviceRepository = serviceRepository;
         _addOnRepository = addOnRepository;
         _serviceGroupRepository = serviceGroupRepository;
+        _categoryGroupRepository = categoryGroupRepository;
         _serviceabilityRepository = serviceabilityRepository;
         _cache = cache;
     }
@@ -104,7 +107,22 @@ public class CategoryQueryService : ICategoryQueryService
                         g.Id, g.Name, servicesByGroup[g.Id].Select(s => ToServiceSummary(s, addOnsByService)).ToList()))
                     .ToList();
 
+                // Same split-by-group-id pattern as services/ServiceGroups
+                // above, one taxonomy level up: one already-fetched,
+                // already-ordered subcategory list serves both the ungrouped
+                // Subcategories field and each group's members.
                 var subcategories = await _categoryRepository.ListChildrenAsync(category.Id);
+                var ungroupedSubcategories = subcategories.Where(c => c.CategoryGroupId is null).ToList();
+                var subcategoriesByGroup = subcategories.Where(c => c.CategoryGroupId is not null)
+                    .GroupBy(c => c.CategoryGroupId!.Value)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                var categoryGroups = await _categoryGroupRepository.ListActiveByCategoryIdsAsync([category.Id]);
+                var categoryGroupResponses = categoryGroups
+                    .Where(g => subcategoriesByGroup.ContainsKey(g.Id))
+                    .Select(g => new CategoryGroupSummaryResponse(
+                        g.Id, g.Name, subcategoriesByGroup[g.Id].Select(ToSummary).ToList()))
+                    .ToList();
 
                 return new CategoryDetailResponse(
                     category.Id,
@@ -115,8 +133,9 @@ public class CategoryQueryService : ICategoryQueryService
                     category.BannerUrl,
                     category.PageBannerUrl,
                     serviceResponses,
-                    subcategories.Select(ToSummary).ToList(),
-                    serviceGroupResponses);
+                    ungroupedSubcategories.Select(ToSummary).ToList(),
+                    serviceGroupResponses,
+                    categoryGroupResponses);
             },
             DetailTtl);
 

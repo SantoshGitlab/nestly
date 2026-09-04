@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { Jost } from "next/font/google";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ToastProvider } from "@/components/ui";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
@@ -27,8 +28,8 @@ const geistMono = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "Nestly — Trusted home services, booked in minutes",
-    template: "%s · Nestly",
+    default: "Glavyx — Trusted home services, booked in minutes",
+    template: "%s · Glavyx",
   },
   description:
     "Cleaning, repairs, salon and more — vetted professionals, upfront pricing, and slots that fit your day.",
@@ -106,6 +107,7 @@ export default function RootLayout({
               className="pt-[calc(4.5rem+env(safe-area-inset-top))] pb-20 md:pb-0"
             >
               {children}
+              <SiteFooter />
             </div>
             <BottomTabBar />
           </ToastProvider>

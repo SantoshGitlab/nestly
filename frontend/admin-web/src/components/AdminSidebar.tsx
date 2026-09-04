@@ -219,7 +219,7 @@ function SidebarBrand() {
         </svg>
       </span>
       <span className="text-[0.9375rem] font-semibold tracking-tight text-fg">
-        Nestly <span className="text-fg-muted">Admin</span>
+        Glavyx <span className="text-fg-muted">Admin</span>
       </span>
     </div>
   );

@@ -94,7 +94,7 @@ export default function SubscriptionPlansPage() {
     <div className="flex w-full max-w-6xl flex-col gap-6">
       <PageHeading
         title="Subscription Plans"
-        subtitle="Price, billing cycle and benefits for the Nestly Plus tiers (PRODUCT-ENHANCEMENTS.md #1)."
+        subtitle="Price, billing cycle and benefits for the Glavyx Plus tiers (PRODUCT-ENHANCEMENTS.md #1)."
         actions={newPlanButton}
       />
 

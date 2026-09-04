@@ -16,6 +16,7 @@ import {
   getCategory,
   listCategories,
   listCategoryChildren,
+  listCategoryGroups,
   setCategoryActive,
   setCategoryFeatured,
   updateCategory,
@@ -40,6 +41,7 @@ const categorySchema = z.object({
   seoTitle: z.string().max(200).optional().or(z.literal("")),
   seoMetaDescription: z.string().max(500).optional().or(z.literal("")),
   parentCategoryId: z.string().optional().or(z.literal("")),
+  categoryGroupId: z.string().optional().or(z.literal("")),
 });
 type CategoryFormValues = z.infer<typeof categorySchema>;
 
@@ -101,9 +103,21 @@ export default function EditCategoryPage() {
           seoTitle: categoryQuery.data.seoTitle ?? "",
           seoMetaDescription: categoryQuery.data.seoMetaDescription ?? "",
           parentCategoryId: categoryQuery.data.parentCategoryId ?? "",
+          categoryGroupId: categoryQuery.data.categoryGroupId ?? "",
         }
       : undefined,
   });
+
+  const selectedParentCategoryId = form.watch("parentCategoryId");
+  const categoryGroupsQuery = useQuery({
+    queryKey: ["category-groups", selectedParentCategoryId],
+    queryFn: () => listCategoryGroups(selectedParentCategoryId),
+    enabled: !!selectedParentCategoryId,
+  });
+  const categoryGroupOptions = [
+    { value: "", label: "No group" },
+    ...(categoryGroupsQuery.data ?? []).map((g) => ({ value: g.id, label: g.name })),
+  ];
 
   const updateMutation = useMutation({
     mutationFn: (values: CategoryFormValues) =>
@@ -118,6 +132,7 @@ export default function EditCategoryPage() {
         seoTitle: values.seoTitle || null,
         seoMetaDescription: values.seoMetaDescription || null,
         parentCategoryId: values.parentCategoryId || null,
+        categoryGroupId: values.categoryGroupId || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -266,14 +281,28 @@ export default function EditCategoryPage() {
             />
           </FormGrid>
 
-          <Select
-            label="Parent category"
-            hint="Leave unset for a top-level category, or choose one to nest this under a parent (Phase 3)."
-            placeholder="No parent (top-level)"
-            options={parentOptions}
-            {...form.register("parentCategoryId")}
-            disabled={!canWrite}
-          />
+          <FormGrid>
+            <Select
+              label="Parent category"
+              hint="Leave unset for a top-level category, or choose one to nest this under a parent (Phase 3)."
+              placeholder="No parent (top-level)"
+              options={parentOptions}
+              {...form.register("parentCategoryId")}
+              disabled={!canWrite}
+            />
+            <Select
+              // Mirrors the service edit page's serviceGroupId remount trick:
+              // the group list loads async (gated on the selected parent), so
+              // this forces the uncontrolled <select> to re-apply the saved
+              // value once the real option list has loaded.
+              key={`${selectedParentCategoryId}-${categoryGroupOptions.length}`}
+              label="Category group"
+              hint='Optional section header shown on the parent&rsquo;s subcategory listing (e.g. "Large appliances"). Only meaningful once a parent category is selected.'
+              options={categoryGroupOptions}
+              {...form.register("categoryGroupId")}
+              disabled={!canWrite || !selectedParentCategoryId}
+            />
+          </FormGrid>
 
           <FormGrid columns={3}>
             <Field

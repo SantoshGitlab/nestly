@@ -20,4 +20,13 @@ public interface IBookingProviderAssignmentRepository
 
     /// <summary>Every assignment ever made to a provider, across every booking, newest first (task 149a - the provider's own "my jobs" list, unlike <c>IBookingRepository.ListByAssignedProviderAsync</c> this includes rejected/superseded rows too).</summary>
     Task<IReadOnlyList<BookingProviderAssignment>> ListByProviderAsync(Guid providerId);
+
+    /// <summary>
+    /// Still-<see cref="BookingProviderAssignmentStatus.Assigned"/> rows whose
+    /// <see cref="BookingProviderAssignment.ResponseDeadline"/> has already
+    /// passed with no response - the assignment-response-expiry sweep's
+    /// candidate set. Excludes anything without a deadline at all (an admin's
+    /// manual assignment with no deadline set is never auto-expired).
+    /// </summary>
+    Task<IReadOnlyList<BookingProviderAssignment>> ListUnansweredPastDeadlineAsync(DateTime nowUtc);
 }

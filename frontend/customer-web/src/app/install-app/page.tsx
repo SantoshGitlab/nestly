@@ -103,11 +103,11 @@ function InstallScreen() {
 
   return (
     <AuthShell
-      title={installed ? "You're all set" : "Add Nestly to your home screen"}
+      title={installed ? "You're all set" : "Add Glavyx to your home screen"}
       subtitle={
         installed
           ? "Open it any time straight from your home screen — no browser tabs, no typing the address again."
-          : "One tap, and Nestly opens like any other app — faster, full-screen, and easy to find."
+          : "One tap, and Glavyx opens like any other app — faster, full-screen, and easy to find."
       }
     >
       <div className="flex flex-col gap-6">
@@ -117,7 +117,7 @@ function InstallScreen() {
           </div>
         ) : platform === "android" && deferredPrompt ? (
           <Button size="lg" fullWidth onClick={install}>
-            Install Nestly
+            Install Glavyx
           </Button>
         ) : (
           <ol className="flex flex-col gap-4">
@@ -141,7 +141,7 @@ function InstallScreen() {
             router.push(next);
           }}
         >
-          {installed ? "Continue to Nestly" : "Maybe later"}
+          {installed ? "Continue to Glavyx" : "Maybe later"}
         </Button>
       </div>
     </AuthShell>
@@ -157,7 +157,7 @@ const IOS_STEPS = [
 const ANDROID_STEPS = [
   "Tap the menu (⋮) in the top corner of your browser.",
   'Tap "Install app" or "Add to Home screen".',
-  "Confirm, and Nestly appears on your home screen.",
+  "Confirm, and Glavyx appears on your home screen.",
 ];
 
 function CheckIcon() {

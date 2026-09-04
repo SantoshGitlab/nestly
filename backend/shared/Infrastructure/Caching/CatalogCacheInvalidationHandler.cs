@@ -20,6 +20,7 @@ public sealed class CatalogCacheInvalidationHandler :
     INotificationHandler<DomainEventNotification<CategoryActivatedEvent>>,
     INotificationHandler<DomainEventNotification<CategoryDeactivatedEvent>>,
     INotificationHandler<DomainEventNotification<CategoryParentChangedEvent>>,
+    INotificationHandler<DomainEventNotification<CategoryUpdatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceCreatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceActivatedEvent>>,
     INotificationHandler<DomainEventNotification<ServiceDeactivatedEvent>>,
@@ -66,6 +67,22 @@ public sealed class CatalogCacheInvalidationHandler :
         if (notification.DomainEvent.NewParentCategoryId is Guid newParentId)
         {
             await InvalidateCategory(newParentId, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// A plain-field edit (name, description, icon/banner, SEO, sort order,
+    /// category group) - busts this category's own cache entry, and its
+    /// parent's too, since the parent's cached response embeds this
+    /// category's summary (name/slug/icon/banner) in its Subcategories list.
+    /// </summary>
+    public async Task Handle(DomainEventNotification<CategoryUpdatedEvent> notification, CancellationToken cancellationToken)
+    {
+        await InvalidateCategory(notification.DomainEvent.CategoryId, cancellationToken);
+
+        if (notification.DomainEvent.ParentCategoryId is Guid parentId)
+        {
+            await InvalidateCategory(parentId, cancellationToken);
         }
     }
 

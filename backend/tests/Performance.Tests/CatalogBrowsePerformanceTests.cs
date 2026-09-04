@@ -88,7 +88,8 @@ public sealed class CatalogBrowsePerformanceTests : IClassFixture<PerfTestDataba
 
     private static CategoryQueryService BuildCategoryQueryService(NestlyDbContext context) => new(
         new CategoryRepository(context), new ServiceRepository(context), new ServiceAddOnRepository(context),
-        new ServiceGroupRepository(context), new ServiceabilityRepository(context), new InMemoryCacheService());
+        new ServiceGroupRepository(context), new CategoryGroupRepository(context), new ServiceabilityRepository(context),
+        new InMemoryCacheService());
 
     /// <summary>
     /// Seeds well past CatalogSearchService's 20-per-type result cap (task

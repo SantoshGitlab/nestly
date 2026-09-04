@@ -1,11 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, Modal, Skeleton, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
-import { clearSelectedLocality, setSelectedCity, setSelectedLocality } from "@/lib/location";
+import {
+  clearSelectedLocality,
+  setSelectedCity,
+  setSelectedLocality,
+  subscribeToOpenCityPicker,
+} from "@/lib/location";
 import type { City, LocalitySearchResult } from "@/lib/types";
 
 /**
@@ -21,6 +26,10 @@ import type { City, LocalitySearchResult } from "@/lib/types";
 export function CitySelector({ transparent = false }: { transparent?: boolean }) {
   const { city, locality } = useSelectedCity();
   const [open, setOpen] = useState(false);
+
+  // Lets `LocationPrompt`'s "choose manually" / no-match fallback open this
+  // same modal instead of duplicating the city/area list UI elsewhere.
+  useEffect(() => subscribeToOpenCityPicker(() => setOpen(true)), []);
 
   // "…" while storage is still being read, "Select city" once read and
   // empty, "City" for a city-only pick, "City - Area" once an area is

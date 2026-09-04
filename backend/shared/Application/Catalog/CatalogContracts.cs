@@ -72,6 +72,18 @@ public record ServiceGroupSummaryResponse(
     IReadOnlyList<ServiceSummaryResponse> Services);
 
 /// <summary>
+/// A named section header for a subset of a category's subcategories (e.g.
+/// "Large appliances" under "AC &amp; Appliance Repair"), as shown to a
+/// customer. Only ever included when it has at least one active
+/// subcategory - the UI must never render an empty header. Mirrors
+/// <see cref="ServiceGroupSummaryResponse"/> exactly, one taxonomy level up.
+/// </summary>
+public record CategoryGroupSummaryResponse(
+    Guid Id,
+    string Name,
+    IReadOnlyList<CategorySummaryResponse> Subcategories);
+
+/// <summary>
 /// Category detail: the category plus its active subcategories, services and
 /// their add-ons (task 41, SRS 11.5; subcategories added Phase 3 catalog
 /// redesign). <see cref="Services"/> is ungrouped services only (Appliance/
@@ -79,7 +91,9 @@ public record ServiceGroupSummaryResponse(
 /// surfaced under its entry in <see cref="ServiceGroups"/> instead, never
 /// both. For every category with no service groups (the default, and every
 /// category before this field existed), <see cref="ServiceGroups"/> is empty
-/// and <see cref="Services"/> behaves exactly as before.
+/// and <see cref="Services"/> behaves exactly as before. <see cref="Subcategories"/>/
+/// <see cref="SubcategoryGroups"/> follow the identical ungrouped/grouped
+/// split, one taxonomy level up.
 /// </summary>
 public record CategoryDetailResponse(
     Guid Id,
@@ -91,7 +105,8 @@ public record CategoryDetailResponse(
     string? PageBannerUrl,
     IReadOnlyList<ServiceSummaryResponse> Services,
     IReadOnlyList<CategorySummaryResponse> Subcategories,
-    IReadOnlyList<ServiceGroupSummaryResponse> ServiceGroups);
+    IReadOnlyList<ServiceGroupSummaryResponse> ServiceGroups,
+    IReadOnlyList<CategoryGroupSummaryResponse> SubcategoryGroups);
 
 /// <summary>Service card for a "services within category" listing (task 42a, SRS 11.5.3).</summary>
 public record ServiceListItemResponse(

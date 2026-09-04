@@ -17,6 +17,7 @@ public sealed class CategoryQueryServiceTests : IClassFixture<TestDatabase>
         new ServiceRepository(context),
         new ServiceAddOnRepository(context),
         new ServiceGroupRepository(context),
+        new CategoryGroupRepository(context),
         new ServiceabilityRepository(context),
         new InMemoryCacheService());
 

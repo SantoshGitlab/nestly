@@ -126,7 +126,7 @@ function LoginScreen() {
       footer={
         accountType === "customer" ? (
           <>
-            New to Nestly?{" "}
+            New to Glavyx?{" "}
             <Link
               href="/register"
               className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"

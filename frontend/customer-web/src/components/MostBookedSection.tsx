@@ -6,9 +6,7 @@ import type { LandingService } from "@/lib/landing-types";
 /**
  * "Most Booked Services": admin-picked bookable services, same card grid as
  * `ServiceGroupSection` (a category page's group listing) so a service reads
- * identically everywhere it appears. `description` is intentionally blank -
- * this section is scoped to image/title/price only (no descriptions are
- * curated for it), and `ServiceCard` already renders an empty line cleanly.
+ * identically everywhere it appears.
  */
 export function MostBookedSection({ services }: { services: LandingService[] }) {
   if (services.length === 0) {
@@ -20,13 +18,12 @@ export function MostBookedSection({ services }: { services: LandingService[] }) 
       <h2 id="most-booked-heading" className="text-display-sm font-bold tracking-tight text-fg">
         Most Booked Services
       </h2>
-      <Reveal className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Reveal className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {services.map((service) => (
           <motion.div key={service.id} variants={revealItem}>
             <ServiceCard
               slug={service.slug}
               name={service.name}
-              description=""
               price={service.price}
               coverImageUrl={service.imageUrl}
             />

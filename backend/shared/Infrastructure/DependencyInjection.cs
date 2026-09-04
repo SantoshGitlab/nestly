@@ -395,6 +395,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceVariantRepository, ServiceVariantRepository>();
         services.AddScoped<IServiceAddOnGroupRepository, ServiceAddOnGroupRepository>();
         services.AddScoped<IServiceGroupRepository, ServiceGroupRepository>();
+        services.AddScoped<ICategoryGroupRepository, CategoryGroupRepository>();
         services.AddScoped<ILandingSelectionRepository, LandingSelectionRepository>();
         services.AddScoped<IServiceFaqRepository, ServiceFaqRepository>();
         services.AddScoped<ISlotBlackoutRepository, SlotBlackoutRepository>();
@@ -455,6 +456,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceVariantManagementService, ServiceVariantManagementService>();
         services.AddScoped<IServiceAddOnGroupManagementService, ServiceAddOnGroupManagementService>();
         services.AddScoped<IServiceGroupManagementService, ServiceGroupManagementService>();
+        services.AddScoped<ICategoryGroupManagementService, CategoryGroupManagementService>();
         services.AddScoped<ILandingManagementService, LandingManagementService>();
         services.AddScoped<ILandingQueryService, LandingQueryService>();
         services.AddScoped<ICustomerAddressRepository, CustomerAddressRepository>();
@@ -696,6 +698,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
+        services.AddScoped<IAssignmentResponseExpirySweepJob, AssignmentResponseExpirySweepJob>();
         services.AddScoped<IBookingFulfilmentPromotionJob, BookingFulfilmentPromotionJob>();
         services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
         services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
@@ -802,6 +805,7 @@ public static class DependencyInjection
         services.AddScoped<ICmsMediaService, CmsMediaService>();
         services.AddScoped<ICmsPageRepository, CmsPageRepository>();
         services.AddScoped<ICmsPageService, CmsPageService>();
+        services.AddScoped<ICmsPageQueryService, CmsPageQueryService>();
         services.AddScoped<IBannerRepository, BannerRepository>();
         services.AddScoped<IBannerService, BannerService>();
         services.AddScoped<IBannerQueryService, BannerQueryService>();

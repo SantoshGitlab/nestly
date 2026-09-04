@@ -36,7 +36,7 @@ if (${JSON.stringify(Boolean(config.apiKey))}) {
   // Background handler: the tab is closed or unfocused, so there is no React
   // tree to render a notification - use the raw Notifications API directly.
   messaging.onBackgroundMessage((payload) => {
-    const title = payload.notification && payload.notification.title || "Nestly";
+    const title = payload.notification && payload.notification.title || "Glavyx";
     const body = payload.notification && payload.notification.body || "";
     self.registration.showNotification(title, { body, icon: "/favicon.ico" });
   });

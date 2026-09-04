@@ -85,7 +85,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
                 Options.Create(new AutoAssignmentOptions())),
             BuildEligibilityService(context)),
         BuildEligibilityService(context),
-        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context),
+        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions { RetryAttempts = retryAttempts, Enabled = enabled }), context),
         new BookingProviderAssignmentRepository(context),
         new BookingRepository(context),
         new RecurringPlanProviderContinuityService(new BookingRepository(context)),
@@ -219,7 +219,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         using (var context = _db.CreateContext())
         {
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context);
+                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions()), context);
 
             var firstAssign = await assignmentService.AssignBySystemAsync(f.BookingId, rejecter.Id);
             firstAssign.IsSuccess.Should().BeTrue();
@@ -239,6 +239,57 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
 
         var history = await new BookingProviderAssignmentRepository(readContext).ListByBookingAsync(f.BookingId);
         history.Should().Contain(a => a.ProviderId == rejecter.Id && a.Status == BookingProviderAssignmentStatus.Rejected);
+    }
+
+    /// <summary>
+    /// The assignment-response-expiry sweep's action (<see cref="IBookingProviderAssignmentService.ExpireAsync"/>)
+    /// re-raises AwaitingFulfilment exactly like <see cref="RejectByProviderAsync"/>'s
+    /// path does - same reassignment pool, triggered by silence instead of an
+    /// explicit decline. Mirrors <see cref="Handle_excludes_a_provider_who_already_rejected_this_booking_and_assigns_the_next_one"/>.
+    /// </summary>
+    [Fact]
+    public async Task Handle_excludes_a_provider_whose_assignment_expired_and_assigns_the_next_one()
+    {
+        Fixture f;
+        Provider unresponsive, other;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            unresponsive = AddActiveEligibleProvider(context, f, 12.9352m, 77.6146m);
+            other = AddActiveEligibleProvider(context, f, 13.0827m, 80.2707m);
+            context.SaveChanges();
+        }
+
+        Guid assignmentId;
+        using (var context = _db.CreateContext())
+        {
+            var assignmentService = new BookingProviderAssignmentService(
+                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions()), context);
+
+            var firstAssign = await assignmentService.AssignBySystemAsync(f.BookingId, unresponsive.Id);
+            firstAssign.IsSuccess.Should().BeTrue();
+            assignmentId = firstAssign.Value.Id;
+
+            // Simulates the sweep finding this assignment past its deadline -
+            // ExpireAsync is exactly what AssignmentResponseExpirySweepJob calls
+            // per stale row it finds, so this exercises the same path without
+            // needing to wait out a real ResponseWindowMinutes.
+            var expireResult = await assignmentService.ExpireAsync(assignmentId);
+            expireResult.IsSuccess.Should().BeTrue();
+            expireResult.Value.Status.Should().Be(BookingProviderAssignmentStatus.Expired);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            await BuildHandler(context).Handle(AwaitingFulfilmentEvent(f.BookingId), CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(f.BookingId);
+        booking!.AssignedProviderId.Should().Be(other.Id, "the provider whose assignment expired must be excluded from the retry");
+
+        var history = await new BookingProviderAssignmentRepository(readContext).ListByBookingAsync(f.BookingId);
+        history.Should().Contain(a => a.ProviderId == unresponsive.Id && a.Status == BookingProviderAssignmentStatus.Expired);
     }
 
     [Fact]

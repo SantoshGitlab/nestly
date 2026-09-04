@@ -1030,7 +1030,7 @@ function BookingSummaryScreen() {
             has actually loaded and there is a balance to offer - a customer
             with nothing in their wallet has nothing to decide here. */}
         {summary && summary.wallet.balance > 0 ? (
-          <Card title="Wallet credit" description="Use your Nestly wallet balance towards this booking.">
+          <Card title="Wallet credit" description="Use your Glavyx wallet balance towards this booking.">
             <CheckboxField
               label={`Use my wallet balance (${inr(summary.wallet.balance)} available)`}
               description={

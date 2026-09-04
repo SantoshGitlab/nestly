@@ -1,10 +1,12 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
@@ -41,6 +43,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
     private readonly IServiceRepository _serviceRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly IProviderScheduleConflictService _scheduleConflictService;
+    private readonly IOptions<AutoAssignmentOptions> _autoAssignmentOptions;
     // Matching candidates for GetEligibleProvidersAsync spans Provider,
     // ProviderServiceArea, ProviderSkillMapping, ProviderCapacity and Pincode
     // in one read - no single existing repository owns that join, so this
@@ -54,6 +57,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         IServiceRepository serviceRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderScheduleConflictService scheduleConflictService,
+        IOptions<AutoAssignmentOptions> autoAssignmentOptions,
         NestlyDbContext context)
     {
         _bookingRepository = bookingRepository;
@@ -61,6 +65,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         _serviceRepository = serviceRepository;
         _assignmentRepository = assignmentRepository;
         _scheduleConflictService = scheduleConflictService;
+        _autoAssignmentOptions = autoAssignmentOptions;
         _context = context;
     }
 
@@ -77,12 +82,17 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
     /// (PROVIDER.md OPEN DECISIONS #1: "the bridge table's assigned_by
     /// column already distinguishes admin from system, so an automatic
     /// assignment engine can be added later purely as a new writer of that
-    /// same table" - this is that later writer). No response deadline: task
-    /// 247's rejection-retry chain moves on to the next candidate itself
-    /// rather than waiting one out.
+    /// same table" - this is that later writer). The response deadline is
+    /// <see cref="AutoAssignmentOptions.ResponseWindowMinutes"/> from now - the
+    /// assignment-response-expiry sweep is what actually moves on to the next
+    /// candidate if that passes with no answer; the rejection-retry chain
+    /// handles the explicit-decline case identically either way.
     /// </summary>
     public Task<Result<BookingProviderAssignmentResponse>> AssignBySystemAsync(Guid bookingId, Guid providerId) =>
-        AssignInternalAsync(bookingId, providerId, BookingAssignedByType.System, adminUserId: null, responseDeadline: null, "Provider auto-assigned by the matching engine.");
+        AssignInternalAsync(
+            bookingId, providerId, BookingAssignedByType.System, adminUserId: null,
+            responseDeadline: DateTime.UtcNow.AddMinutes(_autoAssignmentOptions.Value.ResponseWindowMinutes),
+            "Provider auto-assigned by the matching engine.");
 
     private async Task<Result<BookingProviderAssignmentResponse>> AssignInternalAsync(
         Guid bookingId, Guid providerId, BookingAssignedByType assignedByType, Guid? adminUserId, DateTime? responseDeadline, string reason)
@@ -283,23 +293,63 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         assignment.Reject(reason);
         await _assignmentRepository.UpdateAsync(assignment);
 
-        // Needs reassignment (task 159): clear the display field and return
-        // the booking to the assignable pool. This used to mean a purely
-        // manual admin queue (PROVIDER.md OPEN DECISIONS #1), but task 247's
-        // ProviderAutoAssignmentHandler now reacts to the AwaitingFulfilment
-        // transition raised below identically to a fresh booking - see that
-        // class's doc comment for the retry-cap/exclusion/standing-provider
-        // behaviour. Manual admin assignment remains the fallback, not the
-        // only path: it only takes over once auto-assignment is disabled
-        // (AutoAssignmentOptions.Enabled), exhausts its retry cap, or finds
-        // no eligible candidate.
+        await ReturnToAssignablePoolAsync(booking, "Provider rejected assignment; needs reassignment.");
+
+        var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
+        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)");
+    }
+
+    /// <summary>
+    /// Shared by <see cref="RejectInternalAsync"/> and <see cref="ExpireAsync"/>:
+    /// clears the display field and returns the booking to the assignable
+    /// pool. This used to mean a purely manual admin queue (PROVIDER.md OPEN
+    /// DECISIONS #1), but task 247's <c>ProviderAutoAssignmentHandler</c> now
+    /// reacts to the AwaitingFulfilment transition raised below identically
+    /// to a fresh booking - see that class's doc comment for the
+    /// retry-cap/exclusion/standing-provider behaviour. Manual admin
+    /// assignment remains the fallback, not the only path: it only takes over
+    /// once auto-assignment is disabled (<see cref="AutoAssignmentOptions.Enabled"/>),
+    /// exhausts its retry cap, or finds no eligible candidate.
+    /// </summary>
+    private async Task ReturnToAssignablePoolAsync(Booking booking, string reason)
+    {
         booking.AssignProvider(null);
         if (booking.Status == BookingStatus.Assigned)
         {
-            booking.TransitionTo(BookingStatus.AwaitingFulfilment, "Provider rejected assignment; needs reassignment.");
+            booking.TransitionTo(BookingStatus.AwaitingFulfilment, reason);
         }
 
         await _bookingRepository.UpdateAsync(booking);
+    }
+
+    public async Task<Result<BookingProviderAssignmentResponse>> ExpireAsync(Guid assignmentId)
+    {
+        var assignment = await _assignmentRepository.GetByIdAsync(assignmentId);
+        if (assignment is null)
+        {
+            return Error.NotFound("BookingProviderAssignment.NotFound", "The specified assignment does not exist.");
+        }
+
+        // The provider may have responded (or an admin/another writer may
+        // have superseded this row) in the gap between the sweep reading it
+        // as stale and this call actually running - not an error, just
+        // nothing left for the sweep to do here.
+        if (assignment.Status != BookingProviderAssignmentStatus.Assigned)
+        {
+            var current = await _providerRepository.GetByIdAsync(assignment.ProviderId);
+            return ToResponse(assignment, current?.DisplayName ?? "(unknown provider)");
+        }
+
+        var booking = await _bookingRepository.GetByIdAsync(assignment.BookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("BookingProviderAssignment.BookingNotFound", "Booking was not found.");
+        }
+
+        assignment.Expire();
+        await _assignmentRepository.UpdateAsync(assignment);
+
+        await ReturnToAssignablePoolAsync(booking, "Provider did not respond within the response window; needs reassignment.");
 
         var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
         return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)");

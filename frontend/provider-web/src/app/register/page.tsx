@@ -134,7 +134,7 @@ export default function ProviderRegisterPage() {
 
   return (
     <AuthShell
-      title="Become a Nestly provider"
+      title="Become a Glavyx provider"
       subtitle={
         step === "email"
           ? "Register with your email to start onboarding."

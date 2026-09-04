@@ -60,9 +60,9 @@ function sourceLabel(sourceType: WalletSourceType): string {
     case WalletSourceType.ReferralCreditExpiry:
       return "Referral credit expired";
     case WalletSourceType.NestlyCoinsReward:
-      return "Nestly Coins earned";
+      return "Glavyx Coins earned";
     case WalletSourceType.NestlyCoinsClawback:
-      return "Nestly Coins clawed back";
+      return "Glavyx Coins clawed back";
     case WalletSourceType.BookingWalletCredit:
       return "Applied to booking";
     case WalletSourceType.BookingWalletCreditReversal:
@@ -109,7 +109,7 @@ function WalletScreen() {
     <main className="flex w-full flex-col">
       <PageBanner
         title="Wallet"
-        description="Your Nestly wallet balance and transaction history."
+        description="Your Glavyx wallet balance and transaction history."
         breadcrumb={<BannerBreadcrumb items={[{ label: "Home", href: "/" }, { label: "Wallet" }]} />}
       />
 

@@ -262,4 +262,19 @@ public class AutoAssignmentOptions
     /// </summary>
     [Range(1, 1000)]
     public int PromotionBatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// How long a system-assigned provider has to accept or reject before the
+    /// assignment-response-expiry sweep treats their silence as a decline and
+    /// tries the next candidate. Fifteen minutes: long enough that a provider
+    /// checking their phone between jobs still has a realistic window, short
+    /// enough that a customer whose provider never responds is not left
+    /// waiting for a manual admin to notice. Only system assignments get a
+    /// deadline from this value - an admin's own manual assignment still sets
+    /// <see cref="Nestly.Domain.BookingProviderAssignment.ResponseDeadline"/>
+    /// explicitly via <c>AssignProviderRequest.ResponseDeadline</c>, or not at
+    /// all.
+    /// </summary>
+    [Range(1, 1440)]
+    public int ResponseWindowMinutes { get; set; } = 15;
 }
