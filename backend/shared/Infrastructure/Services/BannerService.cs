@@ -33,7 +33,7 @@ public class BannerService : IBannerService
     public async Task<IReadOnlyList<CmsMediaResponse>> ListMediaAsync()
     {
         var media = await _mediaRepository.ListAsync();
-        return media.Select(m => new CmsMediaResponse(m.Id, m.Url, m.AltText, m.CreatedAtUtc)).ToList();
+        return media.Select(m => new CmsMediaResponse(m.Id, m.Url, m.AltText, m.MediaType, m.CreatedAtUtc)).ToList();
     }
 
     public async Task<BannerAdminSearchResponse> SearchAsync(BannerAdminSearchRequest request)
@@ -170,6 +170,7 @@ public class BannerService : IBannerService
             banner.Subtitle,
             banner.MediaId,
             media?.Url ?? string.Empty,
+            media?.MediaType ?? CmsMediaType.Image,
             banner.LinkUrl,
             banner.Placement,
             banner.CategoryId,

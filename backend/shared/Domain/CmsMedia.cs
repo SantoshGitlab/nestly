@@ -19,11 +19,14 @@ public class CmsMedia : Entity<Guid>
 
     public string? AltText { get; private set; }
 
+    /// <summary>Image versus video, so a renderer knows which element to use without sniffing the URL (task: video hero banners).</summary>
+    public CmsMediaType MediaType { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     protected CmsMedia() { }
 
-    public CmsMedia(Guid id, string url, string? altText) : base(id)
+    public CmsMedia(Guid id, string url, string? altText, CmsMediaType mediaType) : base(id)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -32,10 +35,11 @@ public class CmsMedia : Entity<Guid>
 
         Url = url.Trim();
         AltText = altText;
+        MediaType = mediaType;
         CreatedAtUtc = DateTime.UtcNow;
     }
 
-    public void Update(string url, string? altText)
+    public void Update(string url, string? altText, CmsMediaType mediaType)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -44,5 +48,6 @@ public class CmsMedia : Entity<Guid>
 
         Url = url.Trim();
         AltText = altText;
+        MediaType = mediaType;
     }
 }

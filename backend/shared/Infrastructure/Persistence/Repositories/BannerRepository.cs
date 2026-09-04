@@ -60,16 +60,16 @@ public class BannerRepository : IBannerRepository
         // rather than per-row - same N+1 avoidance CouponRepository.SearchAsync
         // uses for its category-name lookup.
         var mediaIds = page.Select(b => b.MediaId).Distinct().ToList();
-        var mediaUrls = await _context.CmsMediaAssets
+        var media = await _context.CmsMediaAssets
             .Where(m => mediaIds.Contains(m.Id))
-            .ToDictionaryAsync(m => m.Id, m => m.Url);
+            .ToDictionaryAsync(m => m.Id, m => (m.Url, m.MediaType));
 
         var categoryIds = page.Where(b => b.CategoryId.HasValue).Select(b => b.CategoryId!.Value).Distinct().ToList();
         var categoryNames = await _context.Set<Category>()
             .Where(c => categoryIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name);
 
-        var items = page.Select(b => ToResponse(b, mediaUrls, categoryNames)).ToList();
+        var items = page.Select(b => ToResponse(b, media, categoryNames)).ToList();
         return new BannerSearchResult(items, totalCount);
     }
 
@@ -96,6 +96,7 @@ public class BannerRepository : IBannerRepository
                     banner.Subtitle,
                     media.Url,
                     media.AltText,
+                    media.MediaType,
                     banner.LinkUrl))
             .ToListAsync();
 
@@ -105,21 +106,26 @@ public class BannerRepository : IBannerRepository
     /// <summary>Shared with <see cref="Nestly.Infrastructure.Services.BannerService"/> for single-banner reads.</summary>
     internal static BannerResponse ToResponse(
         Banner banner,
-        IReadOnlyDictionary<Guid, string> mediaUrls,
-        IReadOnlyDictionary<Guid, string> categoryNames) => new(
-        banner.Id,
-        banner.Title,
-        banner.Subtitle,
-        banner.MediaId,
-        mediaUrls.TryGetValue(banner.MediaId, out string? url) ? url : string.Empty,
-        banner.LinkUrl,
-        banner.Placement,
-        banner.CategoryId,
-        banner.CategoryId.HasValue && categoryNames.TryGetValue(banner.CategoryId.Value, out string? name) ? name : null,
-        banner.SortOrder,
-        banner.Status,
-        banner.PublishStartUtc,
-        banner.PublishEndUtc,
-        banner.CreatedAtUtc,
-        banner.UpdatedAtUtc);
+        IReadOnlyDictionary<Guid, (string Url, CmsMediaType MediaType)> media,
+        IReadOnlyDictionary<Guid, string> categoryNames)
+    {
+        media.TryGetValue(banner.MediaId, out var asset);
+        return new BannerResponse(
+            banner.Id,
+            banner.Title,
+            banner.Subtitle,
+            banner.MediaId,
+            asset.Url ?? string.Empty,
+            asset.MediaType,
+            banner.LinkUrl,
+            banner.Placement,
+            banner.CategoryId,
+            banner.CategoryId.HasValue && categoryNames.TryGetValue(banner.CategoryId.Value, out string? name) ? name : null,
+            banner.SortOrder,
+            banner.Status,
+            banner.PublishStartUtc,
+            banner.PublishEndUtc,
+            banner.CreatedAtUtc,
+            banner.UpdatedAtUtc);
+    }
 }

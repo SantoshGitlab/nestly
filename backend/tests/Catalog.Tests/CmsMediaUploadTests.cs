@@ -53,7 +53,7 @@ public class CmsMediaUploadTests : IDisposable
 
         var reference = await service.SaveFileAsync(Stream.Null, "logo.png", "image/png");
         var absoluteUrl = $"https://admin.example.test{reference}";
-        var result = await service.CreateAsync(new CmsMediaCreateRequest(absoluteUrl, "Company logo"));
+        var result = await service.CreateAsync(new CmsMediaCreateRequest(absoluteUrl, "Company logo", CmsMediaType.Image));
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Url.Should().Be(absoluteUrl);

@@ -17,9 +17,9 @@ public sealed class BannerRepositoryTests
     // live banner for a placement, so a shared fixture would let one test's
     // seed data leak into another's assertions.
 
-    private static CmsMedia SeedMedia(NestlyDbContext context, string url, string? alt)
+    private static CmsMedia SeedMedia(NestlyDbContext context, string url, string? alt, CmsMediaType mediaType = CmsMediaType.Image)
     {
-        var media = new CmsMedia(Guid.NewGuid(), url, alt);
+        var media = new CmsMedia(Guid.NewGuid(), url, alt, mediaType);
         context.Set<CmsMedia>().Add(media);
         return media;
     }
@@ -67,6 +67,30 @@ public sealed class BannerRepositoryTests
         live[0].Subtitle.Should().Be("sub-1");
         live[0].ImageUrl.Should().Be("/images/hero/a.jpg");
         live[0].ImageAltText.Should().Be("Alt A");
+        live[0].MediaType.Should().Be(CmsMediaType.Image);
+    }
+
+    [Fact]
+    public async Task ListLiveAsync_carries_the_media_type_through_for_video_banners()
+    {
+        var now = DateTime.UtcNow;
+        using var _db = new TestDatabase();
+
+        await using (var seed = _db.CreateContext())
+        {
+            var media = SeedMedia(seed, "/uploads/hero.mp4", "Hero clip", CmsMediaType.Video);
+            await seed.SaveChangesAsync();
+
+            seed.Set<Banner>().Add(HomeBanner(media.Id, "Video banner", null, 0, CmsContentStatus.Published));
+            await seed.SaveChangesAsync();
+        }
+
+        await using var context = _db.CreateContext();
+        var repository = new BannerRepository(context);
+
+        var live = await repository.ListLiveAsync(CmsPlacement.Home, now);
+
+        live.Should().ContainSingle().Which.MediaType.Should().Be(CmsMediaType.Video);
     }
 
     [Fact]

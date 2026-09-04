@@ -23,6 +23,12 @@ export enum CmsPlacement {
   General = 4,
 }
 
+/** Mirrors Nestly.Domain.CmsMediaType's declaration order exactly. */
+export enum CmsMediaType {
+  Image = 0,
+  Video = 1,
+}
+
 /** Lightweight category lookup for the banner form's "category" picker (CategoryPage placement only). */
 export interface CategoryLookupResponse {
   id: string;
@@ -37,17 +43,20 @@ export interface CmsMediaResponse {
   id: string;
   url: string;
   altText: string | null;
+  mediaType: CmsMediaType;
   createdAtUtc: string;
 }
 
 export interface CmsMediaCreateRequest {
   url: string;
   altText: string | null;
+  mediaType: CmsMediaType;
 }
 
 export interface CmsMediaUpdateRequest {
   url: string;
   altText: string | null;
+  mediaType: CmsMediaType;
 }
 
 // ---------------------------------------------------------------------
@@ -121,6 +130,7 @@ export interface BannerResponse {
   subtitle: string | null;
   mediaId: string;
   mediaUrl: string;
+  mediaType: CmsMediaType;
   linkUrl: string | null;
   placement: CmsPlacement;
   categoryId: string | null;

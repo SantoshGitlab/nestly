@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { SearchBar } from "@/components/SearchBar";
 import { cx } from "@/components/ui";
 import { API_V1, apiFetch } from "@/lib/api";
-import type { HomeBanner } from "@/lib/types";
+import { CmsMediaType, type HomeBanner } from "@/lib/types";
 
 /**
  * Hero / primary CTA (SRS 11.1.2). Content is fully admin-managed: the slides
@@ -169,28 +169,43 @@ export function HeroBanner() {
   );
 }
 
-/** The slide image, wrapped in a link when the banner has a destination. */
+/** The slide's image or video, wrapped in a link when the banner has a destination. */
 function BannerImage({ banner, eager }: { banner: HomeBanner; eager: boolean }) {
-  const img = (
-    // eslint-disable-next-line @next/next/no-img-element -- admin-supplied URL from the managed media library, unsuited to next/image's build-time domain allowlist (same reasoning as CategoryTile).
-    <img
-      src={banner.imageUrl}
-      alt={banner.imageAltText ?? banner.title}
-      loading={eager ? "eager" : "lazy"}
-      decoding="async"
-      className="h-full w-full object-cover object-[center_25%]"
-    />
-  );
+  const media =
+    banner.mediaType === CmsMediaType.Video ? (
+      // Hero video slides play like a moving photo, not a media player: no
+      // controls, no sound, loops indefinitely. `muted` is required (not just
+      // preferred) for autoplay to be allowed by browser policy at all.
+      <video
+        src={banner.imageUrl}
+        aria-label={banner.imageAltText ?? banner.title}
+        className="h-full w-full object-cover object-[center_25%]"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload={eager ? "auto" : "metadata"}
+      />
+    ) : (
+      // eslint-disable-next-line @next/next/no-img-element -- admin-supplied URL from the managed media library, unsuited to next/image's build-time domain allowlist (same reasoning as CategoryTile).
+      <img
+        src={banner.imageUrl}
+        alt={banner.imageAltText ?? banner.title}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        className="h-full w-full object-cover object-[center_25%]"
+      />
+    );
 
   if (banner.linkUrl) {
     return (
       <Link href={banner.linkUrl} aria-label={banner.title} className="absolute inset-0 block">
-        {img}
+        {media}
       </Link>
     );
   }
 
-  return img;
+  return media;
 }
 
 function Headline({ text, linkUrl }: { text: string; linkUrl: string | null }) {

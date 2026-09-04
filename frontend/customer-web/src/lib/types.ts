@@ -90,6 +90,16 @@ export interface CategorySummary {
 }
 
 /**
+ * Mirrors Nestly.Domain.CmsMediaType's declaration order exactly. ConsumerApi
+ * has no JsonStringEnumConverter registered (same as {@link BookingStatus}),
+ * so this crosses the wire as its ordinal.
+ */
+export enum CmsMediaType {
+  Image = 0,
+  Video = 1,
+}
+
+/**
  * A live storefront home banner (SRS 11.1.2/11.1.3), as returned by
  * `GET /api/v1/banners/home`. Admin-managed via the CMS banners screen; the
  * home hero renders these in `sortOrder`, one slide each. Mirrors the backend
@@ -104,6 +114,8 @@ export interface HomeBanner {
   imageUrl: string;
   /** Media alt text for accessibility; falls back to the title when null. */
   imageAltText: string | null;
+  /** Whether `imageUrl` is a still image or a video clip - decides `<img>` versus `<video>` in HeroBanner. */
+  mediaType: CmsMediaType;
   /** Optional destination when the banner is tapped; null makes it non-interactive. */
   linkUrl: string | null;
 }

@@ -13,6 +13,7 @@ public class CmsMediaConfiguration : IEntityTypeConfiguration<CmsMedia>
 
         builder.Property(x => x.Url).IsRequired().HasMaxLength(2000);
         builder.Property(x => x.AltText).HasMaxLength(300);
+        builder.Property(x => x.MediaType).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.CreatedAtUtc).IsRequired();
     }
 }

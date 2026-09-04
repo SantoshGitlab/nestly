@@ -10,7 +10,13 @@ import { Alert, Button, Field, Select } from "@/components/ui";
 import { FormActions, FormGrid } from "@/components/data-table";
 import { describeError } from "@/lib/api";
 import { createCmsMedia, listBannerCategories, listBannerMedia, uploadCmsMedia } from "@/lib/cms-api";
-import { CmsPlacement, type BannerCreateRequest, type BannerResponse, type BannerUpdateRequest } from "@/lib/cms-types";
+import {
+  CmsMediaType,
+  CmsPlacement,
+  type BannerCreateRequest,
+  type BannerResponse,
+  type BannerUpdateRequest,
+} from "@/lib/cms-types";
 import { PLACEMENT_OPTIONS, datetimeLocalToUtc, utcToDatetimeLocal } from "./cmsDisplay";
 
 /**
@@ -27,7 +33,7 @@ const bannerFormSchema = z
   .object({
     title: z.string().min(1, "Title is required").max(200, "Title must be 200 characters or fewer"),
     subtitle: z.string().max(300, "Subtitle must be 300 characters or fewer"),
-    mediaId: z.string().min(1, "An image is required"),
+    mediaId: z.string().min(1, "Media is required"),
     linkUrl: z
       .string()
       .max(2000, "Link URL must be 2000 characters or fewer")
@@ -99,6 +105,7 @@ export function BannerForm({
   const queryClient = useQueryClient();
   const [newMediaUrl, setNewMediaUrl] = useState("");
   const [newMediaAlt, setNewMediaAlt] = useState("");
+  const [newMediaType, setNewMediaType] = useState<CmsMediaType>(CmsMediaType.Image);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
   const mediaQuery = useQuery({ queryKey: ["cms", "banners", "media"], queryFn: listBannerMedia });
@@ -119,12 +126,18 @@ export function BannerForm({
   const placement = form.watch("placement");
 
   const addMediaMutation = useMutation({
-    mutationFn: () => createCmsMedia({ url: newMediaUrl.trim(), altText: newMediaAlt.trim() === "" ? null : newMediaAlt.trim() }),
+    mutationFn: () =>
+      createCmsMedia({
+        url: newMediaUrl.trim(),
+        altText: newMediaAlt.trim() === "" ? null : newMediaAlt.trim(),
+        mediaType: newMediaType,
+      }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ["cms", "banners", "media"] });
       form.setValue("mediaId", created.id, { shouldValidate: true });
       setNewMediaUrl("");
       setNewMediaAlt("");
+      setNewMediaType(CmsMediaType.Image);
       setMediaError(null);
     },
     onError: (error) => setMediaError(describeError(error)),
@@ -169,8 +182,11 @@ export function BannerForm({
   });
 
   const mediaOptions = [
-    { value: "", label: mediaQuery.isPending ? "Loading images…" : "Select an image…" },
-    ...(mediaQuery.data ?? []).map((media) => ({ value: media.id, label: media.altText ?? media.url })),
+    { value: "", label: mediaQuery.isPending ? "Loading media…" : "Select media…" },
+    ...(mediaQuery.data ?? []).map((media) => ({
+      value: media.id,
+      label: `${media.mediaType === CmsMediaType.Video ? "[Video] " : ""}${media.altText ?? media.url}`,
+    })),
   ];
 
   const categoryOptions = [
@@ -226,18 +242,18 @@ export function BannerForm({
       />
 
       <fieldset className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4">
-        <legend className="px-1 text-sm font-medium text-fg">Image</legend>
+        <legend className="px-1 text-sm font-medium text-fg">Media</legend>
         <Select
-          label="Image"
+          label="Media"
           required
           error={form.formState.errors.mediaId?.message}
           options={mediaOptions}
           {...form.register("mediaId")}
         />
         {mediaError ? <Alert>{mediaError}</Alert> : null}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
           <Field
-            label="New image URL"
+            label="New media URL"
             hint="Adds to the library and selects it."
             value={newMediaUrl}
             onChange={(event) => setNewMediaUrl(event.target.value)}
@@ -249,6 +265,15 @@ export function BannerForm({
             value={newMediaAlt}
             onChange={(event) => setNewMediaAlt(event.target.value)}
             onKeyDown={onMediaFieldKeyDown}
+          />
+          <Select
+            label="Type"
+            options={[
+              { value: String(CmsMediaType.Image), label: "Image" },
+              { value: String(CmsMediaType.Video), label: "Video" },
+            ]}
+            value={String(newMediaType)}
+            onChange={(event) => setNewMediaType(Number(event.target.value) as CmsMediaType)}
           />
           <Button
             type="button"
@@ -266,11 +291,11 @@ export function BannerForm({
           <span className="h-px flex-1 bg-line" aria-hidden />
         </div>
         <Field
-          label={uploadMediaMutation.isPending ? "Uploading…" : "Upload an image"}
+          label={uploadMediaMutation.isPending ? "Uploading…" : "Upload an image or video"}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
           disabled={uploadMediaMutation.isPending}
-          hint="JPEG, PNG or WebP, up to 8MB. Uses the alt text above. Adds to the library and selects it."
+          hint="JPEG, PNG or WebP up to 8MB, or MP4/WebM video up to 50MB. Uses the alt text above. Adds to the library and selects it; type is detected automatically."
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) uploadMediaMutation.mutate(file);

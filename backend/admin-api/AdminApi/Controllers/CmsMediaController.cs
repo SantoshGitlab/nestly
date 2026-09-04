@@ -96,7 +96,7 @@ public class CmsMediaController : ControllerBase
     [Authorize(Policy = WritePolicy)]
     [ProducesResponseType(typeof(CmsMediaResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [RequestSizeLimit(MaxUploadBytes)]
+    [RequestSizeLimit(MaxVideoUploadBytes)]
     public async Task<IActionResult> Upload(IFormFile file, [FromForm] string? altText)
     {
         if (file is null || file.Length == 0)
@@ -104,14 +104,15 @@ public class CmsMediaController : ControllerBase
             return Problem("A file is required.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        if (file.Length > MaxUploadBytes)
+        if (!AllowedUploadContentTypes.TryGetValue(file.ContentType, out var mediaType))
         {
-            return Problem($"Files must be {MaxUploadBytes / (1024 * 1024)}MB or smaller.", statusCode: StatusCodes.Status400BadRequest);
+            return Problem("Only JPEG, PNG, WebP images or MP4, WebM videos are accepted.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        if (!AllowedUploadContentTypes.Contains(file.ContentType))
+        var maxBytes = mediaType == CmsMediaType.Video ? MaxVideoUploadBytes : MaxImageUploadBytes;
+        if (file.Length > maxBytes)
         {
-            return Problem("Only JPEG, PNG, or WebP images are accepted.", statusCode: StatusCodes.Status400BadRequest);
+            return Problem($"{mediaType} files must be {maxBytes / (1024 * 1024)}MB or smaller.", statusCode: StatusCodes.Status400BadRequest);
         }
 
         await using var stream = file.OpenReadStream();
@@ -123,19 +124,25 @@ public class CmsMediaController : ControllerBase
         // CmsMedia.Url works when read back from any origin: customer-web,
         // admin-web, anywhere else this library is rendered from.
         var absoluteUrl = FileReferenceUrl.ToAbsolute(storedRef, Request.Scheme, Request.Host.ToString());
-        var createResult = await _mediaService.CreateAsync(new CmsMediaCreateRequest(absoluteUrl, altText));
+        var createResult = await _mediaService.CreateAsync(new CmsMediaCreateRequest(absoluteUrl, altText, mediaType));
         return createResult.IsSuccess
             ? CreatedAtAction(nameof(GetById), new { id = createResult.Value.Id }, createResult.Value)
             : createResult.ToProblemResult();
     }
 
-    private const long MaxUploadBytes = 8 * 1024 * 1024;
+    private const long MaxImageUploadBytes = 8 * 1024 * 1024;
 
-    private static readonly HashSet<string> AllowedUploadContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>Video hero banners are meaningfully larger than a still image; capped well above the two sample clips (~5MB each) that motivated this feature while still bounding worst-case upload size.</summary>
+    private const long MaxVideoUploadBytes = 50 * 1024 * 1024;
+
+    /// <summary>Content-type allowlist, mapped to the <see cref="CmsMediaType"/> it implies - single source of truth for both "is this accepted" and "which kind is it".</summary>
+    private static readonly Dictionary<string, CmsMediaType> AllowedUploadContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "image/jpeg",
-        "image/png",
-        "image/webp",
+        ["image/jpeg"] = CmsMediaType.Image,
+        ["image/png"] = CmsMediaType.Image,
+        ["image/webp"] = CmsMediaType.Image,
+        ["video/mp4"] = CmsMediaType.Video,
+        ["video/webm"] = CmsMediaType.Video,
     };
 
     /// <summary>Edits a media asset's URL/alt text.</summary>

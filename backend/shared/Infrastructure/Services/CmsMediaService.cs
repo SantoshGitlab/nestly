@@ -51,7 +51,7 @@ public class CmsMediaService : ICmsMediaService
 
     public async Task<Result<CmsMediaResponse>> CreateAsync(CmsMediaCreateRequest request)
     {
-        var media = new CmsMedia(Guid.NewGuid(), request.Url, request.AltText);
+        var media = new CmsMedia(Guid.NewGuid(), request.Url, request.AltText, request.MediaType);
         await _auditLogWriter.WriteAsync(new AuditEntry("CmsMedia", media.Id.ToString(), "Created"));
         await _mediaRepository.AddAsync(media);
         return ToResponse(media);
@@ -68,7 +68,7 @@ public class CmsMediaService : ICmsMediaService
             return Error.NotFound("CmsMedia.NotFound", "The specified media asset does not exist.");
         }
 
-        media.Update(request.Url, request.AltText);
+        media.Update(request.Url, request.AltText, request.MediaType);
         await _auditLogWriter.WriteAsync(new AuditEntry("CmsMedia", media.Id.ToString(), "Updated"));
         await _mediaRepository.UpdateAsync(media);
         return ToResponse(media);
@@ -93,5 +93,5 @@ public class CmsMediaService : ICmsMediaService
     }
 
     private static CmsMediaResponse ToResponse(CmsMedia media) =>
-        new(media.Id, media.Url, media.AltText, media.CreatedAtUtc);
+        new(media.Id, media.Url, media.AltText, media.MediaType, media.CreatedAtUtc);
 }

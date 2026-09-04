@@ -13,6 +13,7 @@ public class CmsMediaCreateRequestValidator : AbstractValidator<CmsMediaCreateRe
     {
         RuleFor(x => x.Url).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.AltText).MaximumLength(300);
+        RuleFor(x => x.MediaType).IsInEnum();
     }
 }
 
@@ -22,6 +23,7 @@ public class CmsMediaUpdateRequestValidator : AbstractValidator<CmsMediaUpdateRe
     {
         RuleFor(x => x.Url).NotEmpty().MaximumLength(2000);
         RuleFor(x => x.AltText).MaximumLength(300);
+        RuleFor(x => x.MediaType).IsInEnum();
     }
 }
 

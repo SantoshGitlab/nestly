@@ -6,7 +6,7 @@ import { Button } from "@/components/ui";
 import { ConfirmDialog, DataTable } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { describeError } from "@/lib/api";
-import { CmsContentStatus, type BannerResponse } from "@/lib/cms-types";
+import { CmsContentStatus, CmsMediaType, type BannerResponse } from "@/lib/cms-types";
 import { formatPlacement, formatSchedule } from "./cmsDisplay";
 import { CmsStatusBadge } from "./CmsStatusBadge";
 
@@ -59,7 +59,7 @@ export function BannersTable({
     },
     {
       key: "image",
-      header: "Image",
+      header: "Media",
       cell: (banner) => (
         <a
           href={banner.mediaUrl}
@@ -67,7 +67,7 @@ export function BannersTable({
           rel="noreferrer"
           // The link text alone reads as "View" to a screen reader running a
           // link list, which is meaningless across a column of them.
-          aria-label={`View the image for ${banner.title} (opens in a new tab)`}
+          aria-label={`View the ${banner.mediaType === CmsMediaType.Video ? "video" : "image"} for ${banner.title} (opens in a new tab)`}
           className="rounded text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
         >
           View

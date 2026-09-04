@@ -6,11 +6,11 @@ namespace Nestly.Application.Cms;
 // Media (task 124e)
 // ---------------------------------------------------------------------
 
-public sealed record CmsMediaResponse(Guid Id, string Url, string? AltText, DateTime CreatedAtUtc);
+public sealed record CmsMediaResponse(Guid Id, string Url, string? AltText, CmsMediaType MediaType, DateTime CreatedAtUtc);
 
-public sealed record CmsMediaCreateRequest(string Url, string? AltText);
+public sealed record CmsMediaCreateRequest(string Url, string? AltText, CmsMediaType MediaType);
 
-public sealed record CmsMediaUpdateRequest(string Url, string? AltText);
+public sealed record CmsMediaUpdateRequest(string Url, string? AltText, CmsMediaType MediaType);
 
 // ---------------------------------------------------------------------
 // Pages (task 124a)
@@ -91,6 +91,7 @@ public sealed record BannerResponse(
     string? Subtitle,
     Guid MediaId,
     string MediaUrl,
+    CmsMediaType MediaType,
     string? LinkUrl,
     CmsPlacement Placement,
     Guid? CategoryId,
@@ -142,6 +143,7 @@ public sealed record HomeBannerResponse(
     string? Subtitle,
     string ImageUrl,
     string? ImageAltText,
+    CmsMediaType MediaType,
     string? LinkUrl);
 
 // ---------------------------------------------------------------------
