@@ -1098,21 +1098,10 @@ export function DonutChart({
 /* KPI cards                                                                  */
 /* -------------------------------------------------------------------------- */
 
-const KPI_ICON_TONES = {
-  brand: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300",
-  accent: "bg-accent-100 text-accent-700 dark:bg-accent-500/15 dark:text-accent-300",
-  success: "bg-success-soft text-success",
-  danger: "bg-danger-soft text-danger",
-  info: "bg-info-soft text-info",
-  warning: "bg-warning-soft text-warning",
-} as const;
-
 /**
  * Whole-card pastel treatment (task: match the Modernize dashboard
  * reference's stat-card row - `.MuiCardContent` on a solid tint, icon sitting
  * directly on it, label and number both set in the tone's saturated color).
- * Reuses the same `-soft`/`-50` tokens as `KPI_ICON_TONES` above, just
- * applied to the whole card instead of an icon chip.
  */
 const KPI_CARD_TONES = {
   brand: "bg-brand-50 dark:bg-brand-500/15",
