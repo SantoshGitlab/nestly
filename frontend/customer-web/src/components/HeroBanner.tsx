@@ -105,6 +105,8 @@ export function HeroBanner() {
           </motion.div>
         </AnimatePresence>
 
+        {multiple ? <NextSlidePreloader banner={banners[(index + 1) % banners.length]} /> : null}
+
         {/* Soft radial tint behind the copy only — the photo stays fully
             visible at the edges instead of sitting under a flat wash. */}
         <div
@@ -206,6 +208,28 @@ function BannerImage({ banner, eager }: { banner: HomeBanner; eager: boolean }) 
   }
 
   return media;
+}
+
+/**
+ * Fetches the upcoming slide's media into the browser cache before its turn
+ * arrives, so the crossfade in {@link BannerImage} never has to wait on a
+ * multi-megabyte video/image download mid-transition - the visible stutter
+ * this was built to fix. Rendered off-screen (not `display: none`, which some
+ * browsers treat as a signal to skip the fetch) rather than mounted as the
+ * real slide, so it never autoplays, competes for layout, or gets announced
+ * to assistive tech.
+ */
+function NextSlidePreloader({ banner }: { banner: HomeBanner }) {
+  return (
+    <div aria-hidden className="pointer-events-none absolute h-px w-px overflow-hidden opacity-0">
+      {banner.mediaType === CmsMediaType.Video ? (
+        <video src={banner.imageUrl} muted preload="auto" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- prefetch-only element, never displayed at content size.
+        <img src={banner.imageUrl} alt="" loading="eager" decoding="async" />
+      )}
+    </div>
+  );
 }
 
 function Headline({ text, linkUrl }: { text: string; linkUrl: string | null }) {
