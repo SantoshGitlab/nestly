@@ -47,7 +47,7 @@ public class ProviderProfileServiceTests : IDisposable
 
     private ProviderProfileService CreateService(NestlyDbContext context) =>
         new(new ProviderRepository(context), new ProviderServiceAreaRepository(context), new ProviderSkillMappingRepository(context),
-            new ReviewRepository(context));
+            new ReviewRepository(context), new ProviderSessionRepository(context));
 
     [Fact]
     public async Task GetAsync_returns_the_provider_profile()

@@ -120,6 +120,29 @@ public class CustomersController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Deletes a customer's account (right-to-erasure request handled on the
+    /// customer's behalf by support). Terminal and irreversible - unlike
+    /// Block/Unblock there is no "undelete" endpoint.
+    /// </summary>
+    [HttpPost("{customerId:guid}/delete")]
+    [Authorize(Policy = CustomersWritePolicy)]
+    [ProducesResponseType(typeof(CustomerDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Delete(Guid customerId, [FromBody] BlockCustomerRequest request)
+    {
+        var validation = await _blockValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _customerManagementService.DeleteAsync(customerId, CurrentAdminUserId(), request.Reason);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Adds an internal note to a customer's record (SRS 12.4.3, task 101d).</summary>
     [HttpPost("{customerId:guid}/notes")]
     [Authorize(Policy = CustomersWritePolicy)]

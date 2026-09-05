@@ -185,6 +185,22 @@ public class ProfileController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Permanently deletes the caller's own account (right to erasure).
+    /// Job/earnings history is retained under this provider id for
+    /// financial/legal reasons, but personal fields are anonymized and every
+    /// active session is revoked immediately - login is impossible from this
+    /// point on. Mirrors consumer-api's <c>CustomerProfileController.DeleteAccount</c>.
+    /// </summary>
+    [HttpDelete]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteAccount()
+    {
+        var result = await _profileService.DeleteAccountAsync(CurrentProviderId());
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
     private Guid CurrentProviderId() =>
         User.GetSubjectId();
 

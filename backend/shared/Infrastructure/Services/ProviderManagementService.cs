@@ -17,6 +17,7 @@ public class ProviderManagementService : IProviderManagementService
     private readonly IProviderEarningLedgerRepository _earningLedgerRepository;
     private readonly IProviderCapacityRepository _capacityRepository;
     private readonly IProviderServiceAreaRepository _serviceAreaRepository;
+    private readonly IProviderSessionRepository _sessionRepository;
 
     public ProviderManagementService(
         IProviderRepository providerRepository,
@@ -26,7 +27,8 @@ public class ProviderManagementService : IProviderManagementService
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderEarningLedgerRepository earningLedgerRepository,
         IProviderCapacityRepository capacityRepository,
-        IProviderServiceAreaRepository serviceAreaRepository)
+        IProviderServiceAreaRepository serviceAreaRepository,
+        IProviderSessionRepository sessionRepository)
     {
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
@@ -36,6 +38,7 @@ public class ProviderManagementService : IProviderManagementService
         _earningLedgerRepository = earningLedgerRepository;
         _capacityRepository = capacityRepository;
         _serviceAreaRepository = serviceAreaRepository;
+        _sessionRepository = sessionRepository;
     }
 
     public async Task<Result<ProviderSearchResponse>> SearchAsync(ProviderSearchRequest request)
@@ -146,6 +149,26 @@ public class ProviderManagementService : IProviderManagementService
 
         provider.ChangeStatus(ProviderStatus.Active);
         await _providerRepository.UpdateAsync(provider);
+
+        return await BuildDetailAsync(provider);
+    }
+
+    public async Task<Result<ProviderDetailResponse>> DeleteAsync(Guid providerId)
+    {
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        if (provider is null)
+        {
+            return Error.NotFound("Provider.NotFound", "Provider was not found.");
+        }
+
+        if (provider.Status == ProviderStatus.Deactivated)
+        {
+            return Error.Business("Provider.AlreadyDeleted", "This provider's account has already been deleted.");
+        }
+
+        provider.SoftDelete();
+        await _providerRepository.UpdateAsync(provider);
+        await _sessionRepository.RevokeAllForProviderAsync(providerId);
 
         return await BuildDetailAsync(provider);
     }

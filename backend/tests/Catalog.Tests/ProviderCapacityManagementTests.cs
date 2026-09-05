@@ -27,7 +27,8 @@ public sealed class ProviderCapacityManagementTests : IClassFixture<TestDatabase
         new BookingProviderAssignmentRepository(context),
         new ProviderEarningLedgerRepository(context),
         new ProviderCapacityRepository(context),
-        new ProviderServiceAreaRepository(context));
+        new ProviderServiceAreaRepository(context),
+        new Nestly.Infrastructure.Persistence.Repositories.ProviderSessionRepository(context));
 
     private async Task<Guid> SeedProviderAsync()
     {

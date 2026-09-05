@@ -64,6 +64,41 @@ namespace Nestly.Application
             }
         }
 
+        /// <summary>
+        /// Right-to-erasure account deletion: terminal and irreversible,
+        /// unlike <see cref="UpdateStatus"/>'s other transitions - there is no
+        /// "undelete". Personally-identifying fields are overwritten with
+        /// anonymized placeholders (derived from this customer's own id, so
+        /// they satisfy the unique-mobile/unique-email constraints without
+        /// colliding across deletions) rather than left in place, since
+        /// financial/booking history is retained (this row and its id stay;
+        /// each booking already carries its own point-in-time snapshot of
+        /// name/mobile/address, so nothing downstream depends on these fields
+        /// remaining real). Login is blocked the moment <see cref="Status"/>
+        /// leaves <see cref="CustomerStatus.Active"/> -
+        /// <c>CustomerLoginService.IssueSessionAsync</c> already gates on
+        /// that, so no separate "kill switch" is needed here.
+        /// </summary>
+        public void SoftDelete()
+        {
+            if (Status == CustomerStatus.SoftDeleted)
+            {
+                return;
+            }
+
+            Name = "Deleted User";
+            Email = $"deleted+{Id:N}@deleted.glavyx.invalid";
+            Mobile = $"deleted-{Id:N}";
+            DateOfBirth = null;
+            Address = null;
+            City = null;
+            State = null;
+            Pincode = null;
+            Country = null;
+            Status = CustomerStatus.SoftDeleted;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
         public void UpdateProfile(string name, string? email)
         {
             Name = name ?? throw new ArgumentNullException(nameof(name));

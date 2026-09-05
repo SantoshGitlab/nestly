@@ -33,7 +33,8 @@ public class CustomerManagementServiceTests : IDisposable
             new CouponRepository(context),
             new SupportTicketRepository(context),
             new CustomerNoteRepository(context),
-            new CustomerRatingRepository(context));
+            new CustomerRatingRepository(context),
+            new CustomerSessionRepository(context));
 
     private static Customer NewCustomer(string name, string mobile, CustomerStatus status = CustomerStatus.Active, string? city = null, string? email = null) =>
         new(Guid.NewGuid(), mobile, name, status, email: email, city: city);

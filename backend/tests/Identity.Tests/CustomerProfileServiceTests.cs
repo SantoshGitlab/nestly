@@ -66,6 +66,7 @@ public class CustomerProfileServiceTests : IDisposable
             new CustomerRepository(context),
             new CustomerAuthIdentityRepository(context),
             new CustomerCommunicationPreferenceRepository(context),
+            new CustomerSessionRepository(context),
             _otpService.Object,
             Options.Create(options ?? new AccountOptions()),
             NullLogger<CustomerProfileService>.Instance);

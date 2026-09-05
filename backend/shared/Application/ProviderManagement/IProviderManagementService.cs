@@ -28,6 +28,13 @@ public interface IProviderManagementService
     /// <summary>Reactivates a previously suspended provider. Does not re-run the KYC/background-check activation gate - that only applies to the first activation (<see cref="IProviderKycApprovalService.ActivateAsync"/>).</summary>
     Task<Result<ProviderDetailResponse>> ReactivateAsync(Guid providerId);
 
+    /// <summary>
+    /// Support-initiated account deletion (right-to-erasure request handled
+    /// on the provider's behalf). Terminal and irreversible - unlike
+    /// Suspend/Reactivate there is no "undelete".
+    /// </summary>
+    Task<Result<ProviderDetailResponse>> DeleteAsync(Guid providerId);
+
     /// <summary>Job-fulfilment performance summary (task 150c).</summary>
     Task<Result<ProviderPerformanceResponse>> GetPerformanceAsync(Guid providerId);
 

@@ -179,6 +179,22 @@ public class ProvidersController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Deletes a provider's account (right-to-erasure request handled on the
+    /// provider's behalf by support). Terminal and irreversible - unlike
+    /// Suspend/Reactivate there is no "undelete" endpoint.
+    /// </summary>
+    [HttpPost("{providerId:guid}/delete")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(ProviderDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Delete(Guid providerId)
+    {
+        var result = await _providerManagementService.DeleteAsync(providerId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     // ---- Profile photo moderation (task 293) ----
 
     /// <summary>

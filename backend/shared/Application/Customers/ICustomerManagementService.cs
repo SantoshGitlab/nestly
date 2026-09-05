@@ -22,4 +22,12 @@ public interface ICustomerManagementService
     Task<Result<CustomerDetailResponse>> UnblockAsync(Guid customerId, Guid adminUserId);
 
     Task<Result<CustomerNoteResponse>> AddNoteAsync(Guid customerId, Guid adminUserId, string note);
+
+    /// <summary>
+    /// Support-initiated account deletion (right-to-erasure request handled
+    /// on the customer's behalf). Terminal and irreversible - unlike
+    /// Block/Unblock there is no "undelete". <paramref name="adminUserId"/>
+    /// is the acting admin, for audit.
+    /// </summary>
+    Task<Result<CustomerDetailResponse>> DeleteAsync(Guid customerId, Guid adminUserId, string reason);
 }

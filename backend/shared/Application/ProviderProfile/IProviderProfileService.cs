@@ -29,4 +29,11 @@ public interface IProviderProfileService
     Task<IReadOnlyList<ProviderSkillResponse>> GetSkillsAsync(Guid providerId);
 
     Task<Result<IReadOnlyList<ProviderSkillResponse>>> UpdateSkillsAsync(Guid providerId, UpdateProviderSkillsRequest request);
+
+    /// <summary>
+    /// Self-service right-to-erasure account deletion (mirrors
+    /// <c>ICustomerProfileService.DeleteAccountAsync</c>). Terminal and
+    /// irreversible.
+    /// </summary>
+    Task<Result> DeleteAccountAsync(Guid providerId);
 }

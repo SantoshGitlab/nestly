@@ -339,6 +339,37 @@ public class Provider : Entity<Guid>
     }
 
     /// <summary>
+    /// Right-to-erasure account deletion (mirrors <c>Customer.SoftDelete</c>):
+    /// terminal and irreversible, unlike <see cref="ChangeStatus"/>'s other
+    /// transitions - there is no "undelete". Personally-identifying fields
+    /// are overwritten with anonymized placeholders (derived from this
+    /// provider's own id, so they satisfy unique-phone/unique-email
+    /// constraints without colliding across deletions) rather than left in
+    /// place, since financial/job history is retained (this row and its id
+    /// stay). Login is blocked the moment <see cref="Status"/> leaves
+    /// <see cref="ProviderStatus.Active"/> - the login service already gates
+    /// on Suspended/Deactivated, so no separate "kill switch" is needed here.
+    /// </summary>
+    public void SoftDelete()
+    {
+        if (Status == ProviderStatus.Deactivated)
+        {
+            return;
+        }
+
+        LegalName = "Deleted Provider";
+        DisplayName = "Deleted Provider";
+        Email = $"deleted+{Id:N}@deleted.glavyx.invalid";
+        Phone = $"deleted-{Id:N}";
+        Latitude = null;
+        Longitude = null;
+        LocationUpdatedAtUtc = null;
+        RemovePhoto();
+        Status = ProviderStatus.Deactivated;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
     /// Advances onboarding once an admin has approved at least one submitted
     /// KYC document (task 150b - the admin-side counterpart to
     /// <see cref="MarkKycSubmitted"/>). Idempotent, mirroring that method.

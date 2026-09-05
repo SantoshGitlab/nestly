@@ -24,4 +24,11 @@ public interface ICustomerProfileService
     Task<Result<CommunicationPreferencesResponse>> GetPreferencesAsync(Guid customerId);
 
     Task<Result<CommunicationPreferencesResponse>> UpdatePreferencesAsync(Guid customerId, CommunicationPreferencesRequest request);
+
+    /// <summary>
+    /// Self-service right-to-erasure account deletion. Terminal and
+    /// irreversible - unlike every other method here, there is no way back
+    /// from this one.
+    /// </summary>
+    Task<Result> DeleteAccountAsync(Guid customerId);
 }

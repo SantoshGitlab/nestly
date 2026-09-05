@@ -161,6 +161,22 @@ public class CustomerProfileController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Permanently deletes the caller's own account (SRS 11.2.3, right to
+    /// erasure). Booking/payment history is retained under this customer id
+    /// for financial/legal reasons, but personal fields are anonymized and
+    /// every active session is revoked immediately - login is impossible
+    /// from this point on.
+    /// </summary>
+    [HttpDelete]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteAccount()
+    {
+        var result = await _profileService.DeleteAccountAsync(CurrentCustomerId());
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
     private Guid CurrentCustomerId() =>
         User.GetSubjectId();
 

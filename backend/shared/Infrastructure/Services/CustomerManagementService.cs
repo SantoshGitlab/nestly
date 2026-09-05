@@ -27,6 +27,7 @@ public class CustomerManagementService : ICustomerManagementService
     private readonly ISupportTicketRepository _supportTicketRepository;
     private readonly ICustomerNoteRepository _noteRepository;
     private readonly ICustomerRatingRepository _customerRatingRepository;
+    private readonly ICustomerSessionRepository _sessionRepository;
 
     /// <summary>Recent ratings shown on the Customer 360 view - a risk signal, not a full history, same cap rationale as ReviewsSummary's 5-most-recent on the service page.</summary>
     private const int RecentRatingsLimit = 10;
@@ -42,7 +43,8 @@ public class CustomerManagementService : ICustomerManagementService
         ICouponRepository couponRepository,
         ISupportTicketRepository supportTicketRepository,
         ICustomerNoteRepository noteRepository,
-        ICustomerRatingRepository customerRatingRepository)
+        ICustomerRatingRepository customerRatingRepository,
+        ICustomerSessionRepository sessionRepository)
     {
         _customerRepository = customerRepository;
         _addressRepository = addressRepository;
@@ -53,6 +55,7 @@ public class CustomerManagementService : ICustomerManagementService
         _supportTicketRepository = supportTicketRepository;
         _noteRepository = noteRepository;
         _customerRatingRepository = customerRatingRepository;
+        _sessionRepository = sessionRepository;
     }
 
     public async Task<Result<CustomerSearchResponse>> SearchAsync(CustomerSearchRequest request)
@@ -137,6 +140,27 @@ public class CustomerManagementService : ICustomerManagementService
         customer.UpdateStatus(CustomerStatus.Active);
         await _customerRepository.UpdateAsync(customer);
         await _noteRepository.AddAsync(new CustomerNote(Guid.NewGuid(), customerId, adminUserId, "Account unblocked."));
+
+        return await BuildDetailAsync(customer);
+    }
+
+    public async Task<Result<CustomerDetailResponse>> DeleteAsync(Guid customerId, Guid adminUserId, string reason)
+    {
+        var customer = await _customerRepository.GetByIdAsync(customerId);
+        if (customer is null)
+        {
+            return Error.NotFound("Customer.NotFound", "Customer was not found.");
+        }
+
+        if (customer.Status == CustomerStatus.SoftDeleted)
+        {
+            return Error.Business("Customer.AlreadyDeleted", "This customer's account has already been deleted.");
+        }
+
+        customer.SoftDelete();
+        await _customerRepository.UpdateAsync(customer);
+        await _sessionRepository.RevokeAllForCustomerAsync(customerId);
+        await _noteRepository.AddAsync(new CustomerNote(Guid.NewGuid(), customerId, adminUserId, $"Account deleted. Reason: {reason}"));
 
         return await BuildDetailAsync(customer);
     }

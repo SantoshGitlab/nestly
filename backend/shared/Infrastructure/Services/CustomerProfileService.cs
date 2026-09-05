@@ -24,6 +24,7 @@ public class CustomerProfileService : ICustomerProfileService
     private readonly ICustomerRepository _customerRepository;
     private readonly ICustomerAuthIdentityRepository _authIdentityRepository;
     private readonly ICustomerCommunicationPreferenceRepository _preferenceRepository;
+    private readonly ICustomerSessionRepository _sessionRepository;
     private readonly IOTPService _otpService;
     private readonly AccountOptions _options;
     private readonly ILogger<CustomerProfileService> _logger;
@@ -32,6 +33,7 @@ public class CustomerProfileService : ICustomerProfileService
         ICustomerRepository customerRepository,
         ICustomerAuthIdentityRepository authIdentityRepository,
         ICustomerCommunicationPreferenceRepository preferenceRepository,
+        ICustomerSessionRepository sessionRepository,
         IOTPService otpService,
         IOptions<AccountOptions> options,
         ILogger<CustomerProfileService> logger)
@@ -39,6 +41,7 @@ public class CustomerProfileService : ICustomerProfileService
         _customerRepository = customerRepository;
         _authIdentityRepository = authIdentityRepository;
         _preferenceRepository = preferenceRepository;
+        _sessionRepository = sessionRepository;
         _otpService = otpService;
         _options = options.Value;
         _logger = logger;
@@ -250,6 +253,29 @@ public class CustomerProfileService : ICustomerProfileService
         }
 
         return Result.Success(ToResponse(preference));
+    }
+
+    public async Task<Result> DeleteAccountAsync(Guid customerId)
+    {
+        var customer = await _customerRepository.GetByIdAsync(customerId);
+        if (customer is null)
+        {
+            return Result.Failure(NotFound());
+        }
+
+        if (customer.Status == CustomerStatus.SoftDeleted)
+        {
+            // Already deleted - idempotent from the caller's perspective
+            // rather than an error, since the end state they wanted holds.
+            return Result.Success();
+        }
+
+        customer.SoftDelete();
+        await _customerRepository.UpdateAsync(customer);
+        await _sessionRepository.RevokeAllForCustomerAsync(customerId);
+
+        _logger.LogInformation("Customer {CustomerId} deleted their own account.", customerId);
+        return Result.Success();
     }
 
     private static Error NotFound() => Error.NotFound("Profile.NotFound", "Customer profile not found.");

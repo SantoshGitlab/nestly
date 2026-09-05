@@ -19,17 +19,20 @@ public class ProviderProfileService : IProviderProfileService
     private readonly IProviderServiceAreaRepository _serviceAreaRepository;
     private readonly IProviderSkillMappingRepository _skillMappingRepository;
     private readonly IReviewRepository _reviewRepository;
+    private readonly IProviderSessionRepository _sessionRepository;
 
     public ProviderProfileService(
         IProviderRepository providerRepository,
         IProviderServiceAreaRepository serviceAreaRepository,
         IProviderSkillMappingRepository skillMappingRepository,
-        IReviewRepository reviewRepository)
+        IReviewRepository reviewRepository,
+        IProviderSessionRepository sessionRepository)
     {
         _providerRepository = providerRepository;
         _serviceAreaRepository = serviceAreaRepository;
         _skillMappingRepository = skillMappingRepository;
         _reviewRepository = reviewRepository;
+        _sessionRepository = sessionRepository;
     }
 
     public async Task<Result<ProviderProfileResponse>> GetAsync(Guid providerId)
@@ -127,6 +130,28 @@ public class ProviderProfileService : IProviderProfileService
         await _skillMappingRepository.ReplaceForProviderAsync(providerId, skills);
 
         return Result.Success<IReadOnlyList<ProviderSkillResponse>>(skills.Select(ToResponse).ToList());
+    }
+
+    public async Task<Result> DeleteAccountAsync(Guid providerId)
+    {
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        if (provider is null)
+        {
+            return Result.Failure(Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
+        }
+
+        if (provider.Status == ProviderStatus.Deactivated)
+        {
+            // Already deleted - idempotent from the caller's perspective
+            // rather than an error, since the end state they wanted holds.
+            return Result.Success();
+        }
+
+        provider.SoftDelete();
+        await _providerRepository.UpdateAsync(provider);
+        await _sessionRepository.RevokeAllForProviderAsync(providerId);
+
+        return Result.Success();
     }
 
     private async Task<ProviderProfileResponse> ToResponseAsync(Provider provider)
