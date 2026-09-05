@@ -19,36 +19,44 @@ namespace Nestly.Infrastructure.Services;
 /// rather than the official Twilio SDK - no new SDK dependency is needed,
 /// only <see cref="IHttpClientFactory"/>, the same choice
 /// <see cref="SupabaseFileStorageService"/> made for the same reason.
-///
-/// Email is not this class's concern: it decorates whichever
-/// <see cref="INotificationProvider"/> handles email (real SMTP or sandbox)
-/// and delegates <see cref="SendEmailAsync"/> to it unchanged, so Twilio
-/// being configured never implies anything about email being configured.
 /// </remarks>
 public sealed class TwilioNotificationProvider : INotificationProvider
 {
     /// <summary>Named <see cref="HttpClient"/> registration - see <see cref="SupabaseFileStorageService.HttpClientName"/> for why named rather than typed.</summary>
     public const string HttpClientName = "Twilio.Sms";
 
-    private readonly INotificationProvider _emailChannel;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly TwilioOptions _options;
     private readonly ILogger<TwilioNotificationProvider> _logger;
 
     public TwilioNotificationProvider(
-        INotificationProvider emailChannel,
         IHttpClientFactory httpClientFactory,
         IOptions<TwilioOptions> options,
         ILogger<TwilioNotificationProvider> logger)
     {
-        _emailChannel = emailChannel;
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _logger = logger;
     }
 
-    public Task<Result> SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default) =>
-        _emailChannel.SendEmailAsync(toEmail, subject, body, cancellationToken);
+    /// <summary>
+    /// This class exists solely for SMS - <see cref="NotificationRegistration"/>
+    /// always wraps it in a <see cref="CompositeNotificationProvider"/> that
+    /// routes email elsewhere, so this is never actually reached in practice.
+    /// Simulates rather than throwing regardless, matching
+    /// <see cref="SandboxNotificationProvider"/>'s "never crash on a
+    /// vendor gap" posture in case this type is ever resolved standalone.
+    /// </summary>
+    public Task<Result> SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(toEmail))
+        {
+            return Task.FromResult(Result.Failure(Error.Validation("Notification.InvalidRecipient", "Email address is required.")));
+        }
+
+        _logger.LogInformation("Sandbox email simulated for {MaskedEmail}", ContactMasking.Mask(toEmail));
+        return Task.FromResult(Result.Success());
+    }
 
     public async Task<Result> SendSmsAsync(string toMobile, string message, CancellationToken cancellationToken = default)
     {

@@ -17,11 +17,12 @@ namespace Nestly.Infrastructure.Services;
 internal static class NotificationRegistration
 {
     /// <summary>
-    /// Registers real Gmail SMTP email once <c>Email:AppPassword</c> is set
+    /// Registers real email delivery - Brevo when <see cref="BrevoOptions"/>
+    /// is configured, else Gmail SMTP once <c>Email:AppPassword</c> is set -
     /// and real Twilio SMS once every <see cref="TwilioOptions"/> credential
-    /// is set - independently of each other, since one channel being real
-    /// says nothing about the other. Either or both fall back to the sandbox
-    /// provider's simulated behaviour when unconfigured.
+    /// is set. Email and SMS are chosen independently of each other, since
+    /// one channel being real says nothing about the other. Any or all fall
+    /// back to the sandbox provider's simulated behaviour when unconfigured.
     /// </summary>
     internal static IServiceCollection AddNotifications(this IServiceCollection services, IConfiguration configuration)
     {
@@ -35,11 +36,21 @@ internal static class NotificationRegistration
             .ValidateDataAnnotations();
 
         // Neither section holds anything a process cannot start without -
-        // both are optional by design - so no ValidateOnStart, same
+        // all three are optional by design - so no ValidateOnStart, same
         // reasoning as SupabaseStorageOptions/FirebaseOptions.
+        services
+            .AddOptions<BrevoOptions>()
+            .Bind(configuration.GetSection(BrevoOptions.SectionName));
+
         services
             .AddOptions<TwilioOptions>()
             .Bind(configuration.GetSection(TwilioOptions.SectionName));
+
+        services.AddHttpClient(BrevoNotificationProvider.HttpClientName, client =>
+        {
+            client.BaseAddress = new Uri("https://api.brevo.com/");
+            client.Timeout = TimeSpan.FromSeconds(15);
+        });
 
         services.AddHttpClient(TwilioNotificationProvider.HttpClientName, client =>
         {
@@ -49,45 +60,59 @@ internal static class NotificationRegistration
 
         services.AddScoped<SandboxNotificationProvider>();
         services.AddScoped<SmtpNotificationProvider>();
+        services.AddScoped<BrevoNotificationProvider>();
         services.AddScoped<TwilioNotificationProvider>();
 
         services.AddScoped<INotificationProvider>(serviceProvider =>
         {
             var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(NotificationRegistration));
 
+            // Each channel is resolved independently, then combined by
+            // CompositeNotificationProvider - never one resolved from
+            // inside the other's construction, which is what caused the
+            // circular-dependency bug this design replaced. Logged at
+            // startup so "why didn't the email/SMS arrive?" is answerable
+            // from the logs without reading configuration - same convention
+            // as PushNotificationRegistration/RouteEstimateRegistration.
+            var brevoOptions = serviceProvider.GetRequiredService<IOptions<BrevoOptions>>().Value;
             var emailConfigured = !string.IsNullOrWhiteSpace(
                 configuration[$"{EmailOptions.SectionName}:{nameof(EmailOptions.AppPassword)}"]);
 
-            // Logged at startup so "why didn't the email/SMS arrive?" is
-            // answerable from the logs without reading configuration - same
-            // convention as PushNotificationRegistration/RouteEstimateRegistration.
-            INotificationProvider emailChannel;
-            if (emailConfigured)
+            INotificationProvider emailProvider;
+            if (brevoOptions.IsConfigured)
+            {
+                logger.LogInformation("Email notifications will use real Brevo delivery.");
+                emailProvider = serviceProvider.GetRequiredService<BrevoNotificationProvider>();
+            }
+            else if (emailConfigured)
             {
                 logger.LogInformation("Email notifications will use real Gmail SMTP delivery.");
-                emailChannel = serviceProvider.GetRequiredService<SmtpNotificationProvider>();
+                emailProvider = serviceProvider.GetRequiredService<SmtpNotificationProvider>();
             }
             else
             {
-                logger.LogInformation("Email notifications will use the sandbox provider: Email:AppPassword is not configured.");
-                emailChannel = serviceProvider.GetRequiredService<SandboxNotificationProvider>();
+                logger.LogInformation("Email notifications will use the sandbox provider: neither Brevo nor Email:AppPassword is configured.");
+                emailProvider = serviceProvider.GetRequiredService<SandboxNotificationProvider>();
             }
 
             var twilioOptions = serviceProvider.GetRequiredService<IOptions<TwilioOptions>>().Value;
-            if (!twilioOptions.IsConfigured)
+            INotificationProvider smsProvider;
+            if (twilioOptions.IsConfigured)
+            {
+                logger.LogInformation("SMS notifications will use Twilio.");
+                smsProvider = serviceProvider.GetRequiredService<TwilioNotificationProvider>();
+            }
+            else
             {
                 logger.LogInformation(
                     "SMS notifications will use the sandbox provider: Twilio is {State}.",
                     twilioOptions.Enabled ? "missing an account SID, auth token, or sender number" : "disabled by configuration");
-
-                // No real SMS vendor - the email-channel provider already
-                // implements the full interface (its own SendSmsAsync is the
-                // same sandbox simulation), so it can stand in directly.
-                return emailChannel;
+                smsProvider = serviceProvider.GetRequiredService<SandboxNotificationProvider>();
             }
 
-            logger.LogInformation("SMS notifications will use Twilio.");
-            return ActivatorUtilities.CreateInstance<TwilioNotificationProvider>(serviceProvider, emailChannel);
+            return ReferenceEquals(emailProvider, smsProvider)
+                ? emailProvider
+                : new CompositeNotificationProvider(emailProvider, smsProvider);
         });
 
         return services;
