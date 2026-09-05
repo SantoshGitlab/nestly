@@ -123,47 +123,48 @@ export function LocationPrompt() {
   );
 }
 
-interface GoogleGeocodeAddressComponent {
-  long_name: string;
-  types: string[];
-}
-
-interface GoogleGeocodeResponse {
-  results?: Array<{ address_components: GoogleGeocodeAddressComponent[] }>;
+interface NominatimReverseResponse {
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state_district?: string;
+  };
 }
 
 /**
- * Best-effort GPS -> serviceable-city match via Google's Geocoding API
- * (reusing `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, already loaded lazily for the
- * tracking screen - see `lib/googleMaps.ts`'s own note on why it's optional).
- * Resolves to `null` - never throws - on a missing key, a network failure,
- * or a geocoded locality that isn't in `cities`, so every failure mode
- * collapses to the same "fall back to manual" path the caller already has.
+ * Best-effort GPS -> serviceable-city match via OpenStreetMap's Nominatim
+ * reverse-geocoding endpoint. Deliberately not Google's Geocoding API: that
+ * requires a billed API key (`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, which this
+ * app also uses - optionally - for the tracking screen's map tiles, see
+ * `lib/googleMaps.ts`), so a customer with no key configured could never get
+ * a match here regardless of permission being granted. Nominatim needs no
+ * key and no billing account for this call volume (one request per customer
+ * who opts in, at most once a session).
+ * Resolves to `null` - never throws - on a network failure or a locality
+ * that isn't in `cities`, so every failure mode collapses to the same
+ * "fall back to manual" path the caller already has.
  */
 async function matchCityToCoordinates(coords: GeolocationCoordinates, cities: City[]): Promise<City | null> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!apiKey || cities.length === 0) return null;
+  if (cities.length === 0) return null;
 
   try {
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=${encodeURIComponent(apiKey)}`,
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&zoom=10&addressdetails=1`,
     );
     if (!response.ok) return null;
 
-    const data = (await response.json()) as GoogleGeocodeResponse;
-    const candidateNames = new Set<string>();
-    for (const result of data.results ?? []) {
-      for (const component of result.address_components) {
-        if (component.types.includes("locality") || component.types.includes("administrative_area_level_2")) {
-          candidateNames.add(component.long_name.toLowerCase());
-        }
-      }
-    }
+    const data = (await response.json()) as NominatimReverseResponse;
+    const address = data.address ?? {};
+    const candidateNames = [address.city, address.town, address.village, address.county, address.state_district]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.toLowerCase());
 
     return (
       cities.find((city) => {
         const name = city.name.toLowerCase();
-        return Array.from(candidateNames).some((candidate) => candidate.includes(name) || name.includes(candidate));
+        return candidateNames.some((candidate) => candidate.includes(name) || name.includes(candidate));
       }) ?? null
     );
   } catch {

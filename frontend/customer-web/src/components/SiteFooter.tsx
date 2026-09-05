@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PROVIDER_WEB_URL } from "@/lib/unified-login-api";
 
 const LEGAL_LINKS = [
   { href: "/terms", label: "Terms & Conditions" },
@@ -23,6 +24,14 @@ export function SiteFooter() {
               {link.label}
             </Link>
           ))}
+          <a
+            href={`${PROVIDER_WEB_URL}/register`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-fg hover:underline"
+          >
+            Become a Provider
+          </a>
         </nav>
         <p className="text-xs text-fg-subtle">
           &copy; {new Date().getFullYear()} Glavyx. All rights reserved.
