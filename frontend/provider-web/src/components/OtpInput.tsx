@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useId, useState } from "react";
-import type { FocusEvent, InputHTMLAttributes } from "react";
+import type { AnimationEvent, ChangeEvent, FocusEvent, InputHTMLAttributes } from "react";
 import { cx } from "@/components/ui";
 
 type OtpInputProps = {
@@ -44,6 +44,23 @@ type OtpInputProps = {
  * keyboard user cannot Tab to a specific digit and correct just that one -
  * there is one focusable control, read as "Verification code" with its
  * current value, the same as the single-input predecessor.
+ *
+ * The boxes are driven by an internal `displayValue` state, not the `value`
+ * prop directly: every call site wires this up via
+ * `{...form.register("otpCode")}`, and react-hook-form's `register()`
+ * deliberately returns only `{ onChange, onBlur, name, ref }` - never
+ * `value` - because its whole model for a plain registered input is
+ * uncontrolled (it reads the current code straight from the DOM node via
+ * `ref` at validation/submit time, same as any native form). That is exactly
+ * why submission always worked correctly regardless of what the boxes
+ * showed: the real (invisible) input received every keystroke and every
+ * autofill natively, and RHF read its true value at submit time. But it
+ * also means a `value` prop is never actually supplied here, so computing
+ * the boxes from it - as this component did before - left them permanently
+ * empty for every provider, typed or autofilled, not just an autofill edge
+ * case. `displayValue` fixes that by tracking what the real input holds
+ * directly, independent of whether a caller happens to pass a controlled
+ * `value` (if one ever does, it still seeds the initial render below).
  */
 export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(function OtpInput(
   { label = "Verification code", length = 6, error, hint, value, onChange, onBlur, id, ...props },
@@ -52,15 +69,33 @@ export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(function Otp
   const generatedId = useId();
   const inputId = id ?? `field-${props.name ?? "otp"}-${generatedId}`;
   const [focused, setFocused] = useState(false);
+  const [displayValue, setDisplayValue] = useState(() => String(value ?? ""));
 
-  const digits = String(value ?? "")
-    .replace(/\D/g, "")
-    .slice(0, length)
-    .split("");
+  const digits = displayValue.replace(/\D/g, "").slice(0, length).split("");
 
   const handleBlur = (event: FocusEvent<HTMLInputElement>) => {
     setFocused(false);
     onBlur?.(event);
+  };
+
+  // Some platform autofill (e.g. a phone's "verification code" keyboard
+  // suggestion) sets the real input's DOM value without dispatching a
+  // React-visible `input`/`change` event, so neither `onChange` below nor
+  // `displayValue` learns the fill happened on its own - even though the
+  // real code sits in the DOM and gets read correctly at form-submit time.
+  // `:-webkit-autofill`/`:autofill` is the one signal browsers reliably
+  // apply for a silent fill like that; pairing it with the CSS animation in
+  // globals.css turns it into an event this component can react to and
+  // force the visible boxes back in sync.
+  const handleAutofillDetected = (event: AnimationEvent<HTMLInputElement>) => {
+    if (event.animationName !== "nestly-autofill-detect") return;
+    const target = event.currentTarget;
+    const digitsOnly = target.value.replace(/\D/g, "").slice(0, length);
+    if (digitsOnly && digitsOnly !== displayValue) {
+      target.value = digitsOnly;
+      setDisplayValue(digitsOnly);
+      onChange?.({ ...event, target } as unknown as ChangeEvent<HTMLInputElement>);
+    }
   };
 
   return (
@@ -110,14 +145,16 @@ export const OtpInput = forwardRef<HTMLInputElement, OtpInputProps>(function Otp
           inputMode="numeric"
           autoComplete="one-time-code"
           maxLength={length}
-          value={value}
+          value={displayValue}
           onChange={(event) => {
             const digitsOnly = event.target.value.replace(/\D/g, "").slice(0, length);
             if (digitsOnly !== event.target.value) event.target.value = digitsOnly;
+            setDisplayValue(digitsOnly);
             onChange?.(event);
           }}
           onFocus={() => setFocused(true)}
           onBlur={handleBlur}
+          onAnimationStart={handleAutofillDetected}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
           className="absolute inset-0 h-11 w-full cursor-text text-transparent caret-transparent opacity-0"

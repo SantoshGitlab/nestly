@@ -305,6 +305,27 @@
   }
 }
 
+/* No-op animation, purely a detection hook: the browser applies
+   `:autofill`/`:-webkit-autofill` when it silently fills a field (e.g. a
+   platform "verification code" suggestion), often without firing a real
+   `input`/`change` event JS can observe. Pairing the pseudo-class with an
+   animation lets `OtpInput`'s `onAnimationStart` notice the fill happened
+   and force a re-sync - see that component's comment for the bug this
+   fixes: the code was silently filled and correctly submitted, but the
+   decorative boxes kept showing empty because nothing told React the real
+   input's value had changed. */
+@keyframes nestly-autofill-detect {
+  from {
+  }
+  to {
+  }
+}
+input:-webkit-autofill,
+input:autofill {
+  animation-name: nestly-autofill-detect;
+  animation-duration: 1ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
