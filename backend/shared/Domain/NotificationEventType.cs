@@ -103,5 +103,19 @@ public enum NotificationEventType
     AmcContractExpiringSoon,
 
     /// <summary>Every entitled visit on an AMC contract has been redeemed while the term still has time left.</summary>
-    AmcContractExhausted
+    AmcContractExhausted,
+
+    // Provider onboarding: KYC review and go-live activation were entirely
+    // silent - a provider had no way to know an admin had approved/rejected
+    // a document or flipped them to Active until they happened to reopen the
+    // app. APPENDED, NEVER INSERTED - see the comment above ProviderAssigned.
+
+    /// <summary>An admin approved one of this provider's submitted KYC documents.</summary>
+    ProviderKycApproved,
+
+    /// <summary>An admin rejected one of this provider's submitted KYC documents.</summary>
+    ProviderKycRejected,
+
+    /// <summary>An admin activated this provider (go-live) once KYC and the background check both cleared.</summary>
+    ProviderActivated
 }

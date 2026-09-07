@@ -217,7 +217,32 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.JobCompleted, NotificationChannel.Email, "job_completed_email", "Your service is complete",
             "Hi {{CustomerName}},\n\nYour {{ServiceName}} booking {{BookingId}} has been completed by {{ProviderName}}. We'd love to hear how it went - you can leave a rating in the app."),
         Row(NotificationEventType.JobCompleted, NotificationChannel.Push, "job_completed_push", "Service complete",
-            "Your {{ServiceName}} is complete. Tap to rate your experience.")
+            "Your {{ServiceName}} is complete. Tap to rate your experience."),
+
+        // Task 88h: provider onboarding - KYC review and go-live activation.
+        // {{DocType}} is the raw ProviderKycDocumentType enum name (e.g.
+        // "AddressProof"); admin-editable templates can format it however
+        // they like.
+        Row(NotificationEventType.ProviderKycApproved, NotificationChannel.Sms, "provider_kyc_approved_sms", null,
+            "Good news {{ProviderName}} - your {{DocType}} was approved. - Glavyx"),
+        Row(NotificationEventType.ProviderKycApproved, NotificationChannel.Email, "provider_kyc_approved_email", "Your document was approved",
+            "Hi {{ProviderName}},\n\nYour {{DocType}} has been reviewed and approved. You can check your onboarding progress in the app."),
+        Row(NotificationEventType.ProviderKycApproved, NotificationChannel.Push, "provider_kyc_approved_push", "Document approved",
+            "Your {{DocType}} was approved."),
+
+        Row(NotificationEventType.ProviderKycRejected, NotificationChannel.Sms, "provider_kyc_rejected_sms", null,
+            "{{ProviderName}}, your {{DocType}} was rejected. Please re-submit from the app. - Glavyx"),
+        Row(NotificationEventType.ProviderKycRejected, NotificationChannel.Email, "provider_kyc_rejected_email", "Your document was rejected",
+            "Hi {{ProviderName}},\n\nYour {{DocType}} could not be approved. Please review and re-submit it from the app."),
+        Row(NotificationEventType.ProviderKycRejected, NotificationChannel.Push, "provider_kyc_rejected_push", "Document rejected",
+            "Your {{DocType}} was rejected - please re-submit."),
+
+        Row(NotificationEventType.ProviderActivated, NotificationChannel.Sms, "provider_activated_sms", null,
+            "Congratulations {{ProviderName}} - you're live on Glavyx! Start accepting jobs from the app. - Glavyx"),
+        Row(NotificationEventType.ProviderActivated, NotificationChannel.Email, "provider_activated_email", "You're live on Glavyx",
+            "Hi {{ProviderName}},\n\nYour account has been activated - you're now live on Glavyx and can start accepting jobs from the app."),
+        Row(NotificationEventType.ProviderActivated, NotificationChannel.Push, "provider_activated_push", "You're live!",
+            "Your account is activated - start accepting jobs now.")
     ];
 
     private static SeedRow Row(NotificationEventType eventType, NotificationChannel channel, string templateKey, string? subject, string body) =>

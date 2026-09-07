@@ -12,10 +12,16 @@ public class NotificationEventConfiguration : IEntityTypeConfiguration<Notificat
         builder.ToTable("notification_event");
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.CustomerId).IsRequired();
+        builder.Property(x => x.CustomerId);
         builder.HasOne<Customer>()
             .WithMany()
             .HasForeignKey(x => x.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(x => x.ProviderId);
+        builder.HasOne<Provider>()
+            .WithMany()
+            .HasForeignKey(x => x.ProviderId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.BookingId);
@@ -41,6 +47,7 @@ public class NotificationEventConfiguration : IEntityTypeConfiguration<Notificat
         builder.Property(x => x.SentAtUtc);
 
         builder.HasIndex(x => x.CustomerId);
+        builder.HasIndex(x => x.ProviderId);
         builder.HasIndex(x => new { x.EventType, x.Status });
     }
 }

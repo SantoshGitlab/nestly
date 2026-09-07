@@ -44,6 +44,16 @@ export enum NotificationEventType {
   JobStarted = 20,
   JobCompleted = 21,
   ProviderChanged = 22,
+
+  // 23-26 (AmcContractPurchased..AmcContractExhausted) are not mirrored here -
+  // a pre-existing gap (no admin-web enum entries were added when the AMC
+  // module landed), left alone since fixing it is unrelated to task 88h.
+  // ProviderKycApproved/Rejected/Activated's ordinals below are still exact:
+  // each is an explicit value taken directly from its C# declaration
+  // position, not a continuation of the previous line.
+  ProviderKycApproved = 27,
+  ProviderKycRejected = 28,
+  ProviderActivated = 29,
 }
 
 /** Mirrors Nestly.Domain.NotificationChannel's declaration order exactly. */
@@ -77,6 +87,9 @@ export const NOTIFICATION_EVENT_TYPE_LABELS: Record<NotificationEventType, strin
   [NotificationEventType.JobStarted]: "Job started",
   [NotificationEventType.JobCompleted]: "Job completed",
   [NotificationEventType.ProviderChanged]: "Professional changed",
+  [NotificationEventType.ProviderKycApproved]: "Provider KYC approved",
+  [NotificationEventType.ProviderKycRejected]: "Provider KYC rejected",
+  [NotificationEventType.ProviderActivated]: "Provider activated",
 };
 
 export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {

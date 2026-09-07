@@ -16,13 +16,20 @@ public interface INotificationDispatchService
     /// captured in its own <see cref="NotificationDispatchOutcome"/> rather
     /// than aborting the others.
     /// </summary>
+    /// <summary>
+    /// Exactly one of <paramref name="customerId"/>/<paramref name="providerId"/>
+    /// must be set - whichever principal <paramref name="recipient"/> was
+    /// resolved for (<see cref="ResolveRecipientAsync"/>). Enforced by
+    /// <c>NotificationEvent</c>'s constructor, not here.
+    /// </summary>
     Task<IReadOnlyList<NotificationDispatchOutcome>> DispatchAsync(
-        Guid customerId,
+        Guid? customerId,
         NotificationEventType eventType,
         NotificationRecipient recipient,
         IReadOnlyDictionary<string, string> variables,
         Guid? bookingId = null,
         Guid? supportTicketId = null,
+        Guid? providerId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

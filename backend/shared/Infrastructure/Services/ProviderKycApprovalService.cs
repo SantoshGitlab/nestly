@@ -39,11 +39,13 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
         await _kycDocumentRepository.UpdateAsync(document);
 
         // Advances onboarding to KycVerified the first time a document is
-        // approved (idempotent - see Provider.MarkKycVerified).
+        // approved (idempotent - see Provider.MarkKycVerified), and raises
+        // the event that notifies the provider of this approval.
         var provider = await _providerRepository.GetByIdAsync(document.ProviderId);
         if (provider is not null)
         {
             provider.MarkKycVerified();
+            provider.RaiseKycDocumentReviewed(document.Id, document.DocType, approved: true);
             await _providerRepository.UpdateAsync(provider);
         }
 
@@ -65,6 +67,13 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
 
         document.Reject(adminUserId);
         await _kycDocumentRepository.UpdateAsync(document);
+
+        var provider = await _providerRepository.GetByIdAsync(document.ProviderId);
+        if (provider is not null)
+        {
+            provider.RaiseKycDocumentReviewed(document.Id, document.DocType, approved: false);
+            await _providerRepository.UpdateAsync(provider);
+        }
 
         return ToResponse(document);
     }

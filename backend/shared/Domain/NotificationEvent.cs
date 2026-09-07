@@ -17,7 +17,18 @@ namespace Nestly.Domain;
 /// </summary>
 public class NotificationEvent : Entity<Guid>
 {
-    public Guid CustomerId { get; private set; }
+    /// <summary>
+    /// The customer this event is addressed to. Mutually exclusive with
+    /// <see cref="ProviderId"/> - every dispatch has exactly one recipient,
+    /// enforced by the constructor rather than a database check constraint,
+    /// matching how <see cref="BookingId"/>/<see cref="SupportTicketId"/>
+    /// are already only "mutually exclusive in practice" here.
+    /// </summary>
+    public Guid? CustomerId { get; private set; }
+
+    /// <summary>The provider this event is addressed to (task 88h - provider onboarding notifications). See <see cref="CustomerId"/>.</summary>
+    public Guid? ProviderId { get; private set; }
+
     public Guid? BookingId { get; private set; }
     public Guid? SupportTicketId { get; private set; }
 
@@ -41,17 +52,29 @@ public class NotificationEvent : Entity<Guid>
 
     public NotificationEvent(
         Guid id,
-        Guid customerId,
+        Guid? customerId,
         NotificationEventType eventType,
         NotificationChannel channel,
         string recipient,
         string templateKey,
         string? payloadJson,
         Guid? bookingId = null,
-        Guid? supportTicketId = null)
+        Guid? supportTicketId = null,
+        Guid? providerId = null)
         : base(id)
     {
+        if (customerId is null && providerId is null)
+        {
+            throw new ArgumentException("A notification event must be addressed to either a customer or a provider.", nameof(customerId));
+        }
+
+        if (customerId is not null && providerId is not null)
+        {
+            throw new ArgumentException("A notification event cannot be addressed to both a customer and a provider.", nameof(providerId));
+        }
+
         CustomerId = customerId;
+        ProviderId = providerId;
         EventType = eventType;
         Channel = channel;
         Recipient = string.IsNullOrWhiteSpace(recipient)

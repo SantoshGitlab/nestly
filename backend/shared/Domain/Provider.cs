@@ -1,4 +1,5 @@
 using Nestly.BuildingBlocks.Primitives;
+using Nestly.Domain.Events;
 
 namespace Nestly.Domain;
 
@@ -65,7 +66,7 @@ public enum ProviderPhotoModerationStatus
 /// (identity + status) for a different actor, not a specialization of it,
 /// matching this module's SCOPE BOUNDARY of staying extractable on its own.
 /// </summary>
-public class Provider : Entity<Guid>
+public class Provider : AggregateRoot<Guid>
 {
     public string LegalName { get; private set; } = string.Empty;
     public string DisplayName { get; private set; } = string.Empty;
@@ -334,8 +335,32 @@ public class Provider : Entity<Guid>
     /// </summary>
     public void ChangeStatus(ProviderStatus status)
     {
+        var previousStatus = Status;
         Status = status;
         UpdatedAt = DateTime.UtcNow;
+
+        // Only the PendingVerification -> Active transition (go-live) is
+        // notification-worthy - a provider being Suspended/Deactivated does
+        // not need a push telling them so, and re-raising on every call
+        // (including a no-op reassignment to the same status) would be noise.
+        if (status == ProviderStatus.Active && previousStatus != ProviderStatus.Active)
+        {
+            RaiseDomainEvent(new ProviderActivatedEvent(Id));
+        }
+    }
+
+    /// <summary>
+    /// Records that an admin reviewed one of this provider's KYC documents,
+    /// for the notification that tells them so. Deliberately separate from
+    /// <see cref="MarkKycVerified"/>, which is about onboarding progress
+    /// (idempotent, fires once) - a document being approved is a fact worth
+    /// telling the provider about every time it happens, not just the first.
+    /// </summary>
+    public void RaiseKycDocumentReviewed(Guid documentId, ProviderKycDocumentType docType, bool approved)
+    {
+        RaiseDomainEvent(approved
+            ? new ProviderKycDocumentApprovedEvent(Id, documentId, docType)
+            : new ProviderKycDocumentRejectedEvent(Id, documentId, docType));
     }
 
     /// <summary>
