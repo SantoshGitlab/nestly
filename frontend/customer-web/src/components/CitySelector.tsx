@@ -60,11 +60,14 @@ export function CitySelector({ transparent = false }: { transparent?: boolean })
           // Sized specifically for the raw GPS-detected address case
           // (LocationPrompt's cosmetic `detectedAddress`, see useSelectedCity):
           // that text runs far longer than any real "City - Area" pick ever
-          // does, so this button gets more room and smaller type than the
-          // rest of the header's controls to fit meaningfully more of it
-          // before the `truncate` span below still has to ellipsize the
-          // remainder - not a general typography change, just this pill.
-          "inline-flex h-9 max-w-[20rem] items-center gap-1.5 rounded-lg px-3 text-[9px] font-medium transition-colors duration-fast ease-out",
+          // does, so this pill gets smaller type to fit meaningfully more of
+          // it before the `truncate` span below still has to ellipsize the
+          // remainder. `max-w-full` rather than a fixed rem value: a fixed
+          // cap wide enough for the desktop header (which has room to
+          // spare) overflowed the mobile drawer's own narrower padded
+          // width instead of truncating cleanly inside it - `full` always
+          // resolves against whichever real container this renders into.
+          "inline-flex h-9 max-w-full items-center gap-1.5 rounded-lg px-3 text-[9px] font-medium transition-colors duration-fast ease-out",
           transparent
             ? "border border-white/30 bg-white/10 text-white [text-shadow:0_1px_3px_rgb(0_0_0/0.5)] hover:bg-white/20"
             : "border border-line bg-surface text-fg shadow-xs hover:border-line-strong hover:bg-surface-2",
