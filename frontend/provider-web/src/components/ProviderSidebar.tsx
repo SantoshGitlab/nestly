@@ -49,10 +49,17 @@ function SidebarBrand() {
         className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-fg-on-brand shadow-brand"
       >
         <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-          <path
-            d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1v-7.5Z"
-            fill="currentColor"
+          <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeWidth="4.5"
+            strokeLinecap="round"
+            strokeDasharray="44 13"
+            transform="rotate(40 12 12)"
           />
+          <line x1="13.5" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" />
         </svg>
       </span>
       <span className="text-[0.9375rem] font-semibold tracking-tight text-fg">

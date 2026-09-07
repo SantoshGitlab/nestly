@@ -1,31 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nestly Provider">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Glavyx Provider">
   <!--
     Full-bleed on purpose (task 368): this file is the source the PNG icon
     set beside it is rasterized from, and an app icon must not round its own
     corners. iOS masks an apple-touch-icon to its own squircle and fills any
-    transparency it finds outside that mask with black, so the rounded
-    rectangle this used to draw produced black corners on a home screen.
+    transparency it finds outside that mask with black, so a rounded
+    rectangle drawn here would produce black corners on a home screen.
     Android applies its own adaptive-icon shape for the same reason. Both
     platforms want a square, edge-to-edge, fully opaque icon and do the
     rounding themselves.
 
-    Unlike customer-web's icon, the glyph here fills most of the canvas
-    rather than sitting inside a centered ~40% safe zone, so this mark is NOT
-    safe to crop to a circle - which is why manifest.json declares it for the
-    "any" purpose only and never "maskable". Shrinking the glyph to make it
-    maskable is a design decision, not a mechanical one; it is deliberately
-    not made here.
+    Glyph is `GlavyxMark` from customer-web's SiteHeader.tsx, scaled up:
+    same brand-600 background, same 24x24 stroke-based ring+crossbar "G",
+    scaled ~12.8x and centered so it fills roughly the same proportion of
+    this square as it does inside that component's own 40x40 badge - kept
+    in sync with that source so the mark doesn't drift between surfaces
+    (see this app's own auth-ui.tsx logo, edited alongside this file for the
+    same reason).
   -->
-  <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6538CD" />
-      <stop offset="55%" stop-color="#8A6CF0" />
-      <stop offset="100%" stop-color="#A594F6" />
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" fill="url(#g)" />
-  <path
-    d="M110 246 256 132l146 114v154a20 20 0 0 1-20 20h-84v-106H190v106h-84a20 20 0 0 1-20-20Z"
-    fill="#ffffff"
-  />
+  <rect width="512" height="512" fill="#764AE7" />
+  <g transform="translate(102.4,102.4) scale(12.8)">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="4.5"
+      stroke-linecap="round"
+      stroke-dasharray="44 13"
+      transform="rotate(40 12 12)"
+    />
+    <line x1="13.5" y1="12" x2="21" y2="12" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" />
+  </g>
 </svg>
