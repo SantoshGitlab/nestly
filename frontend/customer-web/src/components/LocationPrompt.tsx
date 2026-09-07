@@ -88,8 +88,19 @@ export function LocationPrompt() {
       // 20s gives a real GPS chip room to lock without the customer staring
       // at a spinner indefinitely if it plain can't - the request always
       // resolves one way or the other within that window.
+      //
+      // enableHighAccuracy: without it, a browser is free to return a fast,
+      // coarse fix from WiFi/cell-tower triangulation instead of the actual
+      // GPS chip - accurate to hundreds of meters to a kilometre, not the
+      // building-level precision this feature needs (reported: resolved to
+      // a generic nearby landmark instead of the customer's real building).
+      // Costs more time/battery for a genuine GPS lock, which is exactly
+      // why the timeout above was already raised to 20s.
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 20000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 20000,
+        });
       });
       const geocoded = await reverseGeocode(position.coords);
       const matchedCity = geocoded ? matchCity(geocoded.address, citiesQuery.data ?? []) : null;
