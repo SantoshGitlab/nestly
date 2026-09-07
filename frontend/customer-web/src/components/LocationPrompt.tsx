@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, useToast } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch } from "@/lib/api";
 import { openCityPicker, setSelectedCity, setSelectedLocality } from "@/lib/location";
@@ -40,6 +40,7 @@ export function LocationPrompt() {
   const [isMobile, setIsMobile] = useState(false);
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<"idle" | "locating" | "no-match" | "unsupported">("idle");
+  const pushToast = useToast();
 
   useEffect(() => {
     const query = window.matchMedia(MOBILE_QUERY);
@@ -95,7 +96,14 @@ export function LocationPrompt() {
       // Best-effort only, and deliberately after closing the dialog: the
       // customer's city is already resolved and usable, so a slow or failed
       // area lookup must never leave them staring at a spinner over what
-      // already succeeded.
+      // already succeeded. The toast fires only once, after this settles
+      // either way, so it always reflects the final "City" or "City - Area"
+      // state rather than announcing the city and then silently upgrading -
+      // the header pill only ever shows "City - Area" (SRS 11.1.3, see
+      // CitySelector's own label logic), so this confirmation matches it
+      // exactly instead of introducing separate wording like "current live
+      // location" that the compact header pill has no room to also show.
+      let detectedLabel = matchedCity.name;
       try {
         const localities = await apiFetch<LocalitySearchResult[]>(
           `${API_V1}/geography/cities/${matchedCity.id}/localities`,
@@ -107,10 +115,12 @@ export function LocationPrompt() {
             name: matchedLocality.name,
             pincodeId: matchedLocality.pincodeId,
           });
+          detectedLabel = `${matchedCity.name} - ${matchedLocality.name}`;
         }
       } catch {
         // City alone is still a fully usable selection - see comment above.
       }
+      pushToast("success", `Location detected: ${detectedLabel}`);
     } catch {
       setStatus("no-match");
     }
