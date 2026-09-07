@@ -57,10 +57,7 @@ public static class NotificationIntentPlanner
         [nameof(AmcContractPurchasedEvent)] = typeof(AmcContractPurchasedEvent),
         [nameof(AmcVisitRedeemedEvent)] = typeof(AmcVisitRedeemedEvent),
         [nameof(AmcContractExpiringSoonEvent)] = typeof(AmcContractExpiringSoonEvent),
-        [nameof(AmcContractExhaustedEvent)] = typeof(AmcContractExhaustedEvent),
-        [nameof(ProviderKycDocumentApprovedEvent)] = typeof(ProviderKycDocumentApprovedEvent),
-        [nameof(ProviderKycDocumentRejectedEvent)] = typeof(ProviderKycDocumentRejectedEvent),
-        [nameof(ProviderActivatedEvent)] = typeof(ProviderActivatedEvent)
+        [nameof(AmcContractExhaustedEvent)] = typeof(AmcContractExhaustedEvent)
     };
 
     /// <summary>
@@ -100,10 +97,6 @@ public static class NotificationIntentPlanner
         AmcVisitRedeemedEvent => [NotificationEventType.AmcVisitRedeemed],
         AmcContractExpiringSoonEvent => [NotificationEventType.AmcContractExpiringSoon],
         AmcContractExhaustedEvent => [NotificationEventType.AmcContractExhausted],
-
-        ProviderKycDocumentApprovedEvent => [NotificationEventType.ProviderKycApproved],
-        ProviderKycDocumentRejectedEvent => [NotificationEventType.ProviderKycRejected],
-        ProviderActivatedEvent => [NotificationEventType.ProviderActivated],
 
         _ => []
     };

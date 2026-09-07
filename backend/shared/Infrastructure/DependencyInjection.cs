@@ -857,20 +857,19 @@ public static class DependencyInjection
         services.AddScoped<INotificationIntentCoordinator, NotificationIntentCoordinator>();
         services.AddScoped<INotificationIntentSweepJob, NotificationIntentSweepJob>();
 
-        // The handlers the intent guarantee covers, exposed to the sweep
+        // The four handlers the intent guarantee covers, exposed to the sweep
         // through INotificationTriggerHandler. MediatR's assembly scan already
         // registers each of them as an INotificationHandler for the in-process
         // path; these registrations are the retry path, and they address only
         // the notification handlers so that nothing else subscribed to the
         // same domain events (escrow, referrals, metrics, auto-assignment) is
-        // ever re-run by a sweep. All of them, together, or the guarantee is a
+        // ever re-run by a sweep. All four, together, or the guarantee is a
         // half-truth.
         services.AddScoped<INotificationTriggerHandler, BookingNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, ChatNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, SupportTicketNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, SubscriptionNotificationTriggerHandler>();
         services.AddScoped<INotificationTriggerHandler, AmcNotificationTriggerHandler>();
-        services.AddScoped<INotificationTriggerHandler, ProviderNotificationTriggerHandler>();
 
         // Task 126a-d: admin CRUD, preview and change audit over the template
         // store above (SRS 12.17).

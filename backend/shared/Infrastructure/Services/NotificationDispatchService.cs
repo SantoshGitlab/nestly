@@ -107,13 +107,12 @@ public class NotificationDispatchService : INotificationDispatchService
     }
 
     public async Task<IReadOnlyList<NotificationDispatchOutcome>> DispatchAsync(
-        Guid? customerId,
+        Guid customerId,
         NotificationEventType eventType,
         NotificationRecipient recipient,
         IReadOnlyDictionary<string, string> variables,
         Guid? bookingId = null,
         Guid? supportTicketId = null,
-        Guid? providerId = null,
         CancellationToken cancellationToken = default)
     {
         var outcomes = new List<NotificationDispatchOutcome>();
@@ -121,13 +120,13 @@ public class NotificationDispatchService : INotificationDispatchService
         if (!string.IsNullOrWhiteSpace(recipient.Mobile))
         {
             outcomes.Add(await DispatchChannelAsync(
-                customerId, eventType, NotificationChannel.Sms, recipient.Mobile, variables, bookingId, supportTicketId, providerId, cancellationToken));
+                customerId, eventType, NotificationChannel.Sms, recipient.Mobile, variables, bookingId, supportTicketId, cancellationToken));
         }
 
         if (!string.IsNullOrWhiteSpace(recipient.Email))
         {
             outcomes.Add(await DispatchChannelAsync(
-                customerId, eventType, NotificationChannel.Email, recipient.Email, variables, bookingId, supportTicketId, providerId, cancellationToken));
+                customerId, eventType, NotificationChannel.Email, recipient.Email, variables, bookingId, supportTicketId, cancellationToken));
         }
 
         // Task 156: one dispatch per registered device, not a single send -
@@ -138,7 +137,7 @@ public class NotificationDispatchService : INotificationDispatchService
             foreach (var deviceToken in deviceTokens)
             {
                 outcomes.Add(await DispatchChannelAsync(
-                    customerId, eventType, NotificationChannel.Push, deviceToken, variables, bookingId, supportTicketId, providerId, cancellationToken));
+                    customerId, eventType, NotificationChannel.Push, deviceToken, variables, bookingId, supportTicketId, cancellationToken));
             }
         }
 
@@ -146,14 +145,13 @@ public class NotificationDispatchService : INotificationDispatchService
     }
 
     private async Task<NotificationDispatchOutcome> DispatchChannelAsync(
-        Guid? customerId,
+        Guid customerId,
         NotificationEventType eventType,
         NotificationChannel channel,
         string rawRecipient,
         IReadOnlyDictionary<string, string> variables,
         Guid? bookingId,
         Guid? supportTicketId,
-        Guid? providerId,
         CancellationToken cancellationToken)
     {
         string payloadJson = JsonSerializer.Serialize(variables);
@@ -161,7 +159,7 @@ public class NotificationDispatchService : INotificationDispatchService
         if (!await _templateRenderer.SupportsChannelAsync(eventType, channel, cancellationToken))
         {
             _logger.LogWarning("No notification template registered for {EventType}/{Channel} - skipping dispatch.", eventType, channel);
-            var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId, providerId);
+            var untemplated = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), "no_template", payloadJson, bookingId, supportTicketId);
             untemplated.MarkFailed("No template registered for this event/channel combination.");
             await _repository.AddAsync(untemplated);
             _metricsService.RecordNotificationOutcome(channel.ToString(), succeeded: false, untemplated.ErrorReason);
@@ -169,7 +167,7 @@ public class NotificationDispatchService : INotificationDispatchService
         }
 
         var rendered = await _templateRenderer.RenderAsync(eventType, channel, variables, cancellationToken);
-        var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId, providerId);
+        var notification = new NotificationEvent(Guid.NewGuid(), customerId, eventType, channel, ContactMasking.Mask(rawRecipient), rendered.TemplateKey, payloadJson, bookingId, supportTicketId);
         await _repository.AddAsync(notification);
 
         var sendResult = channel switch

@@ -2822,7 +2822,7 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
 
-                    b.Property<Guid?>("CustomerId")
+                    b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid")
                         .HasColumnName("customer_id");
 
@@ -2840,10 +2840,6 @@ namespace Nestly.Infrastructure.Migrations
                     b.Property<string>("PayloadJson")
                         .HasColumnType("text")
                         .HasColumnName("payload_json");
-
-                    b.Property<Guid?>("ProviderId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("provider_id");
 
                     b.Property<string>("Recipient")
                         .IsRequired()
@@ -2879,9 +2875,6 @@ namespace Nestly.Infrastructure.Migrations
 
                     b.HasIndex("CustomerId")
                         .HasDatabaseName("ix_notification_event_customer_id");
-
-                    b.HasIndex("ProviderId")
-                        .HasDatabaseName("ix_notification_event_provider_id");
 
                     b.HasIndex("SupportTicketId")
                         .HasDatabaseName("ix_notification_event_support_ticket_id");
@@ -6382,13 +6375,8 @@ namespace Nestly.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
                         .HasConstraintName("fk_notification_event_customer_customer_id");
-
-                    b.HasOne("Nestly.Domain.Provider", null)
-                        .WithMany()
-                        .HasForeignKey("ProviderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_notification_event_providers_provider_id");
 
                     b.HasOne("Nestly.Domain.SupportTicket", null)
                         .WithMany()
