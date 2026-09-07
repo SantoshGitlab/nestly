@@ -1,0 +1,47 @@
+name: Backend Keep-Alive
+
+# Pings each Render backend's health endpoint on a schedule so none of them
+# ever sit idle long enough to spin down. Render's free tier spins a service
+# down after ~15 minutes with no traffic, and the resulting cold start (the
+# next real request has to wait for the instance to boot, sometimes 15-50s)
+# surfaces to a customer as a generic "Failed to fetch" - indistinguishable
+# in the browser from a real outage or a CORS failure, since a slow-enough
+# connection just times out before any HTTP response, CORS headers included,
+# ever arrives. A steady trickle of traffic well under that 15-minute window
+# keeps every instance warm, so a genuine customer request never has to pay
+# that cold-start cost.
+#
+# GitHub Actions cron, not an external uptime service (UptimeRobot, cron-job.org,
+# etc.): this repo already uses GitHub Actions as its scheduling platform (see
+# backup-postgres.yml's own reasoning) and this needs no new account, no new
+# secret, and no third party with production URLs on file.
+#
+# 10 minutes, not right at the 15-minute spin-down edge: GitHub's own docs
+# say scheduled workflows can run late under platform load, so the margin
+# absorbs that jitter without a ping ever landing after the instance has
+# already gone idle.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    name: Ping backend health endpoints
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - { name: consumer-api, url: "https://glavyx-consumer-api.onrender.com/health/live" }
+          - { name: admin-api, url: "https://glavyx-admin-api.onrender.com/health/live" }
+          - { name: provider-api, url: "https://glavyx-provider-api.onrender.com/health/live" }
+    steps:
+      - name: Ping ${{ matrix.service.name }}
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "${{ matrix.service.url }}")
+          echo "${{ matrix.service.name }}: HTTP $status"
+          if [ "$status" != "200" ]; then
+            echo "::warning::${{ matrix.service.name }} returned HTTP $status"
+          fi
