@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Button, Modal, useToast } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch } from "@/lib/api";
-import { openCityPicker, setSelectedCity, setSelectedLocality } from "@/lib/location";
+import { openCityPicker, setDetectedAddressLabel, setSelectedCity, setSelectedLocality } from "@/lib/location";
 import type { City, LocalitySearchResult } from "@/lib/types";
 
 const PROMPTED_KEY = "nestly.locationPrompted";
@@ -91,8 +91,8 @@ export function LocationPrompt() {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 20000 });
       });
-      const address = await reverseGeocode(position.coords);
-      const matchedCity = address ? matchCity(address, citiesQuery.data ?? []) : null;
+      const geocoded = await reverseGeocode(position.coords);
+      const matchedCity = geocoded ? matchCity(geocoded.address, citiesQuery.data ?? []) : null;
       if (!matchedCity) {
         setStatus("no-match");
         return;
@@ -101,22 +101,29 @@ export function LocationPrompt() {
       setSelectedCity(matchedCity);
       setVisible(false);
 
+      // The header pill always gets the raw detected address (per product
+      // decision: a customer whose real area isn't a seeded serviceable
+      // locality should still see where they actually are, not just the
+      // city - see `setDetectedAddressLabel`'s own doc comment for why this
+      // is deliberately cosmetic-only). Falls back to the bare city name if
+      // Nominatim returned no `display_name` to build it from.
+      if (geocoded?.displayName) {
+        setDetectedAddressLabel(buildDetectedAddressLabel(geocoded.displayName, matchedCity.name));
+      }
+
       // Best-effort only, and deliberately after closing the dialog: the
       // customer's city is already resolved and usable, so a slow or failed
       // area lookup must never leave them staring at a spinner over what
       // already succeeded. The toast fires only once, after this settles
-      // either way, so it always reflects the final "City" or "City - Area"
-      // state rather than announcing the city and then silently upgrading -
-      // the header pill only ever shows "City - Area" (SRS 11.1.3, see
-      // CitySelector's own label logic), so this confirmation matches it
-      // exactly instead of introducing separate wording like "current live
-      // location" that the compact header pill has no room to also show.
+      // either way, and always names the real matched city/area (not the
+      // cosmetic detected address above) - it's confirming what will
+      // actually drive serviceability, distinct from what the pill shows.
       let detectedLabel = matchedCity.name;
       try {
         const localities = await apiFetch<LocalitySearchResult[]>(
           `${API_V1}/geography/cities/${matchedCity.id}/localities`,
         );
-        const matchedLocality = address ? matchLocality(address, localities) : null;
+        const matchedLocality = geocoded ? matchLocality(geocoded.address, localities) : null;
         if (matchedLocality) {
           setSelectedLocality({
             id: matchedLocality.id,
@@ -124,6 +131,13 @@ export function LocationPrompt() {
             pincodeId: matchedLocality.pincodeId,
           });
           detectedLabel = `${matchedCity.name} - ${matchedLocality.name}`;
+          // setSelectedLocality above clears the cosmetic label as a side
+          // effect (see lib/location.ts) so a manual area pick can't leave
+          // a stale one behind - restore it now that the auto-detect flow,
+          // not a manual pick, is what just called it.
+          if (geocoded?.displayName) {
+            setDetectedAddressLabel(buildDetectedAddressLabel(geocoded.displayName, matchedCity.name));
+          }
         }
       } catch {
         // City alone is still a fully usable selection - see comment above.
@@ -180,6 +194,12 @@ interface NominatimAddress {
 
 interface NominatimReverseResponse {
   address?: NominatimAddress;
+  display_name?: string;
+}
+
+interface ReverseGeocodeResult {
+  address: NominatimAddress;
+  displayName: string | null;
 }
 
 /**
@@ -197,7 +217,7 @@ interface NominatimReverseResponse {
  * Resolves to `null` - never throws - on any network failure, collapsing
  * into the same "fall back to manual" path every other failure mode uses.
  */
-async function reverseGeocode(coords: GeolocationCoordinates): Promise<NominatimAddress | null> {
+async function reverseGeocode(coords: GeolocationCoordinates): Promise<ReverseGeocodeResult | null> {
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1`,
@@ -205,10 +225,30 @@ async function reverseGeocode(coords: GeolocationCoordinates): Promise<Nominatim
     if (!response.ok) return null;
 
     const data = (await response.json()) as NominatimReverseResponse;
-    return data.address ?? null;
+    if (!data.address) return null;
+    return { address: data.address, displayName: data.display_name ?? null };
   } catch {
     return null;
   }
+}
+
+/**
+ * Turns Nominatim's full `display_name` (e.g. "Genus Power Infrastructures
+ * Ltd, SPL3, Sitapura, Sanganer Tehsil, Jaipur, Rajasthan, 302022, India")
+ * into the text shown after "City - " in the header pill: drops the
+ * trailing "India" boilerplate and the matched city's own name, since the
+ * city is already the prefix the customer sees before the dash - showing it
+ * twice ("Jaipur - ..., Jaipur, Rajasthan") would read as a mistake, not
+ * detail. Everything else (building/plot, road, area, state, pincode)
+ * survives; the header pill's own `truncate` class is what turns a long
+ * remainder into the same "text…" clipping every other value there gets.
+ */
+function buildDetectedAddressLabel(displayName: string, cityName: string): string {
+  return displayName
+    .split(",")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment.toLowerCase() !== cityName.toLowerCase() && segment.toLowerCase() !== "india")
+    .join(", ");
 }
 
 function namesMatch(candidate: string, name: string): boolean {

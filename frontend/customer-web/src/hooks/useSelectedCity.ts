@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  getDetectedAddressLabel,
   getSelectedCity,
   getSelectedLocality,
   subscribeToLocationChanges,
@@ -20,18 +21,22 @@ import type { City } from "@/lib/types";
 export function useSelectedCity(): {
   city: City | null | undefined;
   locality: SelectedLocality | null;
+  /** Cosmetic-only GPS-detected address text, or null - see `setDetectedAddressLabel`. */
+  detectedAddress: string | null;
 } {
   const [city, setCity] = useState<City | null | undefined>(undefined);
   const [locality, setLocality] = useState<SelectedLocality | null>(null);
+  const [detectedAddress, setDetectedAddress] = useState<string | null>(null);
 
   useEffect(() => {
     const sync = () => {
       setCity(getSelectedCity());
       setLocality(getSelectedLocality());
+      setDetectedAddress(getDetectedAddressLabel());
     };
     sync();
     return subscribeToLocationChanges(sync);
   }, []);
 
-  return { city, locality };
+  return { city, locality, detectedAddress };
 }

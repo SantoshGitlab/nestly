@@ -11,6 +11,18 @@ import type { City } from "./types";
  */
 const CITY_KEY = "nestly.city";
 const LOCALITY_KEY = "nestly.locality";
+/**
+ * The raw, human-readable address GPS auto-detect resolved (e.g. "Genus
+ * Power Infrastructures Ltd, SPL3, Sitapura") - cosmetic only, shown in the
+ * header pill in place of "City - Area" so a customer whose real area isn't
+ * a seeded serviceable locality still sees where they actually are, not
+ * just the city. Deliberately separate from `SelectedLocality`: that type
+ * drives real catalog/serviceability filtering and must only ever hold a
+ * real seeded locality, never an arbitrary geocoded string. Cleared by every
+ * manual city/area pick (see `setSelectedCity`/`setSelectedLocality` below)
+ * so a stale detected address never survives the customer overriding it.
+ */
+const DETECTED_ADDRESS_KEY = "nestly.detectedAddress";
 
 /** Notifies subscribed components (city selector, serviceability checks) that location moved. */
 const LOCATION_CHANGED_EVENT = "nestly:location-changed";
@@ -51,6 +63,7 @@ export function setSelectedCity(city: City): void {
   // changes - clear it so a stale pincode never silently backs a
   // serviceability or slot check against the wrong city.
   localStorage.removeItem(LOCALITY_KEY);
+  localStorage.removeItem(DETECTED_ADDRESS_KEY);
   window.dispatchEvent(new Event(LOCATION_CHANGED_EVENT));
 }
 
@@ -68,12 +81,33 @@ export function getSelectedLocality(): SelectedLocality | null {
 export function setSelectedLocality(locality: SelectedLocality): void {
   if (!isBrowser()) return;
   localStorage.setItem(LOCALITY_KEY, JSON.stringify(locality));
+  localStorage.removeItem(DETECTED_ADDRESS_KEY);
   window.dispatchEvent(new Event(LOCATION_CHANGED_EVENT));
 }
 
 export function clearSelectedLocality(): void {
   if (!isBrowser()) return;
   localStorage.removeItem(LOCALITY_KEY);
+  localStorage.removeItem(DETECTED_ADDRESS_KEY);
+  window.dispatchEvent(new Event(LOCATION_CHANGED_EVENT));
+}
+
+/**
+ * Cosmetic-only detected-address text (see `DETECTED_ADDRESS_KEY`). Set by
+ * `LocationPrompt` after its own `setSelectedCity`/`setSelectedLocality`
+ * calls (both of which clear this key), so GPS auto-detect's raw text always
+ * wins over those calls' own clearing side effect. Never read by anything
+ * that drives serviceability - `getSelectedLocality` remains the only
+ * source of truth for that.
+ */
+export function getDetectedAddressLabel(): string | null {
+  if (!isBrowser()) return null;
+  return localStorage.getItem(DETECTED_ADDRESS_KEY);
+}
+
+export function setDetectedAddressLabel(label: string): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(DETECTED_ADDRESS_KEY, label);
   window.dispatchEvent(new Event(LOCATION_CHANGED_EVENT));
 }
 

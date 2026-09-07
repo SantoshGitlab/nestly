@@ -24,7 +24,7 @@ import type { City, LocalitySearchResult } from "@/lib/types";
  * bespoke version had none of those.
  */
 export function CitySelector({ transparent = false }: { transparent?: boolean }) {
-  const { city, locality } = useSelectedCity();
+  const { city, locality, detectedAddress } = useSelectedCity();
   const [open, setOpen] = useState(false);
 
   // Lets `LocationPrompt`'s "choose manually" / no-match fallback open this
@@ -34,8 +34,22 @@ export function CitySelector({ transparent = false }: { transparent?: boolean })
   // "…" while storage is still being read, "Select city" once read and
   // empty, "City" for a city-only pick, "City - Area" once an area is
   // narrowed too (SRS 11.1.3's "filtered by selected city/serviceability").
+  // `detectedAddress` overrides "City - Area" when GPS auto-detect resolved
+  // a raw address but the area itself isn't a seeded serviceable locality -
+  // it's cosmetic only (see lib/location.ts), so it never affects which
+  // services actually show, only what the customer sees they're standing
+  // at. `truncate` on the span below is what turns a long detected address
+  // into the same "text…" clipping every other value here already gets.
   const label =
-    city === undefined ? "…" : city === null ? "Select city" : locality ? `${city.name} - ${locality.name}` : city.name;
+    city === undefined
+      ? "…"
+      : city === null
+        ? "Select city"
+        : detectedAddress
+          ? `${city.name} - ${detectedAddress}`
+          : locality
+            ? `${city.name} - ${locality.name}`
+            : city.name;
 
   return (
     <>
