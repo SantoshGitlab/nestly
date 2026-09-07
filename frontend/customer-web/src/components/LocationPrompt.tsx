@@ -80,8 +80,16 @@ export function LocationPrompt() {
 
     setStatus("locating");
     try {
+      // 8s was too aggressive for a real phone: mocked-coordinate testing
+      // never exercises actual GPS acquisition time, and a real first fix -
+      // especially indoors, or with no cached location in a fresh incognito
+      // session - can easily take longer than that, timing out into the
+      // "couldn't match" fallback before the device ever gets a real fix.
+      // 20s gives a real GPS chip room to lock without the customer staring
+      // at a spinner indefinitely if it plain can't - the request always
+      // resolves one way or the other within that window.
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 20000 });
       });
       const address = await reverseGeocode(position.coords);
       const matchedCity = address ? matchCity(address, citiesQuery.data ?? []) : null;
@@ -134,11 +142,13 @@ export function LocationPrompt() {
     <Modal open={visible} onClose={() => setVisible(false)} title="Enable your location" size="sm">
       <div className="flex flex-col gap-4">
         <p className="text-sm text-fg-muted">
-          {status === "no-match"
-            ? "We couldn't match that to a city we serve yet - pick one manually instead."
-            : status === "unsupported"
-              ? "Your browser doesn't support location access here - pick a city manually instead."
-              : "Allow location access so we can show services available near you."}
+          {status === "locating"
+            ? "Getting your location - this can take a few seconds on a real GPS fix..."
+            : status === "no-match"
+              ? "We couldn't match that to a city we serve yet - pick one manually instead."
+              : status === "unsupported"
+                ? "Your browser doesn't support location access here - pick a city manually instead."
+                : "Allow location access so we can show services available near you."}
         </p>
         <div className="flex flex-col gap-2">
           {status !== "unsupported" && (
