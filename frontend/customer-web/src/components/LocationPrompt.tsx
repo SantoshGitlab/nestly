@@ -184,8 +184,12 @@ export function LocationPrompt() {
  * making every iOS customer wait through a doomed 20s attempt first; on
  * failure or timeout, one retry without `enableHighAccuracy` almost always
  * still succeeds (that's the same "coarse but reliable" fix an unmodified
- * getCurrentPosition call would have returned) at the full 20s budget from
- * whichever it came from - it earned that time.
+ * getCurrentPosition call would have returned). That retry gets a much
+ * shorter 10s budget, not the original 20s: without a real GPS lock to wait
+ * out, it resolves from WiFi/cell-tower data, which is fast - reported as
+ * "takes longer to get live location" once the two budgets could stack
+ * worst-case to 28s total, most of which was this retry sitting well past
+ * when a coarse fix actually arrives.
  */
 function getPositionWithFallback(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
@@ -194,7 +198,7 @@ function getPositionWithFallback(): Promise<GeolocationPosition> {
       () => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: false,
-          timeout: 20000,
+          timeout: 10000,
         });
       },
       { enableHighAccuracy: true, timeout: 8000 },
