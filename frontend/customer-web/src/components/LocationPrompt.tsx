@@ -80,28 +80,7 @@ export function LocationPrompt() {
 
     setStatus("locating");
     try {
-      // 8s was too aggressive for a real phone: mocked-coordinate testing
-      // never exercises actual GPS acquisition time, and a real first fix -
-      // especially indoors, or with no cached location in a fresh incognito
-      // session - can easily take longer than that, timing out into the
-      // "couldn't match" fallback before the device ever gets a real fix.
-      // 20s gives a real GPS chip room to lock without the customer staring
-      // at a spinner indefinitely if it plain can't - the request always
-      // resolves one way or the other within that window.
-      //
-      // enableHighAccuracy: without it, a browser is free to return a fast,
-      // coarse fix from WiFi/cell-tower triangulation instead of the actual
-      // GPS chip - accurate to hundreds of meters to a kilometre, not the
-      // building-level precision this feature needs (reported: resolved to
-      // a generic nearby landmark instead of the customer's real building).
-      // Costs more time/battery for a genuine GPS lock, which is exactly
-      // why the timeout above was already raised to 20s.
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 20000,
-        });
-      });
+      const position = await getPositionWithFallback();
       const geocoded = await reverseGeocode(position.coords);
       const matchedCity = geocoded ? matchCity(geocoded.address, citiesQuery.data ?? []) : null;
       if (!matchedCity) {
@@ -188,6 +167,39 @@ export function LocationPrompt() {
       </div>
     </Modal>
   );
+}
+
+/**
+ * Requests a GPS fix, preferring a high-accuracy one but never letting the
+ * accuracy request itself become a hard failure. `enableHighAccuracy: true`
+ * asks the device to hold out for a real GPS-chip lock instead of a fast,
+ * coarse WiFi/cell-tower fix - needed for building-level precision (see
+ * `buildDetectedAddressLabel`'s doc comment) - but iOS Safari/WebKit has a
+ * well-known quirk where a high-accuracy request can time out or fail
+ * outright far more often than on Android, especially indoors (reported:
+ * the location permission prompt appeared and was granted, on both Safari
+ * and Chrome-on-iOS - which share the same WebKit engine under Apple's
+ * platform rules, so this isn't a per-browser quirk - yet the request never
+ * resolved). 8s is enough time to catch a fast high-accuracy lock without
+ * making every iOS customer wait through a doomed 20s attempt first; on
+ * failure or timeout, one retry without `enableHighAccuracy` almost always
+ * still succeeds (that's the same "coarse but reliable" fix an unmodified
+ * getCurrentPosition call would have returned) at the full 20s budget from
+ * whichever it came from - it earned that time.
+ */
+function getPositionWithFallback(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      () => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false,
+          timeout: 20000,
+        });
+      },
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  });
 }
 
 interface NominatimAddress {
