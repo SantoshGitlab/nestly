@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ErrorState } from "@/components/states";
 import { Alert, Badge, Button, Card, Field, Skeleton, cx, useToast } from "@/components/ui";
-import { getProfile, updateProfilePhoto } from "@/lib/profile-api";
+import { describeError } from "@/lib/api";
+import { getProfile, updateProfilePhoto, uploadProfilePhoto } from "@/lib/profile-api";
 import type { BadgeTone } from "@/components/ui";
 import type { ProviderPhotoModerationStatus, ProviderProfile } from "@/lib/types";
 
@@ -46,9 +47,10 @@ type PhotoFormValues = z.infer<typeof photoSchema>;
  * 2. A rejected photo keeps showing here with its reason attached — that is
  *    the only way the provider knows what to change.
  *
- * There is still no file-storage backend on the platform, so `photoUrl` is a
- * reference the provider pastes in, exactly like `KycSection`'s `fileRef`.
- * The local file picker below copies a name and uploads nothing.
+ * `photoUrl` is still a plain URL field (task 349's upload endpoint just fills
+ * it in) rather than the file itself, exactly like `KycSection`'s `fileRef` -
+ * uploading and saving stay two calls, so a provider can still paste an
+ * already-hosted URL directly if they have one.
  */
 export function PhotoSection() {
   const queryClient = useQueryClient();
@@ -76,6 +78,15 @@ export function PhotoSection() {
         profile.photoUrl ? "Photo sent for review." : "Photo removed.",
       );
     },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: uploadProfilePhoto,
+    onSuccess: (result) => {
+      form.setValue("photoUrl", result.url, { shouldValidate: true });
+      toast("success", "Photo uploaded — click Save to submit it for review.");
+    },
+    onError: (error) => toast("error", describeError(error)),
   });
 
   const onSubmit = form.handleSubmit((values) =>
@@ -153,35 +164,37 @@ export function PhotoSection() {
           <Field
             label="Photo link"
             placeholder="https://…"
-            hint="Paste a link to your photo. File upload isn't available on the platform yet."
+            hint="Upload a photo below, or paste a link to one already hosted elsewhere."
             error={form.formState.errors.photoUrl?.message}
             {...form.register("photoUrl")}
           />
 
-          {/* Not wired to any upload endpoint - the platform has no file
-              storage. This only copies a local file's name into the field
-              above; nothing leaves the device. Same as KycSection. */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="photo-local-file" className="text-sm font-medium text-fg">
-              Pick a local file
+              Upload a photo
             </label>
             <input
               id="photo-local-file"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               aria-describedby="photo-local-file-hint"
+              disabled={uploadMutation.isPending}
               onChange={(event) => {
-                const fileName = event.target.files?.[0]?.name;
-                if (fileName) form.setValue("photoUrl", fileName, { shouldValidate: true });
+                const file = event.target.files?.[0];
+                if (file) uploadMutation.mutate(file);
+                event.target.value = "";
               }}
               className={cx(
                 "w-full cursor-pointer rounded-lg border border-line bg-surface text-sm text-fg-muted shadow-xs outline-none transition duration-fast ease-out",
                 "hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25",
                 "file:mr-3 file:cursor-pointer file:border-0 file:bg-surface-3 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-fg",
+                "disabled:cursor-not-allowed disabled:opacity-60",
               )}
             />
             <p id="photo-local-file-hint" className="text-xs text-fg-muted">
-              Copies the file&apos;s name into the link above. Nothing is uploaded.
+              {uploadMutation.isPending
+                ? "Uploading…"
+                : "JPEG, PNG, or WebP, up to 8MB. Fills in the link above — click Save to submit it."}
             </p>
           </div>
 

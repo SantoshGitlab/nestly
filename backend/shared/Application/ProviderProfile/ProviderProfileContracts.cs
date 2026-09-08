@@ -60,6 +60,17 @@ public record UpdateProviderProfileRequest(string LegalName, string DisplayName,
 /// </param>
 public record UpdateProviderPhotoRequest(string? PhotoUrl);
 
+/// <summary>
+/// A file just saved to <c>IFileStorageService</c> and resolved to an
+/// absolute URL (task 349) - the response for
+/// <c>ProfileController.UploadPhoto</c>/<c>UploadKycDocument</c>. The client
+/// feeds <see cref="Url"/> straight into <see cref="UpdateProviderPhotoRequest.PhotoUrl"/>
+/// or <see cref="SubmitProviderKycDocumentRequest.FileRef"/>: uploading and
+/// submitting stay two calls, not one, so the existing validation/moderation
+/// rules on those two endpoints need no duplicate.
+/// </summary>
+public record ProviderFileUploadResponse(string Url);
+
 /// <summary>One geography a provider covers (PROVIDER.md "provider_service_area").</summary>
 public record ProviderServiceAreaResponse(
     Guid Id,

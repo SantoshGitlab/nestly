@@ -17,8 +17,9 @@ import {
   cx,
   useToast,
 } from "@/components/ui";
+import { describeError } from "@/lib/api";
 import { formatDate } from "@/lib/format";
-import { getKycStatus, submitKycDocument } from "@/lib/profile-api";
+import { getKycStatus, submitKycDocument, uploadKycDocumentFile } from "@/lib/profile-api";
 import type { BadgeTone } from "@/components/ui";
 import type { KycDocType, KycDocument, KycVerificationStatus } from "@/lib/profile-types";
 
@@ -74,11 +75,10 @@ const EMPTY_FORM: KycDocumentFormValues = {
  * gets an explicit "send a new one" affordance that pre-selects its type, and
  * the card leads with a single summary line for the account as a whole.
  *
- * There is still no file storage backend on the platform, so `fileRef` is a
- * text reference/URL the provider pastes in. The `<input type="file">` below is
- * NOT wired to any upload endpoint - it only copies the chosen file's *name*
- * into the reference field, which the provider can still edit. That is stated
- * on the control itself rather than left as a surprise.
+ * `fileRef` is still a plain text reference/URL (task 349's upload endpoint
+ * just fills it in) rather than the file itself, exactly like `PhotoSection`'s
+ * `photoUrl` - uploading and submitting stay two calls, so a provider can
+ * still paste an already-hosted URL directly if they have one.
  */
 export function KycSection() {
   const queryClient = useQueryClient();
@@ -106,6 +106,15 @@ export function KycSection() {
       form.reset(EMPTY_FORM);
       toast("success", "Document submitted for review.");
     },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: uploadKycDocumentFile,
+    onSuccess: (result) => {
+      form.setValue("fileRef", result.url, { shouldValidate: true });
+      toast("success", "Document uploaded — click Submit to send it for review.");
+    },
+    onError: (error) => toast("error", describeError(error)),
   });
 
   const onSubmit = form.handleSubmit((values) => mutation.mutate(values));
@@ -188,34 +197,37 @@ export function KycSection() {
           <Field
             label="File reference (URL or reference ID)"
             placeholder="https://…"
-            hint="Paste a link to the document. File upload isn't available on the platform yet."
+            hint="Upload a document below, or paste a link to one already hosted elsewhere."
             error={form.formState.errors.fileRef?.message}
             {...form.register("fileRef")}
           />
 
-          {/* Not wired to any upload endpoint - file storage does not exist on
-              the platform yet. This only copies a local file's name into the
-              reference field above; nothing leaves the device. */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="kyc-local-file" className="text-sm font-medium text-fg">
-              Pick a local file
+              Upload a document
             </label>
             <input
               id="kyc-local-file"
               type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
               aria-describedby="kyc-local-file-hint"
+              disabled={uploadMutation.isPending}
               onChange={(event) => {
-                const fileName = event.target.files?.[0]?.name;
-                if (fileName) form.setValue("fileRef", fileName, { shouldValidate: true });
+                const file = event.target.files?.[0];
+                if (file) uploadMutation.mutate(file);
+                event.target.value = "";
               }}
               className={cx(
                 "w-full cursor-pointer rounded-lg border border-line bg-surface text-sm text-fg-muted shadow-xs outline-none transition duration-fast ease-out",
                 "hover:border-line-strong focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25",
                 "file:mr-3 file:cursor-pointer file:border-0 file:bg-surface-3 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-fg",
+                "disabled:cursor-not-allowed disabled:opacity-60",
               )}
             />
             <p id="kyc-local-file-hint" className="text-xs text-fg-muted">
-              Copies the file&apos;s name into the reference above. Nothing is uploaded.
+              {uploadMutation.isPending
+                ? "Uploading…"
+                : "JPEG, PNG, WebP, or PDF, up to 8MB. Fills in the reference above — click Submit to send it."}
             </p>
           </div>
 

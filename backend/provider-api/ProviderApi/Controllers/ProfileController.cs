@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.ProviderIdentity;
 using Nestly.Application.ProviderProfile;
+using Nestly.Application.Storage;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Infrastructure;
 
@@ -26,6 +27,7 @@ public class ProfileController : ControllerBase
 {
     private readonly IProviderProfileService _profileService;
     private readonly IProviderKycService _kycService;
+    private readonly IFileStorageService _fileStorageService;
     private readonly IValidator<UpdateProviderProfileRequest> _updateProfileValidator;
     private readonly IValidator<UpdateProviderPhotoRequest> _updatePhotoValidator;
     private readonly IValidator<SubmitProviderKycDocumentRequest> _kycDocumentValidator;
@@ -35,6 +37,7 @@ public class ProfileController : ControllerBase
     public ProfileController(
         IProviderProfileService profileService,
         IProviderKycService kycService,
+        IFileStorageService fileStorageService,
         IValidator<UpdateProviderProfileRequest> updateProfileValidator,
         IValidator<UpdateProviderPhotoRequest> updatePhotoValidator,
         IValidator<SubmitProviderKycDocumentRequest> kycDocumentValidator,
@@ -43,6 +46,7 @@ public class ProfileController : ControllerBase
     {
         _profileService = profileService;
         _kycService = kycService;
+        _fileStorageService = fileStorageService;
         _updateProfileValidator = updateProfileValidator;
         _updatePhotoValidator = updatePhotoValidator;
         _kycDocumentValidator = kycDocumentValidator;
@@ -100,6 +104,51 @@ public class ProfileController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Uploads a profile photo file and returns its URL for
+    /// <see cref="UpdatePhoto"/> — a separate call rather than accepting the
+    /// file directly on <see cref="UpdatePhoto"/>, so that endpoint's existing
+    /// JSON contract and validator are untouched. Mirrors
+    /// provider-api's <c>JobsController.UploadCompletionPhoto</c>: content-type
+    /// checked against an image allowlist and size capped before anything is
+    /// read into memory or written to storage.
+    /// </summary>
+    [HttpPost("photo/upload")]
+    [ProducesResponseType(typeof(ProviderFileUploadResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [RequestSizeLimit(MaxPhotoUploadBytes)]
+    public async Task<IActionResult> UploadPhoto(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Problem("A photo file is required.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (file.Length > MaxPhotoUploadBytes)
+        {
+            return Problem($"Photos must be {MaxPhotoUploadBytes / (1024 * 1024)}MB or smaller.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (!AllowedPhotoContentTypes.Contains(file.ContentType))
+        {
+            return Problem("Only JPEG, PNG, or WebP photos are accepted.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        await using var stream = file.OpenReadStream();
+        var storedRef = await _fileStorageService.SaveAsync(stream, file.FileName, file.ContentType);
+        var absoluteUrl = FileReferenceUrl.ToAbsolute(storedRef, Request.Scheme, Request.Host.ToString());
+        return Ok(new ProviderFileUploadResponse(absoluteUrl));
+    }
+
+    private const long MaxPhotoUploadBytes = 8 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedPhotoContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    };
+
     /// <summary>Overall KYC picture: onboarding status plus every submitted document.</summary>
     [HttpGet("kyc")]
     [ProducesResponseType(typeof(ProviderKycStatusResponse), StatusCodes.Status200OK)]
@@ -136,6 +185,50 @@ public class ProfileController : ControllerBase
         var result = await _kycService.SubmitDocumentAsync(request);
         return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : result.ToProblemResult();
     }
+
+    /// <summary>
+    /// Uploads a KYC document file and returns its URL for
+    /// <see cref="SubmitKycDocument"/>'s <c>FileRef</c> — same
+    /// upload-then-submit split as <see cref="UploadPhoto"/>/<see cref="UpdatePhoto"/>.
+    /// Accepts PDF in addition to the photo allowlist: identity/address/bank
+    /// proofs are commonly scanned or exported as PDF, unlike a profile photo.
+    /// </summary>
+    [HttpPost("kyc/documents/upload")]
+    [ProducesResponseType(typeof(ProviderFileUploadResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [RequestSizeLimit(MaxKycUploadBytes)]
+    public async Task<IActionResult> UploadKycDocument(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Problem("A document file is required.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (file.Length > MaxKycUploadBytes)
+        {
+            return Problem($"Documents must be {MaxKycUploadBytes / (1024 * 1024)}MB or smaller.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (!AllowedKycContentTypes.Contains(file.ContentType))
+        {
+            return Problem("Only JPEG, PNG, WebP images or PDF documents are accepted.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        await using var stream = file.OpenReadStream();
+        var storedRef = await _fileStorageService.SaveAsync(stream, file.FileName, file.ContentType);
+        var absoluteUrl = FileReferenceUrl.ToAbsolute(storedRef, Request.Scheme, Request.Host.ToString());
+        return Ok(new ProviderFileUploadResponse(absoluteUrl));
+    }
+
+    private const long MaxKycUploadBytes = 8 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedKycContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+    };
 
     /// <summary>List the provider's declared geography coverage.</summary>
     [HttpGet("service-areas")]

@@ -2,7 +2,7 @@
  * Typed client for the Provider API's profile/onboarding surface
  * (`/api/v1/profile`). Every call is authenticated.
  */
-import { API_V1, apiFetch } from "./api";
+import { API_V1, apiFetch, apiUpload } from "./api";
 import type {
   KycStatusResponse,
   ServiceArea,
@@ -35,6 +35,18 @@ export const updateProfilePhoto = (request: UpdateProviderPhotoRequest) =>
     body: JSON.stringify(request),
   });
 
+/**
+ * Uploads a photo file and returns its URL, for feeding into
+ * {@link updateProfilePhoto}'s `photoUrl`. A separate call rather than one
+ * combined upload-and-save request, so the existing save/moderation flow on
+ * `updateProfilePhoto` needs no change.
+ */
+export const uploadProfilePhoto = (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<{ url: string }>(`${PROFILE_BASE}/photo/upload`, formData, { authenticated: true });
+};
+
 export const getKycStatus = () =>
   apiFetch<KycStatusResponse>(`${PROFILE_BASE}/kyc`, { authenticated: true });
 
@@ -44,6 +56,17 @@ export const submitKycDocument = (request: SubmitKycDocumentRequest) =>
     authenticated: true,
     body: JSON.stringify(request),
   });
+
+/**
+ * Uploads a KYC document file and returns its URL, for feeding into
+ * {@link submitKycDocument}'s `fileRef`. Same upload-then-submit split as
+ * {@link uploadProfilePhoto}.
+ */
+export const uploadKycDocumentFile = (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<{ url: string }>(`${PROFILE_BASE}/kyc/documents/upload`, formData, { authenticated: true });
+};
 
 export const getServiceAreas = () =>
   apiFetch<ServiceArea[]>(`${PROFILE_BASE}/service-areas`, { authenticated: true });
