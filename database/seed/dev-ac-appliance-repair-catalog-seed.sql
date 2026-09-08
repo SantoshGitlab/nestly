@@ -216,4 +216,48 @@ WHERE c.parent_category_id = '87251c60-2ec6-427d-8b26-ffe1edfaf243'
 UPDATE category SET is_active = FALSE
 WHERE id IN ('ee12a1fc-98b5-4ccf-9f06-bc195a12b0f0', '72a6e807-3bc2-4816-bb42-5fbf7ace70a3', '10e83925-eccd-4648-ba88-bb76fd0986d2');
 
+-- 13. UC-style detailed "what's included / what's not included" content
+-- (one point per line, rendered as a bulleted list - see InclusionList in
+-- services/[slug]/page.tsx) for every service in this category. AC's 6
+-- services use UC's real captured copy from its Samsung AC service pages;
+-- the rest use industry-accurate multi-point content in the same style
+-- since no line-by-line UC copy was captured for those subcategories.
+UPDATE service SET inclusions = v.inclusions, exclusions = v.exclusions
+FROM (VALUES
+('foam-jet-service-2-acs-e2e', E'Indoor unit deep cleaning with foam & jet spray\nOutdoor unit power-jet rinse\nPre-service AC gas check and post-service leak/blockage check', E'Spare parts or repairs beyond standard cleaning\nGas refill'),
+('foam-jet-service-3-acs-e2e', E'Indoor unit deep cleaning with foam & jet spray\nOutdoor unit power-jet rinse\nPre-service AC gas check and post-service leak/blockage check', E'Spare parts or repairs beyond standard cleaning\nGas refill'),
+('foam-jet-service-4-acs-e2e', E'Indoor unit deep cleaning with foam & jet spray\nOutdoor unit power-jet rinse\nPre-service AC gas check and post-service leak/blockage check', E'Spare parts or repairs beyond standard cleaning\nGas refill'),
+('foam-jet-service-5-acs-e2e', E'Indoor unit deep cleaning with foam & jet spray\nOutdoor unit power-jet rinse\nPre-service AC gas check and post-service leak/blockage check', E'Spare parts or repairs beyond standard cleaning\nGas refill'),
+('foam-jet-ac-service-e2e', E'2X deeper dust removal with foam + power jet technology\nComprehensive indoor & outdoor unit cleaning\nPre-service AC gas check and final leak/blockage check', E'Spare parts or repairs beyond standard cleaning\nGas refill'),
+('ac-repair-e2e', E'Complete check-up to identify the issue before repair\nInspection of coils, filters and other components\n30-day warranty on the repair', E'Spare parts beyond the standard toolkit (e.g. PCB repairs charged separately)\nAC gas refill'),
+('gas-refill-checkup-e2e', E'Leak identification with nitrogen, compressed air and soap-solution testing\nLeak fixing by brazing and rechecking\nGas refill by weight or back pressure, with pre and post-service checks', E'AC repair beyond the gas circuit\nSpare parts replacement'),
+('ac-installation', E'Installation of both indoor and outdoor units\nDrilling, wiring and mounting for split or window ACs\nFree gas check included', E'AC unit cost\nStabilizer or additional electrical work'),
+('ac-uninstallation', E'Safe removal of indoor and outdoor units\nPipe fixes and disconnection\nService area cleanup', E'Reinstallation at a new location\nPacking for transport'),
+('wm-jet-service-e2e', E'Drum and tub deep cleaning with jet spray\nDetergent tray and filter cleaning\nFinal functionality check', E'Spare parts or repairs\nDescaling chemicals'),
+('wm-checkup-e2e', E'Diagnostic inspection of the machine\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nDeep cleaning service'),
+('washing-machine-installation', E'Levelling and fixing the machine in place\nInlet and outlet pipe connection\nTest run to confirm proper functioning', E'Plumbing work beyond standard connection\nStabilizer or electrical socket installation'),
+('refrigerator-check-up', E'Diagnostic inspection of cooling and components\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nGas refill'),
+('tv-check-up', E'Diagnostic inspection of display and components\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nWall mount installation'),
+('tv-installation', E'Wall mount fixing and levelling\nCable management and connection setup\nFinal functionality check', E'Wall mount bracket cost\nWall repair for pre-existing damage'),
+('tv-uninstallation', E'Safe removal from wall mount\nCable disconnection\nService area cleanup', E'Wall repair after removal\nPacking for transport'),
+('chimney-check-up', E'Diagnostic inspection of suction and filters\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nDeep cleaning service'),
+('deep-chimney-service', E'Baffle filter and duct deep cleaning\nMotor and blower cleaning\nFinal suction test', E'Spare parts or repairs\nDucting replacement'),
+('basic-chimney-service', E'Filter cleaning and grease removal\nExterior wipe-down\nBasic functionality test', E'Motor or blower cleaning\nSpare parts or repairs'),
+('chimney-installation', E'Wall mounting and levelling\nDucting connection\nFinal functionality check', E'Ducting material cost beyond standard length\nWall drilling in tiled/reinforced surfaces'),
+('chimney-uninstallation', E'Safe removal from wall mount\nDucting disconnection\nService area cleanup', E'Wall repair after removal\nPacking for transport'),
+('beyond-chimney-installation', E'Extended ducting beyond standard length\nAdditional wall or ceiling drilling\nFinal functionality check', E'Ducting material cost\nStructural modifications'),
+('microwave-check-up', E'Diagnostic inspection of heating and components\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nDeep cleaning service'),
+('ro-repair-check-up', E'Diagnostic inspection of the unit\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nFilter replacement'),
+('ro-filter-check-up', E'Inspection of filter and membrane condition\nTDS and flow-rate check\nRecommendation report', E'Filter replacement\nRepair work'),
+('ro-complete-filter-replacement', E'Replacement of all filter stages and membrane\nSystem flushing and sanitization\nFinal TDS and flow-rate check', E'Repairs unrelated to filters\nUnit relocation'),
+('ro-wall-mounted-installation', E'Wall mounting and levelling\nInlet and outlet connection with tap fitting\nFinal functionality check', E'Wall drilling in tiled/reinforced surfaces\nElectrical socket installation'),
+('ro-under-counter-installation', E'Under-counter fixing and levelling\nInlet and outlet connection with tap fitting\nFinal functionality check', E'Cabinet modification\nElectrical socket installation'),
+('ro-uninstallation', E'Safe removal of the unit\nPipe and tap disconnection\nService area cleanup', E'Wall or cabinet repair after removal\nPacking for transport'),
+('geyser-check-up', E'Diagnostic inspection of heating element and thermostat\nIdentification of the issue with a repair quotation\nBasic functionality test', E'Repair or spare parts\nDeep cleaning service'),
+('geyser-service', E'Tank descaling and sediment cleaning\nHeating element and thermostat check\nFinal functionality test', E'Spare parts or repairs\nGas connection work'),
+('geyser-installation', E'Wall mounting and levelling\nInlet, outlet and pressure-relief valve connection\nFinal functionality check', E'Electrical wiring or plumbing beyond standard connection\nWall drilling in tiled/reinforced surfaces'),
+('geyser-uninstallation', E'Safe removal from wall mount\nPipe and electrical disconnection\nService area cleanup', E'Wall repair after removal\nPacking for transport')
+) AS v(slug, inclusions, exclusions)
+WHERE service.slug = v.slug;
+
 COMMIT;
