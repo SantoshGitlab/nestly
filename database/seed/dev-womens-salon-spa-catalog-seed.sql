@@ -143,4 +143,35 @@ WHERE c.parent_category_id = (SELECT id FROM category WHERE slug = 'womens-salon
       SELECT 1 FROM service_pincode_mapping m
       WHERE m.service_id = sv.id AND m.pincode_id = p.id);
 
+-- 7. UC-style detailed "what's included / what's not included" content
+-- (one point per line, rendered as a bulleted list - see InclusionList in
+-- services/[slug]/page.tsx) for all 22 new services across the 3 new
+-- subcategories.
+UPDATE service SET inclusions = v.inclusions, exclusions = v.exclusions
+FROM (VALUES
+('stress-relief-swedish-massage', E'Full-body Swedish massage technique\nLong, flowing strokes to improve circulation\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('quick-comfort-therapy', E'Targeted oil massage on shoulders, back and legs\nPressure adjusted to comfort level\nHot towel finish', E'Full-body coverage\nSteam or shower facility'),
+('swedish-with-foot-massage', E'60-minute Swedish full-body massage\n20-minute focused foot massage\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('swedish-head-shoulder-massage', E'60-minute Swedish full-body massage\n20-minute focused head and shoulder massage\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('top-to-toe-stress-relief-massage', E'Full-body massage\nScalp care and foot reflexology\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('deep-tissue-massage', E'Full-body massage with firm, focused pressure\nDeep tissue technique for post-workout relaxation\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('deep-tissue-with-foot-massage', E'60-minute deep tissue full-body massage\n20-minute focused foot massage\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('back-relief-massage', E'Focused massage on lower back, spine and shoulder blades\nPressure adjusted to ease tension\nHot towel finish', E'Full-body coverage\nSteam or shower facility'),
+('leg-relief-massage', E'Focused massage on glutes, calves and feet\nNatural oils to alleviate soreness\nHot towel finish', E'Full-body coverage\nSteam or shower facility'),
+('full-body-massage-scrub', E'Full-body massage\nBody scrub to remove dead skin\nRinse and moisturizing finish', E'Facial treatment\nSteam or shower facility'),
+('post-natal-massage', E'Full-body massage designed for new mothers\nTechniques to reduce water retention and ease tension\nHot towel finish', E'Deep tissue pressure\nClients without medical clearance post-delivery'),
+('elderly-care-massage', E'Light-pressure full-body massage\nTechniques suited for elderly clients\nHot towel finish', E'Deep tissue pressure\nClients with medical conditions requiring clearance'),
+('straight-smooth-blow-dry', E'Wash and blow-dry with a straightening finish\nHeat-protectant product application\nBasic styling', E'Hair cut or trim\nChemical straightening treatment'),
+('in-curl-out-curl-blow-dry', E'Wash and blow-dry with a curled finish\nHeat-protectant product application\nBasic styling', E'Hair cut or trim\nChemical treatment'),
+('hair-straightening', E'Consultation on hair type and length\nStraightening treatment application\nWash and blow-dry finish', E'Hair cut or trim\nTouch-up sessions after the initial treatment'),
+('curls-waves', E'Consultation on preferred curl or wave pattern\nStyling with curling tools\nFinishing spray for hold', E'Hair cut or trim\nChemical perm treatment'),
+('haircut-for-women-hs', E'Consultation on face shape and preferred style\nPrecision haircut with scissor work\nBasic styling and finish', E'Hair color or chemical treatments\nHair spa'),
+('haircut-for-girls', E'Gentle, kid-friendly haircut\nConsultation with parent on preferred style\nBasic styling and finish', E'Hair color or chemical treatments\nHair spa'),
+('hair-trim-women', E'Split-end and length trim\nConsultation on desired length\nBasic styling finish', E'Full haircut or restyling\nHair color or chemical treatments'),
+('basic-saree-draping', E'Consultation on saree style and occasion\nProfessional draping with pins and pleats\nFinal touch-ups for fit', E'Saree or blouse cost\nHair styling or makeup'),
+('advanced-saree-draping', E'Consultation on designer draping style\nProfessional draping with decorative pleats and pins\nFinal touch-ups for fit', E'Saree or blouse cost\nHair styling or makeup'),
+('basic-makeup-women', E'Consultation on look and occasion\nBase, eye and lip makeup application\nSetting spray for long-lasting finish', E'Hairstyling\nFalse lashes or advanced products beyond the standard kit')
+) AS v(slug, inclusions, exclusions)
+WHERE service.slug = v.slug;
+
 COMMIT;
