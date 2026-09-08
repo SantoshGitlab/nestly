@@ -131,4 +131,32 @@ FROM (VALUES
 ) AS v(slug)
 WHERE service.slug = v.slug;
 
+-- 8. UC-style detailed "what's included / what's not included" content
+-- (one point per line - the service detail page renders 2+ lines as a
+-- bulleted list, see InclusionList in services/[slug]/page.tsx) for the
+-- same 19 services. Pre-existing services keep their original one-line text.
+UPDATE service SET inclusions = v.inclusions, exclusions = v.exclusions
+FROM (VALUES
+('haircut-for-men', E'Consultation on face shape and preferred style\nPrecision haircut with scissor and clipper work\nBasic styling and finish', E'Beard trimming or shaving\nHair spa or chemical treatments'),
+('haircut-for-boys', E'Gentle, kid-friendly haircut for ages 2 and above\nConsultation with parent on preferred style\nBasic styling and finish', E'Beard or facial hair services\nHair color or chemical treatments'),
+('clean-shave', E'Pre-shave hot towel prep\nShave with a single-use blade\nAftershave and moisturizer application', E'Beard trimming or shaping\nFacial or skincare treatment'),
+('beard-trimming-styling', E'Consultation on beard shape and length\nTrimming and edging with clipper and scissor\nLine-up and finishing touches', E'Beard coloring\nFull shave'),
+('beard-color-with-product', E'Patch test recommendation before application\nEven, mess-free colour application\nRinse and aftercare tips', E'Beard trimming or shaping\nProduct cost beyond the standard kit used'),
+('skin-brightening-facial', E'Cleansing, scrub and massage\nOrange peel, vitamin C and green tea mask\nToning and moisturizing finish', E'Extractions or blackhead removal\nTreatment for active acne or skin conditions'),
+('skin-hydrating-facial', E'Cleansing, scrub and massage\nMulberry, saffron and arbutin mask\nToning and moisturizing finish', E'Extractions or blackhead removal\nTreatment for active acne or skin conditions'),
+('office-ready-cleanup', E'Quick cleansing and scrub\nVitamin-E, charcoal and lemon pack\nLight massage and moisturizing finish', E'Extractions or deep-pore cleaning\nFacial mask or steam'),
+('oil-free-vacation-cleanup', E'Cleansing and scrub for oily skin\nVitamin-C, green tea and grapefruit pack\nSebum-control massage and moisturizer', E'Extractions or deep-pore cleaning\nFacial mask or steam'),
+('charcoal-detoxifying-cleanup', E'Cleansing and scrub\nCharcoal-extract detox pack\nMassage and moisturizing finish', E'Extractions or deep-pore cleaning\nFacial mask or steam'),
+('quick-comfort-therapy-men', E'Targeted oil massage on shoulders, back and legs\nPressure adjusted to comfort level\nHot towel finish', E'Full-body coverage\nSteam or shower facility'),
+('deep-tissue-pain-relief-massage', E'Full-body massage with firm, focused pressure\nDeep tissue technique for muscle tightness\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('deep-tissue-head-neck-shoulder', E'60-minute deep tissue full-body massage\n40-minute focused head, neck and shoulder massage\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('back-relief-massage-men', E'Focused massage on back and shoulder blades\nPressure adjusted to relieve knots and soreness\nHot towel finish', E'Full-body coverage\nSteam or shower facility'),
+('leg-relief-massage-men', E'Focused massage on thighs, calves and feet\nNatural oils to ease soreness\nHot towel finish', E'Full-body coverage\nSteam or shower facility'),
+('swedish-stress-relief-massage-men', E'Full-body Swedish massage technique\nLong, flowing strokes to improve circulation\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('holistic-destress-massage', E'Medium-pressure massage with focus on head, neck and shoulder\nCalming technique to ease tension\nHot towel finish', E'Full-body deep-pressure work\nSteam or shower facility'),
+('top-to-toe-stress-relief-massage-men', E'Full-body massage\nScalp care and foot reflexology\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility'),
+('sports-recovery-massage', E'High-pressure full-body massage\nFocus on post-workout muscle recovery\nHot towel finish', E'Clients with recent injuries or surgery without medical clearance\nSteam or shower facility')
+) AS v(slug, inclusions, exclusions)
+WHERE service.slug = v.slug;
+
 COMMIT;

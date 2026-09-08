@@ -189,6 +189,14 @@ function InclusionList({
 }) {
   if (!body) return null;
 
+  // Multi-point content (one point per line, UC-style) reads as a bulleted
+  // list; a single sentence stays a plain paragraph so existing one-line
+  // inclusions/exclusions elsewhere in the catalog are unaffected.
+  const points = body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   return (
     <section aria-labelledby={headingId} className="rounded-2xl border border-line bg-surface p-4">
       <h2 id={headingId} className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -211,7 +219,6 @@ function InclusionList({
             fill="none"
             stroke="currentColor"
             strokeWidth="2.25"
-            strokeLinecap="round"
             className="h-4 w-4 text-fg-subtle"
             aria-hidden
           >
@@ -220,7 +227,18 @@ function InclusionList({
         )}
         {title}
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-fg-muted">{body}</p>
+      {points.length > 1 ? (
+        <ul className="mt-2 flex flex-col gap-1.5 text-sm leading-relaxed text-fg-muted">
+          {points.map((point, index) => (
+            <li key={index} className="flex gap-2">
+              <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-fg-subtle" />
+              <span>{point}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm leading-relaxed text-fg-muted">{body}</p>
+      )}
     </section>
   );
 }
