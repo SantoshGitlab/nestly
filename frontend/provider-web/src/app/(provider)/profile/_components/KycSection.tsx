@@ -38,12 +38,14 @@ const VERIFICATION_STATUS_LABELS: Record<KycVerificationStatus, string> = {
   Pending: "Under review",
   Approved: "Approved",
   Rejected: "Rejected",
+  Superseded: "Replaced",
 };
 
 const VERIFICATION_STATUS_TONES: Record<KycVerificationStatus, BadgeTone> = {
   Pending: "warning",
   Approved: "success",
   Rejected: "danger",
+  Superseded: "neutral",
 };
 
 const kycDocumentSchema = z.object({
@@ -286,12 +288,14 @@ function VerificationSummary({ documents }: { documents: KycDocument[] }) {
  */
 function DocumentRow({ doc, onResubmit }: { doc: KycDocument; onResubmit: () => void }) {
   const isRejected = doc.verificationStatus === "Rejected";
+  const isSuperseded = doc.verificationStatus === "Superseded";
 
   return (
     <div
       className={cx(
         "rounded-xl border p-3.5",
         isRejected ? "border-danger/30 bg-danger-soft/40" : "border-line bg-surface-2",
+        isSuperseded && "opacity-60",
       )}
     >
       <div className="flex items-start justify-between gap-3">

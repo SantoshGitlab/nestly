@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   Card,
+  cx,
   EmptyState,
   Field,
   PageHeading,
@@ -91,12 +92,17 @@ const KYC_STATUS_LABELS: Record<ProviderKycVerificationStatus, string> = {
   [ProviderKycVerificationStatus.Pending]: "Pending review",
   [ProviderKycVerificationStatus.Approved]: "Approved",
   [ProviderKycVerificationStatus.Rejected]: "Rejected",
+  // Task 349: the provider submitted a newer document of the same type -
+  // this one is retired history, not a queue item, so it never gets
+  // Approve/Reject actions (gated below on Pending only).
+  [ProviderKycVerificationStatus.Superseded]: "Replaced",
 };
 
 const KYC_STATUS_TONES: Record<ProviderKycVerificationStatus, BadgeTone> = {
   [ProviderKycVerificationStatus.Pending]: "warning",
   [ProviderKycVerificationStatus.Approved]: "success",
   [ProviderKycVerificationStatus.Rejected]: "danger",
+  [ProviderKycVerificationStatus.Superseded]: "neutral",
 };
 
 const PHOTO_STATUS_LABELS: Record<ProviderPhotoModerationStatus, string> = {
@@ -553,7 +559,13 @@ export default function ProviderDetailPage() {
         ) : (
           <ul className="flex flex-col gap-3 text-sm">
             {provider.kycDocuments.map((doc) => (
-              <li key={doc.id} className="rounded-xl border border-line p-3">
+              <li
+                key={doc.id}
+                className={cx(
+                  "rounded-xl border border-line p-3",
+                  doc.verificationStatus === ProviderKycVerificationStatus.Superseded && "opacity-60",
+                )}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium text-fg">{KYC_DOC_TYPE_LABELS[doc.docType]}</span>
                   <Badge tone={KYC_STATUS_TONES[doc.verificationStatus]}>

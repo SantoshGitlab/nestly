@@ -18,11 +18,33 @@ public enum ProviderKycDocumentType
 /// submission side (task 146c) and exposes the transition methods for that
 /// future admin workflow to call.
 /// </summary>
+/// <remarks>
+/// Stored via <c>HasConversion&lt;string&gt;()</c> (see
+/// <c>ProviderKycDocumentConfiguration</c>), so unlike the strictly
+/// append-only, ordinal-sensitive enums elsewhere in this codebase
+/// (<c>NotificationEventType</c>, <c>BookingStatus</c>), inserting
+/// <see cref="Superseded"/> here is safe regardless of position.
+/// </remarks>
 public enum ProviderKycVerificationStatus
 {
     Pending,
     Approved,
-    Rejected
+    Rejected,
+
+    /// <summary>
+    /// Task 349: replaced by a newer document of the same
+    /// <see cref="ProviderKycDocument.DocType"/> - set on the OLD row the
+    /// moment a provider submits a new one, so at most one
+    /// Pending-or-Approved document ever exists per (provider, doc type).
+    /// Without this, a provider resubmitting an already-approved doc type
+    /// (an expired ID, a changed address) left two live rows - the approved
+    /// original and a new Pending one - with nothing distinguishing which is
+    /// current, and no way for admins to tell a genuine re-review request
+    /// from queue noise. Terminal, like <see cref="Rejected"/>: never
+    /// admin-approved/rejected once superseded (see
+    /// <c>ProviderKycApprovalService</c>'s <c>AlreadyReviewed</c> guard).
+    /// </summary>
+    Superseded
 }
 
 /// <summary>
@@ -72,5 +94,23 @@ public class ProviderKycDocument : Entity<Guid>
         VerificationStatus = ProviderKycVerificationStatus.Rejected;
         VerifiedBy = verifiedByAdminUserId;
         VerifiedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Retired by a newer submission of the same <see cref="DocType"/> (task
+    /// 349), called on the OLD document by <c>ProviderKycService.SubmitDocumentAsync</c>.
+    /// A no-op past <see cref="ProviderKycVerificationStatus.Rejected"/>: a
+    /// rejected document is already inactive history, not a second "current"
+    /// row competing with the new submission, so leaving it Rejected keeps
+    /// its reason intact instead of relabelling it as merely superseded.
+    /// </summary>
+    public void Supersede()
+    {
+        if (VerificationStatus == ProviderKycVerificationStatus.Rejected)
+        {
+            return;
+        }
+
+        VerificationStatus = ProviderKycVerificationStatus.Superseded;
     }
 }

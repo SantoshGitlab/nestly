@@ -31,9 +31,24 @@ public class ProviderKycService : IProviderKycService
                 Error.NotFound("ProviderKyc.ProviderNotFound", "No provider found for this id."));
         }
 
+        // Task 349: at most one Pending-or-Approved document may exist per
+        // (provider, doc type) - a provider resubmitting an already-approved
+        // type (expired ID, changed address) must not leave the old, still-
+        // "current"-looking row sitting beside the new one. Read before the
+        // new row is added, so it is never superseded by itself.
+        var existingOfSameType = (await _kycDocumentRepository.GetByProviderAsync(request.ProviderId))
+            .Where(doc => doc.DocType == request.DocType)
+            .ToList();
+
         var document = new ProviderKycDocument(
             Guid.NewGuid(), request.ProviderId, request.DocType, request.FileRef, request.DocNumber);
         await _kycDocumentRepository.AddAsync(document);
+
+        foreach (var previous in existingOfSameType)
+        {
+            previous.Supersede();
+            await _kycDocumentRepository.UpdateAsync(previous);
+        }
 
         // Advances onboarding to KycSubmitted the first time a document is
         // submitted (idempotent - see Provider.MarkKycSubmitted).

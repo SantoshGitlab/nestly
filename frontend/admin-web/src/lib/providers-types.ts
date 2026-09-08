@@ -45,6 +45,8 @@ export enum ProviderKycVerificationStatus {
   Pending = 0,
   Approved = 1,
   Rejected = 2,
+  /** Task 349: replaced by a newer document of the same type - never an admin decision, unlike the other three. Appended, matching the C# enum's own append-only rule. */
+  Superseded = 3,
 }
 
 /** Mirrors Nestly.Domain.ProviderPhotoModerationStatus's declaration order exactly (task 293). */

@@ -94,5 +94,77 @@ public class ProviderKycServiceTests : IDisposable
         result.Error.Code.Should().Be("ProviderKyc.ProviderNotFound");
     }
 
+    [Fact]
+    public async Task SubmitDocumentAsync_supersedes_a_pending_document_of_the_same_type()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateService(context);
+        var first = await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id-v1.pdf", null));
+
+        var second = await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id-v2.pdf", null));
+
+        second.Value.VerificationStatus.Should().Be(nameof(ProviderKycVerificationStatus.Pending));
+
+        var supersededFirst = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == first.Value.Id);
+        supersededFirst.VerificationStatus.Should().Be(ProviderKycVerificationStatus.Superseded);
+    }
+
+    [Fact]
+    public async Task SubmitDocumentAsync_supersedes_an_approved_document_of_the_same_type()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateService(context);
+        var first = await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id-v1.pdf", null));
+
+        var approvedDoc = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == first.Value.Id);
+        approvedDoc.Approve(Guid.NewGuid());
+        context.Update(approvedDoc);
+        await context.SaveChangesAsync();
+
+        await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id-v2.pdf", null));
+
+        var supersededFirst = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == first.Value.Id);
+        supersededFirst.VerificationStatus.Should().Be(ProviderKycVerificationStatus.Superseded);
+    }
+
+    [Fact]
+    public async Task SubmitDocumentAsync_does_not_supersede_a_rejected_document_of_the_same_type()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateService(context);
+        var first = await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id-v1.pdf", null));
+
+        var rejectedDoc = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == first.Value.Id);
+        rejectedDoc.Reject(Guid.NewGuid());
+        context.Update(rejectedDoc);
+        await context.SaveChangesAsync();
+
+        await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id-v2.pdf", null));
+
+        var stillRejected = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == first.Value.Id);
+        stillRejected.VerificationStatus.Should().Be(ProviderKycVerificationStatus.Rejected);
+    }
+
+    [Fact]
+    public async Task SubmitDocumentAsync_does_not_supersede_a_document_of_a_different_type()
+    {
+        await using var context = _database.CreateContext();
+        var service = CreateService(context);
+        var identity = await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.IdentityProof, "s3://kyc/id.pdf", null));
+
+        await service.SubmitDocumentAsync(
+            new SubmitProviderKycDocumentRequest(_providerId, ProviderKycDocumentType.AddressProof, "s3://kyc/addr.pdf", null));
+
+        var stillPendingIdentity = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == identity.Value.Id);
+        stillPendingIdentity.VerificationStatus.Should().Be(ProviderKycVerificationStatus.Pending);
+    }
+
     public void Dispose() => _database.Dispose();
 }

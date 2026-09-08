@@ -24,8 +24,12 @@ export type KycDocType =
   | "ProfessionalCertificate"
   | "Other";
 
-/** provider_kyc_document.verification_status. */
-export type KycVerificationStatus = "Pending" | "Approved" | "Rejected";
+/**
+ * provider_kyc_document.verification_status. "Superseded" (task 349) is set
+ * on an older document the moment a provider submits a newer one of the same
+ * `docType` - it never comes from an admin decision, unlike the other three.
+ */
+export type KycVerificationStatus = "Pending" | "Approved" | "Rejected" | "Superseded";
 
 export interface KycDocument {
   id: string;
@@ -45,10 +49,9 @@ export interface KycStatusResponse {
 }
 
 /**
- * `fileRef` is a file *reference/URL* string, not a binary upload - there is
- * no file storage backend wired up yet (see the KYC submission form's own
- * comment), so this only ever carries a reference the provider pasted in or
- * that a future upload flow will populate once storage exists.
+ * `fileRef` is a file *reference/URL* string, not the file itself - the
+ * upload endpoint (`uploadKycDocumentFile` in `profile-api.ts`) fills this in
+ * with a real hosted URL, but a provider can also paste one directly.
  */
 export interface SubmitKycDocumentRequest {
   docType: KycDocType;
@@ -57,10 +60,9 @@ export interface SubmitKycDocumentRequest {
 }
 
 /**
- * `photoUrl` is a file *reference/URL* string, not a binary upload - same
- * constraint as `SubmitKycDocumentRequest.fileRef`, since there is still no
- * file storage backend. Null or empty clears the photo. Setting one always
- * sends it back for admin review.
+ * `photoUrl` is a file *reference/URL* string, not the file itself - same
+ * shape as `SubmitKycDocumentRequest.fileRef`. Null or empty clears the
+ * photo. Setting one always sends it back for admin review.
  */
 export interface UpdateProviderPhotoRequest {
   photoUrl: string | null;
