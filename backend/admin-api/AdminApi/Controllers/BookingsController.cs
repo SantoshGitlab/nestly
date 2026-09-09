@@ -53,6 +53,7 @@ public class BookingsController : ControllerBase
     private readonly IValidator<AdminRefundRequest> _refundValidator;
     private readonly IValidator<AssignProviderRequest> _assignProviderValidator;
     private readonly IValidator<RejectAssignmentRequest> _rejectAssignmentValidator;
+    private readonly IValidator<RejectCompletionProofRequest> _rejectCompletionProofValidator;
 
     public BookingsController(
         IBookingManagementService bookingManagementService,
@@ -66,7 +67,8 @@ public class BookingsController : ControllerBase
         IValidator<AdminRescheduleBookingRequest> rescheduleValidator,
         IValidator<AdminRefundRequest> refundValidator,
         IValidator<AssignProviderRequest> assignProviderValidator,
-        IValidator<RejectAssignmentRequest> rejectAssignmentValidator)
+        IValidator<RejectAssignmentRequest> rejectAssignmentValidator,
+        IValidator<RejectCompletionProofRequest> rejectCompletionProofValidator)
     {
         _bookingManagementService = bookingManagementService;
         _assignmentService = assignmentService;
@@ -80,6 +82,7 @@ public class BookingsController : ControllerBase
         _refundValidator = refundValidator;
         _assignProviderValidator = assignProviderValidator;
         _rejectAssignmentValidator = rejectAssignmentValidator;
+        _rejectCompletionProofValidator = rejectCompletionProofValidator;
     }
 
     /// <summary>Filterable, paginated booking search (SRS 12.11.1, task 115a).</summary>
@@ -288,6 +291,36 @@ public class BookingsController : ControllerBase
         }
 
         return result.Value is null ? NoContent() : Ok(result.Value);
+    }
+
+    /// <summary>Approves the completion proof and, as the direct consequence, moves the booking to Completed - the only path Completed is now reachable by (see <c>BookingManagementService.DisallowedGenericTransitionTargets</c>).</summary>
+    [HttpPost("{bookingId:guid}/completion-proof/approve")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminBookingDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ApproveCompletionProof(Guid bookingId)
+    {
+        var result = await _bookingManagementService.ApproveCompletionProofAsync(bookingId, CurrentAdminUserId());
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Rejects the completion proof with a required reason; the booking stays InProgress for the provider to finish and resubmit.</summary>
+    [HttpPost("{bookingId:guid}/completion-proof/reject")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminBookingDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RejectCompletionProof(Guid bookingId, [FromBody] RejectCompletionProofRequest request)
+    {
+        var validation = await _rejectCompletionProofValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _bookingManagementService.RejectCompletionProofAsync(bookingId, CurrentAdminUserId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
     /// <summary>Live tracking snapshot for the admin ops view (task 284) - same shape task 275 built for the customer screen, minus the ownership check.</summary>

@@ -1,3 +1,5 @@
+using Nestly.Domain;
+
 namespace Nestly.Application.Bookings;
 
 /// <summary>
@@ -34,4 +36,13 @@ public sealed record BookingCompletionProofResponse(
     IReadOnlyList<string> PhotoRefs,
     IReadOnlyList<CompletionChecklistAnswerResponse> ChecklistAnswers,
     Guid SubmittedByProviderId,
-    DateTime SubmittedAtUtc);
+    DateTime SubmittedAtUtc,
+    // Appended last, matching this record's own append-only convention (see
+    // ProviderPhotoResponse).
+    CompletionProofReviewStatus ReviewStatus,
+    Guid? ReviewedBy,
+    DateTime? ReviewedAtUtc,
+    string? RejectionReason);
+
+/// <summary>Admin rejects a submitted completion proof (the counterpart to <see cref="Nestly.Application.ProviderManagement.RejectProviderKycDocumentRequest"/> for this different kind of provider-submitted evidence) - reason is required so the provider knows what to fix before resubmitting.</summary>
+public sealed record RejectCompletionProofRequest(string Reason);

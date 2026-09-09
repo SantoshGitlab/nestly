@@ -269,6 +269,13 @@ export interface CompletionChecklistAnswerResponse {
   notes: string | null;
 }
 
+/** Mirrors Nestly.Domain.CompletionProofReviewStatus's declaration order exactly. */
+export enum CompletionProofReviewStatus {
+  Pending = 0,
+  Approved = 1,
+  Rejected = 2,
+}
+
 export interface BookingCompletionProofResponse {
   id: string;
   bookingId: string;
@@ -276,6 +283,15 @@ export interface BookingCompletionProofResponse {
   checklistAnswers: CompletionChecklistAnswerResponse[];
   submittedByProviderId: string;
   submittedAtUtc: string;
+  // Appended last, matching the C# positional record's own append-only rule.
+  reviewStatus: CompletionProofReviewStatus;
+  reviewedBy: string | null;
+  reviewedAtUtc: string | null;
+  rejectionReason: string | null;
+}
+
+export interface RejectCompletionProofRequest {
+  reason: string;
 }
 
 /**

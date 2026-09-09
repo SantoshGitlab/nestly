@@ -50,6 +50,14 @@ public class BookingManagementService : IBookingManagementService
         BookingStatus.Rescheduled,
         BookingStatus.RefundPending,
         BookingStatus.Refunded,
+        // Completed now requires the admin to have approved the provider's
+        // completion proof (ApproveCompletionProofAsync) - the same reasoning
+        // as every other entry here: a transition with real side effects
+        // (escrow release, provider earning credit) is too consequential for
+        // a bare generic dropdown. Reaching it this way used to only require
+        // proof to exist, not to have been reviewed - see this method's git
+        // history for that older, narrower guard.
+        BookingStatus.Completed,
     };
 
     /// <summary>
@@ -162,7 +170,7 @@ public class BookingManagementService : IBookingManagementService
         {
             return Error.Validation(
                 "Booking.UseDedicatedAction",
-                $"'{request.NewStatus}' must be set via the dedicated cancel/reschedule/refund action, not a generic status update.");
+                $"'{request.NewStatus}' must be set via the dedicated cancel/reschedule/refund/complete action, not a generic status update.");
         }
 
         if (!BookingLifecycle.IsValidTransition(booking.Status, request.NewStatus))
@@ -177,15 +185,6 @@ public class BookingManagementService : IBookingManagementService
             return Error.Business(
                 "Booking.NoProviderAssigned",
                 $"'{request.NewStatus}' requires a provider already assigned to this booking. Use the assign-provider action first.");
-        }
-
-        if (request.NewStatus == BookingStatus.Completed)
-        {
-            var proofError = await _completionProofRepository.EnsureCompletionProofExistsAsync(bookingId);
-            if (proofError is not null)
-            {
-                return proofError;
-            }
         }
 
         var previousStatus = booking.Status;
@@ -287,6 +286,95 @@ public class BookingManagementService : IBookingManagementService
         return booking is null
             ? Error.NotFound("Booking.NotFound", "The specified booking does not exist.")
             : await BuildDetailAsync(booking);
+    }
+
+    /// <summary>Approves the provider's submitted completion proof and, as the direct consequence, transitions the booking to Completed - the one path Completed is now reachable by, see <see cref="DisallowedGenericTransitionTargets"/>.</summary>
+    public async Task<Result<AdminBookingDetailResponse>> ApproveCompletionProofAsync(Guid bookingId, Guid adminUserId)
+    {
+        var (booking, proof, error) = await LoadPendingCompletionProofAsync(bookingId);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        proof!.Approve(adminUserId);
+        await _completionProofRepository.UpdateAsync(proof);
+
+        try
+        {
+            // Raises BookingStatusChangedEvent -> EscrowReleaseOnCompletionHandler,
+            // which releases escrow to the provider and credits their earning
+            // ledger (task 148) once this save commits - the same mechanism
+            // ProviderJobService.CompleteAsync used to trigger directly.
+            booking!.TransitionTo(BookingStatus.Completed, "Admin approved the completion proof.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error.Business("Booking.InvalidTransition", ex.Message);
+        }
+
+        await _bookingRepository.UpdateAsync(booking);
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "Booking", bookingId.ToString(), "AdminApproveCompletionProof",
+            JsonSerializer.Serialize(new { proof.ReviewStatus, Status = BookingStatus.InProgress.ToString() }),
+            JsonSerializer.Serialize(new { ReviewStatus = CompletionProofReviewStatus.Approved, Status = BookingStatus.Completed.ToString() })));
+        await _dbContext.SaveChangesAsync();
+
+        return await BuildDetailAsync(booking);
+    }
+
+    /// <summary>Rejects the provider's submitted completion proof. The booking is deliberately left exactly where it is (InProgress, the only status a pending proof can exist under) rather than transitioned anywhere - the provider is notified with <paramref name="request"/>'s reason and expected to finish the job and resubmit, not treated as though the booking regressed through some other state.</summary>
+    public async Task<Result<AdminBookingDetailResponse>> RejectCompletionProofAsync(Guid bookingId, Guid adminUserId, RejectCompletionProofRequest request)
+    {
+        var (booking, proof, error) = await LoadPendingCompletionProofAsync(bookingId);
+        if (error is not null)
+        {
+            return error;
+        }
+
+        proof!.Reject(adminUserId, request.Reason);
+        await _completionProofRepository.UpdateAsync(proof);
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "Booking", bookingId.ToString(), "AdminRejectCompletionProof",
+            JsonSerializer.Serialize(new { proof.ReviewStatus }),
+            JsonSerializer.Serialize(new { ReviewStatus = CompletionProofReviewStatus.Rejected, request.Reason })));
+        await _dbContext.SaveChangesAsync();
+
+        return await BuildDetailAsync(booking!);
+    }
+
+    /// <summary>Shared preconditions for both completion-proof review actions: the booking must exist and still be InProgress (the only status a provider-submitted, not-yet-reviewed proof implies - see BookingCompletionProof's doc comment), and that proof must exist and still be Pending (not already reviewed, and not resubmitted since - a stale approve/reject click on a page an admin left open, not a legitimate second review).</summary>
+    private async Task<(Booking? Booking, BookingCompletionProof? Proof, Error? Error)> LoadPendingCompletionProofAsync(Guid bookingId)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return (null, null, Error.NotFound("Booking.NotFound", "The specified booking does not exist."));
+        }
+
+        if (booking.Status != BookingStatus.InProgress)
+        {
+            return (null, null, Error.Business(
+                "Booking.NotAwaitingCompletionReview",
+                $"A booking in status '{booking.Status}' has no completion proof awaiting review."));
+        }
+
+        var proof = await _completionProofRepository.GetByBookingIdAsync(bookingId);
+        if (proof is null)
+        {
+            return (null, null, Error.NotFound("Booking.CompletionProofNotFound", "This booking has no completion proof submitted yet."));
+        }
+
+        if (proof.ReviewStatus != CompletionProofReviewStatus.Pending)
+        {
+            return (null, null, Error.Business(
+                "Booking.CompletionProofAlreadyReviewed",
+                $"This completion proof was already {proof.ReviewStatus}."));
+        }
+
+        return (booking, proof, null);
     }
 
     private async Task<AdminBookingDetailResponse> BuildDetailAsync(Booking booking)

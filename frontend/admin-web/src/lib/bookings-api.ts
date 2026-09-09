@@ -16,6 +16,7 @@ import type {
   AdminRefundRequest,
   AdminRescheduleBookingRequest,
   BookingCompletionProofResponse,
+  RejectCompletionProofRequest,
 } from "./bookings-types";
 
 const BOOKINGS_BASE = `${API_V1}/bookings`;
@@ -82,6 +83,21 @@ export const getBookingCompletionProof = async (
   );
   return result ?? null;
 };
+
+/** Approves the completion proof; the booking moves to Completed as the direct consequence. */
+export const approveCompletionProof = (bookingId: string) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}/completion-proof/approve`, {
+    method: "POST",
+    authenticated: true,
+  });
+
+/** Rejects the completion proof with a required reason; the booking stays InProgress for the provider to finish and resubmit. */
+export const rejectCompletionProof = (bookingId: string, request: RejectCompletionProofRequest) =>
+  apiFetch<AdminBookingDetail>(`${BOOKINGS_BASE}/${bookingId}/completion-proof/reject`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
 
 /** Live tracking snapshot for the ops view (task 284). Rejects with a 404 ApiError - see AdminBookingTrackingResponse's doc comment - when there is no live data to show; the caller renders that as a plain state, not an error. */
 export const getBookingTracking = (bookingId: string) =>

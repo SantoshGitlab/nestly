@@ -7,6 +7,7 @@ import { useState } from "react";
 import {
   Alert,
   Badge,
+  type BadgeTone,
   Button,
   Card,
   EmptyState,
@@ -32,16 +33,19 @@ import { isBookingTrackable, useAdminBookingTrackingLive } from "@/hooks/useAdmi
 import { ApiError, describeError } from "@/lib/api";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import {
+  approveCompletionProof,
   cancelBooking,
   getBookingCompletionProof,
   getBookingDetail,
   getBookingTracking,
   refundBooking,
+  rejectCompletionProof,
   rescheduleBooking,
   updateBookingStatus,
 } from "@/lib/bookings-api";
 import {
   CancellationActor,
+  CompletionProofReviewStatus,
   RefundMethod,
   RefundStatus,
   RescheduleActor,
@@ -83,6 +87,10 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 // Expired is also left out: BookingExpirySweepJob owns that transition, and
 // it is terminal with no refund path, so an admin expiring a booking by hand
 // would strand it. Cancelling is the intended manual equivalent.
+//
+// Completed is left out too, now that reaching it requires approving a
+// completion proof (the card above) - the API rejects it here as well (see
+// BookingManagementService.DisallowedGenericTransitionTargets).
 const GENERIC_STATUS_OPTIONS = [
   BookingStatus.Initiated,
   BookingStatus.PaymentPending,
@@ -93,7 +101,6 @@ const GENERIC_STATUS_OPTIONS = [
   BookingStatus.ProviderEnRoute,
   BookingStatus.ProviderArrived,
   BookingStatus.InProgress,
-  BookingStatus.Completed,
 ].map((value) => ({ value: String(value), label: BOOKING_STATUS_LABELS[value] }));
 
 const CANCELLATION_ACTOR_LABELS: Record<CancellationActor, string> = {
@@ -464,7 +471,9 @@ export default function BookingDetailPage() {
         </Card>
       </div>
 
-      {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+      {booking.status === BookingStatus.InProgress || booking.status === BookingStatus.Completed ? (
+        <CompletionProofCard bookingId={booking.id} canWrite={canWrite} />
+      ) : null}
 
       <TrackingCard bookingId={booking.id} bookingStatus={booking.status} />
 
@@ -1076,10 +1085,46 @@ function secondsSince(utc: string): number {
 }
 
 /** Photo + checklist evidence the provider submitted at job completion - dispute-review evidence (tasks 195-198, SRS 12.11.2). */
-function CompletionProofCard({ bookingId }: { bookingId: string }) {
+const COMPLETION_PROOF_STATUS_LABELS: Record<CompletionProofReviewStatus, string> = {
+  [CompletionProofReviewStatus.Pending]: "Pending review",
+  [CompletionProofReviewStatus.Approved]: "Approved",
+  [CompletionProofReviewStatus.Rejected]: "Rejected",
+};
+
+const COMPLETION_PROOF_STATUS_TONES: Record<CompletionProofReviewStatus, BadgeTone> = {
+  [CompletionProofReviewStatus.Pending]: "warning",
+  [CompletionProofReviewStatus.Approved]: "success",
+  [CompletionProofReviewStatus.Rejected]: "danger",
+};
+
+function CompletionProofCard({ bookingId, canWrite }: { bookingId: string; canWrite: boolean }) {
+  const queryClient = useQueryClient();
+  const [rejectReason, setRejectReason] = useState("");
+
   const query = useQuery({
     queryKey: ["admin-booking-completion-proof", bookingId],
     queryFn: () => getBookingCompletionProof(bookingId),
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-booking-completion-proof", bookingId] });
+    // The parent's own render condition and status timeline both depend on
+    // booking.status, which approve/reject can change (approve) or leave
+    // exactly where it was but still worth a re-fetch (reject).
+    queryClient.invalidateQueries({ queryKey: ["admin-booking-detail", bookingId] });
+  };
+
+  const approveMutation = useMutation({
+    mutationFn: () => approveCompletionProof(bookingId),
+    onSuccess: invalidate,
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () => rejectCompletionProof(bookingId, { reason: rejectReason }),
+    onSuccess: () => {
+      setRejectReason("");
+      invalidate();
+    },
   });
 
   if (query.isPending) {
@@ -1114,9 +1159,19 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
 
   return (
     <Card title="Completion proof" description="Submitted by the provider at job completion (SRS 12.11.2)">
-      <p className="text-sm text-fg-muted">
-        Submitted {formatDateTime(proof.submittedAtUtc)} · {proof.photoRefs.length} photo(s)
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-fg-muted">
+          Submitted {formatDateTime(proof.submittedAtUtc)} · {proof.photoRefs.length} photo(s)
+        </p>
+        <Badge tone={COMPLETION_PROOF_STATUS_TONES[proof.reviewStatus]}>
+          {COMPLETION_PROOF_STATUS_LABELS[proof.reviewStatus]}
+        </Badge>
+      </div>
+      {proof.reviewStatus === CompletionProofReviewStatus.Rejected && proof.rejectionReason ? (
+        <div className="mt-2">
+          <Alert tone="error">{proof.rejectionReason}</Alert>
+        </div>
+      ) : null}
       {proof.photoRefs.length > 0 ? (
         <ul className="mt-2 flex flex-col gap-1 text-sm">
           {proof.photoRefs.map((ref, i) => (
@@ -1146,6 +1201,39 @@ function CompletionProofCard({ bookingId }: { bookingId: string }) {
           ))}
         </ul>
       ) : null}
+
+      {canWrite && proof.reviewStatus === CompletionProofReviewStatus.Pending ? (
+        <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-end">
+          <Button
+            variant="secondary"
+            loading={approveMutation.isPending}
+            onClick={() => approveMutation.mutate()}
+          >
+            Approve &amp; complete booking
+          </Button>
+          <div className="flex-1">
+            <Field
+              label="Rejection reason"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="What's missing or wrong with this proof"
+            />
+          </div>
+          <Button
+            variant="danger"
+            disabled={!rejectReason.trim()}
+            loading={rejectMutation.isPending}
+            onClick={() => rejectMutation.mutate()}
+          >
+            Reject
+          </Button>
+        </div>
+      ) : null}
+      {(approveMutation.isError || rejectMutation.isError) && (
+        <p className="mt-2 text-sm text-danger">
+          {describeError((approveMutation.error ?? rejectMutation.error)!)}
+        </p>
+      )}
     </Card>
   );
 }
