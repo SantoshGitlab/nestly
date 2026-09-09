@@ -99,9 +99,7 @@ export default function ProviderRegisterPage() {
         password: values.password,
         consentAccepted: values.consentAccepted,
       });
-      // /install-app shows the "add to home screen" steps on a mobile
-      // browser that hasn't seen them before, then forwards on to /login.
-      router.push("/install-app?next=%2Flogin%3Fregistered%3D1");
+      router.push("/login?registered=1");
     } catch (err) {
       setError(describeError(err));
     }

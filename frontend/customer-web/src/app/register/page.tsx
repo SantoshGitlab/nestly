@@ -145,10 +145,8 @@ function RegisterScreen() {
       if (values.referralCode !== "") {
         setRegistered(true);
       } else {
-        // Registration doesn't return a session, so sign-in happens next -
-        // the install-app screen carries the eventual /login destination
-        // along as `next` and forwards it once the customer is done there.
-        router.push("/install-app?next=%2Flogin");
+        // Registration doesn't return a session, so sign-in happens next.
+        router.push("/login");
       }
     } catch (err) {
       setError(describeError(err));
@@ -177,7 +175,7 @@ function RegisterScreen() {
             Account created — you were invited by a friend. If your code was
             valid, their reward will be added once it qualifies.
           </Alert>
-          <Button size="lg" fullWidth onClick={() => router.push("/install-app?next=%2Flogin")}>
+          <Button size="lg" fullWidth onClick={() => router.push("/login")}>
             Continue
           </Button>
         </div>

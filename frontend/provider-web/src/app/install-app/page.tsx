@@ -1,25 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 import { AuthShell } from "@/components/auth-ui";
 import { Button } from "@/components/ui";
 
-/** Set once this screen has been shown, so a returning sign-in doesn't nag every time - only a fresh registration always shows it. */
-const SEEN_KEY = "nestly.provider.install-prompt.seen";
-
-const DEFAULT_NEXT = "/jobs";
-
-/** Same open-redirect guard as customer-web's return-to.ts: only a same-site path is ever followed. */
-function resolveNext(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
-    return DEFAULT_NEXT;
-  }
-  return value;
-}
-
-type Platform = "ios" | "android" | "other";
+type Platform = "ios" | "android" | "desktop";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -27,11 +12,11 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 function detectPlatform(): Platform {
-  if (typeof navigator === "undefined") return "other";
+  if (typeof navigator === "undefined") return "desktop";
   const ua = navigator.userAgent;
   if (/iPhone|iPad|iPod/.test(ua)) return "ios";
   if (/Android/.test(ua)) return "android";
-  return "other";
+  return "desktop";
 }
 
 function isStandalone(): boolean {
@@ -43,44 +28,21 @@ function isStandalone(): boolean {
 }
 
 /**
- * Post-signup / mobile sign-in "install as an app" screen. Providers work
- * this portal from their phone in the field, so this is the moment they're
- * most receptive to putting it on their home screen. Desktop visitors and
- * anyone already running the installed PWA skip straight past it.
+ * Standing "get the app" destination - linked from every auth screen (see
+ * AuthShell) rather than pushed onto a provider mid sign-in/registration.
+ * Adapts to whichever device opens it: triggers the native install prompt on
+ * Android, walks through Add to Home Screen on iOS, and points a desktop
+ * visitor at their phone since a PWA can't install from a desktop browser.
  */
 export default function InstallAppPage() {
-  return (
-    <Suspense
-      fallback={
-        <AuthShell title="Almost there" subtitle="Setting things up.">
-          <div />
-        </AuthShell>
-      }
-    >
-      <InstallScreen />
-    </Suspense>
-  );
-}
-
-function InstallScreen() {
-  const router = useRouter();
-  const next = resolveNext(useSearchParams().get("next"));
   const [platform, setPlatform] = useState<Platform | null>(null);
+  const [standalone, setStandalone] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    const detected = detectPlatform();
-    const alreadySeen = window.localStorage.getItem(SEEN_KEY) === "1";
-
-    // Desktop, already installed, or this device has seen the prompt before
-    // (e.g. a returning mobile sign-in) - nothing new to show, so don't nag.
-    if (detected === "other" || isStandalone() || alreadySeen) {
-      router.replace(next);
-      return;
-    }
-
-    setPlatform(detected);
+    setPlatform(detectPlatform());
+    setStandalone(isStandalone());
 
     const onPrompt = (event: Event) => {
       event.preventDefault();
@@ -88,7 +50,6 @@ function InstallScreen() {
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const install = async () => {
@@ -100,58 +61,60 @@ function InstallScreen() {
   };
 
   if (platform === null) {
-    // Detection + redirect runs synchronously in the effect above; this
-    // frame only ever paints on a genuine mobile browser, never on desktop.
     return (
-      <AuthShell title="Almost there" subtitle="Setting things up.">
+      <AuthShell title="Get the Glavyx Provider app" subtitle="Setting things up.">
         <div />
+      </AuthShell>
+    );
+  }
+
+  if (standalone || installed) {
+    return (
+      <AuthShell
+        title="You're all set"
+        subtitle="Glavyx Provider is already on your home screen — open it any time, no browser tabs needed."
+      >
+        <div className="flex items-center justify-center rounded-xl bg-success-soft py-8">
+          <CheckIcon />
+        </div>
+      </AuthShell>
+    );
+  }
+
+  if (platform === "desktop") {
+    return (
+      <AuthShell
+        title="Get Glavyx Provider on your phone"
+        subtitle="The provider portal installs like an app from your phone's browser — this page can't install it here."
+      >
+        <p className="rounded-xl border border-line bg-surface-subtle px-4 py-3 text-center text-sm font-medium text-fg">
+          Open this page on your phone to continue.
+        </p>
       </AuthShell>
     );
   }
 
   return (
     <AuthShell
-      title={installed ? "You're all set" : "Add Glavyx Provider to your home screen"}
-      subtitle={
-        installed
-          ? "Open it any time straight from your home screen — no browser tabs, no typing the address again."
-          : "One tap, and the provider portal opens like any other app — faster, full-screen, and easy to find between jobs."
-      }
+      title="Add Glavyx Provider to your home screen"
+      subtitle="One tap, and the provider portal opens like any other app — faster, full-screen, and easy to find between jobs."
     >
-      <div className="flex flex-col gap-6">
-        {installed ? (
-          <div className="flex items-center justify-center rounded-xl bg-success-soft py-8">
-            <CheckIcon />
-          </div>
-        ) : platform === "android" && deferredPrompt ? (
-          <Button size="lg" fullWidth onClick={install}>
-            Install Glavyx Provider
-          </Button>
-        ) : (
-          <ol className="flex flex-col gap-4">
-            {(platform === "ios" ? IOS_STEPS : ANDROID_STEPS).map((step, index) => (
-              <li key={step} className="flex items-start gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-sm font-semibold text-fg-on-brand shadow-brand">
-                  {index + 1}
-                </span>
-                <p className="pt-0.5 text-sm leading-relaxed text-fg">{step}</p>
-              </li>
-            ))}
-          </ol>
-        )}
-
-        <Button
-          size="lg"
-          variant={installed ? "primary" : "ghost"}
-          fullWidth
-          onClick={() => {
-            window.localStorage.setItem(SEEN_KEY, "1");
-            router.push(next);
-          }}
-        >
-          {installed ? "Continue" : "Maybe later"}
+      {platform === "android" && deferredPrompt ? (
+        <Button size="lg" fullWidth onClick={install}>
+          Install Glavyx Provider
         </Button>
-      </div>
+      ) : (
+        <ol className="flex flex-col gap-4">
+          {(platform === "ios" ? IOS_STEPS : ANDROID_STEPS).map((step, index) => (
+            <li key={step} className="flex items-start gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-sm font-semibold text-fg-on-brand shadow-brand">
+                {index + 1}
+              </span>
+              <p className="pt-0.5 text-sm leading-relaxed text-fg">{step}</p>
+            </li>
+          ))}
+        </ol>
+      )}
     </AuthShell>
   );
 }

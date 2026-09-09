@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { OfflineBanner } from "@/components/OfflineBanner";
@@ -30,6 +31,8 @@ export function AuthShell({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <>
       {/* Outside `main`'s centering flex row - a flex sibling here would be
@@ -97,6 +100,21 @@ export function AuthShell({
           </div>
 
           {footer ? <p className="mt-6 text-center text-sm text-fg-muted">{footer}</p> : null}
+
+          {/* No public nav/footer exists in this app (see layout.tsx) - this
+              is the only place a signed-out visitor can find the PWA install
+              page, so it's on every auth screen rather than just one (except
+              the install page itself, which would otherwise link to itself). */}
+          {pathname !== "/install-app" ? (
+            <p className="mt-4 text-center text-sm text-fg-muted">
+              <Link
+                href="/install-app"
+                className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+              >
+                Get the app
+              </Link>
+            </p>
+          ) : null}
         </div>
       </main>
     </>
