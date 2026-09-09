@@ -300,7 +300,10 @@ function PasswordLogin() {
     try {
       const session = await loginWithPassword(values);
       storeSession(session);
-      router.push("/jobs");
+      // /install-app shows the "add to home screen" steps on a mobile
+      // browser that hasn't seen them before, then forwards on to /jobs
+      // itself - see that page for the skip conditions.
+      router.push("/install-app?next=%2Fjobs");
     } catch (err) {
       setError(describeLoginError(err, "password"));
     }

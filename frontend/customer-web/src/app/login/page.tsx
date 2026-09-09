@@ -318,7 +318,10 @@ function PasswordLogin() {
         body: JSON.stringify(values),
       });
       storeSession(session);
-      router.push(postLoginPath);
+      // /install-app shows the "add to home screen" steps on a mobile
+      // browser that hasn't seen them before, then forwards on to
+      // postLoginPath itself - see that page for the skip conditions.
+      router.push(`/install-app?next=${encodeURIComponent(postLoginPath)}`);
     } catch (err) {
       setError(describeError(err));
     }
