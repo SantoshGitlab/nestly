@@ -174,4 +174,18 @@ FROM (VALUES
 ) AS v(slug, inclusions, exclusions)
 WHERE service.slug = v.slug;
 
+-- 8. Service-level cover images (UC shows a distinct image per service, not
+-- just per subcategory - see Service.CoverImageUrl doc comment).
+UPDATE service SET cover_image_url = '/images/catalogue/womens-salon-spa/services/' || v.slug || '.jpg'
+FROM (VALUES
+    ('stress-relief-swedish-massage'),('quick-comfort-therapy'),('swedish-with-foot-massage'),
+    ('swedish-head-shoulder-massage'),('top-to-toe-stress-relief-massage'),('deep-tissue-massage'),
+    ('deep-tissue-with-foot-massage'),('back-relief-massage'),('leg-relief-massage'),
+    ('full-body-massage-scrub'),('post-natal-massage'),('elderly-care-massage'),
+    ('straight-smooth-blow-dry'),('in-curl-out-curl-blow-dry'),('hair-straightening'),
+    ('curls-waves'),('haircut-for-women-hs'),('haircut-for-girls'),('hair-trim-women'),
+    ('basic-saree-draping'),('advanced-saree-draping'),('basic-makeup-women')
+) AS v(slug)
+WHERE service.slug = v.slug;
+
 COMMIT;
