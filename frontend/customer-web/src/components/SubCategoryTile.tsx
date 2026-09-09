@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -36,14 +37,15 @@ export function SubCategoryTile({ category }: { category: LandingSubCategory }) 
       >
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-brand-gradient">
           {showImage ? (
-            // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
-            <img
+            // next/image: every imageUrl in production is same-origin
+            // (audited 2026-09-09), same reasoning as CategoryTile/ServiceCard.
+            <Image
               src={category.imageUrl!}
               alt=""
-              loading="lazy"
-              decoding="async"
+              fill
+              sizes="(min-width: 1024px) 20vw, (min-width: 640px) 33vw, 50vw"
               onError={() => setImageFailed(true)}
-              className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
+              className="object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />
           ) : null}
         </div>

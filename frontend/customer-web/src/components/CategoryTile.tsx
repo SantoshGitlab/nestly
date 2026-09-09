@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { SPRING } from "@/components/motion";
@@ -34,17 +35,18 @@ export function CategoryTile({ category }: { category: CategorySummary }) {
             broken image or a placeholder icon) until an admin uploads one. */}
         <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-brand-gradient">
           {showImage ? (
-            // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
-            <img
+            // next/image: same reasoning as ServiceCard - every bannerUrl in
+            // production is same-origin (audited 2026-09-09), so this
+            // right-sizes each image to the card instead of shipping the
+            // full original, on top of the lazy-loading the plain <img> it
+            // replaces already had.
+            <Image
               src={category.bannerUrl!}
               alt=""
-              // Same reasoning as ServiceCard: most of a category grid sits
-              // below the fold, so only the ones actually scrolled into view
-              // should cost a request.
-              loading="lazy"
-              decoding="async"
+              fill
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
               onError={() => setImageFailed(true)}
-              className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
+              className="object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />
           ) : null}
 

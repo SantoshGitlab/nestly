@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { SPRING } from "@/components/motion";
@@ -46,18 +47,23 @@ export function ServiceCard({
       >
         <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-brand-gradient">
           {showImage ? (
-            // eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization.
-            <img
+            // next/image: every coverImageUrl in production is same-origin
+            // (self-hosted under /images/catalogue/..., audited 2026-09-09),
+            // so this optimizes cleanly with no remotePatterns config. These
+            // render dozens-deep in a catalog grid, almost all below the
+            // fold - next/image lazy-loads by default (no `loading` prop
+            // needed) and, unlike the plain <img> this replaces, also
+            // serves a size actually matched to the rendered card instead
+            // of the full original upload, which is the bigger of the two
+            // mobile-network costs docs/FRONTEND.md's RESPONSIVE DESIGN
+            // policy calls out.
+            <Image
               src={coverImageUrl}
               alt=""
-              // These render dozens-deep in a catalog grid, almost all below
-              // the fold - eager-loading every one at once is exactly the
-              // mobile-network cost docs/FRONTEND.md's RESPONSIVE DESIGN
-              // policy calls out.
-              loading="lazy"
-              decoding="async"
+              fill
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
               onError={() => setImageFailed(true)}
-              className="h-full w-full object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
+              className="object-cover transition-transform duration-slow ease-out group-hover:scale-[1.04]"
             />
           ) : (
             <div

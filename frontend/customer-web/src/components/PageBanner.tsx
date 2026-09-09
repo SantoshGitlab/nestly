@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
 
@@ -42,8 +43,12 @@ export function PageBanner({
     >
       {imageUrl ? (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element -- admin-supplied external URL, unsuited to static optimization. */}
-          <img src={imageUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+          {/* next/image, right-sized to the viewport instead of the full
+              original upload - every pageBannerUrl in production is
+              same-origin (audited 2026-09-09). `priority` (not lazy) because
+              this is the single largest above-the-fold element on every page
+              that has one - the usual LCP candidate. */}
+          <Image src={imageUrl} alt="" aria-hidden fill priority sizes="100vw" className="object-cover" />
           <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/20" />
         </>
       ) : (
