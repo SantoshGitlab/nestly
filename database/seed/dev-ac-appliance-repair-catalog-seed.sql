@@ -260,4 +260,51 @@ FROM (VALUES
 ) AS v(slug, inclusions, exclusions)
 WHERE service.slug = v.slug;
 
+-- 14. Service-level cover images (UC shows a distinct image per service,
+-- not just per subcategory - see Service.CoverImageUrl doc comment).
+-- The 4 foam-jet AC-count variants share one photo (same physical service,
+-- same as UC's own super-saver-package tiles); beyond-chimney-installation
+-- shares chimney-installation's photo for the same reason; geyser-service
+-- reuses the subcategory's own geyser.jpg since it's a literal photo of the
+-- appliance itself.
+UPDATE service SET cover_image_url = '/images/catalogue/ac-appliance-repair/services/' || v.file || '.jpg'
+FROM (VALUES
+('foam-jet-service-2-acs-e2e','foam-jet-ac-service-e2e'),
+('foam-jet-service-3-acs-e2e','foam-jet-ac-service-e2e'),
+('foam-jet-service-4-acs-e2e','foam-jet-ac-service-e2e'),
+('foam-jet-service-5-acs-e2e','foam-jet-ac-service-e2e'),
+('foam-jet-ac-service-e2e','foam-jet-ac-service-e2e'),
+('ac-repair-e2e','ac-repair-e2e'),
+('gas-refill-checkup-e2e','gas-refill-checkup-e2e'),
+('ac-installation','ac-installation'),
+('ac-uninstallation','ac-uninstallation'),
+('wm-jet-service-e2e','wm-jet-service-e2e'),
+('wm-checkup-e2e','wm-checkup-e2e'),
+('washing-machine-installation','washing-machine-installation'),
+('refrigerator-check-up','refrigerator-check-up'),
+('tv-check-up','tv-check-up'),
+('tv-installation','tv-installation'),
+('tv-uninstallation','tv-uninstallation'),
+('chimney-check-up','chimney-check-up'),
+('deep-chimney-service','deep-chimney-service'),
+('basic-chimney-service','basic-chimney-service'),
+('chimney-installation','chimney-installation'),
+('chimney-uninstallation','chimney-uninstallation'),
+('beyond-chimney-installation','chimney-installation'),
+('microwave-check-up','microwave-check-up'),
+('ro-repair-check-up','ro-repair-check-up'),
+('ro-filter-check-up','ro-filter-check-up'),
+('ro-complete-filter-replacement','ro-complete-filter-replacement'),
+('ro-wall-mounted-installation','ro-wall-mounted-installation'),
+('ro-under-counter-installation','ro-under-counter-installation'),
+('ro-uninstallation','ro-uninstallation'),
+('geyser-check-up','geyser-check-up'),
+('geyser-installation','geyser-installation'),
+('geyser-uninstallation','geyser-uninstallation')
+) AS v(slug, file)
+WHERE service.slug = v.slug;
+
+UPDATE service SET cover_image_url = '/images/catalogue/ac-appliance-repair/geyser.jpg'
+WHERE slug = 'geyser-service';
+
 COMMIT;
