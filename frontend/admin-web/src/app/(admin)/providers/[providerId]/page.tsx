@@ -105,6 +105,11 @@ const KYC_STATUS_TONES: Record<ProviderKycVerificationStatus, BadgeTone> = {
   [ProviderKycVerificationStatus.Superseded]: "neutral",
 };
 
+/** KYC uploads are restricted server-side to JPEG/PNG/WebP or PDF (ProfileController.AllowedKycContentTypes) - the stored object keeps that extension, so it's a reliable way to tell an image from a PDF client-side without a HEAD request. */
+function isImageFileRef(fileRef: string): boolean {
+  return /\.(jpe?g|png|webp)$/i.test(new URL(fileRef).pathname);
+}
+
 const PHOTO_STATUS_LABELS: Record<ProviderPhotoModerationStatus, string> = {
   [ProviderPhotoModerationStatus.Pending]: "Pending review",
   [ProviderPhotoModerationStatus.Approved]: "Live to customers",
@@ -580,6 +585,43 @@ export default function ProviderDetailPage() {
                   ) : null}
                   Submitted {formatDateTime(doc.submittedAt)}
                 </p>
+
+                {/* The submitted file itself - approving/rejecting below was
+                    previously the only thing this card offered, with no way
+                    to actually see what was being approved. An image gets an
+                    inline thumbnail (same pattern as the profile-photo card
+                    below); a PDF gets a document icon - both link to the
+                    full file, since a thumbnail alone isn't enough to read
+                    an ID document's text. */}
+                <div className="mt-3 flex items-center gap-3 border-t border-line pt-3">
+                  {isImageFileRef(doc.fileRef) ? (
+                    // next/image needs the host in next.config's allowlist and
+                    // a provider-supplied URL can point anywhere (same
+                    // reasoning as the profile-photo card below), so a plain
+                    // img is the only workable element here.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={doc.fileRef}
+                      alt={`${KYC_DOC_TYPE_LABELS[doc.docType]} submitted by ${provider.displayName}`}
+                      className="h-14 w-14 shrink-0 rounded-lg border border-line object-cover"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-2 text-xs font-medium text-fg-subtle"
+                    >
+                      PDF
+                    </span>
+                  )}
+                  <a
+                    href={doc.fileRef}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                  >
+                    View document
+                  </a>
+                </div>
 
                 {canWriteProvider && doc.verificationStatus === ProviderKycVerificationStatus.Pending ? (
                   <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end">
