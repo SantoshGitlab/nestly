@@ -159,4 +159,22 @@ FROM (VALUES
 ) AS v(slug, inclusions, exclusions)
 WHERE service.slug = v.slug;
 
+-- 9. Service-level cover images + UC-style content for the 6 pre-existing
+-- "Salon for Men" services that predate this file (see the header - they
+-- don't map 1:1 onto UC's line items, so they were kept as-is rather than
+-- force-fit, and were skipped by the pass above). Backfilled 2026-09-09
+-- after a holistic review found they were the only remaining services
+-- across all six replicated categories still on the generic icon fallback.
+UPDATE service SET cover_image_url = '/images/catalogue/mens-salon-massage/services/' || v.slug || '.jpg',
+       inclusions = v.inclusions, exclusions = v.exclusions
+FROM (VALUES
+    ('haircut-beard-styling', E'Consultation on style\nPrecision haircut\nBeard trim and shape-up', E'Hair color\nBeard coloring'),
+    ('hair-spa-e2e', E'Scalp massage\nDeep-conditioning hair mask\nSteam and wash finish', E'Haircut\nHair color'),
+    ('body-massage-45-min-e2e', E'Full-body oil massage\nChoice of massage oil\nRelaxation-focused technique', E'Facial or head-only massage\nSteam or shower facility'),
+    ('head-massage-e2e', E'Scalp, neck and shoulder massage\nChoice of oil\nStress-relief technique', E'Full-body massage\nHair wash'),
+    ('classic-facial-e2e', E'Cleansing and exfoliation\nFace mask application\nMoisturizing finish', E'Extractions\nChemical peel'),
+    ('beard-grooming-e2e', E'Beard trim and shape-up\nEdge and line-up\nConditioning oil application', E'Haircut\nBeard coloring')
+) AS v(slug, inclusions, exclusions)
+WHERE service.slug = v.slug;
+
 COMMIT;

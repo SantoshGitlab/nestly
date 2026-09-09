@@ -188,4 +188,43 @@ FROM (VALUES
 ) AS v(slug)
 WHERE service.slug = v.slug;
 
+-- 9. Service-level cover images + UC-style content for the 27 pre-existing
+-- "Salon for Women" services (see section 1's header comment - their
+-- hierarchy/pricing was already correct against UC, so section 7/8 above
+-- only covered the 3 new sibling subcategories). Backfilled 2026-09-09
+-- after a holistic review found these were still on the generic icon
+-- fallback with flat one-line descriptions.
+UPDATE service SET cover_image_url = '/images/catalogue/womens-salon-spa/services/' || v.slug || '.jpg',
+       inclusions = v.inclusions, exclusions = v.exclusions
+FROM (VALUES
+    ('wax-glow-package-e2e', E'Full arms & legs roll-on waxing\nGlass-skin hydration facial\nSingle-use wax cartridge', E'Underarms or bikini waxing\nFacial extractions'),
+    ('monthly-maintenance-package-e2e', E'Full arms & legs waxing\nBasic cleanup, manicure and pedicure\nEyebrow and upper-lip threading', E'Nail extensions or gel polish\nFacial or body massage'),
+    ('full-arms-underarms-waxing-e2e', E'Roll-on waxing for full arms\nUnderarms waxing\nSoothing gel application', E'Legs or bikini waxing\nSkin-lightening treatment'),
+    ('full-legs-waxing-e2e', E'Roll-on waxing for full legs\nKnee and ankle area coverage\nSoothing gel application', E'Arms or underarms waxing\nBikini line waxing'),
+    ('threading-e2e', E'Eyebrow shaping by threading\nUpper-lip hair removal\nAftercare gel application', E'Full-face threading\nEyebrow tinting'),
+    ('spatula-waxing-full-arms-legs-underarms-uc', E'RICA or honey wax application with spatula\nFull arms, legs and underarms coverage\nSoothing post-wax gel', E'Bikini line waxing\nFacial waxing'),
+    ('roll-on-waxing-full-arms-legs-underarms-uc', E'Single-use cartridge roll-on wax\nFull arms, legs and underarms coverage\nHygienic, no double-dipping application', E'Bikini line waxing\nFacial waxing'),
+    ('bikini-waxing-uc', E'Full pelvic area waxing\nSingle-use wax strips\nSoothing gel application', E'Buttocks area\nLaser or permanent hair reduction'),
+    ('underarms-waxing-uc', E'Roll-on or spatula waxing for underarms\nQuick-dry wax formula\nSoothing gel application', E'Arms or legs waxing\nDeodorant or talc application'),
+    ('matcha-detox-ritual-uc', E'Matcha-infused detox mask application\nDeep-cleansing massage\nToning and moisturizing finish', E'Extractions\nChemical peel'),
+    ('cherry-blossom-glow-ritual-uc', E'Cherry blossom-infused mask application\nHydrating massage\nBarrier-repair moisturizer finish', E'Extractions\nAnti-ageing serum'),
+    ('korean-glass-hydration-facial-uc', E'Multi-step Korean hydration ritual\nSheet mask or hydrating gel mask\nDewy-finish moisturizer application', E'Extractions\nMicrodermabrasion'),
+    ('korean-glow-facial-e2e', E'Cleansing and exfoliation\nHydrating mask application\nGlow-boosting serum and moisturizer', E'Extractions\nChemical peel'),
+    ('korean-plant-peptide-brightening-facial-uc', E'Plant-peptide serum application\nBrightening mask\nEven-tone finishing massage', E'Extractions\nLaser toning'),
+    ('aroma-magic-instant-glow-facial-e2e', E'Cleansing and steam\nAroma Magic mask application\nGlow-finishing massage', E'Extractions\nHair removal'),
+    ('o3-shine-glow-facial-uc', E'Pigmentation-focused cleansing\nO3+ brightening mask application\nEven-tone finishing massage', E'Extractions\nChemical peel'),
+    ('sara-lightening-glow-facial-uc', E'Cleansing and exfoliation\nLightening mask application\nHydrating finish massage', E'Extractions\nSkin-lightening injections'),
+    ('power-glow-cleanup-uc', E'Deep cleansing\nExfoliating scrub\nBrightening mask application', E'Extractions\nChemical peel'),
+    ('sara-fruit-cleanup-uc', E'Fruit-enzyme cleansing\nAntioxidant mask application\nMoisturizing finish', E'Extractions\nSunscreen application'),
+    ('classic-pedicure-e2e', E'Foot soak\nScrub and callus removal\nNail shaping and polish', E'Gel or nail extensions\nMedical foot-care treatment'),
+    ('classic-manicure-e2e', E'Hand soak\nScrub and cuticle care\nNail shaping and polish', E'Gel or nail extensions\nParaffin wax treatment'),
+    ('crystal-rose-pedicure-uc', E'Crystal-infused foot soak\nOlive and jojoba oil hydration\nFoot, shoulder and palm massage', E'Gel or nail extensions\nMedical foot-care treatment'),
+    ('british-rose-manicure-uc', E'Olive and jojoba oil hand hydration\nCuticle care and scrub\nNail shaping and polish', E'Gel or nail extensions\nParaffin wax treatment'),
+    ('haircut-styling-women', E'Consultation on style and face shape\nPrecision haircut\nBasic blow-dry finish', E'Hair color or chemical treatments\nAdvanced styling for events'),
+    ('global-hair-colour-e2e', E'Root-to-tip colour application\nAmmonia-free formula\nWash and blow-dry finish', E'Haircut\nHair spa or treatment'),
+    ('bleach-uc', E'Patch test\nFacial bleach application\nSoothing gel finish', E'Body bleach\nSensitive-skin formula upgrade'),
+    ('detan-uc', E'Exfoliating de-tan scrub\nTargeted application on sun-exposed areas\nMoisturizing finish', E'Full-body de-tan\nChemical peel')
+) AS v(slug, inclusions, exclusions)
+WHERE service.slug = v.slug;
+
 COMMIT;
