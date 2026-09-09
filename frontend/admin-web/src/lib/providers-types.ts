@@ -340,6 +340,8 @@ export interface BookingProviderAssignment {
   responseDeadline: string | null;
   respondedAt: string | null;
   notes: string | null;
+  /** Appended last, matching the C# positional record's own append-only rule. */
+  providerOnboardingStatus: ProviderOnboardingStatus;
 }
 
 /**

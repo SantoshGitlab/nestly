@@ -45,6 +45,21 @@ public class ProviderRepository : IProviderRepository
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, ProviderOnboardingStatus>> GetOnboardingStatusesByIdsAsync(IReadOnlyCollection<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, ProviderOnboardingStatus>();
+        }
+
+        return await _context.Set<Provider>()
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, p.OnboardingStatus })
+            .ToDictionaryAsync(p => p.Id, p => p.OnboardingStatus);
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<Provider>> ListPendingPhotoModerationAsync(CancellationToken cancellationToken = default) =>
         await _context.Set<Provider>()
             .AsNoTracking()

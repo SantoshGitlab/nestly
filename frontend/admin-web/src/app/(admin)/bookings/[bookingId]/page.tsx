@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import {
@@ -52,7 +53,7 @@ import {
   getEligibleProviders,
   rejectBookingAssignment,
 } from "@/lib/providers-api";
-import { BookingAssignedByType, BookingProviderAssignmentStatus } from "@/lib/providers-types";
+import { BookingAssignedByType, BookingProviderAssignmentStatus, ProviderOnboardingStatus } from "@/lib/providers-types";
 import { BookingStatus } from "@/lib/types";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -351,6 +352,19 @@ export default function BookingDetailPage() {
   );
   const wouldOverrideAcceptedProvider = liveAssignment?.status === BookingProviderAssignmentStatus.Accepted;
 
+  // A provider only reaches ProviderStatus.Active - the bar AssignInternalAsync
+  // already holds every assignment to - once their KYC is KycVerified
+  // (ProviderKycApprovalService.ActivateAsync's gate), so this should not be
+  // reachable via the normal assignment flow. Guarded anyway (not just
+  // trusted as invariant) because status can move backward outside that one
+  // path - an admin edit, a data fix - and "reject" is exactly the wrong
+  // moment to discover that happened: it is itself a signal something about
+  // this provider needs a second look, not a routine scheduling action.
+  const assignedProviderKycPending =
+    liveAssignment?.status === BookingProviderAssignmentStatus.Assigned &&
+    liveAssignment.providerOnboardingStatus !== ProviderOnboardingStatus.KycVerified &&
+    liveAssignment.providerOnboardingStatus !== ProviderOnboardingStatus.Completed;
+
   return (
     <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
@@ -611,6 +625,15 @@ export default function BookingDetailPage() {
                 {liveAssignment === undefined
                   ? "There is no outstanding assignment to reject."
                   : `${liveAssignment.providerDisplayName} has already accepted this job - use "Assign provider" above to replace them instead.`}
+              </Alert>
+            ) : assignedProviderKycPending ? (
+              <Alert tone="warning">
+                {liveAssignment.providerDisplayName}&rsquo;s KYC documents are still pending review - resolve that
+                first on{" "}
+                <Link href={`/providers/${liveAssignment.providerId}`} className="font-medium underline underline-offset-4">
+                  their provider page
+                </Link>{" "}
+                before making assignment changes.
               </Alert>
             ) : (
               <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">

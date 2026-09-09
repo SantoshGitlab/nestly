@@ -30,6 +30,16 @@ public interface IProviderRepository : IRepository<Provider>
     Task<IReadOnlyDictionary<Guid, string>> GetDisplayNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
 
     /// <summary>
+    /// Onboarding status for a page of provider ids, in one round trip -
+    /// mirrors <see cref="GetDisplayNamesByIdsAsync"/>'s batched shape. Lets
+    /// the booking-assignment history flag a provider whose KYC is not yet
+    /// <see cref="ProviderOnboardingStatus.KycVerified"/> without loading a
+    /// full <see cref="Provider"/> per row. Ids with no matching provider are
+    /// absent from the result, so callers keep their own fallback.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, ProviderOnboardingStatus>> GetOnboardingStatusesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
+    /// <summary>
     /// Task 293: the admin photo-moderation queue - every provider whose
     /// profile photo is still <see cref="ProviderPhotoModerationStatus.Pending"/>,
     /// oldest submission first so nothing starves at the back of it.

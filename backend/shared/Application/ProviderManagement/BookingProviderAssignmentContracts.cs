@@ -20,7 +20,12 @@ public sealed record BookingProviderAssignmentResponse(
     DateTime? ResponseDeadline,
     DateTime? RespondedAt,
     string? Notes,
-    string? CompletionProofRef);
+    string? CompletionProofRef,
+    // Appended last, matching this record's own append-only convention (see
+    // ProviderPhotoResponse). Lets the admin booking screen tell a provider
+    // whose KYC review is still outstanding apart from one already verified,
+    // without a second call - see IProviderRepository.GetOnboardingStatusesByIdsAsync.
+    ProviderOnboardingStatus ProviderOnboardingStatus);
 
 /// <summary>
 /// A candidate for manual assignment to a booking (PROVIDER.md OPEN DECISIONS

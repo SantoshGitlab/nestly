@@ -169,7 +169,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
 
             await dbTransaction.CommitAsync();
 
-            return ToResponse(assignment, provider.DisplayName);
+            return ToResponse(assignment, provider.DisplayName, provider.OnboardingStatus);
         }
         catch (DbUpdateException)
         {
@@ -257,7 +257,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         await _assignmentRepository.UpdateAsync(assignment);
 
         var provider = await _providerRepository.GetByIdAsync(providerId);
-        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)");
+        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)", provider?.OnboardingStatus ?? ProviderOnboardingStatus.Registered);
     }
 
     public async Task<Result<BookingProviderAssignmentResponse>> RejectByProviderAsync(Guid bookingId, Guid providerId, RejectAssignmentRequest request)
@@ -296,7 +296,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         await ReturnToAssignablePoolAsync(booking, "Provider rejected assignment; needs reassignment.");
 
         var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)");
+        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)", provider?.OnboardingStatus ?? ProviderOnboardingStatus.Registered);
     }
 
     /// <summary>
@@ -337,7 +337,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         if (assignment.Status != BookingProviderAssignmentStatus.Assigned)
         {
             var current = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-            return ToResponse(assignment, current?.DisplayName ?? "(unknown provider)");
+            return ToResponse(assignment, current?.DisplayName ?? "(unknown provider)", current?.OnboardingStatus ?? ProviderOnboardingStatus.Registered);
         }
 
         var booking = await _bookingRepository.GetByIdAsync(assignment.BookingId);
@@ -352,7 +352,7 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         await ReturnToAssignablePoolAsync(booking, "Provider did not respond within the response window; needs reassignment.");
 
         var provider = await _providerRepository.GetByIdAsync(assignment.ProviderId);
-        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)");
+        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)", provider?.OnboardingStatus ?? ProviderOnboardingStatus.Registered);
     }
 
     public async Task<Result<IReadOnlyList<BookingProviderAssignmentResponse>>> GetHistoryAsync(Guid bookingId)
@@ -365,14 +365,19 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
 
         var history = await _assignmentRepository.ListByBookingAsync(bookingId);
 
+        var distinctProviderIds = history.Select(a => a.ProviderId).Distinct().ToList();
+
         // Task 257: the local dictionary only saved a repeat lookup for a
         // provider already seen in this history - the first assignment for
         // each distinct provider still cost its own round trip.
-        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(
-            history.Select(a => a.ProviderId).Distinct().ToList());
+        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(distinctProviderIds);
+        var onboardingStatuses = await _providerRepository.GetOnboardingStatusesByIdsAsync(distinctProviderIds);
 
         return history
-            .Select(assignment => ToResponse(assignment, displayNames.GetValueOrDefault(assignment.ProviderId, "(unknown provider)")))
+            .Select(assignment => ToResponse(
+                assignment,
+                displayNames.GetValueOrDefault(assignment.ProviderId, "(unknown provider)"),
+                onboardingStatuses.GetValueOrDefault(assignment.ProviderId, ProviderOnboardingStatus.Registered)))
             .ToList();
     }
 
@@ -496,7 +501,10 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         return results;
     }
 
-    private static BookingProviderAssignmentResponse ToResponse(BookingProviderAssignment assignment, string providerDisplayName) => new(
+    private static BookingProviderAssignmentResponse ToResponse(
+        BookingProviderAssignment assignment,
+        string providerDisplayName,
+        ProviderOnboardingStatus providerOnboardingStatus) => new(
         assignment.Id,
         assignment.BookingId,
         assignment.ProviderId,
@@ -508,5 +516,6 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
         assignment.ResponseDeadline,
         assignment.RespondedAt,
         assignment.Notes,
-        assignment.CompletionProofRef);
+        assignment.CompletionProofRef,
+        providerOnboardingStatus);
 }
