@@ -595,19 +595,38 @@ export default function BookingDetailPage() {
               </Button>
             </div>
 
-            <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <Field
-                  label="Rejection reason (optional)"
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="Reason the current assignment is being rejected"
-                />
+            {/* Mirrors BookingProviderAssignmentService.RejectAsync's own guard
+                (status must be Assigned) rather than inventing a new rule:
+                that method already fails with "no outstanding assignment to
+                reject" once the provider has Accepted (superseding an
+                accepted provider is the "Assign provider" flow above,
+                which - see liveAssignment's comment - goes through
+                MarkReassigned instead), and there is nothing live to reject
+                at all once the booking is Completed/cancelled. Previously
+                this button had no guard, so clicking it in either case
+                surfaced that error only after a round-trip instead of never
+                being clickable. */}
+            {liveAssignment?.status !== BookingProviderAssignmentStatus.Assigned ? (
+              <Alert tone="info">
+                {liveAssignment === undefined
+                  ? "There is no outstanding assignment to reject."
+                  : `${liveAssignment.providerDisplayName} has already accepted this job - use "Assign provider" above to replace them instead.`}
+              </Alert>
+            ) : (
+              <div className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <Field
+                    label="Rejection reason (optional)"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Reason the current assignment is being rejected"
+                  />
+                </div>
+                <Button variant="danger" onClick={() => setConfirmReject(true)}>
+                  Reject current assignment
+                </Button>
               </div>
-              <Button variant="danger" onClick={() => setConfirmReject(true)}>
-                Reject current assignment
-              </Button>
-            </div>
+            )}
           </div>
         ) : null}
       </Card>
