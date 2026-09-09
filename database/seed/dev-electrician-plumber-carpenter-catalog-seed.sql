@@ -116,9 +116,9 @@ SELECT gen_random_uuid(), 'Carpenter', 'carpenter',
 WHERE NOT EXISTS (SELECT 1 FROM category WHERE slug = 'carpenter');
 
 UPDATE service SET category_id = (SELECT id FROM category WHERE slug = 'carpenter'),
-       name = 'Décor installation (Small)', slug = 'decor-installation-small', price = 79.00, sort_order = 0,
+       name = 'Decor installation (Small)', slug = 'decor-installation-small', price = 79.00, sort_order = 0,
        description = 'For item sizes up to 8 x 8 inch, such as photo frames, clocks and key holders.',
-       short_description = 'Small décor install',
+       short_description = 'Small decor install',
        inclusions = E'Wall drilling and fitting for the item\nSecure mounting and levelling\nFinal stability check',
        exclusions = E'Decor item cost\nPorcelain tile special drilling',
        cover_image_url = '/images/catalogue/electrician-plumber-carpenter/services/decor-installation-small.jpg'
