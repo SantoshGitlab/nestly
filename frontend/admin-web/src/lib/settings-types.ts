@@ -64,6 +64,8 @@ export interface FeatureFlagSettings {
   calendarViewEnabled: boolean;
   earningsLedgerEnabled: boolean;
   offersScreenEnabled: boolean;
+  /** Internal/admin-only kill switch for the service/pincode mapping auto-enable/auto-disable safety net - not customer- or provider-facing. */
+  autoManageServiceabilityEnabled: boolean;
 }
 
 /** Every settings group at once - what `GET /api/v1/settings` returns. */

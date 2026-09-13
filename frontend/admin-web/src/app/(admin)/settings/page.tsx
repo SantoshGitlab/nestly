@@ -610,6 +610,7 @@ const featureSchema = z.object({
   calendarViewEnabled: z.boolean(),
   earningsLedgerEnabled: z.boolean(),
   offersScreenEnabled: z.boolean(),
+  autoManageServiceabilityEnabled: z.boolean(),
 });
 
 /** Full-width subheading between the Customer/Provider flag groups within one FormGrid - same span as ToggleRow, so it lines up rather than sitting in a half-width column. */
@@ -712,6 +713,14 @@ function FeatureFlagSettingsSection({ initial, queryClient, canWrite }: { initia
             name="offersScreenEnabled"
             label="Offers screen"
             description="The dedicated Offers screen. Accepting/declining an offer stays available from Today and Jobs either way."
+          />
+
+          <FlagGroupHeading>Platform</FlagGroupHeading>
+          <FeatureFlagToggle
+            form={form}
+            name="autoManageServiceabilityEnabled"
+            label="Auto-manage serviceability"
+            description="Master kill switch for auto-enabling/auto-disabling service/pincode mappings from live provider coverage. Turning this off freezes every mapping's active state at whatever it is now, until an admin changes it by hand."
           />
         </>
       )}

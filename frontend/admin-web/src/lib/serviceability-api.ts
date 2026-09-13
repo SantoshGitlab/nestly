@@ -207,6 +207,13 @@ export const setServicePincodeMappingActive = (id: string, isActive: boolean) =>
     authenticated: true,
   });
 
+/** Pins/unpins a mapping's active state as admin-owned - auto-enable/auto-disable skip it entirely while pinned. */
+export const setServicePincodeMappingPinned = (id: string, isPinned: boolean) =>
+  apiFetch<void>(`${MAPPINGS_BASE}/service-pincode/${id}/${isPinned ? "pin" : "unpin"}`, {
+    method: "POST",
+    authenticated: true,
+  });
+
 // ---- Coverage gap map (docs/OPEN-FIXES-FEATURES.csv "Admin Web, Proposed new page, Coverage gap map") ----
 
 /** Active services with no active pincode mapping anywhere. */
