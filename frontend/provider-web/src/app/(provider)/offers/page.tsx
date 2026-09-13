@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useMemo } from "react";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import { Button, EmptyState, PageHeading, Skeleton } from "@/components/ui";
 import { isNotImplemented } from "@/lib/api";
@@ -9,6 +10,7 @@ import { listJobs } from "@/lib/jobs-api";
 import { listPendingOffers } from "@/lib/jobs-active";
 import type { JobListItem } from "@/lib/jobs-types";
 import { OfferCard } from "./_components/OfferCard";
+import { useOfferRinging } from "./_components/useOfferRinging";
 
 /**
  * Offers screen (docs/OPEN-FIXES-FEATURES.csv, "Provider Web, Proposed new
@@ -42,6 +44,12 @@ import { OfferCard } from "./_components/OfferCard";
  * end-to-end (a new server-side notification trigger + payload contract).
  * That is a genuinely separate, larger change and stays deferred, per this
  * row's own fix note.
+ *
+ * What this screen adds instead, without that infrastructure: `useOfferRinging`
+ * loops a ringtone + vibration for as long as any offer here is still open,
+ * so a provider on this screen does not have to be staring at a live
+ * countdown to notice a new one. Still bounded by the same push gap above -
+ * it cannot reach a provider who has navigated away or closed the app.
  */
 export default function OffersPage() {
   const query = useQuery({
@@ -80,7 +88,11 @@ export default function OffersPage() {
 }
 
 function OffersContent({ jobs }: { jobs: JobListItem[] }) {
-  const offers = listPendingOffers(jobs);
+  // useMemo, not a bare call: listPendingOffers builds a new array every
+  // invocation, and useOfferRinging keys its effect off this reference only
+  // changing when the underlying data actually does (see its own comment).
+  const offers = useMemo(() => listPendingOffers(jobs), [jobs]);
+  useOfferRinging(offers);
 
   if (offers.length === 0) {
     return (
