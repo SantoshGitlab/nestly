@@ -61,13 +61,22 @@ function hasUnexpiredOffer(offers: readonly JobListItem[], nowMs: number): boole
  * immediately after the sign-in submit that unblocks audio for the rest of
  * the session). A tap anywhere on the resulting page - opening a nav tab is
  * enough - clears it; nothing here works around that either.
+ *
+ * Depends on `offers` itself, not a derived boolean: computing "should ring"
+ * with Date.now() at render time is an impure read (React may call a render
+ * more than once for one commit - Strict Mode, a discarded/retried render -
+ * and the answer must not depend on exactly when that happened to run), so
+ * the same hasUnexpiredOffer check instead runs inside the effect below,
+ * where an impure/time-based read is the normal, correct place for it. This
+ * only avoids restarting on every unrelated re-render because the caller
+ * (`(provider)/layout.tsx`) already keeps `offers`' reference stable via its
+ * own useMemo, and TanStack Query's structural sharing means an unchanged
+ * poll response doesn't produce a new array either - an offer's deadline
+ * elapsing with nothing new fetched is still caught by this effect's own
+ * setInterval re-check, not by a dependency-array restart.
  */
 export function useOfferRinging(offers: readonly JobListItem[]): void {
-  const offersRef = useRef(offers);
-  offersRef.current = offers;
-
   const audioContextRef = useRef<AudioContext | null>(null);
-  const shouldRing = hasUnexpiredOffer(offers, Date.now());
 
   useEffect(() => {
     return () => {
@@ -76,7 +85,7 @@ export function useOfferRinging(offers: readonly JobListItem[]): void {
   }, []);
 
   useEffect(() => {
-    if (!shouldRing) return;
+    if (!hasUnexpiredOffer(offers, Date.now())) return;
 
     const AudioContextClass =
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -114,10 +123,12 @@ export function useOfferRinging(offers: readonly JobListItem[]): void {
 
     playChime();
     const intervalId = setInterval(() => {
-      // offersRef, not the closed-over `offers`: this timer must keep
-      // reading the latest list across the whole open-ended ringing window,
-      // not just the snapshot from whichever render started it.
-      if (!hasUnexpiredOffer(offersRef.current, Date.now())) {
+      // The closed-over `offers`, not a ref: this effect only lives as long
+      // as `offers` itself hasn't changed (it's the dependency below), so
+      // the closure is already current for the whole interval's lifetime -
+      // what this re-check catches is pure time passing (a deadline
+      // elapsing), not a stale snapshot.
+      if (!hasUnexpiredOffer(offers, Date.now())) {
         clearInterval(intervalId);
         return;
       }
@@ -130,5 +141,5 @@ export function useOfferRinging(offers: readonly JobListItem[]): void {
         navigator.vibrate(0); // cancels any in-flight pattern
       }
     };
-  }, [shouldRing]);
+  }, [offers]);
 }
