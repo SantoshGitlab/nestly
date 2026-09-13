@@ -34,6 +34,12 @@
     <ProjectReference Include="..\..\shared\BuildingBlocks\BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\shared\Domain\Domain.csproj" />
     <ProjectReference Include="..\..\shared\Infrastructure\Infrastructure.csproj" />
+    <!-- FeatureFlagsControllerTests: the two public projection endpoints
+         (GET /api/v1/feature-flags on each API) are thin controller-level
+         mappings with no service-layer equivalent to unit test instead, so
+         the tests exercise the controllers themselves. -->
+    <ProjectReference Include="..\..\consumer-api\ConsumerApi\ConsumerApi.csproj" />
+    <ProjectReference Include="..\..\provider-api\ProviderApi\ProviderApi.csproj" />
   </ItemGroup>
 
 </Project>
