@@ -39,7 +39,7 @@ export function LocationPrompt() {
   const { city } = useSelectedCity();
   const [isMobile, setIsMobile] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [status, setStatus] = useState<"idle" | "locating" | "no-match" | "unsupported">("idle");
+  const [status, setStatus] = useState<"idle" | "locating" | "no-match" | "unsupported" | "failed">("idle");
   const pushToast = useToast();
 
   useEffect(() => {
@@ -79,10 +79,40 @@ export function LocationPrompt() {
     }
 
     setStatus("locating");
+
+    let position: GeolocationPosition;
     try {
-      const position = await getPositionWithFallback();
+      position = await getPositionWithFallback();
+    } catch (error) {
+      // Permission denied, or both the high-accuracy and coarse fixes timed
+      // out - a real technical failure, not "you're outside our service
+      // area", so it gets its own status/message and a logged cause instead
+      // of collapsing into "no-match" like every other failure used to.
+      console.error("Location prompt: couldn't get a GPS fix.", error);
+      setStatus("failed");
+      return;
+    }
+
+    let cities: City[];
+    try {
+      // citiesQuery.data alone races the fulfilment-window: it fires only
+      // once this modal opens (`enabled: visible`), and on a cold consumer-api
+      // instance (Render free tier - can take several seconds to wake) it can
+      // still be loading by the time geolocation+reverse-geocode resolve. The
+      // old `citiesQuery.data ?? []` read that gap as an empty city list and
+      // reported a spurious "no-match" even for a customer standing in a
+      // served city. Falling back to an explicit refetch closes it without
+      // re-fetching when the data already arrived (`??` short-circuits).
+      cities = citiesQuery.data ?? (await citiesQuery.refetch()).data ?? [];
+    } catch (error) {
+      console.error("Location prompt: couldn't load the serviceable-city list.", error);
+      setStatus("failed");
+      return;
+    }
+
+    try {
       const geocoded = await reverseGeocode(position.coords);
-      const matchedCity = geocoded ? matchCity(geocoded.address, citiesQuery.data ?? []) : null;
+      const matchedCity = geocoded ? matchCity(geocoded.address, cities) : null;
       if (!matchedCity) {
         setStatus("no-match");
         return;
@@ -133,8 +163,9 @@ export function LocationPrompt() {
         // City alone is still a fully usable selection - see comment above.
       }
       pushToast("success", `Location detected: ${detectedLabel}`);
-    } catch {
-      setStatus("no-match");
+    } catch (error) {
+      console.error("Location prompt: an unexpected error interrupted matching.", error);
+      setStatus("failed");
     }
   }
 
@@ -150,9 +181,11 @@ export function LocationPrompt() {
             ? "Getting your location - this can take a few seconds on a real GPS fix..."
             : status === "no-match"
               ? "We couldn't match that to a city we serve yet - pick one manually instead."
-              : status === "unsupported"
-                ? "Your browser doesn't support location access here - pick a city manually instead."
-                : "Allow location access so we can show services available near you."}
+              : status === "failed"
+                ? "We couldn't detect your location just now - pick a city manually instead."
+                : status === "unsupported"
+                  ? "Your browser doesn't support location access here - pick a city manually instead."
+                  : "Allow location access so we can show services available near you."}
         </p>
         <div className="flex flex-col gap-2">
           {status !== "unsupported" && (
@@ -254,7 +287,11 @@ async function reverseGeocode(coords: GeolocationCoordinates): Promise<ReverseGe
     const data = (await response.json()) as NominatimReverseResponse;
     if (!data.address) return null;
     return { address: data.address, displayName: data.display_name ?? null };
-  } catch {
+  } catch (error) {
+    // Still degrades to the manual-pick path, not a thrown error - see this
+    // function's own doc comment - but logged rather than silent, so a real
+    // Nominatim outage/rate-limit is distinguishable from "nothing matched".
+    console.error("Location prompt: reverse-geocoding failed.", error);
     return null;
   }
 }
