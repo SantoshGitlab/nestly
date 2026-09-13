@@ -9,13 +9,16 @@ namespace Nestly.Domain;
 /// from. Every value here doubles as the group's <see cref="SystemSetting.GroupKey"/>.
 /// </summary>
 /// <remarks>
-/// SRS 12.19 also lists "Communication provider settings", "Public contact
-/// details" and general "Feature flags" as candidate groups. Those are not
-/// backed by a lettered subtask (131a-131h only cover the seven groups below)
-/// and have no existing consuming code to anchor a schema to, so adding them
-/// now would be speculative (YAGNI, docs/CODING-STANDARDS.md). The store is
-/// designed to extend to them later without a redesign: add a constant here,
-/// a settings record in SettingsContracts.cs, a validator, and a seed row.
+/// SRS 12.19 also lists "Communication provider settings" and "Public
+/// contact details" as candidate groups. Those are still not backed by a
+/// lettered subtask and have no existing consuming code to anchor a schema
+/// to, so adding them now would be speculative (YAGNI, docs/CODING-STANDARDS.md).
+/// <see cref="Feature"/> is the exception: it gates existing, already-wired
+/// customer-/provider-facing UI (wallet, coupons, referrals, AMC, coins,
+/// service ratings, provider ratings/calendar/earnings-ledger/offers), so a
+/// schema exists to anchor it to. The store still extends the same way for
+/// any future group: add a constant here, a settings record in
+/// SettingsContracts.cs, a validator, and a seed row.
 /// </remarks>
 public static class SystemSettingGroups
 {
@@ -26,10 +29,11 @@ public static class SystemSettingGroups
     public const string Tax = "tax";
     public const string Wallet = "wallet";
     public const string Coupon = "coupon";
+    public const string Feature = "features";
 
     /// <summary>Every settings group, in SRS 12.19 bullet order.</summary>
     public static readonly IReadOnlyList<string> All =
     [
-        Booking, Slot, Cancellation, Reschedule, Tax, Wallet, Coupon
+        Booking, Slot, Cancellation, Reschedule, Tax, Wallet, Coupon, Feature
     ];
 }

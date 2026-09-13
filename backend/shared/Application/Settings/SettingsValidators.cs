@@ -70,3 +70,13 @@ public class CouponSettingsValidator : AbstractValidator<CouponSettings>
         RuleFor(x => x.MaxActiveCouponsPerCustomer).InclusiveBetween(1, 100).When(x => x.MaxActiveCouponsPerCustomer is not null);
     }
 }
+
+/// <summary>
+/// Every field is a plain boolean, so there is nothing to range-check - this
+/// class exists only to match the per-group validator convention every other
+/// settings group follows (<see cref="ISystemSettingsService"/>'s callers
+/// resolve one via DI regardless of group).
+/// </summary>
+public class FeatureFlagSettingsValidator : AbstractValidator<FeatureFlagSettings>
+{
+}
