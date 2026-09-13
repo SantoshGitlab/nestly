@@ -140,6 +140,33 @@ public class ServiceabilityMappingsController : ControllerBase
     }
 
     /// <summary>
+    /// docs/OPEN-FIXES-FEATURES.csv "Service to pincode mapping" follow-up:
+    /// pins this mapping's active state as admin-owned, so
+    /// <c>AutoEnableProviderCoverageAsync</c>/<c>AutoDisableUnservedMappingsAsync</c>
+    /// skip it entirely from now on.
+    /// </summary>
+    [HttpPost("service-pincode/{id:guid}/pin")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PinServicePincodeMapping(Guid id)
+    {
+        var result = await _mappingManagementService.PinServicePincodeMappingAsync(id);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
+    /// <summary>Hands this mapping's active state back to auto-enable/auto-disable.</summary>
+    [HttpPost("service-pincode/{id:guid}/unpin")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UnpinServicePincodeMapping(Guid id)
+    {
+        var result = await _mappingManagementService.UnpinServicePincodeMappingAsync(id);
+        return result.IsSuccess ? NoContent() : result.ToProblemResult();
+    }
+
+    /// <summary>
     /// docs/OPEN-FIXES-FEATURES.csv "Service pincode mapping coverage": a
     /// warning list, not a blocker - every active service that has no active
     /// pincode mapping anywhere, so an admin can catch a launched-but-

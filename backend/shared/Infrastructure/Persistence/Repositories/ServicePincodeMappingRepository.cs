@@ -45,7 +45,7 @@ public class ServicePincodeMappingRepository : IServicePincodeMappingRepository
                   (pincodeId == null || mapping.PincodeId == pincodeId)
             orderby pincode.Code, service.Name
             select new ServicePincodeMappingResponse(
-                mapping.Id, service.Id, service.Name, pincode.Id, pincode.Code, mapping.IsActive)
+                mapping.Id, service.Id, service.Name, pincode.Id, pincode.Code, mapping.IsActive, mapping.IsPinned)
         ).ToListAsync();
 
     public async Task<IReadOnlyList<UnmappedActiveServiceResponse>> ListUnmappedActiveServicesAsync()
@@ -148,6 +148,12 @@ public class ServicePincodeMappingRepository : IServicePincodeMappingRepository
             orderby pincode.Code, service.Name
             select new MappedPincodeWithoutProviderCoverageResponse(mapping.Id, service.Id, service.Name, pincode.Id, pincode.Code)
         ).ToListAsync();
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ServicePincodeMapping>> ListPendingAutoDisableDueByAsync(DateTime cutoffUtc) =>
+        await _context.Set<ServicePincodeMapping>()
+            .Where(m => m.PendingAutoDisableSince != null && m.PendingAutoDisableSince <= cutoffUtc)
+            .ToListAsync();
 
     /// <summary>
     /// Shared by <see cref="ListPincodesWithProviderCoverageButNoServiceMappingAsync"/>

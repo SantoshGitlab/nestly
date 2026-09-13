@@ -1,5 +1,8 @@
+using System.Text.Json;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Serviceability;
+using Nestly.Application.Settings;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -14,6 +17,8 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
     private readonly ICityRepository _cityRepository;
     private readonly IServiceRepository _serviceRepository;
     private readonly IPincodeRepository _pincodeRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
+    private readonly ISystemSettingsService _systemSettingsService;
 
     public ServiceabilityMappingManagementService(
         ICategoryCityMappingRepository categoryCityMappingRepository,
@@ -21,7 +26,9 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
         ICategoryRepository categoryRepository,
         ICityRepository cityRepository,
         IServiceRepository serviceRepository,
-        IPincodeRepository pincodeRepository)
+        IPincodeRepository pincodeRepository,
+        IAuditLogWriter auditLogWriter,
+        ISystemSettingsService systemSettingsService)
     {
         _categoryCityMappingRepository = categoryCityMappingRepository;
         _servicePincodeMappingRepository = servicePincodeMappingRepository;
@@ -29,6 +36,8 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
         _cityRepository = cityRepository;
         _serviceRepository = serviceRepository;
         _pincodeRepository = pincodeRepository;
+        _auditLogWriter = auditLogWriter;
+        _systemSettingsService = systemSettingsService;
     }
 
     public async Task<IReadOnlyList<CategoryLookupResponse>> ListCategoriesAsync()
@@ -136,12 +145,12 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
                 await _servicePincodeMappingRepository.UpdateAsync(existing);
             }
 
-            return new ServicePincodeMappingResponse(existing.Id, service.Id, service.Name, pincode.Id, pincode.Code, existing.IsActive);
+            return new ServicePincodeMappingResponse(existing.Id, service.Id, service.Name, pincode.Id, pincode.Code, existing.IsActive, existing.IsPinned);
         }
 
         var mapping = new ServicePincodeMapping(Guid.NewGuid(), request.ServiceId, request.PincodeId);
         await _servicePincodeMappingRepository.AddAsync(mapping);
-        return new ServicePincodeMappingResponse(mapping.Id, service.Id, service.Name, pincode.Id, pincode.Code, mapping.IsActive);
+        return new ServicePincodeMappingResponse(mapping.Id, service.Id, service.Name, pincode.Id, pincode.Code, mapping.IsActive, mapping.IsPinned);
     }
 
     public async Task<Result> ActivateServicePincodeMappingAsync(Guid id)
@@ -170,6 +179,34 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
         return Result.Success();
     }
 
+    /// <inheritdoc/>
+    public async Task<Result> PinServicePincodeMappingAsync(Guid id)
+    {
+        var mapping = await _servicePincodeMappingRepository.GetByIdAsync(id);
+        if (mapping is null)
+        {
+            return Result.Failure(Error.NotFound("Serviceability.MappingNotFound", "The specified mapping does not exist."));
+        }
+
+        mapping.Pin();
+        await _servicePincodeMappingRepository.UpdateAsync(mapping);
+        return Result.Success();
+    }
+
+    /// <inheritdoc/>
+    public async Task<Result> UnpinServicePincodeMappingAsync(Guid id)
+    {
+        var mapping = await _servicePincodeMappingRepository.GetByIdAsync(id);
+        if (mapping is null)
+        {
+            return Result.Failure(Error.NotFound("Serviceability.MappingNotFound", "The specified mapping does not exist."));
+        }
+
+        mapping.Unpin();
+        await _servicePincodeMappingRepository.UpdateAsync(mapping);
+        return Result.Success();
+    }
+
     public Task<IReadOnlyList<UnmappedActiveServiceResponse>> ListUnmappedActiveServicesAsync() =>
         _servicePincodeMappingRepository.ListUnmappedActiveServicesAsync();
 
@@ -179,6 +216,11 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
     /// <inheritdoc/>
     public async Task<int> AutoEnableProviderCoverageAsync(Guid providerId)
     {
+        if (!await IsAutoManagementEnabledAsync())
+        {
+            return 0;
+        }
+
         var coverable = await _servicePincodeMappingRepository.ListCoverablePairsForProviderAsync(providerId);
         if (coverable.Count == 0)
         {
@@ -186,8 +228,19 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
         }
 
         var enabled = 0;
+        var nowUtc = DateTime.UtcNow;
         foreach (var pair in coverable)
         {
+            // Pin/cooldown only matter for a mapping that already exists -
+            // ListCoverablePairsForProviderAsync only returns pairs with no
+            // currently-active mapping, but an inactive (suspended) one may
+            // still be sitting there pinned or mid-cooldown.
+            var existing = await _servicePincodeMappingRepository.FindAsync(pair.ServiceId, pair.PincodeId);
+            if (existing is not null && (existing.IsPinned || IsWithinAutoToggleCooldown(existing, nowUtc)))
+            {
+                continue;
+            }
+
             // Reuses the same create-or-reactivate path the admin mapping
             // screen uses (see the interface doc comment) - never hand-rolls
             // persistence here, and inherits its idempotency: a pair already
@@ -198,6 +251,7 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
             if (result.IsSuccess)
             {
                 enabled++;
+                await RecordAutoToggleAsync(result.Value.Id, "AutoEnabled", pair.ServiceId, pair.PincodeId, providerId, nowUtc);
             }
         }
 
@@ -210,6 +264,11 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
     /// <inheritdoc/>
     public async Task<int> AutoDisableUnservedMappingsAsync(Guid providerId, IReadOnlyList<ServiceabilityCoverageGapResponse>? candidatePairs = null)
     {
+        if (!await IsAutoManagementEnabledAsync())
+        {
+            return 0;
+        }
+
         // No explicit snapshot supplied - this is the suspend/deactivate call
         // shape, where the provider's skill/area rows are untouched by the
         // status change, so "what they currently satisfy" IS the "before"
@@ -221,23 +280,54 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
         }
 
         var disabled = 0;
+        var nowUtc = DateTime.UtcNow;
         foreach (var pair in candidates)
         {
+            var mapping = await _servicePincodeMappingRepository.FindAsync(pair.ServiceId, pair.PincodeId);
+            if (mapping is null || !mapping.IsActive || mapping.IsPinned)
+            {
+                continue;
+            }
+
             // Re-checked against current state (after whatever change
             // triggered this call), not the snapshot - another active
             // provider may still cover this pair, or this same provider may
             // still cover it if only one of skill/area changed.
             if (await _servicePincodeMappingRepository.HasActiveProviderCoverageAsync(pair.ServiceId, pair.PincodeId))
             {
+                // Coverage still (or again) holds - cancel any grace-period
+                // timer a previous pass may have started for this pair.
+                if (mapping.PendingAutoDisableSince is not null)
+                {
+                    mapping.ClearPendingAutoDisable();
+                    await _servicePincodeMappingRepository.UpdateAsync(mapping);
+                }
+
                 continue;
             }
 
-            var mapping = await _servicePincodeMappingRepository.FindAsync(pair.ServiceId, pair.PincodeId);
-            if (mapping is not null && mapping.IsActive)
+            if (IsWithinAutoToggleCooldown(mapping, nowUtc))
             {
+                continue;
+            }
+
+            if (IsPastGracePeriod(mapping, nowUtc))
+            {
+                // Already pending from an earlier pass and the grace period
+                // has fully elapsed since - coverage is still lost now, so
+                // disable it for real.
                 mapping.Deactivate();
-                await _servicePincodeMappingRepository.UpdateAsync(mapping);
+                await RecordAutoToggleAsync(mapping, "AutoDisabled", pair.ServiceId, pair.PincodeId, providerId, nowUtc);
                 disabled++;
+            }
+            else
+            {
+                // First time this pair is seen unserved (or still within its
+                // grace period) - start/keep the pending timer rather than
+                // disabling immediately, so a brief provider suspend/
+                // reactivate blip does not take the pincode dark.
+                mapping.MarkPendingAutoDisable(nowUtc);
+                await _servicePincodeMappingRepository.UpdateAsync(mapping);
             }
         }
 
@@ -247,4 +337,71 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
     /// <inheritdoc/>
     public Task<IReadOnlyList<MappedPincodeWithoutProviderCoverageResponse>> ListMappedPincodesWithoutProviderCoverageAsync() =>
         _servicePincodeMappingRepository.ListMappedPincodesWithoutProviderCoverageAsync();
+
+    /// <summary>
+    /// The <c>FeatureFlagSettings.AutoManageServiceabilityEnabled</c> kill
+    /// switch. Fails open (treats the flag as enabled) when the settings
+    /// store has no "features" row or cannot be read, rather than silently
+    /// disabling the whole auto-management feature on an uninitialized or
+    /// momentarily unreadable settings store - the safer default for a
+    /// feature whose entire purpose is keeping serviceability in sync with
+    /// live provider coverage.
+    /// </summary>
+    private async Task<bool> IsAutoManagementEnabledAsync()
+    {
+        var result = await _systemSettingsService.GetFeatureFlagSettingsAsync();
+        return !result.IsSuccess || result.Value.AutoManageServiceabilityEnabled;
+    }
+
+    private static bool IsWithinAutoToggleCooldown(ServicePincodeMapping mapping, DateTime nowUtc) =>
+        mapping.LastAutoToggledAtUtc is { } lastToggledAtUtc &&
+        nowUtc - lastToggledAtUtc < TimeSpan.FromMinutes(ServiceabilityAutoManagementDefaults.AutoToggleCooldownMinutes);
+
+    private static bool IsPastGracePeriod(ServicePincodeMapping mapping, DateTime nowUtc) =>
+        mapping.PendingAutoDisableSince is { } pendingSinceUtc &&
+        nowUtc - pendingSinceUtc >= TimeSpan.FromMinutes(ServiceabilityAutoManagementDefaults.AutoDisableGracePeriodMinutes);
+
+    /// <summary>Loads the mapping by id and delegates to the entity overload - see its doc comment.</summary>
+    private async Task RecordAutoToggleAsync(Guid mappingId, string action, Guid serviceId, Guid pincodeId, Guid providerId, DateTime toggledAtUtc)
+    {
+        var mapping = await _servicePincodeMappingRepository.GetByIdAsync(mappingId);
+        if (mapping is null)
+        {
+            return;
+        }
+
+        await RecordAutoToggleAsync(mapping, action, serviceId, pincodeId, providerId, toggledAtUtc);
+    }
+
+    /// <summary>
+    /// Common tail of every actual auto-enable/auto-disable toggle: stamps
+    /// the flap-protection cooldown, writes the audit entry, then persists -
+    /// in that order, so the audit row and the mapping's own change commit in
+    /// the same transaction (<see cref="IAuditLogWriter.WriteAsync"/>'s
+    /// documented contract). Attributed to <see cref="AuditContext.System"/>
+    /// rather than whoever's request happened to trigger this - the toggle
+    /// itself is a system decision computed from live provider coverage, not
+    /// the human's (a provider replacing their own skills, or an admin
+    /// reactivating them) - matching how <see cref="AuditActorType.System"/>
+    /// already covers this codebase's other no-human-actor writes (a
+    /// scheduled job, or - per <c>HttpAuditContextProvider</c>'s own doc
+    /// comment - any write with no ambient HTTP request at all).
+    /// </summary>
+    private async Task RecordAutoToggleAsync(ServicePincodeMapping mapping, string action, Guid serviceId, Guid pincodeId, Guid providerId, DateTime toggledAtUtc)
+    {
+        mapping.RecordAutoToggle(toggledAtUtc);
+
+        var newValues = JsonSerializer.Serialize(new
+        {
+            serviceId,
+            pincodeId,
+            triggeringProviderId = providerId,
+        });
+
+        await _auditLogWriter.WriteAsync(
+            new AuditEntry("ServicePincodeMapping", mapping.Id.ToString(), action, NewValues: newValues),
+            context: AuditContext.System);
+
+        await _servicePincodeMappingRepository.UpdateAsync(mapping);
+    }
 }
