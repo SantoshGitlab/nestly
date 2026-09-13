@@ -503,6 +503,40 @@ actions, review edits and backfills would all have to keep in step, to save a
 query that is already cheap. Revisit only with a measurement showing this
 lookup is hot.
 
+## SERVICEABILITY AUTO-MANAGEMENT
+
+`service_pincode_mapping.is_active` (SRS 12.9.2) used to be purely
+admin-set. It is now also driven automatically by live provider coverage:
+`IServiceabilityMappingManagementService.AutoEnableProviderCoverageAsync`
+activates a mapping once a provider with matching skill+area coverage
+appears, and `AutoDisableUnservedMappingsAsync` deactivates one once the last
+covering provider is gone. Three columns exist purely to make that safe.
+
+### `service_pincode_mapping` — the safety-net columns
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `is_pinned` | `boolean` NOT NULL, default `false` | Admin override. When true, both auto-enable and auto-disable skip this mapping entirely — it stays exactly as an admin last set it regardless of live coverage. Set/cleared via the admin `pin`/`unpin` endpoints |
+| `last_auto_toggled_at_utc` | `timestamptz` NULL | When this mapping was last changed by auto-enable/auto-disable (never by an admin). Null until the first auto-toggle. Drives the flap-protection cooldown (`ServiceabilityAutoManagementDefaults.AutoToggleCooldownMinutes`, 15 min): a mapping just auto-toggled is not auto-toggled again within the cooldown even if coverage flips back |
+| `pending_auto_disable_since` | `timestamptz` NULL | Set the moment auto-disable first observes lost coverage; cleared if coverage returns, or once the mapping is actually auto-disabled. Auto-disable only acts once this has been in the past for at least `ServiceabilityAutoManagementDefaults.AutoDisableGracePeriodMinutes` (30 min) — the grace period that keeps a brief provider suspend/reactivate blip from taking a pincode dark. Deliberately does not apply to auto-enable, which is never delayed |
+
+A recurring Hangfire job (`IServiceabilityAutoDisableSweepJob`, registered via
+`ScheduleServiceabilityAutoDisableSweepJob`) re-checks every mapping with a
+`pending_auto_disable_since` past the grace-period cutoff and disables the
+ones still unserved, clearing the timer on any that have regained coverage or
+been pinned/deactivated by hand in the meantime — the grace period would
+otherwise only be honoured the next time something else touched the mapping.
+
+Every real auto-toggle (not a no-op skip) writes an `AuditEntry` on
+`ServicePincodeMapping` with a system `AuditContext` (`IAuditLogWriter`'s
+explicit-context overload), so an "AutoEnabled"/"AutoDisabled" change is
+distinguishable from an admin action in the audit trail.
+
+The whole mechanism is gated behind `FeatureFlagSettings.AutoManageServiceabilityEnabled`
+(default true, admin-only — see docs/API.md's SystemSettings section):
+false makes every auto-enable/auto-disable call and the sweep job no-op
+before doing any work, without touching `is_pinned` or the timers.
+
 ## SOFT DELETE
 
 Where business requirements require record retention:
