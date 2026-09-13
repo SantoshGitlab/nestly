@@ -50,7 +50,7 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context), new InMemoryCacheService()),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
             new WalletService(new WalletLedgerRepository(context), context),
@@ -76,6 +76,7 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
             new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context),
+            new AlwaysEligibleProviderSearchStub(),
             context);
     }
 
@@ -369,6 +370,76 @@ public sealed class PaymentWebhookServiceTests : IClassFixture<TestDatabase>
 
         var escrowService = new EscrowService(new PlatformEscrowLedgerRepository(readContext));
         (await escrowService.GetHeldBalanceAsync(fixture.BookingId)).Should().Be(fixture.Total, "escrow held must equal the payment once, not twice");
+    }
+
+    [Fact]
+    public async Task A_manual_payment_confirms_the_booking_the_same_way_a_gateway_payment_does()
+    {
+        var gateway = BuildGateway();
+        Fixture fixture;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = await SeedBookingAsync(seedContext, priceOverride: 501m);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var (_, webhook) = BuildServices(context, gateway);
+            var result = await webhook.RecordManualPaymentAsync(fixture.BookingId, ManualPaymentMethod.Cash, "receipt-1234");
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Status.Should().Be(PaymentTransactionStatus.Success);
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(fixture.BookingId);
+        booking!.Status.Should().Be(BookingStatus.Confirmed, "a manual payment must transition the booking the same way a gateway success does");
+
+        var transaction = await new PaymentTransactionRepository(readContext).GetByBookingIdAsync(fixture.BookingId);
+        transaction!.Attempts.Should().ContainSingle();
+        transaction.Attempts[0].GatewayPaymentRef.Should().Contain("Cash").And.Contain("receipt-1234");
+        transaction.CommissionAmount.Should().NotBeNull("commission must still be recorded on a manual payment, exactly as on a gateway one");
+
+        var holds = await readContext.Set<PlatformEscrowLedger>()
+            .Where(e => e.BookingId == fixture.BookingId && e.EntryType == EscrowEntryType.Hold)
+            .ToListAsync();
+        holds.Should().ContainSingle("a manual payment must also move the amount into escrow like a gateway payment does");
+    }
+
+    [Fact]
+    public async Task A_manual_payment_is_rejected_once_the_booking_is_already_paid()
+    {
+        var gateway = BuildGateway();
+        Fixture fixture;
+        string gatewayOrderId;
+
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = await SeedBookingAsync(seedContext, priceOverride: 501m);
+            var (payments, _) = BuildServices(seedContext, gateway);
+            var order = await payments.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, IdempotencyKey: null));
+            gatewayOrderId = order.Value.GatewayOrderId;
+        }
+
+        using (var callbackContext = _db.CreateContext())
+        {
+            var (_, webhook) = BuildServices(callbackContext, gateway);
+            string paymentRef = "sandbox_pay_test_ref";
+            string payload = PaymentWebhookPayload.Build(gatewayOrderId, paymentRef, PaymentWebhookPayload.SuccessStatus);
+            string signature = gateway.SignPayload(payload);
+            (await webhook.HandleCallbackAsync(new PaymentWebhookRequest(gatewayOrderId, paymentRef, PaymentWebhookPayload.SuccessStatus, signature)))
+                .IsSuccess.Should().BeTrue();
+        }
+
+        using var context = _db.CreateContext();
+        var (_, webhookAfterPaid) = BuildServices(context, gateway);
+        var result = await webhookAfterPaid.RecordManualPaymentAsync(fixture.BookingId, ManualPaymentMethod.Upi, "already-paid-ref");
+
+        // The booking-status gate (Confirmed is neither PaymentPending nor
+        // PaymentFailed) is checked first, so this is the error surfaced -
+        // Payment.AlreadyPaid guards the narrower case of a transaction
+        // already Success while the booking itself has not yet moved on.
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Payment.BookingNotPayable");
     }
 
     [Fact]

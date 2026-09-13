@@ -28,6 +28,7 @@ import {
   formatDateTime,
 } from "@/components/data-table";
 import { BookingStatusBadge } from "@/components/status-badges";
+import { ReschedulePicker } from "@/components/ReschedulePicker";
 import { TrackingMap } from "@/components/TrackingMap";
 import { isBookingTrackable, useAdminBookingTrackingLive } from "@/hooks/useAdminBookingTrackingLive";
 import { ApiError, describeError } from "@/lib/api";
@@ -38,6 +39,7 @@ import {
   getBookingCompletionProof,
   getBookingDetail,
   getBookingTracking,
+  recordManualPayment,
   refundBooking,
   rejectCompletionProof,
   rescheduleBooking,
@@ -46,6 +48,7 @@ import {
 import {
   CancellationActor,
   CompletionProofReviewStatus,
+  ManualPaymentMethod,
   RefundMethod,
   RefundStatus,
   RescheduleActor,
@@ -58,6 +61,7 @@ import {
   rejectBookingAssignment,
 } from "@/lib/providers-api";
 import { BookingAssignedByType, BookingProviderAssignmentStatus, ProviderOnboardingStatus } from "@/lib/providers-types";
+import type { EligibleProvider } from "@/lib/providers-types";
 import { BookingStatus } from "@/lib/types";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -78,6 +82,20 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   [BookingStatus.Refunded]: "Refunded",
   [BookingStatus.Expired]: "Expired",
 };
+
+/**
+ * Docs/OPEN-FIXES-FEATURES.csv "Provider performance": "expose the key
+ * metrics inline in the assignment picker" - appended to the native
+ * `<Select>` option text below, since a plain HTML `<option>` cannot render
+ * a badge. Shown only when there is data to show (null means no offers/no
+ * visible review yet, not zero).
+ */
+function formatPerformanceSuffix(candidate: EligibleProvider): string {
+  const parts: string[] = [];
+  if (candidate.acceptanceRatePercent !== null) parts.push(`${candidate.acceptanceRatePercent}% accept`);
+  if (candidate.averageRating !== null) parts.push(`★${candidate.averageRating}`);
+  return parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
+}
 
 // Statuses reachable through the generic status-update action. Cancel/
 // reschedule/refund each go through their own dedicated action below - the
@@ -198,6 +216,10 @@ export default function BookingDetailPage() {
   const [refundMethod, setRefundMethod] = useState(String(RefundMethod.Gateway));
   const [confirmRefund, setConfirmRefund] = useState(false);
 
+  const [manualPaymentMethod, setManualPaymentMethod] = useState(String(ManualPaymentMethod.Cash));
+  const [manualPaymentReference, setManualPaymentReference] = useState("");
+  const [confirmManualPayment, setConfirmManualPayment] = useState(false);
+
   const [assignProviderId, setAssignProviderId] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [confirmReject, setConfirmReject] = useState(false);
@@ -273,6 +295,24 @@ export default function BookingDetailPage() {
     onError: (err) => setActionError(describeError(err)),
   });
 
+  // Row 25, docs/OPEN-FIXES-FEATURES.csv - transitions the booking to
+  // Confirmed exactly like a successful gateway payment (server-side).
+  const manualPaymentMutation = useMutation({
+    mutationFn: () =>
+      recordManualPayment(bookingId, {
+        method: Number(manualPaymentMethod) as ManualPaymentMethod,
+        reference: manualPaymentReference,
+      }),
+    onSuccess: () => {
+      setActionError(null);
+      setActionNotice("Manual payment recorded; booking confirmed.");
+      setManualPaymentReference("");
+      setConfirmManualPayment(false);
+      invalidateDetail();
+    },
+    onError: (err) => setActionError(describeError(err)),
+  });
+
   const assignProviderMutation = useMutation({
     mutationFn: () => assignProviderToBooking(bookingId, { providerId: assignProviderId }),
     onSuccess: () => {
@@ -324,8 +364,14 @@ export default function BookingDetailPage() {
   }
 
   const booking = detailQuery.data;
+  // Row 33, docs/OPEN-FIXES-FEATURES.csv: mirrors BookingProviderAssignmentService.IsAssignableStatus's
+  // admin-only allow-list server-side - Confirmed is included so ops can
+  // push a paid booking to a provider immediately rather than waiting for
+  // auto-assignment (which only runs as the slot approaches).
   const isAssignableStatus =
-    booking.status === BookingStatus.AwaitingFulfilment || booking.status === BookingStatus.Assigned;
+    booking.status === BookingStatus.Confirmed ||
+    booking.status === BookingStatus.AwaitingFulfilment ||
+    booking.status === BookingStatus.Assigned;
 
   // Mirrors BookingLifecycle's transition table server-side (only these
   // source statuses have a CancelledByAdmin edge) - the "Cancel booking" card
@@ -334,6 +380,7 @@ export default function BookingDetailPage() {
   // the API reject it with "A booking in status 'X' can no longer be
   // cancelled." Gating the card itself surfaces that up front instead.
   const isCancellableByAdmin = [
+    BookingStatus.PaymentPending,
     BookingStatus.PaymentFailed,
     BookingStatus.Confirmed,
     BookingStatus.AwaitingFulfilment,
@@ -343,6 +390,12 @@ export default function BookingDetailPage() {
     BookingStatus.InProgress,
     BookingStatus.Rescheduled,
   ].includes(booking.status);
+
+  // Row 25, docs/OPEN-FIXES-FEATURES.csv - mirrors the server-side gate in
+  // PaymentWebhookService.RecordManualPaymentAsync (the same one the
+  // gateway order-creation path already uses).
+  const isManuallyPayable =
+    booking.status === BookingStatus.PaymentPending || booking.status === BookingStatus.PaymentFailed;
 
   // The one assignment row still "live" for this booking, if any (every
   // other row is a settled Rejected/Reassigned/Withdrawn/Completed). Backend
@@ -558,9 +611,8 @@ export default function BookingDetailPage() {
           <div className="mt-5 flex flex-col gap-4 border-t border-line pt-5">
             {!isAssignableStatus ? (
               <Alert tone="info">
-                A provider can only be assigned once this booking reaches{" "}
-                {BOOKING_STATUS_LABELS[BookingStatus.AwaitingFulfilment]} (current status:{" "}
-                {booking.statusLabel}).
+                A provider can only be assigned once this booking is {BOOKING_STATUS_LABELS[BookingStatus.Confirmed]}{" "}
+                or later (current status: {booking.statusLabel}).
               </Alert>
             ) : wouldOverrideAcceptedProvider ? (
               <Alert tone="warning">
@@ -602,7 +654,7 @@ export default function BookingDetailPage() {
                         p.pincodeMatch ? "this pincode" : "city-wide"
                       }${p.serviceMatch ? "" : ", category-wide"} · ${p.assignedJobsToday}${
                         p.maxJobsPerDay !== null ? `/${p.maxJobsPerDay}` : ""
-                      } jobs today`,
+                      } jobs today${formatPerformanceSuffix(p)}`,
                     }))}
                   />
                 )}
@@ -763,12 +815,16 @@ export default function BookingDetailPage() {
 
           <Card title="Reschedule booking" description="Admin-initiated reschedule (SRS 12.11.3, task 117b)">
             <div className="flex flex-col gap-4">
-              <FormGrid>
-                <Field label="Locality ID" required value={rescheduleLocalityId} onChange={(e) => setRescheduleLocalityId(e.target.value)} />
-                <Field label="Slot window ID" required value={rescheduleSlotWindowId} onChange={(e) => setRescheduleSlotWindowId(e.target.value)} />
-                <Field label="New slot date" type="date" required value={rescheduleSlotDate} onChange={(e) => setRescheduleSlotDate(e.target.value)} />
-                <Field label="Reason (optional)" value={rescheduleReason} onChange={(e) => setRescheduleReason(e.target.value)} />
-              </FormGrid>
+              <ReschedulePicker
+                bookingId={bookingId}
+                localityId={rescheduleLocalityId}
+                onLocalityChange={(id) => setRescheduleLocalityId(id)}
+                slotWindowId={rescheduleSlotWindowId}
+                onSlotChange={(id) => setRescheduleSlotWindowId(id)}
+                slotDate={rescheduleSlotDate}
+                onDateChange={(date) => setRescheduleSlotDate(date)}
+              />
+              <Field label="Reason (optional)" value={rescheduleReason} onChange={(e) => setRescheduleReason(e.target.value)} />
               <FormActions align="start">
                 <Button
                   disabled={!rescheduleLocalityId || !rescheduleSlotWindowId || !rescheduleSlotDate}
@@ -780,6 +836,44 @@ export default function BookingDetailPage() {
               </FormActions>
             </div>
           </Card>
+
+          {isManuallyPayable ? (
+            <Card
+              title="Record manual payment"
+              description="Record a cash, UPI or bank-transfer payment taken outside the gateway (row 25, docs/OPEN-FIXES-FEATURES.csv). Confirms the booking exactly like a successful online payment."
+            >
+              <div className="flex flex-col gap-4">
+                <FormGrid>
+                  <Select
+                    label="Method"
+                    options={[
+                      { value: String(ManualPaymentMethod.Cash), label: "Cash" },
+                      { value: String(ManualPaymentMethod.Upi), label: "UPI" },
+                      { value: String(ManualPaymentMethod.BankTransfer), label: "Bank transfer" },
+                      { value: String(ManualPaymentMethod.Other), label: "Other" },
+                    ]}
+                    value={manualPaymentMethod}
+                    onChange={(e) => setManualPaymentMethod(e.target.value)}
+                  />
+                  <Field
+                    label="Reference"
+                    required
+                    placeholder="Receipt number, UTR, transaction ID..."
+                    value={manualPaymentReference}
+                    onChange={(e) => setManualPaymentReference(e.target.value)}
+                  />
+                </FormGrid>
+                <FormActions align="start">
+                  <Button
+                    disabled={!manualPaymentReference.trim()}
+                    onClick={() => setConfirmManualPayment(true)}
+                  >
+                    Record payment
+                  </Button>
+                </FormActions>
+              </div>
+            </Card>
+          ) : null}
 
           <Card title="Refund" description="Full or partial refund with audit (SRS 12.11.3, 12.13.2-3, task 117c)">
             <div className="flex flex-col gap-4">
@@ -856,6 +950,21 @@ export default function BookingDetailPage() {
       >
         <p className="text-sm text-fg-muted">
           Reason: <span className="font-medium text-fg">{cancelReason}</span>
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmManualPayment}
+        title="Record this manual payment?"
+        description="This confirms the booking immediately, the same way a successful online payment does."
+        confirmLabel="Record payment"
+        loading={manualPaymentMutation.isPending}
+        error={manualPaymentMutation.isError ? describeError(manualPaymentMutation.error) : null}
+        onCancel={() => setConfirmManualPayment(false)}
+        onConfirm={() => manualPaymentMutation.mutate()}
+      >
+        <p className="text-sm text-fg-muted">
+          Reference: <span className="font-medium text-fg">{manualPaymentReference}</span>
         </p>
       </ConfirmDialog>
 

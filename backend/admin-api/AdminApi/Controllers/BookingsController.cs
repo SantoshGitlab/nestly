@@ -6,10 +6,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Nestly.Application.BookingManagement;
 using Nestly.Application.Bookings;
+using Nestly.Application.Geography;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Slots;
 using Nestly.Application.Tracking;
 using Nestly.BuildingBlocks.Extensions;
 using Nestly.Domain;
+using ResultOutcome = Nestly.BuildingBlocks.Results.Result;
+using ErrorOutcome = Nestly.BuildingBlocks.Results.Error;
 using Nestly.Infrastructure;
 
 namespace Nestly.AdminApi.Controllers;
@@ -46,14 +50,18 @@ public class BookingsController : ControllerBase
     private readonly IBookingCompletionProofRepository _completionProofRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IBookingTrackingQueryService _trackingQueryService;
+    private readonly IGeographyQueryService _geographyQueryService;
+    private readonly ISlotAvailabilityService _slotAvailabilityService;
     private readonly IValidator<AdminBookingSearchRequest> _searchValidator;
     private readonly IValidator<AdminBookingStatusUpdateRequest> _statusUpdateValidator;
     private readonly IValidator<AdminCancelBookingRequest> _cancelValidator;
     private readonly IValidator<AdminRescheduleBookingRequest> _rescheduleValidator;
     private readonly IValidator<AdminRefundRequest> _refundValidator;
+    private readonly IValidator<AdminManualPaymentRequest> _manualPaymentValidator;
     private readonly IValidator<AssignProviderRequest> _assignProviderValidator;
     private readonly IValidator<RejectAssignmentRequest> _rejectAssignmentValidator;
     private readonly IValidator<RejectCompletionProofRequest> _rejectCompletionProofValidator;
+    private readonly IValidator<AdminUnassignedAtRiskBookingRequest> _unassignedAtRiskValidator;
 
     public BookingsController(
         IBookingManagementService bookingManagementService,
@@ -61,28 +69,36 @@ public class BookingsController : ControllerBase
         IBookingCompletionProofRepository completionProofRepository,
         IBookingRepository bookingRepository,
         IBookingTrackingQueryService trackingQueryService,
+        IGeographyQueryService geographyQueryService,
+        ISlotAvailabilityService slotAvailabilityService,
         IValidator<AdminBookingSearchRequest> searchValidator,
         IValidator<AdminBookingStatusUpdateRequest> statusUpdateValidator,
         IValidator<AdminCancelBookingRequest> cancelValidator,
         IValidator<AdminRescheduleBookingRequest> rescheduleValidator,
         IValidator<AdminRefundRequest> refundValidator,
+        IValidator<AdminManualPaymentRequest> manualPaymentValidator,
         IValidator<AssignProviderRequest> assignProviderValidator,
         IValidator<RejectAssignmentRequest> rejectAssignmentValidator,
-        IValidator<RejectCompletionProofRequest> rejectCompletionProofValidator)
+        IValidator<RejectCompletionProofRequest> rejectCompletionProofValidator,
+        IValidator<AdminUnassignedAtRiskBookingRequest> unassignedAtRiskValidator)
     {
         _bookingManagementService = bookingManagementService;
         _assignmentService = assignmentService;
         _completionProofRepository = completionProofRepository;
         _bookingRepository = bookingRepository;
         _trackingQueryService = trackingQueryService;
+        _geographyQueryService = geographyQueryService;
+        _slotAvailabilityService = slotAvailabilityService;
         _searchValidator = searchValidator;
         _statusUpdateValidator = statusUpdateValidator;
         _cancelValidator = cancelValidator;
         _rescheduleValidator = rescheduleValidator;
         _refundValidator = refundValidator;
+        _manualPaymentValidator = manualPaymentValidator;
         _assignProviderValidator = assignProviderValidator;
         _rejectAssignmentValidator = rejectAssignmentValidator;
         _rejectCompletionProofValidator = rejectCompletionProofValidator;
+        _unassignedAtRiskValidator = unassignedAtRiskValidator;
     }
 
     /// <summary>Filterable, paginated booking search (SRS 12.11.1, task 115a).</summary>
@@ -118,6 +134,50 @@ public class BookingsController : ControllerBase
         }
 
         var result = await _bookingManagementService.SearchAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Row "Unassigned and at-risk queue", docs/OPEN-FIXES-FEATURES.csv: paid
+    /// bookings that are assignable but have no live provider on them yet,
+    /// soonest slot first so the most at-risk booking surfaces at the top -
+    /// see <see cref="IBookingManagementService.ListUnassignedAtRiskAsync"/>.
+    /// A static route ahead of <see cref="GetDetail"/>'s <c>{bookingId:guid}</c>
+    /// route would ordinarily risk a clash, but the guid constraint means
+    /// "unassigned-at-risk" never matches it regardless of declaration order.
+    /// </summary>
+    [HttpGet("unassigned-at-risk")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(AdminUnassignedAtRiskBookingSearchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ListUnassignedAtRisk([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var request = new AdminUnassignedAtRiskBookingRequest(page, pageSize);
+
+        var validation = await _unassignedAtRiskValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _bookingManagementService.ListUnassignedAtRiskAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Row "Fulfilment control room", docs/OPEN-FIXES-FEATURES.csv: every
+    /// operationally live booking on <paramref name="date"/> (defaults to
+    /// today), flat - admin-web buckets these into status columns itself, see
+    /// <see cref="IBookingManagementService.GetFulfilmentBoardAsync"/>. A
+    /// static route ahead of <see cref="GetDetail"/>'s <c>{bookingId:guid}</c>
+    /// route, same non-clash reasoning as <see cref="ListUnassignedAtRisk"/>.
+    /// </summary>
+    [HttpGet("fulfilment-board")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(AdminFulfilmentBoardResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFulfilmentBoard([FromQuery] DateOnly? date = null)
+    {
+        var result = await _bookingManagementService.GetFulfilmentBoardAsync(new AdminFulfilmentBoardRequest(date));
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
@@ -170,6 +230,64 @@ public class BookingsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// Active cities for the reschedule panel's locality picker (row 26,
+    /// docs/OPEN-FIXES-FEATURES.csv) - the same <see cref="IGeographyQueryService"/>
+    /// the customer booking flow's city selector uses, so this never
+    /// re-derives its own city list.
+    /// </summary>
+    [HttpGet("reschedule-cities")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<CityResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetRescheduleCities() => Ok(await _geographyQueryService.ListActiveCitiesAsync());
+
+    /// <summary>
+    /// Localities matching a name/pincode search within a city (row 26,
+    /// docs/OPEN-FIXES-FEATURES.csv) - resolves the <see cref="AdminRescheduleBookingRequest.LocalityId"/>
+    /// the reschedule action needs, via the same <see cref="IGeographyQueryService"/>
+    /// the customer booking flow's <c>LocalitySelector</c> calls, instead of
+    /// asking the admin to paste a raw UUID.
+    /// </summary>
+    [HttpGet("reschedule-localities")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<LocalityResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRescheduleLocalities([FromQuery] Guid cityId, [FromQuery] string? search)
+    {
+        var result = await _geographyQueryService.SearchLocalitiesAsync(cityId, search);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Available slot windows for this booking's service, at a candidate
+    /// locality, on a candidate date (row 26, docs/OPEN-FIXES-FEATURES.csv) -
+    /// resolves the <see cref="AdminRescheduleBookingRequest.SlotWindowId"/>
+    /// the reschedule action needs, via the same <see cref="ISlotAvailabilityService"/>
+    /// the customer booking flow's <c>SlotPicker</c> calls, instead of asking
+    /// the admin to paste a raw UUID.
+    /// </summary>
+    [HttpGet("{bookingId:guid}/reschedule-slots")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(SlotAvailabilityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetRescheduleSlots(Guid bookingId, [FromQuery] Guid localityId, [FromQuery] DateOnly date)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return ResultOutcome.Failure(ErrorOutcome.NotFound("Booking.NotFound", "The specified booking does not exist.")).ToProblemResult();
+        }
+
+        var serviceId = booking.Items.FirstOrDefault()?.ServiceId;
+        if (serviceId is null)
+        {
+            return ResultOutcome.Failure(ErrorOutcome.NotFound("Booking.NoServiceItem", "This booking has no service line item to check availability for.")).ToProblemResult();
+        }
+
+        var result = await _slotAvailabilityService.GetAvailableSlotsAsync(serviceId.Value, localityId, date);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Admin-initiated reschedule (SRS 12.11.3, task 117b) via the existing reschedule domain service (task 82d).</summary>
     [HttpPost("{bookingId:guid}/reschedule")]
     [Authorize(Policy = WritePolicy)]
@@ -205,6 +323,26 @@ public class BookingsController : ControllerBase
         }
 
         var result = await _bookingManagementService.RefundAsync(bookingId, CurrentAdminUserId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Records a manual/offline payment (cash, UPI, bank transfer) against a booking Awaiting Payment (row 25, docs/OPEN-FIXES-FEATURES.csv) - transitions the booking exactly like a successful gateway payment via <see cref="Nestly.Application.Payments.IPaymentWebhookService.RecordManualPaymentAsync"/>.</summary>
+    [HttpPost("{bookingId:guid}/manual-payment")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminBookingDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RecordManualPayment(Guid bookingId, [FromBody] AdminManualPaymentRequest request)
+    {
+        var validation = await _manualPaymentValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _bookingManagementService.RecordManualPaymentAsync(bookingId, CurrentAdminUserId(), request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

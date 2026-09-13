@@ -38,4 +38,25 @@ public interface IBookingManagementService
 
     /// <summary>Rejects the provider's submitted completion proof with a required reason; the booking stays InProgress for the provider to finish and resubmit (task: admin completion verification).</summary>
     Task<Result<AdminBookingDetailResponse>> RejectCompletionProofAsync(Guid bookingId, Guid adminUserId, RejectCompletionProofRequest request);
+
+    /// <summary>
+    /// Records a manual/offline payment (row 25, docs/OPEN-FIXES-FEATURES.csv)
+    /// via <c>IPaymentWebhookService.RecordManualPaymentAsync</c>, which
+    /// applies the same success transition a gateway payment does.
+    /// </summary>
+    Task<Result<AdminBookingDetailResponse>> RecordManualPaymentAsync(Guid bookingId, Guid adminUserId, AdminManualPaymentRequest request);
+
+    /// <summary>
+    /// Row "Unassigned and at-risk queue", docs/OPEN-FIXES-FEATURES.csv: paid,
+    /// assignable bookings with no live provider, soonest slot first. See
+    /// <see cref="Bookings.IBookingRepository.ListUnassignedAtRiskAsync"/>.
+    /// </summary>
+    Task<Result<AdminUnassignedAtRiskBookingSearchResponse>> ListUnassignedAtRiskAsync(AdminUnassignedAtRiskBookingRequest request);
+
+    /// <summary>
+    /// Row "Fulfilment control room", docs/OPEN-FIXES-FEATURES.csv: every
+    /// operationally live booking for one day, flat, for admin-web's kanban
+    /// board. See <see cref="Bookings.IBookingRepository.ListForFulfilmentBoardAsync"/>.
+    /// </summary>
+    Task<Result<AdminFulfilmentBoardResponse>> GetFulfilmentBoardAsync(AdminFulfilmentBoardRequest request);
 }

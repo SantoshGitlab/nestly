@@ -68,3 +68,25 @@ public class AdminRefundRequestValidator : AbstractValidator<AdminRefundRequest>
             .WithMessage("A positive amount is required for a partial refund.");
     }
 }
+
+/// <summary>A reference is always required so a manual payment can be reconciled later (row 25, docs/OPEN-FIXES-FEATURES.csv).</summary>
+public class AdminManualPaymentRequestValidator : AbstractValidator<AdminManualPaymentRequest>
+{
+    public AdminManualPaymentRequestValidator()
+    {
+        RuleFor(x => x.Method).IsInEnum();
+        RuleFor(x => x.Reference).NotEmpty().MaximumLength(200);
+    }
+}
+
+/// <summary>Bounds paging, matching <see cref="AdminBookingSearchRequestValidator"/>'s rules (row "Unassigned and at-risk queue", docs/OPEN-FIXES-FEATURES.csv).</summary>
+public class AdminUnassignedAtRiskBookingRequestValidator : AbstractValidator<AdminUnassignedAtRiskBookingRequest>
+{
+    public const int MaxPageSize = 100;
+
+    public AdminUnassignedAtRiskBookingRequestValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize);
+    }
+}

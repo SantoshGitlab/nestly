@@ -77,6 +77,16 @@ export default function JobsPage() {
       <PageHeading
         title="Jobs"
         subtitle="Bookings assigned to you — accept, decline and track progress."
+        actions={
+          // Entry point into /calendar (docs/OPEN-FIXES-FEATURES.csv
+          // "Calendar and week view") - see that page's own header comment
+          // for the nav-placement reasoning.
+          <Link href="/calendar">
+            <Button type="button" variant="secondary" size="sm">
+              View week calendar
+            </Button>
+          </Link>
+        }
       />
 
       <Card title="Filters" description="Narrow the list to a status or a single day.">
@@ -195,8 +205,11 @@ function JobCard({ job }: { job: JobListItem }) {
                 look at, not a footnote. */}
             {isRecurring ? <RecurringJobBadge frequency={job.recurringFrequency} /> : null}
           </div>
+          {/* Net payout, not the customer's gross booking total (bug fix,
+              docs/OPEN-FIXES-FEATURES.csv "Payout figure") - job detail
+              breaks it down further into booking total minus commission. */}
           <span className="nums shrink-0 text-sm font-semibold text-fg">
-            {formatInr(job.totalPayableSnapshot)}
+            {formatInr(job.netAmountToProvider)}
           </span>
         </div>
 

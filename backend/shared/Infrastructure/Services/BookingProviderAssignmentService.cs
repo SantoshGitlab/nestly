@@ -94,6 +94,19 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             responseDeadline: DateTime.UtcNow.AddMinutes(_autoAssignmentOptions.Value.ResponseWindowMinutes),
             "Provider auto-assigned by the matching engine.");
 
+    /// <summary>
+    /// Row 33, docs/OPEN-FIXES-FEATURES.csv: an admin can manually push a
+    /// paid Confirmed booking straight to a provider instead of waiting for
+    /// auto-assignment (which only runs as the slot approaches) - the panel
+    /// used to flatly refuse until AwaitingFulfilment. Confirmed is
+    /// deliberately allowed only for <see cref="BookingAssignedByType.Admin"/>:
+    /// the automatic engine's own gate is unchanged, so this does not alter
+    /// when/what auto-assignment picks up.
+    /// </summary>
+    private static bool IsAssignableStatus(BookingStatus status, BookingAssignedByType assignedByType) =>
+        status is BookingStatus.AwaitingFulfilment or BookingStatus.Assigned
+        || (assignedByType == BookingAssignedByType.Admin && status == BookingStatus.Confirmed);
+
     private async Task<Result<BookingProviderAssignmentResponse>> AssignInternalAsync(
         Guid bookingId, Guid providerId, BookingAssignedByType assignedByType, Guid? adminUserId, DateTime? responseDeadline, string reason)
     {
@@ -114,11 +127,13 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             return Error.Business("BookingProviderAssignment.ProviderNotActive", "Only an active provider can be assigned to a booking.");
         }
 
-        if (booking.Status != BookingStatus.AwaitingFulfilment && booking.Status != BookingStatus.Assigned)
+        if (!IsAssignableStatus(booking.Status, assignedByType))
         {
             return Error.Business(
                 "BookingProviderAssignment.InvalidBookingStatus",
-                $"A provider can only be assigned while the booking is AwaitingFulfilment or Assigned (current status: {booking.Status}).");
+                assignedByType == BookingAssignedByType.Admin
+                    ? $"A provider can only be assigned while the booking is Confirmed, AwaitingFulfilment or Assigned (current status: {booking.Status})."
+                    : $"A provider can only be assigned while the booking is AwaitingFulfilment or Assigned (current status: {booking.Status}).");
         }
 
         // Task 288: the read this decision depends on and the writes that act
@@ -159,7 +174,18 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             // The signal now comes from MarkReassigned's
             // BookingProviderChangedEvent above, which fires on both branches
             // of this if and does not depend on a status change.
-            if (booking.Status == BookingStatus.AwaitingFulfilment)
+            //
+            // Row 33, docs/OPEN-FIXES-FEATURES.csv: a paid Confirmed booking
+            // manually assigned by admin has no direct Confirmed->Assigned
+            // edge in BookingLifecycle (only Confirmed->AwaitingFulfilment
+            // does), so it is walked through AwaitingFulfilment first rather
+            // than adding a lifecycle shortcut just for this caller.
+            if (booking.Status == BookingStatus.Confirmed)
+            {
+                booking.TransitionTo(BookingStatus.AwaitingFulfilment, "Released to fulfilment by admin assignment.");
+                booking.TransitionTo(BookingStatus.Assigned, reason);
+            }
+            else if (booking.Status == BookingStatus.AwaitingFulfilment)
             {
                 booking.TransitionTo(BookingStatus.Assigned, reason);
             }
@@ -248,12 +274,51 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             return Error.NotFound("BookingProviderAssignment.NoOutstandingAssignment", "You have no outstanding assignment for this booking.");
         }
 
+        // Row 38, docs/OPEN-FIXES-FEATURES.csv: idempotent for a provider
+        // retrying their own accept - if the first call already succeeded
+        // server-side but the response never reached the client (a dropped
+        // connection, a background/foreground app switch), a naive retry
+        // would previously fail with AlreadyResponded and read as "you lost
+        // the job" even though the provider is still assigned. Only the same
+        // provider's own already-Accepted state is treated as success here -
+        // Rejected/Reassigned/Withdrawn still fail below exactly as before,
+        // since those are real terminal outcomes, not a delivery failure.
+        if (assignment.Status == BookingProviderAssignmentStatus.Accepted)
+        {
+            var alreadyAcceptedProvider = await _providerRepository.GetByIdAsync(providerId);
+            return ToResponse(
+                assignment, alreadyAcceptedProvider?.DisplayName ?? "(unknown provider)",
+                alreadyAcceptedProvider?.OnboardingStatus ?? ProviderOnboardingStatus.Registered);
+        }
+
         if (assignment.Status != BookingProviderAssignmentStatus.Assigned)
         {
             return Error.Business("BookingProviderAssignment.AlreadyResponded", $"This assignment was already {assignment.Status}.");
         }
 
         assignment.Accept();
+        await _assignmentRepository.UpdateAsync(assignment);
+
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        return ToResponse(assignment, provider?.DisplayName ?? "(unknown provider)", provider?.OnboardingStatus ?? ProviderOnboardingStatus.Registered);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<BookingProviderAssignmentResponse>> ExtendResponseDeadlineAsync(Guid bookingId, Guid providerId)
+    {
+        var assignment = await _assignmentRepository.GetActiveByBookingAsync(bookingId);
+        if (assignment is null || assignment.ProviderId != providerId)
+        {
+            // Same IDOR-hiding pattern as AcceptAsync/RejectByProviderAsync.
+            return Error.NotFound("BookingProviderAssignment.NoOutstandingAssignment", "You have no outstanding assignment for this booking.");
+        }
+
+        if (assignment.Status != BookingProviderAssignmentStatus.Assigned)
+        {
+            return Error.Business("BookingProviderAssignment.AlreadyResponded", $"This assignment was already {assignment.Status}.");
+        }
+
+        assignment.ExtendResponseDeadline(TimeSpan.FromMinutes(_autoAssignmentOptions.Value.ResponseWindowMinutes));
         await _assignmentRepository.UpdateAsync(assignment);
 
         var provider = await _providerRepository.GetByIdAsync(providerId);
@@ -482,6 +547,30 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
             .Select(g => new { ProviderId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.ProviderId, x => x.Count);
 
+        // Docs/OPEN-FIXES-FEATURES.csv "Provider performance": "expose the
+        // key metrics inline in the assignment picker" - display only (OPEN
+        // DECISIONS #4/#3, see EligibleProviderResponse's doc comment), so
+        // this never touches the ranking below. Batched for the whole
+        // candidate set in one query each, same shape as capacityByProvider/
+        // jobsTodayByProvider above - never one query per candidate.
+        var acceptanceStatsByProvider = await _context.BookingProviderAssignments
+            .Where(a => providerIds.Contains(a.ProviderId))
+            .GroupBy(a => a.ProviderId)
+            .Select(g => new
+            {
+                ProviderId = g.Key,
+                Total = g.Count(),
+                Accepted = g.Count(a =>
+                    a.Status == BookingProviderAssignmentStatus.Accepted || a.Status == BookingProviderAssignmentStatus.Completed)
+            })
+            .ToDictionaryAsync(x => x.ProviderId, x => x);
+
+        var ratingByProvider = await _context.Reviews
+            .Where(r => r.ProviderId != null && providerIds.Contains(r.ProviderId!.Value) && r.Status == ReviewStatus.Visible)
+            .GroupBy(r => r.ProviderId!.Value)
+            .Select(g => new { ProviderId = g.Key, Average = g.Average(r => (double)r.Rating) })
+            .ToDictionaryAsync(x => x.ProviderId, x => x.Average);
+
         var results = bestPerProvider
             .Select(x => new EligibleProviderResponse(
                 x.ProviderId,
@@ -490,7 +579,13 @@ public class BookingProviderAssignmentService : IBookingProviderAssignmentServic
                 x.PincodeMatch,
                 x.ServiceMatch,
                 capacityByProvider.GetValueOrDefault(x.ProviderId),
-                jobsTodayByProvider.GetValueOrDefault(x.ProviderId)))
+                jobsTodayByProvider.GetValueOrDefault(x.ProviderId),
+                AcceptanceRatePercent: acceptanceStatsByProvider.TryGetValue(x.ProviderId, out var stats) && stats.Total > 0
+                    ? Math.Round(100.0 * stats.Accepted / stats.Total, 1)
+                    : null,
+                AverageRating: ratingByProvider.TryGetValue(x.ProviderId, out var avgRating)
+                    ? Math.Round(avgRating, 1)
+                    : null))
             // Most specific match first (exact pincode, exact service), then
             // least-loaded today - never by rating (OPEN DECISIONS #4).
             .OrderByDescending(r => r.PincodeMatch)

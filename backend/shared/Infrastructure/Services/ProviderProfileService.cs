@@ -1,6 +1,7 @@
 using Nestly.Application;
 using Nestly.Application.ProviderProfile;
 using Nestly.Application.Reviews;
+using Nestly.Application.Serviceability;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 
@@ -20,19 +21,25 @@ public class ProviderProfileService : IProviderProfileService
     private readonly IProviderSkillMappingRepository _skillMappingRepository;
     private readonly IReviewRepository _reviewRepository;
     private readonly IProviderSessionRepository _sessionRepository;
+    private readonly IServiceabilityMappingManagementService _serviceabilityMappingManagementService;
+    private readonly IProviderAvailabilityWindowRepository _availabilityWindowRepository;
 
     public ProviderProfileService(
         IProviderRepository providerRepository,
         IProviderServiceAreaRepository serviceAreaRepository,
         IProviderSkillMappingRepository skillMappingRepository,
         IReviewRepository reviewRepository,
-        IProviderSessionRepository sessionRepository)
+        IProviderSessionRepository sessionRepository,
+        IServiceabilityMappingManagementService serviceabilityMappingManagementService,
+        IProviderAvailabilityWindowRepository availabilityWindowRepository)
     {
         _providerRepository = providerRepository;
         _serviceAreaRepository = serviceAreaRepository;
         _skillMappingRepository = skillMappingRepository;
         _reviewRepository = reviewRepository;
         _sessionRepository = sessionRepository;
+        _serviceabilityMappingManagementService = serviceabilityMappingManagementService;
+        _availabilityWindowRepository = availabilityWindowRepository;
     }
 
     public async Task<Result<ProviderProfileResponse>> GetAsync(Guid providerId)
@@ -101,10 +108,31 @@ public class ProviderProfileService : IProviderProfileService
                 Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
         }
 
+        // Bug 3 auto-disable: snapshot what this provider is currently
+        // propping up BEFORE the replace below deletes their old area rows -
+        // see AutoDisableUnservedMappingsAsync's doc comment for why the
+        // "before" picture has to be taken here, not after.
+        var previouslyCovered = await _serviceabilityMappingManagementService.ListMappedPairsCoveredByProviderAsync(providerId);
+
         var areas = request.Areas
             .Select(a => new ProviderServiceArea(Guid.NewGuid(), providerId, a.CityId, a.ZoneId, a.PincodeId))
             .ToList();
         await _serviceAreaRepository.ReplaceForProviderAsync(providerId, areas);
+
+        // Bug 3 auto-enable (docs/OPEN-FIXES-FEATURES.csv "Service to
+        // pincode mapping"): new/re-added coverage here can newly make a
+        // service fulfillable in a pincode - auto-create or reactivate the
+        // matching ServicePincodeMapping(s) rather than leaving it to a
+        // warning an admin has to notice. See the management service's doc
+        // comment for why this is safe to call unconditionally (idempotent,
+        // reuses the existing create-or-reactivate path).
+        await _serviceabilityMappingManagementService.AutoEnableProviderCoverageAsync(providerId);
+
+        // Bug 3 auto-disable: the reverse - an area dropped here can be the
+        // last thing keeping a mapping bookable; deactivate any mapping that
+        // depended on the coverage snapshotted above and now has no active
+        // provider (this one or any other) left covering it.
+        await _serviceabilityMappingManagementService.AutoDisableUnservedMappingsAsync(providerId, previouslyCovered);
 
         return Result.Success<IReadOnlyList<ProviderServiceAreaResponse>>(areas.Select(ToResponse).ToList());
     }
@@ -124,10 +152,25 @@ public class ProviderProfileService : IProviderProfileService
                 Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
         }
 
+        // Same Bug 3 auto-disable snapshot as UpdateServiceAreasAsync,
+        // taken before the replace below removes this provider's old skill
+        // rows.
+        var previouslyCovered = await _serviceabilityMappingManagementService.ListMappedPairsCoveredByProviderAsync(providerId);
+
         var skills = request.Skills
             .Select(s => new ProviderSkillMapping(Guid.NewGuid(), providerId, s.CategoryId, s.ServiceId))
             .ToList();
         await _skillMappingRepository.ReplaceForProviderAsync(providerId, skills);
+
+        // Same Bug 3 auto-enable as UpdateServiceAreasAsync - a newly added
+        // skill can be the missing half of coverage for a pincode the
+        // provider already serves.
+        await _serviceabilityMappingManagementService.AutoEnableProviderCoverageAsync(providerId);
+
+        // Same Bug 3 auto-disable as UpdateServiceAreasAsync - a dropped
+        // skill can be the missing half that used to make a mapping
+        // bookable.
+        await _serviceabilityMappingManagementService.AutoDisableUnservedMappingsAsync(providerId, previouslyCovered);
 
         return Result.Success<IReadOnlyList<ProviderSkillResponse>>(skills.Select(ToResponse).ToList());
     }
@@ -151,7 +194,50 @@ public class ProviderProfileService : IProviderProfileService
         await _providerRepository.UpdateAsync(provider);
         await _sessionRepository.RevokeAllForProviderAsync(providerId);
 
+        // Bug 3 auto-disable: self-service deletion is a provider going
+        // inactive same as ProviderManagementService.SuspendAsync/DeleteAsync
+        // - their skill/area rows are untouched, so no "before" snapshot is
+        // needed (see AutoDisableUnservedMappingsAsync's doc comment).
+        await _serviceabilityMappingManagementService.AutoDisableUnservedMappingsAsync(providerId);
+
         return Result.Success();
+    }
+
+    /// <inheritdoc/>
+    public async Task<Result<ProviderGoLiveStatusResponse>> GetGoLiveStatusAsync(Guid providerId)
+    {
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        if (provider is null)
+        {
+            return Result.Failure<ProviderGoLiveStatusResponse>(
+                Error.NotFound("ProviderProfile.NotFound", "The specified provider does not exist."));
+        }
+
+        // Same gate ProviderKycApprovalService.ActivateAsync uses for
+        // "has KYC been verified" - KycVerified is set the first time an
+        // admin approves a document (ProviderKycApprovalService.ApproveDocumentAsync)
+        // and Completed only follows once activation itself has already
+        // happened, so both count as "KYC approved" here.
+        var kycApproved = provider.OnboardingStatus is ProviderOnboardingStatus.KycVerified or ProviderOnboardingStatus.Completed;
+
+        var skills = await _skillMappingRepository.GetByProviderAsync(providerId);
+        var hasActiveSkill = skills.Any(s => s.IsActive);
+
+        var areas = await _serviceAreaRepository.GetByProviderAsync(providerId);
+        var hasActiveServiceArea = areas.Any(a => a.IsActive);
+
+        var availabilityWindows = await _availabilityWindowRepository.GetByProviderAsync(providerId);
+        var hasAvailability = availabilityWindows.Count > 0;
+
+        var checks = new List<ProviderGoLiveCheckResponse>
+        {
+            new("kycApproved", "Get your KYC documents approved", kycApproved),
+            new("hasActiveSkill", "Add at least one skill", hasActiveSkill),
+            new("hasActiveServiceArea", "Add at least one service area", hasActiveServiceArea),
+            new("hasAvailability", "Set your weekly availability", hasAvailability),
+        };
+
+        return Result.Success(new ProviderGoLiveStatusResponse(checks.All(c => c.IsComplete), checks));
     }
 
     private async Task<ProviderProfileResponse> ToResponseAsync(Provider provider)

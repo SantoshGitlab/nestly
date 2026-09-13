@@ -23,6 +23,17 @@ public interface IReviewRepository
     /// </summary>
     Task<ProviderRatingSummary?> GetProviderRatingAsync(Guid providerId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Same aggregate as <see cref="GetProviderRatingAsync"/>, batched for
+    /// every provider with at least one visible review, in one round trip -
+    /// the performance-ranking rollup's rating column (docs/OPEN-FIXES-FEATURES.csv
+    /// "Provider performance") needs every provider's rating at once, not one
+    /// provider at a time. A provider with no visible review is simply absent
+    /// from the result, mirroring <c>IProviderRepository.GetDisplayNamesByIdsAsync</c>'s
+    /// "missing means keep your own fallback" convention.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, ProviderRatingSummary>> GetProviderRatingsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The bare review entity for a moderation action (task 122) - no joined display fields, just the aggregate to mutate.</summary>
     Task<Review?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
@@ -37,4 +48,18 @@ public interface IReviewRepository
 
     /// <summary>The full (unpaginated, capped) set of rows matching an export request (SRS 12.15 "Export reviews", task 122).</summary>
     Task<IReadOnlyList<ReviewModerationRow>> ListForExportAsync(ReviewModerationCriteria criteria, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Paginated, provider-safe read of a provider's own reviews
+    /// (docs/OPEN-FIXES-FEATURES.csv "Ratings and feedback"), newest first.
+    /// Excludes <see cref="ReviewStatus.Hidden"/> reviews (same rule as
+    /// <see cref="GetProviderRatingAsync"/>) and, additionally, any review
+    /// currently <see cref="Review.IsFlagged"/> - a review flagged for abuse
+    /// should not reach the professional it describes until a moderator
+    /// resolves the flag, even though a flagged review can otherwise still be
+    /// publicly <see cref="ReviewStatus.Visible"/>. Joined with the customer
+    /// only to carry their raw name back for display-name minimization one
+    /// layer up (see <see cref="ProviderVisibleReviewRow"/>).
+    /// </summary>
+    Task<ProviderVisibleReviewSearchResult> SearchVisibleForProviderAsync(Guid providerId, int page, int pageSize, CancellationToken cancellationToken = default);
 }

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -198,7 +199,7 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context), new InMemoryCacheService()),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
             new WalletService(new WalletLedgerRepository(context), context),
@@ -224,6 +225,7 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
             new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context),
+            new AlwaysEligibleProviderSearchStub(),
             context);
     }
 
@@ -251,9 +253,14 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             BuildGateway(), context),
+        new PaymentWebhookService(
+            new PaymentTransactionRepository(context), new BookingRepository(context), new ServiceRepository(context), BuildGateway(),
+            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance),
         new AuditLogWriter(context, new StubAuditContextProvider(AuditActorType.AdminUser, Guid.NewGuid())),
         context,
-        new BookingCompletionProofRepository(context));
+        new BookingCompletionProofRepository(context),
+        new ProviderRepository(context));
 
     private static SandboxPaymentGateway BuildGateway() =>
         new(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" }));
@@ -357,31 +364,7 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
-    public async Task UpdateStatusAsync_rejects_Completed_without_a_completion_proof_on_file()
-    {
-        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
-
-        using (var context = _db.CreateContext())
-        {
-            var bookingRepository = new BookingRepository(context);
-            var booking = await bookingRepository.GetByIdAsync(bookingId);
-            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
-            booking.TransitionTo(BookingStatus.Assigned);
-            booking.TransitionTo(BookingStatus.InProgress);
-            await bookingRepository.UpdateAsync(booking);
-        }
-
-        using var context2 = _db.CreateContext();
-        var service = BuildBookingManagementService(context2);
-        var result = await service.UpdateStatusAsync(
-            bookingId, Guid.NewGuid(), new AdminBookingStatusUpdateRequest(BookingStatus.Completed, "Marking complete"));
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be("Booking.CompletionProofRequired");
-    }
-
-    [Fact]
-    public async Task UpdateStatusAsync_accepts_Completed_once_a_completion_proof_exists()
+    public async Task UpdateStatusAsync_rejects_Completed_via_the_generic_endpoint_even_with_a_completion_proof_on_file()
     {
         var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
 
@@ -403,8 +386,64 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
         var result = await service.UpdateStatusAsync(
             bookingId, Guid.NewGuid(), new AdminBookingStatusUpdateRequest(BookingStatus.Completed, "Marking complete"));
 
-        result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "Completed should succeed once a proof is on file");
+        // Completed is only reachable via ApproveCompletionProofAsync now - see
+        // DisallowedGenericTransitionTargets's doc comment - regardless of
+        // whether a proof happens to be on file.
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Booking.UseDedicatedAction");
+    }
+
+    [Fact]
+    public async Task ApproveCompletionProofAsync_transitions_the_booking_to_Completed_once_a_pending_proof_exists()
+    {
+        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
+
+        using (var context = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            booking.TransitionTo(BookingStatus.Assigned);
+            booking.TransitionTo(BookingStatus.InProgress);
+            await bookingRepository.UpdateAsync(booking);
+
+            var proof = new BookingCompletionProof(Guid.NewGuid(), bookingId, Guid.NewGuid(), ["s3://proofs/photo.jpg"], []);
+            await new BookingCompletionProofRepository(context).AddAsync(proof);
+        }
+
+        using var context2 = _db.CreateContext();
+        var service = BuildBookingManagementService(context2);
+        var result = await service.ApproveCompletionProofAsync(bookingId, Guid.NewGuid());
+
+        result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "Completed should succeed once a pending proof is on file");
         result.Value.Status.Should().Be(BookingStatus.Completed);
+    }
+
+    [Fact]
+    public async Task RejectCompletionProofAsync_leaves_the_booking_InProgress_for_the_provider_to_resubmit()
+    {
+        var (_, bookingId, _, _) = await SeedConfirmedBookingAsync();
+
+        using (var context = _db.CreateContext())
+        {
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(bookingId);
+            booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+            booking.TransitionTo(BookingStatus.Assigned);
+            booking.TransitionTo(BookingStatus.InProgress);
+            await bookingRepository.UpdateAsync(booking);
+
+            var proof = new BookingCompletionProof(Guid.NewGuid(), bookingId, Guid.NewGuid(), ["s3://proofs/photo.jpg"], []);
+            await new BookingCompletionProofRepository(context).AddAsync(proof);
+        }
+
+        using var context2 = _db.CreateContext();
+        var service = BuildBookingManagementService(context2);
+        var result = await service.RejectCompletionProofAsync(
+            bookingId, Guid.NewGuid(), new RejectCompletionProofRequest("Photo doesn't show the completed work"));
+
+        result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "Reject should succeed for a pending proof");
+        result.Value.Status.Should().Be(BookingStatus.InProgress);
     }
 
     /// <summary>
@@ -591,7 +630,13 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
         new ServiceGroupRepository(context),
         new ServiceMediaRepository(context),
         new AuditLogWriter(context, new StubAuditContextProvider(AuditActorType.AdminUser, Guid.NewGuid())),
-        new InMemoryCacheService());
+        new InMemoryCacheService(),
+        new ServiceCityPriceRepository(context),
+        new BookingRepository(context),
+        new ServiceabilityMappingManagementService(
+            new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context),
+            new CategoryRepository(context), new CityRepository(context),
+            new ServiceRepository(context), new PincodeRepository(context)));
 
     [Fact]
     public async Task A_service_is_created_updated_and_deactivated_through_ServiceManagementService()

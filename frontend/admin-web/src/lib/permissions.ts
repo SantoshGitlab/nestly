@@ -35,6 +35,7 @@ import type { AdminSessionClaims } from "./types";
 
 export type NavModuleKey =
   | "dashboard"
+  | "fulfilment"
   | "customers"
   | "catalog"
   | "pricing"
@@ -70,6 +71,12 @@ export interface NavModule {
 
 export const NAV_MODULES: readonly NavModule[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard.read" },
+  // Row "Fulfilment control room", docs/OPEN-FIXES-FEATURES.csv: gated on
+  // "bookings.read" rather than a new permission code - this is a live-state
+  // view over the Booking domain (BookingsController's own module), not a
+  // separate module of its own, same reasoning as "admin-users" reusing
+  // "settings.read" above.
+  { key: "fulfilment", label: "Fulfilment Board", href: "/fulfilment", srsRef: "docs/OPEN-FIXES-FEATURES.csv", requiredPermission: "bookings.read" },
   { key: "customers", label: "Customers", href: "/customers", srsRef: "SRS 12.4", requiredPermission: "customers.read" },
   { key: "catalog", label: "Catalog", href: "/catalog", srsRef: "SRS 12.5-12.7", requiredPermission: "catalog.read" },
   { key: "pricing", label: "Pricing", href: "/pricing", srsRef: "SRS 12.8", requiredPermission: "pricing.read" },
@@ -92,7 +99,11 @@ export const NAV_MODULES: readonly NavModule[] = [
   { key: "admin-users", label: "Admin Users", href: "/admin-users", srsRef: "SRS 12.2", requiredPermission: "settings.read" },
   { key: "provider", label: "Providers", href: "/providers", srsRef: "PROVIDER.md", requiredPermission: "provider.read" },
   { key: "referral", label: "Referral Program", href: "/referral", srsRef: "REFERRAL.md", requiredPermission: "referral.read" },
-  { key: "nestly-coins", label: "Glavyx Coins", href: "/nestly-coins", srsRef: "NESTLY-COINS.md", requiredPermission: "nestly-coins.read" },
+  // href is the Glavyx name; `key` and `requiredPermission` deliberately are
+  // not. Those two are the AdminModules.NestlyCoins constant that admin_permission
+  // rows are keyed on, so renaming them means a data migration and, if it goes
+  // wrong, admins locked out of the module. The URL is the part anyone sees.
+  { key: "nestly-coins", label: "Glavyx Coins", href: "/glavyx-coins", srsRef: "NESTLY-COINS.md", requiredPermission: "nestly-coins.read" },
   { key: "subscription", label: "Subscription Plans", href: "/subscription-plans", srsRef: "PRODUCT-ENHANCEMENTS.md #1", requiredPermission: "subscription.read" },
   { key: "payments", label: "Payments", href: "/payments", srsRef: "SRS 12.13.1", requiredPermission: "payments.read" },
   { key: "provider-referral", label: "Provider Referral Program", href: "/provider-referral", srsRef: "PROVIDER-REFERRAL.md", requiredPermission: "provider-referral.read" },
@@ -121,13 +132,13 @@ export function canWriteModule(claims: AdminSessionClaims | null, moduleKey: Nav
  */
 const ROLE_MODULE_FALLBACK: Record<string, NavModuleKey[] | "*"> = {
   "Super Admin": "*",
-  "Operations Admin": ["dashboard", "customers", "bookings", "serviceability", "slots", "support", "chat", "provider", "payments", "provider-referral"],
-  "Booking Admin": ["dashboard", "bookings", "slots", "serviceability"],
+  "Operations Admin": ["dashboard", "fulfilment", "customers", "bookings", "serviceability", "slots", "support", "chat", "provider", "payments", "provider-referral"],
+  "Booking Admin": ["dashboard", "fulfilment", "bookings", "slots", "serviceability"],
   "Support Admin": ["dashboard", "support", "chat", "customers", "reviews"],
   "Catalog Admin": ["dashboard", "catalog", "pricing"],
   "Pricing Admin": ["dashboard", "pricing", "coupons"],
   "Marketing Admin": ["dashboard", "coupons", "cms", "landing", "notifications", "reviews", "referral", "nestly-coins", "subscription"],
-  "Finance Admin": ["dashboard", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments", "provider-referral"],
+  "Finance Admin": ["dashboard", "fulfilment", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments", "provider-referral"],
   "Read-only Analyst": ["dashboard", "reports"],
 };
 

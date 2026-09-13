@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { AuthShell, ResendRow, Segmented, useResendCountdown } from "@/components/auth-ui";
 import { OtpInput } from "@/components/OtpInput";
-import { Alert, Button, Field } from "@/components/ui";
+import { Alert, Button, Field, IconButton } from "@/components/ui";
 import { describeError, describeLoginError } from "@/lib/api";
 import { loginWithPassword, requestLoginOtp, verifyLoginOtp } from "@/lib/auth-api";
 import { isAuthenticated, storeSession, subscribeToAuthChanges } from "@/lib/auth";
@@ -78,10 +78,10 @@ export default function ProviderLoginPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   // Already signed in (e.g. back-button to /login with a live session) -
-  // send straight to the jobs list instead of showing the form again.
+  // send straight to Today instead of showing the form again.
   useEffect(() => {
     const sync = () => {
-      if (isAuthenticated()) router.replace("/jobs");
+      if (isAuthenticated()) router.replace("/today");
     };
     sync();
     return subscribeToAuthChanges(sync);
@@ -91,11 +91,19 @@ export default function ProviderLoginPage() {
   // useSearchParams) so this page can stay statically prerendered - a
   // useSearchParams call forces the whole page out of static rendering
   // unless wrapped in its own Suspense boundary, which is unnecessary
-  // machinery for a single one-off banner.
+  // machinery for a couple of one-off banners.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (new URLSearchParams(window.location.search).get("registered") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("registered") === "1") {
       setInfoMessage("Registration submitted. Sign in below to continue.");
+    } else if (params.get("reason") === "expired") {
+      // Set by RequireProviderAuth when it redirects here after a live
+      // session lapsed (as opposed to nobody having been signed in) - see
+      // that component. Without this, the redirect landed on a bare sign-in
+      // form and any credentials error from a *subsequent* failed attempt
+      // could read as if the still-valid password had just stopped working.
+      setInfoMessage("Your session expired. Please sign in again.");
     }
   }, []);
 
@@ -111,7 +119,7 @@ export default function ProviderLoginPage() {
       }
       const session = (await response.json()) as ProviderLoginResponse;
       storeSession(session);
-      router.push("/jobs");
+      router.push("/today");
     } catch (err) {
       setDevError(describeError(err));
     } finally {
@@ -200,7 +208,7 @@ function OtpLogin() {
     try {
       const session = await verifyLoginOtp({ mobile, otpCode: values.otpCode });
       storeSession(session);
-      router.push("/jobs");
+      router.push("/today");
     } catch (err) {
       setError(describeLoginError(err));
     }
@@ -289,6 +297,7 @@ function OtpLogin() {
 function PasswordLogin() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordSchema),
@@ -301,9 +310,9 @@ function PasswordLogin() {
       const session = await loginWithPassword(values);
       storeSession(session);
       // /install-app shows the "add to home screen" steps on a mobile
-      // browser that hasn't seen them before, then forwards on to /jobs
+      // browser that hasn't seen them before, then forwards on to /today
       // itself - see that page for the skip conditions.
-      router.push("/install-app?next=%2Fjobs");
+      router.push("/install-app?next=%2Ftoday");
     } catch (err) {
       setError(describeLoginError(err, "password"));
     }
@@ -319,13 +328,24 @@ function PasswordLogin() {
         error={form.formState.errors.email?.message}
         {...form.register("email")}
       />
-      <Field
-        label="Password"
-        type="password"
-        autoComplete="current-password"
-        error={form.formState.errors.password?.message}
-        {...form.register("password")}
-      />
+      <div className="relative">
+        <Field
+          label="Password"
+          type={passwordVisible ? "text" : "password"}
+          autoComplete="current-password"
+          className="pr-11"
+          error={form.formState.errors.password?.message}
+          {...form.register("password")}
+        />
+        <IconButton
+          type="button"
+          label={passwordVisible ? "Hide password" : "Show password"}
+          onClick={() => setPasswordVisible((visible) => !visible)}
+          className="absolute right-1 top-[30px]"
+        >
+          {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+        </IconButton>
+      </div>
       <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
         Sign in
       </Button>
@@ -336,5 +356,26 @@ function PasswordLogin() {
         Forgot your password?
       </Link>
     </form>
+  );
+}
+
+/* Line icons matching the rest of the kit's stroke style (viewBox 24, currentColor, 2px stroke). */
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+      <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6 0 9.5 7 9.5 7a15.6 15.6 0 0 1-3.06 3.9M6.5 6.5C3.8 8.2 2.5 12 2.5 12s3.5 7 9.5 7a9.6 9.6 0 0 0 4.24-.96" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
   );
 }

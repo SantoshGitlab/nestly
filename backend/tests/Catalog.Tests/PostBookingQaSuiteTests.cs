@@ -188,7 +188,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceAddOnRepository(context),
                 new ServiceabilityRepository(context),
                 new ServiceCityPriceRepository(context),
-                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context)),
+                new CityPricingPolicyRepository(context), new ServiceVariantRepository(context), new ServiceAddOnGroupRepository(context), new InMemoryCacheService()),
             couponService,
             new SubscriptionBenefitService(new CustomerSubscriptionRepository(context)),
             new WalletService(new WalletLedgerRepository(context), context),
@@ -214,6 +214,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new ReviewRepository(context),
             new CustomerSubscriptionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context),
+            new AlwaysEligibleProviderSearchStub(),
             context);
     }
 
@@ -270,7 +271,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
     private static void AdvanceTo(Booking booking, BookingStatus target)
     {
         // BookingService.CreateAsync already leaves a freshly created
-        // booking at PaymentPending (see NoPaymentGatewayReason) - this
+        // booking at PaymentPending (see AwaitingPaymentReason) - this
         // only walks it further, in the order BookingLifecycle allows.
         if (target == BookingStatus.PaymentPending) { return; }
 

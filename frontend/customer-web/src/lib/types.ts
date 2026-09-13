@@ -317,6 +317,17 @@ export interface SlotAvailability {
   reason: SlotUnavailabilityReason;
 }
 
+/** One day inside a {@link SlotRange} - `SlotAvailability` plus the date it describes. */
+export interface SlotDayAvailability extends SlotAvailability {
+  /** `YYYY-MM-DD`. */
+  date: string;
+}
+
+/** Availability for a run of dates in one response, in date order (GET /slots/range). */
+export interface SlotRange {
+  days: SlotDayAvailability[];
+}
+
 export interface SlotRevalidation {
   isValid: boolean;
   reason: string | null;
@@ -550,7 +561,7 @@ export interface BookingDetail {
    * showing here immediately.
    */
   provider: BookingProviderSummary | null;
-  /** Short human-facing code ("NST-260825-K7F3M") - what to show instead of `id`. */
+  /** Short human-facing code ("GLX-260825-K7F3M") - what to show instead of `id`. */
   reference: string;
 }
 
@@ -574,7 +585,7 @@ export interface BookingListItem {
   status: BookingStatus;
   statusLabel: string;
   createdAtUtc: string;
-  /** Short human-facing code ("NST-260825-K7F3M") - what to show instead of `id`. */
+  /** Short human-facing code ("GLX-260825-K7F3M") - what to show instead of `id`. */
   reference: string;
 }
 

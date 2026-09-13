@@ -5599,8 +5599,8 @@ namespace Nestly.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_slot_window");
 
-                    b.HasIndex("CityId")
-                        .HasDatabaseName("ix_slot_window_city_id");
+                    b.HasIndex("CityId", "IsActive")
+                        .HasDatabaseName("ix_slot_window_city_id_is_active");
 
                     b.ToTable("slot_window", (string)null);
                 });

@@ -311,6 +311,112 @@ public class BookingRepository : IBookingRepository
             .ToListAsync();
     }
 
+    /// <summary>The admin allow-list <c>BookingProviderAssignmentService.IsAssignableStatus</c> accepts for a manual assignment - see <see cref="IBookingRepository.ListUnassignedAtRiskAsync"/>.</summary>
+    private static readonly BookingStatus[] UnassignedAtRiskStatuses =
+    [
+        BookingStatus.Confirmed,
+        BookingStatus.AwaitingFulfilment,
+        BookingStatus.Assigned,
+    ];
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Sorted and paged in memory rather than via SQL ORDER BY/OFFSET, unlike
+    /// every other paged query in this class - <see cref="Booking.SlotStartTimeSnapshot"/>
+    /// is a <c>TimeSpan</c>, and (like the comparisons documented on
+    /// <see cref="IBookingRepository.ListConfirmedDueForFulfilmentAsync"/>) an
+    /// ORDER BY on it does not translate on the SQLite provider the test
+    /// suite runs against, only on PostgreSQL. This queue is a small, bounded
+    /// operational list - paid bookings with no live provider - not a
+    /// candidate set that could ever need a database-level Skip/Take over an
+    /// unbounded table, so loading every match and sorting client-side is the
+    /// one implementation that is correct on both providers.
+    /// </remarks>
+    public async Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListUnassignedAtRiskAsync(int page, int pageSize)
+    {
+        // Only Items (for the service name), same as SearchAsync above - this
+        // list never reads AddOns/StatusHistory.
+        var candidates = await _context.Bookings
+            .AsNoTracking()
+            .Include(b => b.Items)
+            .Where(b => UnassignedAtRiskStatuses.Contains(b.Status) && b.AssignedProviderId == null)
+            .ToListAsync();
+
+        var ordered = candidates
+            .OrderBy(b => b.SlotDate)
+            .ThenBy(b => b.SlotStartTimeSnapshot)
+            .ThenBy(b => b.Id)
+            .ToList();
+
+        (int safePage, int safePageSize) = PagedQueryExtensions.Normalize(page, pageSize);
+        var rows = ordered.Skip(PagedQueryExtensions.Offset(safePage, safePageSize)).Take(safePageSize).ToList();
+
+        return (rows, ordered.Count);
+    }
+
+    private static readonly BookingStatus[] AwaitingPaymentStatuses =
+    [
+        BookingStatus.PaymentPending,
+        BookingStatus.PaymentFailed,
+    ];
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Booking>> ListAwaitingPaymentAsync() =>
+        await _context.Bookings
+            .AsNoTracking()
+            .Where(b => AwaitingPaymentStatuses.Contains(b.Status))
+            .ToListAsync();
+
+    /// <summary>The operationally-live statuses <see cref="ListForFulfilmentBoardAsync"/> shows - see that method's doc comment.</summary>
+    private static readonly BookingStatus[] FulfilmentBoardStatuses =
+    [
+        BookingStatus.Confirmed,
+        BookingStatus.AwaitingFulfilment,
+        BookingStatus.Assigned,
+        BookingStatus.ProviderEnRoute,
+        BookingStatus.ProviderArrived,
+        BookingStatus.InProgress,
+        BookingStatus.Completed,
+    ];
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Booking>> ListForFulfilmentBoardAsync(DateOnly date) =>
+        await _context.Bookings
+            .AsNoTracking()
+            .Include(b => b.Items)
+            .Where(b => b.SlotDate == date && FulfilmentBoardStatuses.Contains(b.Status))
+            .ToListAsync();
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<Guid>> ListServiceIdsEverBookedAsync() =>
+        await _context.BookingItems
+            .AsNoTracking()
+            .Select(i => i.ServiceId)
+            .Distinct()
+            .ToListAsync();
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyDictionary<Guid, string>> ListServiceNamesByIdsAsync(IReadOnlyCollection<Guid> bookingIds)
+    {
+        if (bookingIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        // Queries BookingItems directly (same DbSet ListServiceIdsEverBookedAsync
+        // reads) rather than Booking.Items, so this never loads a full
+        // Booking aggregate just to read item names.
+        var rows = await _context.BookingItems
+            .AsNoTracking()
+            .Where(i => bookingIds.Contains(i.BookingId))
+            .Select(i => new { i.BookingId, i.NameSnapshot })
+            .ToListAsync();
+
+        return rows
+            .GroupBy(r => r.BookingId)
+            .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(r => r.NameSnapshot).Distinct()));
+    }
+
     private IQueryable<Booking> FullyLoaded() =>
         _context.Bookings
             .Include(b => b.Items).ThenInclude(i => i.AddOns)

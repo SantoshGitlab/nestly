@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.BookingManagement;
 using Nestly.Application.Bookings;
@@ -92,9 +93,11 @@ public class BookingManagementService : IBookingManagementService
     private readonly ICancellationService _cancellationService;
     private readonly IRescheduleService _rescheduleService;
     private readonly IRefundService _refundService;
+    private readonly IPaymentWebhookService _paymentWebhookService;
     private readonly IAuditLogWriter _auditLogWriter;
     private readonly NestlyDbContext _dbContext;
     private readonly IBookingCompletionProofRepository _completionProofRepository;
+    private readonly IProviderRepository _providerRepository;
 
     public BookingManagementService(
         IBookingRepository bookingRepository,
@@ -105,9 +108,11 @@ public class BookingManagementService : IBookingManagementService
         ICancellationService cancellationService,
         IRescheduleService rescheduleService,
         IRefundService refundService,
+        IPaymentWebhookService paymentWebhookService,
         IAuditLogWriter auditLogWriter,
         NestlyDbContext dbContext,
-        IBookingCompletionProofRepository completionProofRepository)
+        IBookingCompletionProofRepository completionProofRepository,
+        IProviderRepository providerRepository)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
@@ -117,9 +122,11 @@ public class BookingManagementService : IBookingManagementService
         _cancellationService = cancellationService;
         _rescheduleService = rescheduleService;
         _refundService = refundService;
+        _paymentWebhookService = paymentWebhookService;
         _auditLogWriter = auditLogWriter;
         _dbContext = dbContext;
         _completionProofRepository = completionProofRepository;
+        _providerRepository = providerRepository;
     }
 
     public async Task<Result<AdminBookingSearchResponse>> SearchAsync(AdminBookingSearchRequest request)
@@ -288,6 +295,35 @@ public class BookingManagementService : IBookingManagementService
             : await BuildDetailAsync(booking);
     }
 
+    public async Task<Result<AdminBookingDetailResponse>> RecordManualPaymentAsync(Guid bookingId, Guid adminUserId, AdminManualPaymentRequest request)
+    {
+        var manualPaymentResult = await _paymentWebhookService.RecordManualPaymentAsync(bookingId, request.Method, request.Reference);
+        if (manualPaymentResult.IsFailure)
+        {
+            return manualPaymentResult.Error;
+        }
+
+        // Same audited-after-the-domain-service-commits pattern every other
+        // action in this class follows (see this class's own doc comment) -
+        // RecordManualPaymentAsync already committed its own DB transaction.
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "Booking", bookingId.ToString(), "AdminManualPayment",
+            null,
+            JsonSerializer.Serialize(new
+            {
+                manualPaymentResult.Value.Id,
+                Amount = manualPaymentResult.Value.Amount,
+                request.Method,
+                request.Reference
+            })));
+        await _dbContext.SaveChangesAsync();
+
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        return booking is null
+            ? Error.NotFound("Booking.NotFound", "The specified booking does not exist.")
+            : await BuildDetailAsync(booking);
+    }
+
     /// <summary>Approves the provider's submitted completion proof and, as the direct consequence, transitions the booking to Completed - the one path Completed is now reachable by, see <see cref="DisallowedGenericTransitionTargets"/>.</summary>
     public async Task<Result<AdminBookingDetailResponse>> ApproveCompletionProofAsync(Guid bookingId, Guid adminUserId)
     {
@@ -419,6 +455,63 @@ public class BookingManagementService : IBookingManagementService
             booking.CreatedAtUtc,
             booking.BookingReference);
     }
+
+    /// <inheritdoc/>
+    public async Task<Result<AdminUnassignedAtRiskBookingSearchResponse>> ListUnassignedAtRiskAsync(AdminUnassignedAtRiskBookingRequest request)
+    {
+        var (rows, totalCount) = await _bookingRepository.ListUnassignedAtRiskAsync(request.Page, request.PageSize);
+
+        var items = rows.Select(ToUnassignedAtRiskItem).ToList();
+        return new AdminUnassignedAtRiskBookingSearchResponse(items, totalCount, request.Page, request.PageSize);
+    }
+
+    private static AdminUnassignedAtRiskBookingResponse ToUnassignedAtRiskItem(Booking booking) => new(
+        booking.Id,
+        booking.BookingReference,
+        booking.CustomerNameSnapshot,
+        booking.Items.Count > 0 ? booking.Items[0].NameSnapshot : "(no service)",
+        booking.SlotDate,
+        booking.SlotStartTimeSnapshot,
+        booking.AddressCitySnapshot,
+        booking.AddressPincodeSnapshot,
+        booking.Status,
+        BookingStatusMapper.LabelFor(booking.Status),
+        booking.CreatedAtUtc);
+
+    /// <inheritdoc/>
+    public async Task<Result<AdminFulfilmentBoardResponse>> GetFulfilmentBoardAsync(AdminFulfilmentBoardRequest request)
+    {
+        var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var rows = await _bookingRepository.ListForFulfilmentBoardAsync(date);
+
+        var providerIds = rows
+            .Where(b => b.AssignedProviderId.HasValue)
+            .Select(b => b.AssignedProviderId!.Value)
+            .Distinct()
+            .ToList();
+        var providerNames = providerIds.Count > 0
+            ? await _providerRepository.GetDisplayNamesByIdsAsync(providerIds)
+            : new Dictionary<Guid, string>();
+
+        var items = rows.Select(booking => ToFulfilmentBoardItem(booking, providerNames)).ToList();
+        return new AdminFulfilmentBoardResponse(date, items);
+    }
+
+    private static AdminFulfilmentBoardBookingResponse ToFulfilmentBoardItem(
+        Booking booking, IReadOnlyDictionary<Guid, string> providerNames) => new(
+        booking.Id,
+        booking.BookingReference,
+        booking.CustomerNameSnapshot,
+        booking.Items.Count > 0 ? booking.Items[0].NameSnapshot : "(no service)",
+        booking.SlotDate,
+        booking.SlotStartTimeSnapshot,
+        booking.AddressCitySnapshot,
+        booking.AddressPincodeSnapshot,
+        booking.Status,
+        BookingStatusMapper.LabelFor(booking.Status),
+        booking.AssignedProviderId,
+        booking.AssignedProviderId.HasValue && providerNames.TryGetValue(booking.AssignedProviderId.Value, out var name) ? name : null,
+        booking.CreatedAtUtc);
 
     private static AdminBookingListItemResponse ToListItem(Booking booking) => new(
         booking.Id,

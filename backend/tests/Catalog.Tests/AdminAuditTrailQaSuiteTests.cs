@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
@@ -144,7 +145,12 @@ public sealed class AdminAuditTrailQaSuiteTests : IClassFixture<TestDatabase>
         var service = new ServiceManagementService(
             new ServiceRepository(actContext), new CategoryRepository(actContext), new ServiceGroupRepository(actContext),
             new ServiceMediaRepository(actContext),
-            new AuditLogWriter(actContext, new StubAuditContextProvider(actorId)), new InMemoryCacheService());
+            new AuditLogWriter(actContext, new StubAuditContextProvider(actorId)), new InMemoryCacheService(),
+            new ServiceCityPriceRepository(actContext), new BookingRepository(actContext),
+            new ServiceabilityMappingManagementService(
+                new CategoryCityMappingRepository(actContext), new ServicePincodeMappingRepository(actContext),
+                new CategoryRepository(actContext), new CityRepository(actContext),
+                new ServiceRepository(actContext), new PincodeRepository(actContext)));
 
         var result = await service.CreateAsync(new ServiceCreateRequest(
             categoryId, "Audit Service", "audit-service-" + Guid.NewGuid(), "desc", null, 499m,
@@ -234,9 +240,15 @@ public sealed class AdminAuditTrailQaSuiteTests : IClassFixture<TestDatabase>
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),
             new SandboxPaymentGateway(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" })), context),
+        new PaymentWebhookService(
+            new PaymentTransactionRepository(context), new BookingRepository(context), new ServiceRepository(context),
+            new SandboxPaymentGateway(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" })),
+            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance),
         new AuditLogWriter(context, new StubAuditContextProvider(actorId)),
         context,
-        new BookingCompletionProofRepository(context));
+        new BookingCompletionProofRepository(context),
+        new ProviderRepository(context));
 
     [Fact]
     public async Task Admin_cancelling_a_booking_is_audited()

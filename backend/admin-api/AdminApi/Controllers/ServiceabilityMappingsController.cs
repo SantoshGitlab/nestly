@@ -139,6 +139,45 @@ public class ServiceabilityMappingsController : ControllerBase
         return result.IsSuccess ? NoContent() : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// docs/OPEN-FIXES-FEATURES.csv "Service pincode mapping coverage": a
+    /// warning list, not a blocker - every active service that has no active
+    /// pincode mapping anywhere, so an admin can catch a launched-but-
+    /// unbookable service (like the AC installation flagship service the CSV
+    /// row describes) before a customer does.
+    /// </summary>
+    [HttpGet("unmapped-active-services")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<UnmappedActiveServiceResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListUnmappedActiveServices() =>
+        Ok(await _mappingManagementService.ListUnmappedActiveServicesAsync());
+
+    /// <summary>
+    /// docs/OPEN-FIXES-FEATURES.csv "Serviceability and provider skills ...
+    /// Service to pincode mapping": a warning list of service/pincode pairs
+    /// where an active provider already has matching skill + area coverage
+    /// but no active serviceability mapping exists, so the pincode still
+    /// shows the service as unbookable despite a qualified provider already
+    /// being onboarded there.
+    /// </summary>
+    [HttpGet("coverage-gaps")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<ServiceabilityCoverageGapResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListCoverageGaps() =>
+        Ok(await _mappingManagementService.ListPincodesWithProviderCoverageButNoServiceMappingAsync());
+
+    /// <summary>
+    /// docs/OPEN-FIXES-FEATURES.csv "Admin Web, Proposed new page, Coverage
+    /// gap map": the third grid category - active service/pincode mappings
+    /// with no active provider actually able to fulfil them. Informational
+    /// only; see <see cref="IServiceabilityMappingManagementService.ListMappedPincodesWithoutProviderCoverageAsync"/>.
+    /// </summary>
+    [HttpGet("mapped-without-coverage")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<MappedPincodeWithoutProviderCoverageResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListMappedWithoutCoverage() =>
+        Ok(await _mappingManagementService.ListMappedPincodesWithoutProviderCoverageAsync());
+
     private static ModelStateDictionary ToModelState(ValidationResult validation)
     {
         var modelState = new ModelStateDictionary();

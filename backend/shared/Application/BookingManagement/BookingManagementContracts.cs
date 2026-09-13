@@ -20,7 +20,7 @@ public sealed record AdminBookingSearchRequest(
     string? CouponCode,
     int Page = 1,
     int PageSize = 20,
-    // Short human-facing code ("NST-260825-K7F3M") or any substring of one -
+    // Short human-facing code ("GLX-260825-K7F3M") or any substring of one -
     // see Booking.BookingReference's doc comment. Separate from BookingId
     // (exact GUID match) rather than replacing it: existing API callers that
     // already search by GUID keep working unchanged.
@@ -39,7 +39,7 @@ public sealed record AdminBookingListItemResponse(
     decimal TotalPayable,
     string? CouponCode,
     DateTime CreatedAtUtc,
-    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // Short human-facing code ("GLX-260825-K7F3M") - see Booking.BookingReference's
     // doc comment. Appended last: this is a positional record.
     string Reference);
 
@@ -118,7 +118,7 @@ public sealed record AdminBookingDetailResponse(
     IReadOnlyList<AdminBookingRescheduleResponse> Reschedules,
     IReadOnlyList<AdminBookingRefundResponse> Refunds,
     DateTime CreatedAtUtc,
-    // Short human-facing code ("NST-260825-K7F3M") - see Booking.BookingReference's
+    // Short human-facing code ("GLX-260825-K7F3M") - see Booking.BookingReference's
     // doc comment. Appended last: this is a positional record.
     string Reference);
 
@@ -151,3 +151,77 @@ public sealed record AdminRescheduleBookingRequest(Guid LocalityId, Guid SlotWin
 /// doc comment for why this does not split into two permission tiers.
 /// </summary>
 public sealed record AdminRefundRequest(bool IsFullRefund, decimal? Amount, string Reason, RefundMethod Method);
+
+/// <summary>
+/// Admin manual/offline payment request (row 25, docs/OPEN-FIXES-FEATURES.csv) -
+/// the only money-in action alongside the gateway/sandbox flow. Gated behind
+/// "bookings.write", the same tier <see cref="AdminRefundRequest"/> uses, for
+/// the same reason (see <c>BookingsController</c>'s doc comment).
+/// </summary>
+public sealed record AdminManualPaymentRequest(ManualPaymentMethod Method, string Reference);
+
+// ---- Unassigned & at-risk queue (docs/OPEN-FIXES-FEATURES.csv "Admin Web,
+// Proposed new page, Unassigned and at-risk queue"): paid bookings that are
+// in a status <c>BookingProviderAssignmentService.IsAssignableStatus</c>
+// would accept an admin assignment for, but with no live provider on them
+// yet - see <see cref="Bookings.IBookingRepository.ListUnassignedAtRiskAsync"/>. ----
+
+/// <summary>Paging only - no filters, this is a small, fixed operational queue rather than a general search.</summary>
+public sealed record AdminUnassignedAtRiskBookingRequest(int Page = 1, int PageSize = 20);
+
+/// <summary>
+/// One queue row. <paramref name="SlotDate"/>/<paramref name="SlotStartTime"/>
+/// are returned raw rather than a precomputed "time until slot" - admin-web
+/// renders and keeps that countdown fresh on its own (the response may sit in
+/// the browser for a while on a page an ops user leaves open), the same
+/// split the booking-tracking endpoints already use for ETAs.
+/// </summary>
+public sealed record AdminUnassignedAtRiskBookingResponse(
+    Guid Id,
+    string Reference,
+    string CustomerName,
+    string ServiceName,
+    DateOnly SlotDate,
+    TimeSpan SlotStartTime,
+    string City,
+    string Pincode,
+    BookingStatus Status,
+    string StatusLabel,
+    DateTime CreatedAtUtc);
+
+public sealed record AdminUnassignedAtRiskBookingSearchResponse(IReadOnlyList<AdminUnassignedAtRiskBookingResponse> Items, int TotalCount, int Page, int PageSize);
+
+// ---- Fulfilment control room (docs/OPEN-FIXES-FEATURES.csv "Admin Web,
+// Proposed new page, Fulfilment control room"): a single day's operationally
+// live bookings, flat - admin-web buckets these into status columns
+// (Unassigned/Assigned/En route/In progress/Completed) and layers its own
+// "overdue/at-risk" read on top from Status/AssignedProviderId/SlotStartTime,
+// the same client-side urgency computation the unassigned-at-risk queue page
+// already does, rather than this response baking in a server-computed "now"
+// that would go stale the moment the admin's tab sits open. ----
+
+/// <summary><paramref name="Date"/> defaults to the caller's local "today" when omitted - see <see cref="Bookings.IBookingRepository.ListForFulfilmentBoardAsync"/> for which statuses this returns.</summary>
+public sealed record AdminFulfilmentBoardRequest(DateOnly? Date);
+
+/// <summary>
+/// One board card. <paramref name="SlotDate"/>/<paramref name="SlotStartTime"/>
+/// are raw, like <see cref="AdminUnassignedAtRiskBookingResponse"/>'s -
+/// admin-web derives and refreshes any "in 2h"/"overdue" label itself rather
+/// than trusting a value computed once at request time.
+/// </summary>
+public sealed record AdminFulfilmentBoardBookingResponse(
+    Guid Id,
+    string Reference,
+    string CustomerName,
+    string ServiceName,
+    DateOnly SlotDate,
+    TimeSpan SlotStartTime,
+    string City,
+    string Pincode,
+    BookingStatus Status,
+    string StatusLabel,
+    Guid? AssignedProviderId,
+    string? AssignedProviderName,
+    DateTime CreatedAtUtc);
+
+public sealed record AdminFulfilmentBoardResponse(DateOnly Date, IReadOnlyList<AdminFulfilmentBoardBookingResponse> Items);

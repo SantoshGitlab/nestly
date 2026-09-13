@@ -42,6 +42,14 @@ export enum RefundType {
   Partial = 1,
 }
 
+/** Mirrors Nestly.Domain.ManualPaymentMethod's declaration order exactly. */
+export enum ManualPaymentMethod {
+  Cash = 0,
+  Upi = 1,
+  BankTransfer = 2,
+  Other = 3,
+}
+
 /** Mirrors Nestly.Domain.PaymentTransactionStatus's declaration order exactly. */
 export enum PaymentTransactionStatus {
   Pending = 0,
@@ -64,7 +72,7 @@ export interface AdminBookingListItem {
   totalPayable: number;
   couponCode: string | null;
   createdAtUtc: string;
-  /** Short human-facing code ("NST-260825-K7F3M") - what to show/search on instead of `id`. */
+  /** Short human-facing code ("GLX-260825-K7F3M") - what to show/search on instead of `id`. */
   reference: string;
 }
 
@@ -91,7 +99,7 @@ export interface AdminBookingSearchParams {
   couponCode?: string;
   page?: number;
   pageSize?: number;
-  /** Short human-facing code ("NST-260825-K7F3M") or any substring of one - matches server-side against `Booking.BookingReference`. */
+  /** Short human-facing code ("GLX-260825-K7F3M") or any substring of one - matches server-side against `Booking.BookingReference`. */
   reference?: string;
 }
 
@@ -229,7 +237,7 @@ export interface AdminBookingDetail {
   reschedules: AdminBookingReschedule[];
   refunds: AdminBookingRefund[];
   createdAtUtc: string;
-  /** Short human-facing code ("NST-260825-K7F3M") - what to show/search on instead of `id`. */
+  /** Short human-facing code ("GLX-260825-K7F3M") - what to show/search on instead of `id`. */
   reference: string;
 }
 
@@ -257,6 +265,58 @@ export interface AdminRefundRequest {
   amount?: number;
   reason: string;
   method: RefundMethod;
+}
+
+/** Row 25, docs/OPEN-FIXES-FEATURES.csv - mirrors Nestly.Application.BookingManagement.AdminManualPaymentRequest. */
+export interface AdminManualPaymentRequest {
+  method: ManualPaymentMethod;
+  reference: string;
+}
+
+// ---- Reschedule pickers (row 26, docs/OPEN-FIXES-FEATURES.csv) ----
+// Mirrors the shapes customer-web's LocalitySelector/SlotPicker already
+// consume (Nestly.Application.Geography/Slots), served here via
+// BookingsController's reschedule-cities/reschedule-localities/reschedule-slots
+// actions so the admin reschedule panel needs no hand-typed UUIDs.
+
+export interface RescheduleCity {
+  id: string;
+  name: string;
+  stateName: string;
+}
+
+export interface RescheduleLocality {
+  id: string;
+  name: string;
+  zoneName: string;
+  pincodeCode: string;
+  pincodeId: string;
+}
+
+/** Mirrors Nestly.Application.Slots.SlotUnavailabilityReason's declaration order exactly. */
+export enum SlotUnavailabilityReason {
+  None = 0,
+  NotServiceable = 1,
+  DateOutOfBookableRange = 2,
+  Blackout = 3,
+  NoWindowsConfigured = 4,
+  CutoffPassed = 5,
+  FullyBooked = 6,
+}
+
+export interface RescheduleSlotOption {
+  slotWindowId: string;
+  name: string;
+  /** .NET TimeSpan serialises as "hh:mm:ss". */
+  startTime: string;
+  endTime: string;
+  maxBookingsPerSlot: number | null;
+}
+
+export interface RescheduleSlotAvailability {
+  isServiceable: boolean;
+  slots: RescheduleSlotOption[];
+  reason: SlotUnavailabilityReason;
 }
 
 /**
@@ -332,4 +392,67 @@ export interface AdminBookingTrackingResponse {
   providerLocation: AdminTrackedLocation | null;
   eta: AdminTrackedEta | null;
   destination: AdminTrackedDestination;
+}
+
+// ---- Unassigned & at-risk queue (docs/OPEN-FIXES-FEATURES.csv "Admin Web,
+// Proposed new page, Unassigned and at-risk queue") - mirrors
+// Nestly.Application.BookingManagement.AdminUnassignedAtRiskBookingResponse. ----
+
+/**
+ * One row of the queue: a paid booking with no live provider yet. `slotDate`/
+ * `slotStartTime` come back raw (not a precomputed countdown) so this page
+ * can format and refresh "time until slot" itself, same as every other
+ * slot display in admin-web.
+ */
+export interface AdminUnassignedAtRiskBooking {
+  id: string;
+  reference: string;
+  customerName: string;
+  serviceName: string;
+  slotDate: string;
+  /** .NET TimeSpan serialises as "hh:mm:ss". */
+  slotStartTime: string;
+  city: string;
+  pincode: string;
+  status: BookingStatus;
+  statusLabel: string;
+  createdAtUtc: string;
+}
+
+export interface AdminUnassignedAtRiskBookingSearchResponse {
+  items: AdminUnassignedAtRiskBooking[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+// ---- Fulfilment control room (docs/OPEN-FIXES-FEATURES.csv "Admin Web,
+// Proposed new page, Fulfilment control room") - mirrors
+// Nestly.Application.BookingManagement.AdminFulfilmentBoardBookingResponse.
+// A flat list for one day; the /fulfilment page buckets these into status
+// columns and layers its own "overdue/at-risk" read on top, same reasoning as
+// AdminUnassignedAtRiskBooking above. ----
+
+/** One board card. `slotDate`/`slotStartTime` come back raw, same as {@link AdminUnassignedAtRiskBooking}. */
+export interface AdminFulfilmentBoardBooking {
+  id: string;
+  reference: string;
+  customerName: string;
+  serviceName: string;
+  slotDate: string;
+  /** .NET TimeSpan serialises as "hh:mm:ss". */
+  slotStartTime: string;
+  city: string;
+  pincode: string;
+  status: BookingStatus;
+  statusLabel: string;
+  assignedProviderId: string | null;
+  assignedProviderName: string | null;
+  createdAtUtc: string;
+}
+
+export interface AdminFulfilmentBoardResponse {
+  /** The calendar date the board was built for, echoed back (.NET DateOnly, "yyyy-MM-dd"). */
+  date: string;
+  items: AdminFulfilmentBoardBooking[];
 }

@@ -127,4 +127,76 @@ public interface IBookingRepository
     /// Ids with no matching booking are simply absent from the result.
     /// </summary>
     Task<IReadOnlyList<Booking>> ListSummariesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
+    /// <summary>
+    /// Distinct <see cref="BookingItem.ServiceId"/>s that appear in ANY
+    /// booking ever placed, regardless of that booking's current status -
+    /// docs/OPEN-FIXES-FEATURES.csv "Admin Web, Proposed new page, Catalog
+    /// health"'s "never booked" check. A service absent from this set has no
+    /// booking history at all, launched or not.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListServiceIdsEverBookedAsync();
+
+    /// <summary>
+    /// Comma-joined, de-duplicated <see cref="BookingItem.NameSnapshot"/>s for
+    /// a set of bookings, keyed by booking id (docs/OPEN-FIXES-FEATURES.csv
+    /// "Earnings detail and payouts" - the earnings ledger's "service"
+    /// column). A projection query, not <see cref="ListSummariesByIdsAsync"/>
+    /// plus a client-side join: that method deliberately omits
+    /// <see cref="Booking.Items"/> to keep list screens cheap, and loading
+    /// the full aggregate here just to read item names would undo that.
+    /// Ids with no matching booking are simply absent from the result.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, string>> ListServiceNamesByIdsAsync(IReadOnlyCollection<Guid> bookingIds);
+
+    /// <summary>
+    /// Row "Unassigned and at-risk queue", docs/OPEN-FIXES-FEATURES.csv: paid
+    /// bookings a live assignment could still be pushed onto -
+    /// <see cref="BookingStatus.Confirmed"/>, <see cref="BookingStatus.AwaitingFulfilment"/>
+    /// or <see cref="BookingStatus.Assigned"/>, the same admin allow-list
+    /// <c>BookingProviderAssignmentService.IsAssignableStatus</c> uses - that
+    /// currently have no live provider (<see cref="Booking.AssignedProviderId"/>
+    /// is null). Assigned is included only for symmetry with that gate: in
+    /// practice a booking is never Assigned with a null AssignedProviderId,
+    /// since <see cref="Booking.AssignProvider"/> is what puts it in that
+    /// status and always sets both together. Paged and sorted soonest slot
+    /// first (<see cref="Booking.SlotDate"/>/<see cref="Booking.SlotStartTimeSnapshot"/>
+    /// ascending, tie-broken on <see cref="Booking.Id"/> for a stable total
+    /// order across pages) so the most at-risk booking surfaces first.
+    /// </summary>
+    Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListUnassignedAtRiskAsync(int page, int pageSize);
+
+    /// <summary>
+    /// Every booking currently <see cref="BookingStatus.PaymentPending"/> or
+    /// <see cref="BookingStatus.PaymentFailed"/> - "Awaiting Payment"/
+    /// "Payment Failed" in <see cref="BookingStatusMapper"/>'s customer-facing
+    /// labels, and the payment reconciliation view's candidate set
+    /// (docs/OPEN-FIXES-FEATURES.csv "Payment reconciliation"). Cross-
+    /// referenced there against <see cref="Nestly.Application.Payments.IPaymentTransactionRepository.ListByBookingIdsAsync"/>
+    /// to classify each one as stuck-pending, failed or orphaned - a small,
+    /// bounded operational list, same "not a candidate set that could ever
+    /// need database-level paging" reasoning as <see cref="ListUnassignedAtRiskAsync"/>.
+    /// </summary>
+    Task<IReadOnlyList<Booking>> ListAwaitingPaymentAsync();
+
+    /// <summary>
+    /// Row "Fulfilment control room", docs/OPEN-FIXES-FEATURES.csv: every
+    /// booking whose <see cref="Booking.SlotDate"/> is <paramref name="date"/>
+    /// and that is in an operationally live status for that day - the same
+    /// Confirmed/AwaitingFulfilment/Assigned allow-list
+    /// <see cref="ListUnassignedAtRiskAsync"/> uses, plus the in-flight
+    /// fulfilment statuses (<see cref="BookingStatus.ProviderEnRoute"/>,
+    /// <see cref="BookingStatus.ProviderArrived"/>, <see cref="BookingStatus.InProgress"/>)
+    /// and <see cref="BookingStatus.Completed"/>, so the board also shows
+    /// today's jobs that already finished. Payment-pending/failed, cancelled,
+    /// refunded, rescheduled and expired bookings are excluded - none of
+    /// those are "a job happening today" operationally.
+    ///
+    /// Bounded to one calendar day's bookings, so - like
+    /// <see cref="ListUnassignedAtRiskAsync"/> and <see cref="ListAwaitingPaymentAsync"/> -
+    /// this returns every match unpaged rather than needing a database
+    /// Skip/Take; the admin-web fulfilment board buckets the flat result into
+    /// status columns itself.
+    /// </summary>
+    Task<IReadOnlyList<Booking>> ListForFulfilmentBoardAsync(DateOnly date);
 }
