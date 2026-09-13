@@ -45,11 +45,21 @@ export function BannersTable({
   const [confirmed, setConfirmed] = useState(false);
   const isUnpublishing = pendingUnpublish !== null && togglingId === pendingUnpublish.id;
 
-  useEffect(() => {
-    if (!confirmed || isUnpublishing) return;
-    setConfirmed(false);
-    if (!toggleError) setPendingUnpublish(null);
-  }, [confirmed, isUnpublishing, toggleError]);
+  // "Adjusting state when a prop changes" (react.dev/learn/you-might-not-
+  // need-an-effect), not an effect: shouldSettle is true for exactly one
+  // render (a confirmed toggle that has just stopped being pending), and
+  // comparing against its own last-seen value during render is what fires
+  // the close-out exactly once per settle rather than on every render where
+  // both conditions still hold.
+  const shouldSettle = confirmed && !isUnpublishing;
+  const [wasSettling, setWasSettling] = useState(false);
+  if (shouldSettle !== wasSettling) {
+    setWasSettling(shouldSettle);
+    if (shouldSettle) {
+      setConfirmed(false);
+      if (!toggleError) setPendingUnpublish(null);
+    }
+  }
 
   const columns: DataTableColumn<BannerResponse>[] = [
     {
