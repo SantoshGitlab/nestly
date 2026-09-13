@@ -23,6 +23,7 @@ import type {
   BookingSettings,
   CancellationSettings,
   CouponSettings,
+  FeatureFlagSettings,
   RescheduleSettings,
   SlotSettings,
   TaxSettings,
@@ -599,6 +600,125 @@ function CouponSettingsSection({ initial, queryClient, canWrite }: { initial: Co
   );
 }
 
+const featureSchema = z.object({
+  walletEnabled: z.boolean(),
+  referralsEnabled: z.boolean(),
+  amcSubscriptionsEnabled: z.boolean(),
+  serviceRatingsEnabled: z.boolean(),
+  bookingHelpLinkEnabled: z.boolean(),
+  ratingsPageEnabled: z.boolean(),
+  calendarViewEnabled: z.boolean(),
+  earningsLedgerEnabled: z.boolean(),
+  offersScreenEnabled: z.boolean(),
+});
+
+/** Full-width subheading between the Customer/Provider flag groups within one FormGrid - same span as ToggleRow, so it lines up rather than sitting in a half-width column. */
+function FlagGroupHeading({ children }: { children: ReactNode }) {
+  return (
+    <p className="sm:col-span-2 mt-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle first:mt-0">
+      {children}
+    </p>
+  );
+}
+
+function FeatureFlagToggle({
+  form,
+  name,
+  label,
+  description,
+}: {
+  form: UseFormReturn<FeatureFlagSettings>;
+  name: keyof FeatureFlagSettings;
+  label: string;
+  description: string;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <ToggleRow label={label} description={description} checked={field.value} onChange={field.onChange} />
+      )}
+    />
+  );
+}
+
+function FeatureFlagSettingsSection({ initial, queryClient, canWrite }: { initial: FeatureFlagSettings; queryClient: QueryClient; canWrite: boolean }) {
+  return (
+    <SettingsGroupCard<FeatureFlagSettings>
+      title="Feature flags"
+      description="Turn optional customer- and provider-facing features on or off. Core booking, payment and fulfilment steps are never affected (SRS 12.19)."
+      groupPath="features"
+      schema={featureSchema}
+      defaultValues={initial}
+      onSaved={(value) => updateSettingsCache(queryClient, "feature", value)}
+      canWrite={canWrite}
+    >
+      {(form) => (
+        <>
+          <FlagGroupHeading>Customer app</FlagGroupHeading>
+          <FeatureFlagToggle
+            form={form}
+            name="walletEnabled"
+            label="Wallet"
+            description="Wallet nav entry, account-menu link and bottom-tab entry."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="referralsEnabled"
+            label="Refer & earn"
+            description="Refer & Earn nav entry and page."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="amcSubscriptionsEnabled"
+            label="AMC plans"
+            description="AMC Plans nav entry and promo card."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="serviceRatingsEnabled"
+            label="Service rating badge"
+            description="Rating/review-count trust badge on the service detail page."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="bookingHelpLinkEnabled"
+            label="Booking help link"
+            description={'"Need help? Contact support" link on the booking summary/payment pages.'}
+          />
+
+          <FlagGroupHeading>Provider app</FlagGroupHeading>
+          <FeatureFlagToggle
+            form={form}
+            name="ratingsPageEnabled"
+            label="Ratings & feedback"
+            description="Ratings promo card on Profile and the Ratings page."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="calendarViewEnabled"
+            label="Calendar view"
+            description="Week calendar entry points on Jobs/Availability and the Calendar page."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="earningsLedgerEnabled"
+            label="Earnings ledger"
+            description="Only the transaction ledger section of Earnings - summary, per-job earnings and payouts stay visible."
+          />
+          <FeatureFlagToggle
+            form={form}
+            name="offersScreenEnabled"
+            label="Offers screen"
+            description="The dedicated Offers screen. Accepting/declining an offer stays available from Today and Jobs either way."
+          />
+        </>
+      )}
+    </SettingsGroupCard>
+  );
+}
+
 /**
  * Shaped like a real settings card — header, a two-column field grid, a
  * button row — so the page does not reflow when the settings land.
@@ -633,7 +753,7 @@ export default function SystemSettingsPage() {
     <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="System settings"
-        subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet and coupon rules (SRS 12.19)."
+        subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet, coupon and feature-flag rules (SRS 12.19)."
       />
 
       {isPending ? (
@@ -641,6 +761,7 @@ export default function SystemSettingsPage() {
           <SettingsCardSkeleton fields={4} />
           <SettingsCardSkeleton fields={5} />
           <SettingsCardSkeleton fields={3} />
+          <SettingsCardSkeleton fields={9} />
         </>
       ) : isError ? (
         // Previously a bare Alert with no way out: a transient failure left
@@ -655,6 +776,7 @@ export default function SystemSettingsPage() {
           <TaxSettingsSection initial={data.tax} queryClient={queryClient} canWrite={canWrite} />
           <WalletSettingsSection initial={data.wallet} queryClient={queryClient} canWrite={canWrite} />
           <CouponSettingsSection initial={data.coupon} queryClient={queryClient} canWrite={canWrite} />
+          <FeatureFlagSettingsSection initial={data.feature} queryClient={queryClient} canWrite={canWrite} />
         </>
       )}
     </div>
