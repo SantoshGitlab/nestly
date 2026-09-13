@@ -109,6 +109,8 @@ function NewRecurringBookingPlanScreen() {
   useEffect(() => {
     if (selectedAddressId !== null || !addressesQuery.data) return;
     const preferred = addressesQuery.data.find((a) => a.isDefault) ?? addressesQuery.data[0];
+    // Reacting to the addresses query arriving, not a render-time prop change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (preferred) setSelectedAddressId(preferred.id);
   }, [addressesQuery.data, selectedAddressId]);
 

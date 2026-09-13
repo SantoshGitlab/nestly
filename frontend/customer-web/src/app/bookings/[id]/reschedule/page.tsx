@@ -285,6 +285,13 @@ function RescheduleSlotPicker({
   // labels below during the server render risks a hydration mismatch
   // whenever the server's default Intl locale differs from the browser's.
   const [dates, setDates] = useState<string[]>([]);
+  // Not a lazy initializer: that would run during server-side prerendering
+  // too, defeating the exact hydration-mismatch avoidance described above
+  // (Date/Intl exist on the server, just with a potentially different
+  // default locale, so it would silently compute *different* dates there
+  // rather than fail loudly - the mount effect is what actually confines
+  // this to the client's own locale).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setDates(upcomingDates()), []);
 
   const queries = useQueries({

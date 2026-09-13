@@ -61,9 +61,11 @@ export function HeroBanner() {
 
   // Guard the index against a shrinking list (e.g. a banner unpublished
   // between loads) so it never points past the end.
-  useEffect(() => {
+  const [priorBannersLength, setPriorBannersLength] = useState(banners.length);
+  if (banners.length !== priorBannersLength) {
+    setPriorBannersLength(banners.length);
     if (index > banners.length - 1) setIndex(0);
-  }, [banners.length, index]);
+  }
 
   useEffect(() => {
     if (paused || banners.length <= 1) return;

@@ -97,6 +97,11 @@ function CancelBookingScreen() {
     },
   });
 
+  // False positive: the rule can't see that react-hook-form's handleSubmit
+  // only *builds* this callback during render - it doesn't call it until a
+  // real submit event fires, well outside render, which is the only place
+  // inFlight.current is ever actually read or written.
+  // eslint-disable-next-line react-hooks/refs
   const submit = form.handleSubmit((values) => {
     if (inFlight.current) return;
     inFlight.current = true;

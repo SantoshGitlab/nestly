@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button, Modal, useToast } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch } from "@/lib/api";
@@ -35,31 +35,45 @@ const MOBILE_QUERY = "(max-width: 767px)";
  * existing `CitySelector` via `openCityPicker()` rather than re-implementing
  * a second city list here.
  */
+function subscribeToMobileQuery(onChange: () => void): () => void {
+  const query = window.matchMedia(MOBILE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function getIsMobile(): boolean {
+  return window.matchMedia(MOBILE_QUERY).matches;
+}
+
+/** Desktop-safe default for SSR - corrected immediately from the real client snapshot above, same as every other useSyncExternalStore default in this codebase. */
+function getIsMobileServerSnapshot(): boolean {
+  return false;
+}
+
 export function LocationPrompt() {
   const { city } = useSelectedCity();
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useSyncExternalStore(subscribeToMobileQuery, getIsMobile, getIsMobileServerSnapshot);
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<"idle" | "locating" | "no-match" | "unsupported" | "failed">("idle");
   const pushToast = useToast();
 
-  useEffect(() => {
-    const query = window.matchMedia(MOBILE_QUERY);
-    setIsMobile(query.matches);
-    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
-
-  useEffect(() => {
-    if (!isMobile) return;
-    if (city !== null) return; // undefined = still reading storage, a City = already chosen - neither should be interrupted
-    if (sessionStorage.getItem(PROMPTED_KEY)) return;
+  // "Adjusting state when a prop changes" (react.dev/learn/you-might-not-
+  // need-an-effect), not an effect, for the same reason as OfflineBanner's
+  // dismissed-reset: this only needs to fire once, the first render where
+  // (mobile, no city yet, not already prompted) all hold - not on every
+  // render where they still do - and comparing against a tracked previous
+  // value during render is what limits it to that one transition.
+  const shouldPrompt =
+    isMobile && city === null && typeof window !== "undefined" && !sessionStorage.getItem(PROMPTED_KEY);
+  const [hasPrompted, setHasPrompted] = useState(false);
+  if (shouldPrompt && !hasPrompted) {
+    setHasPrompted(true);
     // Marked as soon as the prompt is shown, not on a choice being made -
     // dismissing (Escape, backdrop click) still counts as "already asked
     // this session" so a refresh can't turn this into a nag.
     sessionStorage.setItem(PROMPTED_KEY, "1");
     setVisible(true);
-  }, [isMobile, city]);
+  }
 
   const citiesQuery = useQuery({
     queryKey: ["geography", "cities"],

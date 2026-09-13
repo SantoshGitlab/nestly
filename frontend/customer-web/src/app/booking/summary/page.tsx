@@ -238,6 +238,10 @@ function BookingSummaryScreen() {
       serviceable[0] ??
       addressesQuery.data.find((a) => a.isDefault) ??
       addressesQuery.data[0];
+    // Reacting to addressesQuery.data arriving from an async query, not a
+    // render-time prop change; see the doc comment above for why this can't
+    // pre-select before the data (and the serviceable area) are known.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (preferred) setSelectedAddressId(preferred.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressesQuery.data, selectedAddressId, locality?.pincodeId]);
@@ -262,6 +266,10 @@ function BookingSummaryScreen() {
     if (!serviceSlug) return;
     const draft = readDraft(serviceSlug);
     if (draft) {
+      // A once-per-serviceSlug restore, not a render-time sync; see the
+      // hasRestoredDraft doc comment above for why this must run (and land)
+      // strictly before the persist effect's own write.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuantity(draft.quantity);
       setSelectedAddOnIds(new Set(draft.addOnIds));
       setSelectedVariantId(draft.serviceVariantId ?? null);
@@ -286,6 +294,9 @@ function BookingSummaryScreen() {
   useEffect(() => {
     if (!hasRestoredDraft || selectedVariantId !== null || !serviceQuery.data) return;
     const firstVariant = serviceQuery.data.variants[0];
+    // Reacting to hasRestoredDraft settling and serviceQuery.data arriving,
+    // both async, not a render-time prop change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (firstVariant) setSelectedVariantId(firstVariant.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasRestoredDraft, serviceQuery.data]);
@@ -300,6 +311,9 @@ function BookingSummaryScreen() {
   useEffect(() => {
     const newAddressId = searchParams.get("newAddressId");
     if (!newAddressId || !serviceSlug) return;
+    // A one-time mount action consuming a URL param handed off by
+    // /addresses/new, not a render-time sync (see the doc comment above).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedAddressId(newAddressId);
     const cleaned = new URLSearchParams(searchParams.toString());
     cleaned.delete("newAddressId");
@@ -466,6 +480,9 @@ function BookingSummaryScreen() {
     if (!appliedCouponCode || !(error instanceof ApiError)) return;
     if (!errorCode(error)?.startsWith("Coupon.")) return;
 
+    // Reacting to a query error arriving from the server, not a render-time
+    // prop change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAppliedCouponCode(null);
     setCouponMessage(null);
     setCouponError(

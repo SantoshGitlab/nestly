@@ -114,10 +114,15 @@ export function SiteHeader() {
   }, [authed]);
 
   // A route change means the destination was reached — leaving the drawer open
-  // over the new page is never what the customer wanted.
-  useEffect(() => {
+  // over the new page is never what the customer wanted. "Adjusting state
+  // when a prop changes" (react.dev/learn/you-might-not-need-an-effect),
+  // during render rather than in an effect, tracking pathname itself as the
+  // comparison so this only fires on an actual route change.
+  const [drawerClosedForPathname, setDrawerClosedForPathname] = useState(pathname);
+  if (pathname !== drawerClosedForPathname) {
+    setDrawerClosedForPathname(pathname);
     setDrawerOpen(false);
-  }, [pathname]);
+  }
 
   // Only the home route ever needs this listener (elsewhere `transparent` is
   // always false), but mounting it unconditionally keeps the hook order
@@ -372,9 +377,13 @@ function AccountMenu({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  // "Adjusting state when a prop changes", during render rather than in an
+  // effect - see the drawer-close above for the same pattern.
+  const [closedForPathname, setClosedForPathname] = useState(pathname);
+  if (pathname !== closedForPathname) {
+    setClosedForPathname(pathname);
     setOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     if (!open) return;
