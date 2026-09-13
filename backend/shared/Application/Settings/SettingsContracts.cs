@@ -117,6 +117,16 @@ public sealed record CouponSettings(
 /// <param name="CalendarViewEnabled">Provider-web: the "View week calendar" entry points on Jobs/Availability and the <c>/calendar</c> page.</param>
 /// <param name="EarningsLedgerEnabled">Provider-web: only the ledger section of the Earnings page (<c>LedgerSection</c>) - the rest of Earnings (summary, per-job earnings, payouts) is unaffected.</param>
 /// <param name="OffersScreenEnabled">Provider-web: the dedicated <c>/offers</c> screen - offer accept/decline stays reachable from <c>/today</c> and <c>/jobs</c>, which are never gated.</param>
+/// <param name="AutoManageServiceabilityEnabled">
+/// Internal/admin-only operational kill switch (docs/OPEN-FIXES-FEATURES.csv
+/// "Service to pincode mapping" follow-up) - not customer- or provider-
+/// facing, so deliberately absent from <see cref="CustomerFeatureFlagsResponse"/>/
+/// <see cref="ProviderFeatureFlagsResponse"/> and their public
+/// <c>GET /api/v1/feature-flags</c> endpoints. When false,
+/// <c>IServiceabilityMappingManagementService.AutoEnableProviderCoverageAsync</c>
+/// and <c>AutoDisableUnservedMappingsAsync</c> both no-op entirely, checked at
+/// the start of each call before any work. Defaults true.
+/// </param>
 public sealed record FeatureFlagSettings(
     bool WalletEnabled,
     bool ReferralsEnabled,
@@ -126,7 +136,8 @@ public sealed record FeatureFlagSettings(
     bool RatingsPageEnabled,
     bool CalendarViewEnabled,
     bool EarningsLedgerEnabled,
-    bool OffersScreenEnabled);
+    bool OffersScreenEnabled,
+    bool AutoManageServiceabilityEnabled);
 
 /// <summary>
 /// The customer-facing subset of <see cref="FeatureFlagSettings"/>, plus the
