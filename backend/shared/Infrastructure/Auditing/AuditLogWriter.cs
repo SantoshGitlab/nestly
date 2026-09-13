@@ -19,23 +19,23 @@ public sealed class AuditLogWriter : IAuditLogWriter
         _auditContextProvider = auditContextProvider;
     }
 
-    public async Task WriteAsync(AuditEntry entry, CancellationToken cancellationToken = default)
+    public async Task WriteAsync(AuditEntry entry, CancellationToken cancellationToken = default, AuditContext? context = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        AuditContext context = _auditContextProvider.GetCurrent();
+        AuditContext attribution = context ?? _auditContextProvider.GetCurrent();
 
         var auditLog = new AuditLog(
             id: Guid.NewGuid(),
-            actorType: context.ActorType,
-            actorId: context.ActorId,
+            actorType: attribution.ActorType,
+            actorId: attribution.ActorId,
             entityName: entry.EntityName,
             entityId: entry.EntityId,
             action: entry.Action,
             oldValues: AsJson(entry.OldValues),
             newValues: AsJson(entry.NewValues),
-            ipAddress: context.IpAddress,
-            correlationId: context.CorrelationId);
+            ipAddress: attribution.IpAddress,
+            correlationId: attribution.CorrelationId);
 
         // Added to the current unit of work only — the caller's SaveChangesAsync
         // commits it in the same transaction as the change it describes.
