@@ -20,14 +20,23 @@ function hasUnexpiredOffer(offers: readonly JobListItem[], nowMs: number): boole
  * stopping the instant that stops being true - the provider accepted or
  * declined it (it drops out of the list), or its response window ran out.
  *
+ * Called once, from `(provider)/layout.tsx` - the authenticated app shell,
+ * not any one screen - fed by that layout's own actively-polled `GET /jobs`
+ * query. Deliberately shell-level rather than scoped to `/offers`: an offer
+ * lands the instant it is assigned regardless of which screen the provider
+ * is working from (mid-visit on a different job, checking earnings, ...),
+ * so ringing that only fired while `/offers` itself happened to be mounted
+ * would miss exactly the cases where a provider most needs the nudge.
+ *
  * docs/OPEN-FIXES-FEATURES.csv's "Job offers with countdown" row already
  * closed the "no dedicated offers surface" gap; this closes the next one
- * behind it, that a provider not already staring at this screen can still
- * miss an offer entirely with nothing audible or physical to notice. It is
- * NOT a substitute for push - it only ever reaches a provider who has this
- * screen open - see OffersPage's own doc comment for why standing up real
- * push infra (today's server-side provider is a no-op logging sandbox in
- * every environment) is a separate, larger change kept out of this one.
+ * behind it, that a provider not looking at that screen right now could
+ * still miss an offer entirely with nothing audible or physical to notice.
+ * It is NOT a substitute for push - it only ever reaches a provider with
+ * the app open in a focused tab - see OffersPage's own doc comment for why
+ * standing up real push infra (today's server-side provider is a no-op
+ * logging sandbox in every environment) is a separate, larger change kept
+ * out of this one.
  *
  * Synthesized via the Web Audio API rather than an embedded audio file: a
  * two-tone chime built from two oscillators needs no binary asset, no
@@ -40,10 +49,18 @@ function hasUnexpiredOffer(offers: readonly JobListItem[], nowMs: number): boole
  *
  * Browsers block audio from starting with no prior user gesture on the
  * page (autoplay policy) - by design, and not something to work around. In
- * practice a provider reaches /offers by tapping a nav link, which
- * satisfies it for the rest of that page load; a tab left open with no
- * interaction since load may stay silent for the first offer, same as any
- * other in-page audio would.
+ * practice a provider reaches this shell by signing in, which satisfies it
+ * for the rest of that page load; a tab left open with no interaction since
+ * load may stay silent for the first offer, same as any other in-page audio
+ * would.
+ *
+ * navigator.vibrate() enforces its own, separate gesture requirement -
+ * confirmed against a real Chrome instance: "Blocked call to
+ * navigator.vibrate because user hasn't tapped on the frame ... yet" fires
+ * even once the audio gesture requirement above is satisfied (e.g.
+ * immediately after the sign-in submit that unblocks audio for the rest of
+ * the session). A tap anywhere on the resulting page - opening a nav tab is
+ * enough - clears it; nothing here works around that either.
  */
 export function useOfferRinging(offers: readonly JobListItem[]): void {
   const offersRef = useRef(offers);

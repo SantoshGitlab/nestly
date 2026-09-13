@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useMemo } from "react";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import { Button, EmptyState, PageHeading, Skeleton } from "@/components/ui";
 import { isNotImplemented } from "@/lib/api";
@@ -10,7 +9,6 @@ import { listJobs } from "@/lib/jobs-api";
 import { listPendingOffers } from "@/lib/jobs-active";
 import type { JobListItem } from "@/lib/jobs-types";
 import { OfferCard } from "./_components/OfferCard";
-import { useOfferRinging } from "./_components/useOfferRinging";
 
 /**
  * Offers screen (docs/OPEN-FIXES-FEATURES.csv, "Provider Web, Proposed new
@@ -45,11 +43,13 @@ import { useOfferRinging } from "./_components/useOfferRinging";
  * That is a genuinely separate, larger change and stays deferred, per this
  * row's own fix note.
  *
- * What this screen adds instead, without that infrastructure: `useOfferRinging`
- * loops a ringtone + vibration for as long as any offer here is still open,
- * so a provider on this screen does not have to be staring at a live
- * countdown to notice a new one. Still bounded by the same push gap above -
- * it cannot reach a provider who has navigated away or closed the app.
+ * What the app adds instead, without that infrastructure: `(provider)/layout.tsx`
+ * polls this same `GET /jobs` data at the shell level and loops a ringtone +
+ * vibration (`useOfferRinging`) for as long as any offer is open, from
+ * anywhere in the app - not only while this specific screen is mounted, so a
+ * provider working a different job elsewhere still notices a new one. Still
+ * bounded by the same push gap above - it cannot reach a provider who has
+ * navigated away from the app/tab entirely or closed it.
  */
 export default function OffersPage() {
   const query = useQuery({
@@ -88,11 +88,7 @@ export default function OffersPage() {
 }
 
 function OffersContent({ jobs }: { jobs: JobListItem[] }) {
-  // useMemo, not a bare call: listPendingOffers builds a new array every
-  // invocation, and useOfferRinging keys its effect off this reference only
-  // changing when the underlying data actually does (see its own comment).
-  const offers = useMemo(() => listPendingOffers(jobs), [jobs]);
-  useOfferRinging(offers);
+  const offers = listPendingOffers(jobs);
 
   if (offers.length === 0) {
     return (
