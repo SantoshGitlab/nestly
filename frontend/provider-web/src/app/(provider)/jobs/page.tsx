@@ -18,6 +18,7 @@ import {
   cx,
 } from "@/components/ui";
 import { isNotImplemented } from "@/lib/api";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import { formatDateTime, formatInr, formatIsoDate, formatTime } from "@/lib/format";
 import { listJobs } from "@/lib/jobs-api";
 import { JobStatus } from "@/lib/jobs-types";
@@ -47,6 +48,7 @@ const STATUS_OPTIONS = [
  * much, and how long they have to answer) do not fit a phone-width table.
  */
 export default function JobsPage() {
+  const { calendarViewEnabled } = useFeatureFlags();
   const [status, setStatus] = useState("");
   const [date, setDate] = useState("");
   const [appliedStatus, setAppliedStatus] = useState("");
@@ -81,11 +83,13 @@ export default function JobsPage() {
           // Entry point into /calendar (docs/OPEN-FIXES-FEATURES.csv
           // "Calendar and week view") - see that page's own header comment
           // for the nav-placement reasoning.
-          <Link href="/calendar">
-            <Button type="button" variant="secondary" size="sm">
-              View week calendar
-            </Button>
-          </Link>
+          calendarViewEnabled ? (
+            <Link href="/calendar">
+              <Button type="button" variant="secondary" size="sm">
+                View week calendar
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 

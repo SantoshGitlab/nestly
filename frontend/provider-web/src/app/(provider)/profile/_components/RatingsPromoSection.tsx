@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Button, Card } from "@/components/ui";
+import { useFeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Entry point into Ratings & feedback (docs/OPEN-FIXES-FEATURES.csv "Ratings
@@ -11,6 +14,9 @@ import { Button, Card } from "@/components/ui";
  * Earnings) before Profile itself.
  */
 export function RatingsPromoSection() {
+  const { ratingsPageEnabled } = useFeatureFlags();
+  if (!ratingsPageEnabled) return null;
+
   return (
     <Card
       title="Ratings & feedback"

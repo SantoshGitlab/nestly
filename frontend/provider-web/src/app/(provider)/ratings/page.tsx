@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeading } from "@/components/ui";
+import { useFeatureFlags, useRedirectIfDisabled } from "@/lib/feature-flags";
 import { RecentReviewsSection } from "./_components/RecentReviewsSection";
 import { SummarySection } from "./_components/SummarySection";
 
@@ -19,6 +20,9 @@ import { SummarySection } from "./_components/SummarySection";
  * failing reviews list never blanks out the average that loaded fine.
  */
 export default function RatingsPage() {
+  const { ratingsPageEnabled } = useFeatureFlags();
+  useRedirectIfDisabled(ratingsPageEnabled, "/today");
+
   return (
     <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading title="Ratings & feedback" subtitle="How customers have rated your work." />

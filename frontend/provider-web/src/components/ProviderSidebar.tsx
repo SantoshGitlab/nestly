@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import { listJobs } from "@/lib/jobs-api";
 import { listPendingOffers } from "@/lib/jobs-active";
 
@@ -19,14 +20,32 @@ import { listPendingOffers } from "@/lib/jobs-active";
  * drawer they would have to open to reach the job they are standing in front
  * of; from `md` up it is a conventional side rail.
  */
-const NAV_ITEMS = [
+const NAV_ITEMS: readonly {
+  key: string;
+  href: string;
+  label: string;
+  icon: ReactNode;
+  flagKey?: keyof import("@/lib/feature-flags").ProviderFeatureFlags;
+}[] = [
   { key: "today", href: "/today", label: "Today", icon: <TodayIcon /> },
-  { key: "offers", href: "/offers", label: "Offers", icon: <OfferIcon /> },
+  { key: "offers", href: "/offers", label: "Offers", icon: <OfferIcon />, flagKey: "offersScreenEnabled" },
   { key: "jobs", href: "/jobs", label: "Jobs", icon: <BriefcaseIcon /> },
   { key: "availability", href: "/availability", label: "Availability", icon: <CalendarIcon /> },
   { key: "earnings", href: "/earnings", label: "Earnings", icon: <WalletIcon /> },
   { key: "profile", href: "/profile", label: "Profile", icon: <UserIcon /> },
-] as const;
+];
+
+/** Tailwind only picks up class names it can see as literal strings, so the grid-column count per visible-item count is spelled out rather than interpolated. */
+const GRID_COLS_CLASS: Record<number, string> = {
+  5: "grid-cols-5",
+  6: "grid-cols-6",
+};
+
+/** `NAV_ITEMS` filtered by each entry's optional `flagKey` (SRS 12.19 "Feature flags"), shared by the side rail and the bottom tab bar. */
+function useVisibleNavItems() {
+  const flags = useFeatureFlags();
+  return NAV_ITEMS.filter((item) => !item.flagKey || flags[item.flagKey]);
+}
 
 function useActiveMatcher() {
   const pathname = usePathname();
@@ -114,6 +133,7 @@ function SidebarBrand() {
 export function ProviderSidebar() {
   const isActive = useActiveMatcher();
   const pendingOfferCount = usePendingOfferCount();
+  const navItems = useVisibleNavItems();
 
   return (
     <nav
@@ -124,7 +144,7 @@ export function ProviderSidebar() {
       className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-surface p-4 md:flex"
     >
       <SidebarBrand />
-      {NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         const active = isActive(item.href);
         return (
           <Link
@@ -162,6 +182,7 @@ export function ProviderTabBar() {
   const pathname = usePathname();
   const isActive = useActiveMatcher();
   const pendingOfferCount = usePendingOfferCount();
+  const navItems = useVisibleNavItems();
 
   // See isJobDetailPath's comment - redundant with that screen's own sticky
   // action bar.
@@ -170,9 +191,12 @@ export function ProviderTabBar() {
   return (
     <nav
       aria-label="Provider sections"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+      className={cx(
+        "fixed inset-x-0 bottom-0 z-40 grid border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden",
+        GRID_COLS_CLASS[navItems.length] ?? "grid-cols-6",
+      )}
     >
-      {NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         const active = isActive(item.href);
         return (
           <Link

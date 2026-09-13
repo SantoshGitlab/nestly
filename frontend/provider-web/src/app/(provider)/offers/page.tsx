@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ErrorState, NotYetAvailable } from "@/components/states";
 import { Button, EmptyState, PageHeading, Skeleton } from "@/components/ui";
 import { isNotImplemented } from "@/lib/api";
+import { useFeatureFlags, useRedirectIfDisabled } from "@/lib/feature-flags";
 import { listJobs } from "@/lib/jobs-api";
 import { listPendingOffers } from "@/lib/jobs-active";
 import type { JobListItem } from "@/lib/jobs-types";
@@ -44,6 +45,9 @@ import { OfferCard } from "./_components/OfferCard";
  * row's own fix note.
  */
 export default function OffersPage() {
+  const { offersScreenEnabled } = useFeatureFlags();
+  useRedirectIfDisabled(offersScreenEnabled, "/today");
+
   const query = useQuery({
     // Same key/query `/today` and `/jobs` (unfiltered) use - shares their
     // cache rather than firing a second, identical fetch.
