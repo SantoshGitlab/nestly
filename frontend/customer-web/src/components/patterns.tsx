@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import type { ReactNode } from "react";
-import { ACCOUNT_LINKS } from "@/components/SiteHeader";
+import { useVisibleAccountLinks } from "@/components/SiteHeader";
 import { Badge, Card, Skeleton, cx } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import { SPRING } from "@/components/motion";
@@ -728,7 +728,7 @@ export function BannerBreadcrumb({ items }: { items: { label: string; href?: str
  * rendered on serves nothing.
  */
 export function AccountQuickLinksCard({ currentHref }: { currentHref: string }) {
-  const links = ACCOUNT_LINKS.filter((link) => link.href !== currentHref);
+  const links = useVisibleAccountLinks().filter((link) => link.href !== currentHref);
 
   return (
     <Card title="Manage your account">

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useFeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Low-risk in-flow help affordance for the booking funnel (docs/OPEN-FIXES-FEATURES.csv
@@ -11,6 +14,9 @@ import Link from "next/link";
  * this fix, and a real, already-built entry point already exists.
  */
 export function BookingHelpLink() {
+  const { bookingHelpLinkEnabled } = useFeatureFlags();
+  if (!bookingHelpLinkEnabled) return null;
+
   return (
     <Link
       href="/support/new"

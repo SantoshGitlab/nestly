@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
+import { useFeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Thumb-zone bottom navigation for phone widths (task #342).
@@ -28,9 +29,15 @@ const TAB_ITEMS = [
   { key: "home", href: "/", label: "Home", icon: <HomeIcon /> },
   { key: "search", href: "/search", label: "Search", icon: <SearchIcon /> },
   { key: "bookings", href: "/bookings", label: "Bookings", icon: <BookingsIcon /> },
-  { key: "wallet", href: "/wallet", label: "Wallet", icon: <WalletIcon /> },
+  { key: "wallet", href: "/wallet", label: "Wallet", icon: <WalletIcon />, flagKey: "walletEnabled" },
   { key: "profile", href: "/profile", label: "Profile", icon: <ProfileIcon /> },
 ] as const;
+
+/** Tailwind only picks up class names it can see as literal strings, so the grid-column count per visible-item count is spelled out rather than interpolated. */
+const GRID_COLS_CLASS: Record<number, string> = {
+  4: "grid-cols-4",
+  5: "grid-cols-5",
+};
 
 /**
  * Routes where a fixed `StickyActionBar` (or, for the auth screens, a
@@ -55,7 +62,10 @@ function hideOnRoute(pathname: string): boolean {
 
 export function BottomTabBar() {
   const pathname = usePathname();
+  const flags = useFeatureFlags();
   if (hideOnRoute(pathname)) return null;
+
+  const items = TAB_ITEMS.filter((item) => !("flagKey" in item) || flags[item.flagKey]);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -67,11 +77,12 @@ export function BottomTabBar() {
     <nav
       aria-label="Bottom navigation"
       className={cx(
-        "fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-surface/95 backdrop-blur-md md:hidden",
+        "fixed inset-x-0 bottom-0 z-40 grid border-t border-line bg-surface/95 backdrop-blur-md md:hidden",
+        GRID_COLS_CLASS[items.length] ?? "grid-cols-5",
         "supports-[padding:max(0px)]:pb-[max(0px,env(safe-area-inset-bottom))]",
       )}
     >
-      {TAB_ITEMS.map((item) => {
+      {items.map((item) => {
         const active = isActive(item.href);
         return (
           <Link

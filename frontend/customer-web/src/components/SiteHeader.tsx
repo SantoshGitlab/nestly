@@ -22,6 +22,7 @@ import {
   takeDeviceTokenId,
 } from "@/lib/device-tokens-api";
 import { requestPushToken } from "@/lib/push";
+import { useFeatureFlags, type CustomerFeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Global chrome for customer-web.
@@ -58,17 +59,33 @@ const SCROLL_SOLID_PX = 24;
  * links" sidebar card can reuse the exact same list rather than keeping a
  * second copy that could drift from this one.
  */
-export const ACCOUNT_LINKS = [
+export const ACCOUNT_LINKS: readonly {
+  href: string;
+  label: string;
+  flagKey?: keyof CustomerFeatureFlags;
+}[] = [
   { href: "/bookings", label: "My bookings" },
   { href: "/recurring-bookings", label: "Recurring bookings" },
   { href: "/addresses", label: "Addresses" },
-  { href: "/wallet", label: "Wallet" },
+  { href: "/wallet", label: "Wallet", flagKey: "walletEnabled" },
   { href: "/subscription", label: "Glavyx Plus" },
-  { href: "/amc", label: "AMC Plans" },
-  { href: "/refer-earn", label: "Refer & Earn" },
+  { href: "/amc", label: "AMC Plans", flagKey: "amcSubscriptionsEnabled" },
+  { href: "/refer-earn", label: "Refer & Earn", flagKey: "referralsEnabled" },
   { href: "/support", label: "Support" },
   { href: "/profile", label: "Profile" },
-] as const;
+];
+
+/**
+ * `ACCOUNT_LINKS` filtered by each entry's optional `flagKey` (SRS 12.19
+ * "Feature flags") - shared by every consumer of the list (`AccountMenu`,
+ * `MobileDrawer`, and `patterns.tsx`'s `AccountQuickLinksCard`) so a disabled
+ * feature disappears from all three at once rather than needing the same
+ * filter re-applied at each call site.
+ */
+export function useVisibleAccountLinks() {
+  const flags = useFeatureFlags();
+  return ACCOUNT_LINKS.filter((link) => !link.flagKey || flags[link.flagKey]);
+}
 
 export function SiteHeader() {
   const router = useRouter();
@@ -371,6 +388,7 @@ function AccountMenu({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const accountLinks = useVisibleAccountLinks();
 
   useEffect(() => {
     setOpen(false);
@@ -445,7 +463,7 @@ function AccountMenu({
           role="menu"
           className="absolute right-0 top-full z-50 mt-2 w-56 animate-pop overflow-hidden rounded-xl border border-line bg-surface p-1.5 shadow-lg"
         >
-          {ACCOUNT_LINKS.map((link) => (
+          {accountLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -488,6 +506,7 @@ function MobileDrawer({
   onSignOut: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const accountLinks = useVisibleAccountLinks();
 
   // This is a hand-rolled dialog rather than the shared `Modal` (a right-side
   // slide-over, not `Modal`'s centered/bottom-sheet shape), so it has to
@@ -601,7 +620,7 @@ function MobileDrawer({
               <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
                 Account
               </p>
-              {ACCOUNT_LINKS.map((link) => (
+              {accountLinks.map((link) => (
                 <DrawerLink key={link.href} href={link.href} pathname={pathname}>
                   {link.label}
                 </DrawerLink>
