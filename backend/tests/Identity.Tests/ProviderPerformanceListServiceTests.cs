@@ -34,7 +34,8 @@ public class ProviderPerformanceListServiceTests : IDisposable
         new ProviderSessionRepository(context),
         new ServiceabilityMappingManagementService(
             new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
-            new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context)),
+            new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
+            TestServices.AuditLogWriter(context), TestServices.SystemSettings(context)),
         new ProviderAvailabilityWindowRepository(context),
         new ReviewRepository(context));
 

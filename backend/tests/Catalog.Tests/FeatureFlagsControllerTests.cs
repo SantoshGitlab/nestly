@@ -29,7 +29,8 @@ public sealed class FeatureFlagsControllerTests
         RatingsPageEnabled: true,
         CalendarViewEnabled: true,
         EarningsLedgerEnabled: true,
-        OffersScreenEnabled: true);
+        OffersScreenEnabled: true,
+        AutoManageServiceabilityEnabled: true);
 
     [Fact]
     public async Task ConsumerApi_Get_ProjectsCustomerFlags_AndCouponsEnabledFromCouponGroup()

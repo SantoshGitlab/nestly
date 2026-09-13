@@ -145,14 +145,14 @@ public sealed class SystemSettingsServiceTests : IDisposable
     [Fact]
     public async Task GetFeatureFlagSettingsAsync_ReturnsDeserializedValue_WhenGroupSeeded()
     {
-        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true}");
+        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true,\"autoManageServiceabilityEnabled\":true}");
         using var context = _database.CreateContext();
         var service = CreateService(context);
 
         var result = await service.GetFeatureFlagSettingsAsync();
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.Should().Be(new FeatureFlagSettings(true, true, true, true, true, true, true, true, true));
+        result.Value.Should().Be(new FeatureFlagSettings(true, true, true, true, true, true, true, true, true, true));
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class SystemSettingsServiceTests : IDisposable
     [Fact]
     public async Task UpdateFeatureFlagSettingsAsync_PersistsNewValue_AndWritesAuditEntry()
     {
-        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true}");
+        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true,\"autoManageServiceabilityEnabled\":true}");
         var updated = new FeatureFlagSettings(
             WalletEnabled: false,
             ReferralsEnabled: true,
@@ -180,7 +180,8 @@ public sealed class SystemSettingsServiceTests : IDisposable
             RatingsPageEnabled: true,
             CalendarViewEnabled: true,
             EarningsLedgerEnabled: true,
-            OffersScreenEnabled: false);
+            OffersScreenEnabled: false,
+            AutoManageServiceabilityEnabled: true);
 
         using (var context = _database.CreateContext())
         {
