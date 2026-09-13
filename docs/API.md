@@ -1012,6 +1012,14 @@ Push device token registration (SRS 19.1, task 156).
 | POST | `/api/v{version}/device-tokens` | Registers (or re-registers) the caller's device for push notifications. | Customer JWT | RegisterDeviceTokenRequest | 200 → DeviceTokenResponse |
 | DELETE | `/api/v{version}/device-tokens/{id}` | Deactivates a device (e.g. on logout). | Customer JWT | — | 204 No Content |
 
+### FeatureFlags
+
+Public customer-facing feature flags (SRS 12.19 "Feature flags"). No auth - this gates navigation/UI before or without a session, same reasoning as `GeographyController`. Projects the admin-only `FeatureFlagSettings` group down to `CustomerFeatureFlagsResponse` plus the pre-existing coupons flag (`CouponSettings.CouponsEnabled`) - never the full admin settings shape, which would leak provider-side flags to an unauthenticated caller. Frontend consumers fail open (treat a flag as enabled) if this read fails - only Coupons is also backend-enforced.
+
+| Method | Path | Summary | Auth | Request | Success Response |
+|---|---|---|---|---|---|
+| GET | `/api/v{version}/feature-flags` | Wallet, Coupons, Referrals, AMC Subscriptions, service ratings badge and booking-help-link flags. | Public | — | 200 → CustomerFeatureFlagsResponse |
+
 ### Geography
 
 Public geography lookups for location selection (SRS 11.1, 11.4.1). No auth - browsing needs no session.
@@ -1239,12 +1247,15 @@ Admin booking management (SRS 12.11, 12.13.2-3; tasks 115a-117c): filterable sea
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
 | GET | `/api/v{version}/admin/bookings` | Filterable, paginated booking search (SRS 12.11.1, task 115a). | Admin JWT + permission `bookings.read` | — | 200 → AdminBookingSearchResponse |
+| GET | `/api/v{version}/admin/bookings/unassigned-at-risk` | Paid bookings that are assignable but have no live provider on them yet, soonest slot first, for the "Unassigned and at-risk queue" admin-web page. Static route declared ahead of `GetDetail`'s `{bookingId:guid}` route. | Admin JWT + permission `bookings.read` | — | 200 → AdminUnassignedAtRiskBookingSearchResponse |
+| GET | `/api/v{version}/admin/bookings/fulfilment-board` | Every operationally live booking on a given date (defaults to today), flat - feeds the "Fulfilment control room" admin-web page, which buckets these into status columns itself. Static route, same non-clash reasoning as the row above. | Admin JWT + permission `bookings.read` | — | 200 → AdminFulfilmentBoardResponse |
 | GET | `/api/v{version}/admin/bookings/{bookingId}` | Full detail: snapshots, status timeline, payment, cancellation/reschedule/refund history (SRS 12.11.2, tasks 115b-115c). | Admin JWT + permission `bookings.read` | — | 200 → AdminBookingDetailResponse |
 | POST | `/api/v{version}/admin/bookings/{bookingId}/assign-provider` | Assigns (or reassigns) a provider to a booking (task 147, PROVIDER.md OPEN DECISIONS #1 - manual admin-driven assignment). Gated behind "bookings.write" - the existing permission code, per PROVIDER.md's SCOPE BOUNDARY this is Booking-domain behaviour, not a separate Provider-module permission. Returns 409 with "BookingProviderAssignment.ProviderDoubleBooked" when the provider is already on an overlapping job (task 288) - unlike their advisory capacity limits, that one is a hard stop even for an admin. | Admin JWT + permission `bookings.write` | AssignProviderRequest | 200 → BookingProviderAssignmentResponse |
 | GET | `/api/v{version}/admin/bookings/{bookingId}/assignments` | Full provider-assignment history for a booking, newest first (task 147/159) - shows prior rejections/reassignments leading to the current state. | Admin JWT + permission `bookings.read` | — | 200 → BookingProviderAssignmentResponse[] |
 | POST | `/api/v{version}/admin/bookings/{bookingId}/cancel` | Admin-initiated cancellation (SRS 12.11.3, task 117a) via the existing cancellation domain service (task 80c). | Admin JWT + permission `bookings.write` | AdminCancelBookingRequest | 200 → AdminBookingDetailResponse |
 | GET | `/api/v{version}/admin/bookings/{bookingId}/completion-proof` | Completion proof (photos + checklist) for a booking, if any (task 198, SRS 12.11.2 dispute review). | Admin JWT + permission `bookings.read` | — | 200 → BookingCompletionProofResponse |
 | GET | `/api/v{version}/admin/bookings/{bookingId}/eligible-providers` | Candidate providers for manually assigning this booking - matched by service area (pincode/city) and skill (service/category), ranked by specificity then current load. Read-only, to inform the admin's own choice before calling `AssignProvider`: no auto-dispatch (PROVIDER.md OPEN DECISIONS #1). | Admin JWT + permission `bookings.read` | — | 200 → EligibleProviderResponse[] |
+| POST | `/api/v{version}/admin/bookings/{bookingId}/manual-payment` | Records a manual/offline payment (cash, UPI, bank transfer) against a booking Awaiting Payment - transitions the booking exactly like a successful gateway payment. | Admin JWT + permission `bookings.write` | AdminManualPaymentRequest | 200 → AdminBookingDetailResponse |
 | POST | `/api/v{version}/admin/bookings/{bookingId}/refund` | Full or partial refund with audit (SRS 12.11.3, 12.13.2-3, task 117c) via the existing refund domain service (task 75d). | Admin JWT + permission `bookings.write` | AdminRefundRequest | 200 → AdminBookingDetailResponse |
 | POST | `/api/v{version}/admin/bookings/{bookingId}/reject-assignment` | Rejects the booking's current outstanding assignment (task 159) - clears the assigned provider and returns the booking to AwaitingFulfilment so it needs manual reassignment (no auto-match, PROVIDER.md OPEN DECISIONS #1). | Admin JWT + permission `bookings.write` | RejectAssignmentRequest | 200 → BookingProviderAssignmentResponse |
 | POST | `/api/v{version}/admin/bookings/{bookingId}/reschedule` | Admin-initiated reschedule (SRS 12.11.3, task 117b) via the existing reschedule domain service (task 82d). | Admin JWT + permission `bookings.write` | AdminRescheduleBookingRequest | 200 → AdminBookingDetailResponse |
@@ -1405,7 +1416,9 @@ Admin payment transaction view (SRS 12.13.1, task 311): a filterable transaction
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
 | GET | `/api/v{version}/admin/payments` | Transaction list, filterable by booking id, status and creation date range (SRS 12.13.1). | Admin JWT + permission `payments.read` | — | 200 → PagedAdminPaymentTransactionResponse |
+| GET | `/api/v{version}/admin/payments/reconciliation` | Payment reconciliation queue: stuck-pending, failed and orphaned Awaiting Payment/Payment Failed bookings, oldest first - feeds the "Payment reconciliation" admin-web page. Static route declared ahead of `GetDetail`'s `{transactionId:guid}` route. | Admin JWT + permission `payments.read` | — | 200 → AdminPaymentReconciliationResponse |
 | GET | `/api/v{version}/admin/payments/{transactionId}` | Full transaction detail: attempts and refunds (SRS 12.13.1, 14.3). | Admin JWT + permission `payments.read` | — | 200 → AdminPaymentTransactionDetailResponse |
+| POST | `/api/v{version}/admin/payments/{transactionId}/void` | Voids a stuck pending payment order - marks our record only, no gateway call. The reconciliation module's one write action, gated separately from the read endpoints above. | Admin JWT + permission `payments.write` | AdminVoidPaymentTransactionRequest? | 200 → AdminPaymentTransactionListItemResponse |
 
 ### Payouts
 
@@ -1449,6 +1462,7 @@ Admin provider directory management (PROVIDER.md API surface "Admin-Facing Addit
 | POST | `/api/v{version}/admin/providers` | Admin-created provider record (task 150a). ProviderType is always Individual - OPEN DECISIONS #2. | Admin JWT + permission `provider.write` | CreateProviderRequest | 201 → ProviderDetailResponse |
 | POST | `/api/v{version}/admin/providers/kyc-documents/{documentId}/approve` | Approves a submitted KYC document (task 150b, the admin-side counterpart to task 146c's submission flow). | Admin JWT + permission `provider.write` | — | 200 → ProviderKycDocumentResponse |
 | POST | `/api/v{version}/admin/providers/kyc-documents/{documentId}/reject` | Rejects a submitted KYC document (task 150b). | Admin JWT + permission `provider.write` | RejectProviderKycDocumentRequest | 200 → ProviderKycDocumentResponse |
+| GET | `/api/v{version}/admin/providers/performance` | The provider-performance ranking list, for the "Provider performance" admin-web page: offers received, acceptance rate, average response time, completion rate and average rating per provider over a rolling window (default 30 days), sortable/paginated. Static route declared ahead of `{providerId:guid}/performance`. | Admin JWT + permission `provider.read` | — | 200 → ProviderPerformanceListResponse |
 | GET | `/api/v{version}/admin/providers/photo-moderation/pending` | The photo-moderation queue (task 293): every provider whose profile photo is awaiting a verdict. A provider photo is user-supplied content shown to customers, so it goes through the same admin gate this API already applies to KYC documents and review text - it is not published on upload. | Admin JWT + permission `provider.read` | — | 200 → ProviderPhotoResponse[] |
 | GET | `/api/v{version}/admin/providers/{providerId}` | Provider detail: profile, KYC documents, background check history (task 150a/150b). | Admin JWT + permission `provider.read` | — | 200 → ProviderDetailResponse |
 | PUT | `/api/v{version}/admin/providers/{providerId}` | Updates a provider's profile (task 150a). | Admin JWT + permission `provider.write` | UpdateProviderRequest | 200 → ProviderDetailResponse |
@@ -1552,6 +1566,8 @@ Admin add-on management (SRS 12.7, task 107): CRUD and mapping to services, acti
 
 Admin category/city and service/pincode serviceability mapping (SRS 12.9.2, task 111): which categories are active in which city, which services are active in which pincode, and blackout/suspension via deactivation. Gated behind the "serviceability" module, same as `GeographyController`.
 
+A service/pincode mapping's active state is no longer purely admin-set: `IServiceabilityMappingManagementService` now auto-enables a mapping when a provider gains matching skill+area coverage and auto-disables it (after a grace period) when the last covering provider loses that coverage - see docs/DATABASE.md's serviceability auto-management section and docs/PROVIDER.md's Capability & Coverage domain. The `pin`/`unpin` and three read-only diagnostic endpoints below exist to keep that automatic behaviour admin-observable and admin-overridable.
+
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
 | GET | `/api/v{version}/admin/serviceability-mappings/categories` | _(no doc comment)_ | Admin JWT + permission `serviceability.read` | — | 200 → CategoryLookupResponse[] |
@@ -1559,11 +1575,16 @@ Admin category/city and service/pincode serviceability mapping (SRS 12.9.2, task
 | POST | `/api/v{version}/admin/serviceability-mappings/category-city` | _(no doc comment)_ | Admin JWT + permission `serviceability.write` | CategoryCityMappingCreateRequest | 200 → CategoryCityMappingResponse |
 | POST | `/api/v{version}/admin/serviceability-mappings/category-city/{id}/activate` | _(no doc comment)_ | Admin JWT + permission `serviceability.write` | — | 204 No Content |
 | POST | `/api/v{version}/admin/serviceability-mappings/category-city/{id}/deactivate` | Suspends a category's serviceability in a city (SRS 12.9.2 "Service blackout in selected areas"). | Admin JWT + permission `serviceability.write` | — | 204 No Content |
+| GET | `/api/v{version}/admin/serviceability-mappings/coverage-gaps` | Service/pincode pairs where an active provider already has matching skill+area coverage but no active mapping exists yet - feeds the "Coverage gap map" admin-web page. | Admin JWT + permission `serviceability.read` | — | 200 → ServiceabilityCoverageGapResponse[] |
+| GET | `/api/v{version}/admin/serviceability-mappings/mapped-without-coverage` | Active service/pincode mappings with no active provider actually able to fulfil them - the inverse diagnostic, also on the "Coverage gap map" page. | Admin JWT + permission `serviceability.read` | — | 200 → MappedPincodeWithoutProviderCoverageResponse[] |
 | GET | `/api/v{version}/admin/serviceability-mappings/service-pincode` | _(no doc comment)_ | Admin JWT + permission `serviceability.read` | — | 200 → ServicePincodeMappingResponse[] |
 | POST | `/api/v{version}/admin/serviceability-mappings/service-pincode` | _(no doc comment)_ | Admin JWT + permission `serviceability.write` | ServicePincodeMappingCreateRequest | 200 → ServicePincodeMappingResponse |
 | POST | `/api/v{version}/admin/serviceability-mappings/service-pincode/{id}/activate` | _(no doc comment)_ | Admin JWT + permission `serviceability.write` | — | 204 No Content |
 | POST | `/api/v{version}/admin/serviceability-mappings/service-pincode/{id}/deactivate` | Suspends a service's serviceability in a pincode (SRS 12.9.2 "Temporary service suspension"). | Admin JWT + permission `serviceability.write` | — | 204 No Content |
+| POST | `/api/v{version}/admin/serviceability-mappings/service-pincode/{id}/pin` | Pins this mapping's active state as admin-owned, so auto-enable/auto-disable skip it entirely from now on. | Admin JWT + permission `serviceability.write` | — | 204 No Content |
+| POST | `/api/v{version}/admin/serviceability-mappings/service-pincode/{id}/unpin` | Hands this mapping's active state back to auto-enable/auto-disable. | Admin JWT + permission `serviceability.write` | — | 204 No Content |
 | GET | `/api/v{version}/admin/serviceability-mappings/services` | _(no doc comment)_ | Admin JWT + permission `serviceability.read` | — | 200 → ServiceLookupResponse[] |
+| GET | `/api/v{version}/admin/serviceability-mappings/unmapped-active-services` | Active services with no active pincode mapping anywhere - catches a launched-but-unbookable service. | Admin JWT + permission `serviceability.read` | — | 200 → UnmappedActiveServiceResponse[] |
 
 ### Services
 
@@ -1572,6 +1593,7 @@ Admin service/package management (SRS 12.6, task 105): CRUD over the full field 
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
 | GET | `/api/v{version}/admin/catalog/services` | _(no doc comment)_ | Admin JWT + permission `catalog.read` | — | 200 → ServiceAdminResponse[] |
+| GET | `/api/v{version}/admin/catalog/services/health` | Catalog health check, for the "Catalog health" admin-web page: active services missing a city price, a cover image, an active serviceability mapping, or that have never been booked. Warning/audit only, non-destructive - static route declared ahead of `{id:guid}`. | Admin JWT + permission `catalog.read` | — | 200 → CatalogHealthIssueResponse[] |
 | POST | `/api/v{version}/admin/catalog/services` | _(no doc comment)_ | Admin JWT + permission `catalog.write` | ServiceCreateRequest | 200 → ServiceAdminResponse |
 | GET | `/api/v{version}/admin/catalog/services/{id}` | _(no doc comment)_ | Admin JWT + permission `catalog.read` | — | 200 → ServiceAdminResponse |
 | PUT | `/api/v{version}/admin/catalog/services/{id}` | _(no doc comment)_ | Admin JWT + permission `catalog.write` | ServiceUpdateRequest | 200 → ServiceAdminResponse |
@@ -1648,7 +1670,9 @@ Admin ticket workflow (SRS 12.14, 16.2, tasks 120a-f): search/detail across ever
 
 ### SystemSettings
 
-Admin-configurable system settings/feature-flag management (SRS 12.19, tasks 131a-131h): booking, slot, cancellation, reschedule, tax, wallet and coupon settings groups, each independently readable/editable. Gated behind "settings.read"/"settings.write" - the same two policies every module's `AdminModules` code already generates via `AdminPermissionCatalog`, so no new policy registration was needed.
+Admin-configurable system settings/feature-flag management (SRS 12.19, tasks 131a-131h): booking, slot, cancellation, reschedule, tax, wallet, coupon and feature-flag settings groups, each independently readable/editable. Gated behind "settings.read"/"settings.write" - the same two policies every module's `AdminModules` code already generates via `AdminPermissionCatalog`, so no new policy registration was needed.
+
+The `features` group (`FeatureFlagSettings`) is a "Feature flags" card on the admin Settings page controlling customer-facing toggles (Wallet, Referrals, AMC Subscriptions, service ratings badge, booking help link - Coupons stays on `CouponSettings.CouponsEnabled`) and provider-facing toggles (Ratings page, Calendar view, Earnings ledger section, Offers screen), each projected down to the public unauthenticated `GET /api/v1/feature-flags` on consumer-api/provider-api (see those sections below). It also carries the admin-only `AutoManageServiceabilityEnabled` kill switch for the serviceability auto-enable/auto-disable behaviour (see the ServiceabilityMappings section above) - deliberately not exposed on either public feature-flags endpoint. Every customer/provider-facing flag fails open on the frontend if this settings read fails; only Coupons is also backend-enforced.
 
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
@@ -1659,6 +1683,8 @@ Admin-configurable system settings/feature-flag management (SRS 12.19, tasks 131
 | PUT | `/api/v{version}/settings/cancellation` | _(no doc comment)_ | Admin JWT + permission `settings.write` | CancellationSettings | 200 → CancellationSettings |
 | GET | `/api/v{version}/settings/coupon` | _(no doc comment)_ | Admin JWT + permission `settings.read` | — | 200 → CouponSettings |
 | PUT | `/api/v{version}/settings/coupon` | _(no doc comment)_ | Admin JWT + permission `settings.write` | CouponSettings | 200 → CouponSettings |
+| GET | `/api/v{version}/settings/features` | The feature-flag settings group (customer-facing, provider-facing and the admin-only `AutoManageServiceabilityEnabled` kill switch). | Admin JWT + permission `settings.read` | — | 200 → FeatureFlagSettings |
+| PUT | `/api/v{version}/settings/features` | _(no doc comment)_ | Admin JWT + permission `settings.write` | FeatureFlagSettings | 200 → FeatureFlagSettings |
 | GET | `/api/v{version}/settings/reschedule` | _(no doc comment)_ | Admin JWT + permission `settings.read` | — | 200 → RescheduleSettings |
 | PUT | `/api/v{version}/settings/reschedule` | _(no doc comment)_ | Admin JWT + permission `settings.write` | RescheduleSettings | 200 → RescheduleSettings |
 | GET | `/api/v{version}/settings/slot` | _(no doc comment)_ | Admin JWT + permission `settings.read` | — | 200 → SlotSettings |
@@ -1736,6 +1762,14 @@ Provider earnings and payouts (task 149c, PROVIDER.md API surface "Earnings" - s
 | GET | `/api/v{version}/earnings/payouts/{id}` | One payout's detail - 404s if it belongs to a different provider. | Provider JWT | — | 200 → ProviderPayoutResponse |
 | GET | `/api/v{version}/earnings/summary` | Rolled-up earnings summary (current balance) for the caller. | Provider JWT | — | 200 → ProviderEarningsSummaryResponse |
 
+### FeatureFlags
+
+Public provider-facing feature flags (SRS 12.19 "Feature flags"). No auth, same reasoning as consumer-api's `FeatureFlagsController`. Projects the admin-only `FeatureFlagSettings` group down to `ProviderFeatureFlagsResponse` - never the full admin settings shape. provider-web fails open (treats a flag as enabled) if this read fails.
+
+| Method | Path | Summary | Auth | Request | Success Response |
+|---|---|---|---|---|---|
+| GET | `/api/v{version}/feature-flags` | Ratings page, Calendar view, Earnings ledger section and Offers screen flags. | Public | — | 200 → ProviderFeatureFlagsResponse |
+
 ### Geography
 
 Read-only city/zone/pincode lookup for the provider service-areas picker (task 205, PROVIDER.md's Capability &amp; Coverage domain). Before this controller, `ProfileController`'s service-areas endpoints took bare `cityId`/`zoneId`/`pincodeId` with no lookup to resolve them against - provider-web's `ServiceAreasSection` had providers hand-type raw GUIDs. Reuses the existing admin-facing `IGeographyManagementService` (same service `AdminApi.Controllers.GeographyController` calls) rather than adding a new query service - only the response shape is new, trimmed to id/name (matching `ProviderServiceAreaInput`'s cityId/zoneId/pincodeId shape).
@@ -1762,6 +1796,7 @@ Provider jobs (task 149a, PROVIDER.md API surface "Jobs" - list/detail, accept/r
 | GET | `/api/v{version}/jobs/{bookingId}/completion-verification` | The completion evidence submitted for this job, if any (task 198). | Provider JWT | — | 200 → BookingCompletionProofResponse |
 | POST | `/api/v{version}/jobs/{bookingId}/completion-verification` | Submits (or resubmits) the completion evidence - photos plus checklist - required before `Complete` will succeed (tasks 195-197). Distinct from `UploadCompletionProof`'s single legacy proof-ref field. | Provider JWT | SubmitCompletionProofRequest | 200 → BookingCompletionProofResponse |
 | POST | `/api/v{version}/jobs/{bookingId}/en-route` | Mark an accepted job as en route - the provider has set off for the customer's address (task 270). Optional: `Start` still works straight from an accepted job, so a provider who never taps this is not blocked. Re-tapping while already en route answers 200 with the unchanged job rather than a conflict, so a client retrying over a bad connection is not punished for it. | Provider JWT | — | 200 → ProviderJobDetailResponse |
+| POST | `/api/v{version}/jobs/{bookingId}/extend-response-deadline` | Extends this job's response deadline - called by provider-web when its own accept/reject attempt failed for a reason that was not the provider's fault (a transient error, not the 401/session-expiry case the client already retries transparently), so the response window is not silently lost while they retry. | Provider JWT | — | 200 → ProviderJobDetailResponse |
 | POST | `/api/v{version}/jobs/{bookingId}/location` | Report the provider's current position for a job in flight (task 269). Fails closed: 403 unless the caller is the provider on this booking's live assignment, 409 unless the job has been accepted and the booking is still in a trackable state - so no position is ever collected before the provider accepts or after the job ends. Accepted fixes answer 200; fixes dropped by the per-booking throttle answer 202, since the client did nothing wrong and must not retry them. | Provider JWT | RecordProviderLocationRequest | 200 → RecordProviderLocationResponse |
 | POST | `/api/v{version}/jobs/{bookingId}/reject` | Reject an assigned job (task 159 - returns the booking to the assignable pool for admin reassignment). | Provider JWT | RejectJobRequest | 200 → ProviderJobDetailResponse |
 | POST | `/api/v{version}/jobs/{bookingId}/start` | Mark an accepted job as started (provider has arrived / begun work). | Provider JWT | — | 200 → ProviderJobDetailResponse |
@@ -1787,5 +1822,14 @@ Provider profile, KYC, service areas and skills (task 149a, PROVIDER.md API surf
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
 | POST | `/api/v1/auth/dev/login-as-provider` | Dev-only QA auth bypass (Program.cs, provider-api) — issues a real provider session for a given mobile number without OTP/password. Gated by a shared-secret header, not a JWT. | Header `X-Dev-Auth-Key` must match `DevAuth:Key` config; no key configured (as in Production) makes this endpoint unusable. | DevProviderLoginRequest | 200 OK |
+
+### Ratings
+
+Ratings and feedback: the provider's own running average rating, review count, and recent customer reviews, for the "Ratings and feedback" provider-web page. Every action is scoped to the caller's own provider id taken from the JWT (SRS 28.3 IDOR), same pattern as `EarningsController`/`ProfileController`.
+
+| Method | Path | Summary | Auth | Request | Success Response |
+|---|---|---|---|---|---|
+| GET | `/api/v{version}/ratings/summary` | The caller's running average rating and total review count. | Provider JWT | — | 200 → ProviderRatingsSummaryResponse |
+| GET | `/api/v{version}/ratings/reviews` | The caller's own recent reviews, newest first, paginated. | Provider JWT | — | 200 → ProviderReviewSearchResponse |
 
 <!-- END GENERATED ENDPOINT REFERENCE -->
