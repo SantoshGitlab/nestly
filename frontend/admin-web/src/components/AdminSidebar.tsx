@@ -27,7 +27,7 @@ import type { AdminSessionClaims } from "@/lib/types";
  * from the nav.
  */
 const GROUPS: readonly { label: string; keys: readonly NavModuleKey[] }[] = [
-  { label: "Overview", keys: ["dashboard", "reports"] },
+  { label: "Overview", keys: ["dashboard", "overview", "reports"] },
   { label: "Operations", keys: ["fulfilment", "bookings", "payments", "slots", "support", "chat", "reviews"] },
   { label: "Catalog", keys: ["catalog", "pricing", "serviceability"] },
   { label: "People", keys: ["customers", "provider", "provider-referral", "admin-users"] },
@@ -60,6 +60,12 @@ const MODULE_ICONS: Record<NavModuleKey, ReactNode> = {
   reports: (
     <svg {...ICON_PROPS}>
       <path d="M4 20V10M12 20V4M20 20v-6" />
+    </svg>
+  ),
+  overview: (
+    <svg {...ICON_PROPS}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 12 12 6.5M12 12l4.5 2.5" />
     </svg>
   ),
   fulfilment: (
