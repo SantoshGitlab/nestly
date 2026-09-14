@@ -467,10 +467,14 @@ function CustomersSection() {
 /* Catalog                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// Matches CatalogHealthSection.tsx's own REASON_LABELS exactly (short form)
+// rather than a separate, longer wording — consistency with the linked
+// detail page, and short enough not to truncate in the donut legend's
+// narrow column at mobile width (375px).
 const HEALTH_REASON_LABELS: Record<CatalogHealthReason, string> = {
-  NoPrice: "Missing price",
-  NoMapping: "Missing mapping",
-  NoImage: "Missing image",
+  NoPrice: "No price",
+  NoMapping: "No mapping",
+  NoImage: "No image",
   NeverBooked: "Never booked",
 };
 

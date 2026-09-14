@@ -1151,7 +1151,11 @@ export function DonutChart({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-5">
+      {/* Stacked below ~420px (a legend label like "Missing mapping" has no
+          room beside a 140px donut at phone width) - side-by-side above it,
+          which covers every desktop card width this renders in, including a
+          2-column dashboard grid's halved column. */}
+      <div className="flex flex-col items-start gap-4 min-[420px]:flex-row min-[420px]:items-center min-[420px]:gap-5">
         <div className="relative shrink-0">
           <svg
             width={size}
