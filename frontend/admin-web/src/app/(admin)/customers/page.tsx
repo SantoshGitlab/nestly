@@ -2,7 +2,8 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Button, Field, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
@@ -39,6 +40,23 @@ interface FilterFormState {
 
 const EMPTY_FILTERS: FilterFormState = { name: "", mobile: "", email: "", city: "", status: "" };
 
+/**
+ * Seeds the filter form from the URL's query params - the Customer Analytics
+ * dashboard's status tiles link here as `/customers?status=X` and expect the
+ * list to open already filtered, not requiring the admin to re-pick the
+ * status by hand (same reasoning, and the same pattern, as
+ * providers/page.tsx's own filtersFromSearchParams).
+ */
+function filtersFromSearchParams(params: URLSearchParams): FilterFormState {
+  return {
+    name: params.get("name") ?? "",
+    mobile: params.get("mobile") ?? "",
+    email: params.get("email") ?? "",
+    city: params.get("city") ?? "",
+    status: params.get("status") ?? "",
+  };
+}
+
 function buildParamsQuery(params: CustomerSearchParams): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -69,9 +87,23 @@ function buildQueryString(filters: FilterFormState, page: number): string {
  * Built on the task 221 pattern. Columns are deliberately NOT sortable: the
  * list is paged server-side and the endpoint takes no sort parameter, so a
  * header sort would silently reorder only the 20 rows on screen.
+ *
+ * Wrapped in Suspense: `useSearchParams` (reading the Customer Analytics
+ * dashboard's click-through filters) opts the tree below it out of static
+ * rendering, and Next's App Router requires a Suspense boundary around that
+ * or the production build fails (same pattern providers/page.tsx uses).
  */
 export default function CustomersPage() {
-  const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
+  return (
+    <Suspense fallback={<div className="w-full max-w-7xl px-6 py-10" />}>
+      <CustomersPageContent />
+    </Suspense>
+  );
+}
+
+function CustomersPageContent() {
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<FilterFormState>(() => filtersFromSearchParams(searchParams));
   const [page, setPage] = useState(1);
 
   // Real city list to suggest against the City field, which stays a plain
@@ -89,25 +121,25 @@ export default function CustomersPage() {
   // debounced 300ms before it hits the query, same convention as the Name
   // typeahead below and as payments/reconciliation/page.tsx's search box;
   // Account status (a dropdown) applies immediately.
-  const [debouncedName, setDebouncedName] = useState("");
+  const [debouncedName, setDebouncedName] = useState(filters.name);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.name]);
 
-  const [debouncedMobile, setDebouncedMobile] = useState("");
+  const [debouncedMobile, setDebouncedMobile] = useState(filters.mobile);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedMobile(filters.mobile.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.mobile]);
 
-  const [debouncedEmail, setDebouncedEmail] = useState("");
+  const [debouncedEmail, setDebouncedEmail] = useState(filters.email);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedEmail(filters.email.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.email]);
 
-  const [debouncedCity, setDebouncedCity] = useState("");
+  const [debouncedCity, setDebouncedCity] = useState(filters.city);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedCity(filters.city.trim()), 300);
     return () => window.clearTimeout(handle);
