@@ -37,13 +37,12 @@ type ProviderReferralTab = "all" | "fraud-queue";
 export default function ProviderReferralsPage() {
   const [tab, setTab] = useState<ProviderReferralTab>("all");
   const [filters, setFilters] = useState<ProviderReferralFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<ProviderReferralFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
-  // Live typeahead for Provider - reuses the same searchProviderReferrals
-  // call the list below uses, same pattern as bookings/page.tsx's Booking #
-  // suggestions. Suggests both referrer and referee names since the field
-  // searches across both.
+  // Live filtering (no Search button): Provider is a free-text field,
+  // debounced 300ms before it hits the query - shared with the typeahead
+  // suggestions below rather than debouncing twice. Status (a dropdown)
+  // applies immediately.
   const [debouncedProviderSearch, setDebouncedProviderSearch] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(
@@ -52,6 +51,12 @@ export default function ProviderReferralsPage() {
     );
     return () => window.clearTimeout(handle);
   }, [filters.providerSearch]);
+
+  // Any filter change resets to page 1 - staying on a now out-of-range page
+  // would just show an empty result (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedProviderSearch, filters.status]);
 
   const providerSuggestionsQuery = useQuery({
     queryKey: ["provider-referrals", "provider-suggestions", debouncedProviderSearch] as const,
@@ -62,28 +67,23 @@ export default function ProviderReferralsPage() {
   });
 
   const referralsQuery = useQuery({
-    queryKey: ["provider-referrals", "search", tab, appliedFilters, page] as const,
+    queryKey: ["provider-referrals", "search", tab, debouncedProviderSearch, filters.status, page] as const,
     queryFn: () =>
       tab === "fraud-queue"
         ? listProviderReferralFraudQueue({ page, pageSize: PAGE_SIZE })
         : searchProviderReferrals({
-            providerSearch: appliedFilters.providerSearch || undefined,
+            providerSearch: debouncedProviderSearch || undefined,
             status:
-              appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as ProviderReferralStatus),
+              filters.status === "" ? undefined : (Number(filters.status) as ProviderReferralStatus),
             page,
             pageSize: PAGE_SIZE,
           }),
     placeholderData: keepPreviousData,
   });
 
-  const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedProviderSearch("");
     setPage(1);
   };
 
@@ -92,7 +92,7 @@ export default function ProviderReferralsPage() {
     setPage(1);
   };
 
-  const activeFilterCount = tab === "all" ? countActiveFilters(appliedFilters) : 0;
+  const activeFilterCount = tab === "all" ? countActiveFilters(filters) : 0;
 
   const columns: DataTableColumn<ProviderReferralAdminListItem>[] = [
     {
@@ -151,7 +151,6 @@ export default function ProviderReferralsPage() {
         {tab === "all" ? (
           <FilterBar
             columns={2}
-            onSubmit={applyFilters}
             onClear={clearFilters}
             activeCount={activeFilterCount}
             busy={referralsQuery.isFetching}
