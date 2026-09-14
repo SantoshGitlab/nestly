@@ -36,7 +36,8 @@ public sealed class AdminPaymentReconciliationService : IAdminPaymentReconciliat
         _timeProvider = timeProvider;
     }
 
-    public async Task<Result<AdminPaymentReconciliationResponse>> GetReconciliationAsync(int page, int pageSize)
+    public async Task<Result<AdminPaymentReconciliationResponse>> GetReconciliationAsync(
+        int page, int pageSize, PaymentReconciliationCategory? category = null, string? search = null)
     {
         int safePage = page < 1 ? 1 : page;
         int safePageSize = pageSize switch
@@ -71,11 +72,28 @@ public sealed class AdminPaymentReconciliationService : IAdminPaymentReconciliat
             }
         }
 
-        var ordered = items.OrderByDescending(i => i.AgeMinutes).ThenBy(i => i.BookingId).ToList();
+        // Bucket counts are computed from every classified row - before
+        // category/search narrows anything - so the summary strip always
+        // shows true totals, not a shrinking count for the bucket currently
+        // filtered to.
+        int stuckPendingCount = items.Count(i => i.Category == PaymentReconciliationCategory.StuckPending);
+        int failedCount = items.Count(i => i.Category == PaymentReconciliationCategory.Failed);
+        int orphanedCount = items.Count(i => i.Category == PaymentReconciliationCategory.Orphaned);
 
-        int stuckPendingCount = ordered.Count(i => i.Category == PaymentReconciliationCategory.StuckPending);
-        int failedCount = ordered.Count(i => i.Category == PaymentReconciliationCategory.Failed);
-        int orphanedCount = ordered.Count(i => i.Category == PaymentReconciliationCategory.Orphaned);
+        IEnumerable<AdminPaymentReconciliationItemResponse> filtered = items;
+        if (category is not null)
+        {
+            filtered = filtered.Where(i => i.Category == category);
+        }
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var needle = search.Trim();
+            filtered = filtered.Where(i =>
+                i.BookingReference.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                i.CustomerName.Contains(needle, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var ordered = filtered.OrderByDescending(i => i.AgeMinutes).ThenBy(i => i.BookingId).ToList();
 
         int offset = (safePage - 1) * safePageSize;
         var pageItems = ordered.Skip(offset).Take(safePageSize).ToList();

@@ -248,6 +248,82 @@ public sealed class AdminPaymentReconciliationServiceTests : IClassFixture<TestD
     }
 
     [Fact]
+    public async Task GetReconciliationAsync_category_filter_narrows_items_but_counts_stay_total()
+    {
+        var gateway = BuildGateway();
+        SeededBooking orphaned, failed;
+
+        using (var seedContext = _db.CreateContext())
+        {
+            orphaned = await SeedPayableBookingAsync(seedContext, 601m);
+            failed = await SeedPayableBookingAsync(seedContext, 602m);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var paymentRepository = new PaymentTransactionRepository(context);
+            var bookingRepository = new BookingRepository(context);
+            var paymentService = BuildPaymentService(paymentRepository, bookingRepository, context, gateway);
+            var webhookService = BuildWebhookService(paymentRepository, bookingRepository, context, gateway);
+
+            var failedOrder = await paymentService.CreateOrderAsync(failed.CustomerId, new CreatePaymentOrderRequest(failed.BookingId, null));
+            string payload = PaymentWebhookPayload.Build(failedOrder.Value.GatewayOrderId, "sandbox_declined_ref", PaymentWebhookPayload.FailedStatus);
+            string signature = gateway.SignPayload(payload);
+            var callback = await webhookService.HandleCallbackAsync(
+                new PaymentWebhookRequest(failedOrder.Value.GatewayOrderId, "sandbox_declined_ref", PaymentWebhookPayload.FailedStatus, signature));
+            callback.IsSuccess.Should().BeTrue();
+
+            // orphaned is left exactly as SeedPayableBookingAsync created it: PaymentPending, no transaction ever created.
+        }
+
+        using var readContext = _db.CreateContext();
+        var service = CreateService(readContext, TimeProvider.System);
+
+        var unfiltered = await service.GetReconciliationAsync(page: 1, pageSize: 100);
+        unfiltered.IsSuccess.Should().BeTrue();
+        int totalFailedCount = unfiltered.Value.FailedCount;
+        int totalOrphanedCount = unfiltered.Value.OrphanedCount;
+
+        var filtered = await service.GetReconciliationAsync(page: 1, pageSize: 100, category: PaymentReconciliationCategory.Orphaned);
+        filtered.IsSuccess.Should().BeTrue();
+        filtered.Value.Items.Should().OnlyContain(i => i.Category == PaymentReconciliationCategory.Orphaned);
+        filtered.Value.Items.Should().Contain(i => i.BookingId == orphaned.BookingId);
+        filtered.Value.Items.Should().NotContain(i => i.BookingId == failed.BookingId);
+
+        // The bucket counts describe the whole queue, not the current filter
+        // - a UI switching buckets must not see its own summary strip shift.
+        filtered.Value.FailedCount.Should().Be(totalFailedCount);
+        filtered.Value.OrphanedCount.Should().Be(totalOrphanedCount);
+    }
+
+    [Fact]
+    public async Task GetReconciliationAsync_search_matches_booking_reference_case_insensitively()
+    {
+        SeededBooking orphaned, otherOrphaned;
+        using (var seedContext = _db.CreateContext())
+        {
+            orphaned = await SeedPayableBookingAsync(seedContext, 603m);
+            otherOrphaned = await SeedPayableBookingAsync(seedContext, 604m);
+        }
+
+        using var readContext = _db.CreateContext();
+        var service = CreateService(readContext, TimeProvider.System);
+
+        var unfiltered = await service.GetReconciliationAsync(page: 1, pageSize: 100);
+        unfiltered.IsSuccess.Should().BeTrue();
+        string reference = unfiltered.Value.Items.Single(i => i.BookingId == orphaned.BookingId).BookingReference;
+
+        // Mixed-case, partial substring of the real reference - proves the
+        // match is a case-insensitive Contains, not an exact/prefix match.
+        string needle = reference.Substring(reference.Length / 2).ToLowerInvariant();
+
+        var searched = await service.GetReconciliationAsync(page: 1, pageSize: 100, search: needle);
+        searched.IsSuccess.Should().BeTrue();
+        searched.Value.Items.Should().Contain(i => i.BookingId == orphaned.BookingId);
+        searched.Value.Items.Should().NotContain(i => i.BookingId == otherOrphaned.BookingId);
+    }
+
+    [Fact]
     public async Task VoidAsync_cancels_a_pending_transaction_and_it_becomes_orphaned()
     {
         var gateway = BuildGateway();
