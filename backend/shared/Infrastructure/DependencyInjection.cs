@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Nestly.Application;
@@ -1074,7 +1075,26 @@ public static class DependencyInjection
                 // client has no way to send an Authorization header on it and
                 // this process was not reading the query-string token the
                 // other two APIs have read since task 190.
-                options.Events = HubJwtEvents.Create();
+                var events = HubJwtEvents.Create();
+
+                // TEMPORARY DIAGNOSTIC (docs/OPEN-FIXES-FEATURES.csv "provider
+                // login bounces to /login?reason=expired"): a freshly-issued,
+                // well-formed token was being rejected with no visibility into
+                // why - the default JWT bearer handler never logs the actual
+                // SecurityTokenException. Remove once the root cause is found.
+                events.OnAuthenticationFailed = context =>
+                {
+                    var diagnosticLogger = context.HttpContext.RequestServices
+                        .GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("ProviderJwtDiagnostic");
+                    diagnosticLogger.LogWarning(
+                        context.Exception,
+                        "Provider JWT authentication failed for {Path}",
+                        context.HttpContext.Request.Path);
+                    return Task.CompletedTask;
+                };
+
+                options.Events = events;
             });
 
         services.AddAuthorization();
