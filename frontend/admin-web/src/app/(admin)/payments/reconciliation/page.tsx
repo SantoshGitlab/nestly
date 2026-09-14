@@ -2,8 +2,8 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
-import { Alert, Badge, Button, PageHeading, Textarea } from "@/components/ui";
+import { useEffect, useState } from "react";
+import { Alert, Badge, Button, Field, PageHeading, Textarea, cx } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import {
   ConfirmDialog,
@@ -90,9 +90,31 @@ export default function PaymentReconciliationPage() {
   const [voidingItem, setVoidingItem] = useState<AdminPaymentReconciliationItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Bucket filter: "" means every category. Clicking a summary badge below
+  // sets this directly, same as typing into Search - both just narrow the
+  // one query, no separate "Search" button (this queue is small/bounded,
+  // unlike the full booking search screen's server-paged list).
+  const [categoryFilter, setCategoryFilter] = useState<"" | PaymentReconciliationCategory>("");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+
+  // Any filter change resets to page 1 - staying on page 3 of a now-smaller
+  // result set would just show an empty page.
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter, debouncedSearch]);
+
   const query = useQuery({
-    queryKey: ["admin-payments-reconciliation", page] as const,
-    queryFn: () => getPaymentReconciliation(page, PAGE_SIZE),
+    queryKey: ["admin-payments-reconciliation", page, categoryFilter, debouncedSearch] as const,
+    queryFn: () =>
+      getPaymentReconciliation(page, PAGE_SIZE, {
+        category: categoryFilter === "" ? undefined : categoryFilter,
+        search: debouncedSearch || undefined,
+      }),
     placeholderData: keepPreviousData,
   });
 
@@ -191,13 +213,63 @@ export default function PaymentReconciliationPage() {
 
       {query.data ? (
         <div className="mt-6 flex flex-wrap gap-3">
-          <Badge tone={CATEGORY_TONES[PaymentReconciliationCategory.StuckPending]}>
-            {query.data.stuckPendingCount} stuck pending
-          </Badge>
-          <Badge tone={CATEGORY_TONES[PaymentReconciliationCategory.Failed]}>{query.data.failedCount} failed</Badge>
-          <Badge tone={CATEGORY_TONES[PaymentReconciliationCategory.Orphaned]}>{query.data.orphanedCount} orphaned</Badge>
+          <CategoryFilterBadge
+            tone={CATEGORY_TONES[PaymentReconciliationCategory.StuckPending]}
+            label={`${query.data.stuckPendingCount} stuck pending`}
+            active={categoryFilter === PaymentReconciliationCategory.StuckPending}
+            onClick={() =>
+              setCategoryFilter((current) =>
+                current === PaymentReconciliationCategory.StuckPending ? "" : PaymentReconciliationCategory.StuckPending,
+              )
+            }
+          />
+          <CategoryFilterBadge
+            tone={CATEGORY_TONES[PaymentReconciliationCategory.Failed]}
+            label={`${query.data.failedCount} failed`}
+            active={categoryFilter === PaymentReconciliationCategory.Failed}
+            onClick={() =>
+              setCategoryFilter((current) =>
+                current === PaymentReconciliationCategory.Failed ? "" : PaymentReconciliationCategory.Failed,
+              )
+            }
+          />
+          <CategoryFilterBadge
+            tone={CATEGORY_TONES[PaymentReconciliationCategory.Orphaned]}
+            label={`${query.data.orphanedCount} orphaned`}
+            active={categoryFilter === PaymentReconciliationCategory.Orphaned}
+            onClick={() =>
+              setCategoryFilter((current) =>
+                current === PaymentReconciliationCategory.Orphaned ? "" : PaymentReconciliationCategory.Orphaned,
+              )
+            }
+          />
         </div>
       ) : null}
+
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="max-w-xs flex-1">
+          <Field
+            label="Search"
+            name="search"
+            placeholder="Booking # or customer name"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {search || categoryFilter !== "" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch("");
+              setCategoryFilter("");
+            }}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+      </div>
 
       <div className="mt-4">
         <DataTable
@@ -247,6 +319,40 @@ export default function PaymentReconciliationPage() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * One of the three bucket summary badges, doubling as the category filter -
+ * clicking narrows the table to that bucket; clicking the active one again
+ * clears back to "All buckets" (no separate reset control needed for this
+ * one filter). The active state uses a ring rather than a different tone so
+ * the badge's own colour still reads as "this bucket", not "this is
+ * selected".
+ */
+function CategoryFilterBadge({
+  tone,
+  label,
+  active,
+  onClick,
+}: {
+  tone: BadgeTone;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cx(
+        "rounded-full outline-offset-2 transition-shadow",
+        active ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-bg dark:ring-offset-bg-raised" : "",
+      )}
+    >
+      <Badge tone={tone}>{label}</Badge>
+    </button>
   );
 }
 
