@@ -109,14 +109,14 @@ const BOOKING_CSV_COLUMNS: readonly CsvColumn<AdminBookingListItem>[] = [
 
 export default function BookingsPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   // Keyed by booking id, valued with the row itself (not just the id) so a
   // selection survives paging — `DataTable` only ever holds the current
   // page's rows, but the export button needs the actual row data for every
-  // booking selected across however many pages the admin visited. Cleared on
-  // a new search (`onSubmit`/`onClear` below), since filters changing
-  // underneath a stale selection would be confusing.
+  // booking selected across however many pages the admin visited. Cleared
+  // when the filters settle onto a new result set (the debounce/page-reset
+  // effect below) or on `onClear`, since filters changing underneath a stale
+  // selection would be confusing.
   const [selectedBookings, setSelectedBookings] = useState<Map<string, AdminBookingListItem>>(new Map());
 
   // Real category list for the Category filter's dropdown, not free text -
@@ -180,34 +180,80 @@ export default function BookingsPage() {
     placeholderData: keepPreviousData,
   });
 
+  // City and Coupon code have no typeahead suggestions of their own, but stay
+  // free text on the query too, so they get the same 300ms debounce as every
+  // other text field on this page - just without a suggestions query riding
+  // along with it.
+  const [debouncedCity, setDebouncedCity] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCity(filters.city.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.city]);
+
+  const [debouncedCouponCode, setDebouncedCouponCode] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCouponCode(filters.couponCode.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.couponCode]);
+
+  // Live filtering (no Search button): Booking #, Customer name and Customer
+  // mobile reuse the debounce each already computes for its typeahead
+  // suggestions above, rather than adding a second timer per field. Status,
+  // Category and the two slot date fields apply immediately. Any change
+  // resets to page 1 and drops the row selection, same as `onSubmit` used to.
+  useEffect(() => {
+    setPage(1);
+    setSelectedBookings(new Map());
+  }, [
+    debouncedReference,
+    debouncedCustomerName,
+    debouncedCustomerMobile,
+    filters.status,
+    debouncedCity,
+    filters.categoryId,
+    debouncedCouponCode,
+    filters.slotDateFrom,
+    filters.slotDateTo,
+  ]);
+
   const query = useQuery({
-    queryKey: ["admin-bookings", appliedFilters, page],
+    queryKey: [
+      "admin-bookings",
+      debouncedReference,
+      debouncedCustomerName,
+      debouncedCustomerMobile,
+      filters.status,
+      debouncedCity,
+      filters.categoryId,
+      debouncedCouponCode,
+      filters.slotDateFrom,
+      filters.slotDateTo,
+      page,
+    ],
     queryFn: () =>
       searchBookings({
-        reference: appliedFilters.reference || undefined,
-        customerName: appliedFilters.customerName || undefined,
-        customerMobile: appliedFilters.customerMobile || undefined,
-        status: appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as BookingStatus),
-        city: appliedFilters.city || undefined,
-        categoryId: appliedFilters.categoryId || undefined,
-        couponCode: appliedFilters.couponCode || undefined,
-        slotDateFrom: appliedFilters.slotDateFrom || undefined,
-        slotDateTo: appliedFilters.slotDateTo || undefined,
+        reference: debouncedReference || undefined,
+        customerName: debouncedCustomerName || undefined,
+        customerMobile: debouncedCustomerMobile || undefined,
+        status: filters.status === "" ? undefined : (Number(filters.status) as BookingStatus),
+        city: debouncedCity || undefined,
+        categoryId: filters.categoryId || undefined,
+        couponCode: debouncedCouponCode || undefined,
+        slotDateFrom: filters.slotDateFrom || undefined,
+        slotDateTo: filters.slotDateTo || undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
     placeholderData: keepPreviousData,
   });
 
-  const onSubmit = () => {
-    setPage(1);
-    setSelectedBookings(new Map());
-    setAppliedFilters(filters);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedReference("");
+    setDebouncedCustomerName("");
+    setDebouncedCustomerMobile("");
+    setDebouncedCity("");
+    setDebouncedCouponCode("");
     setPage(1);
     setSelectedBookings(new Map());
   };
@@ -298,9 +344,8 @@ export default function BookingsPage() {
       <BookingsTabs />
 
       <FilterBar
-        onSubmit={onSubmit}
         onClear={onClear}
-        activeCount={countActiveFilters(appliedFilters)}
+        activeCount={countActiveFilters(filters)}
         busy={query.isFetching}
       >
         <Field
