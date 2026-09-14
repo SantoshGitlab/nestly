@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cx, EmptyState, Field, Modal } from "@/components/ui";
-import { buildSearchIndex, matchesEntry, type SearchCategory, type SearchIndexEntry } from "@/lib/search-index";
+import { buildSearchIndex, matchEntry, type SearchCategory, type SearchIndexEntry } from "@/lib/search-index";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
 /** Fixed display order for result groups - Pages before Settings, matching how often each is the thing an admin is hunting for. */
@@ -12,16 +12,24 @@ const CATEGORY_ORDER: readonly SearchCategory[] = ["Pages", "Settings"];
 /** Keeps the palette responsive on a broad query ("a") without rendering hundreds of rows. */
 const MAX_RESULTS_PER_CATEGORY = 8;
 
+interface MatchedEntry {
+  entry: SearchIndexEntry;
+  /** See `EntryMatch.matchedKeyword` - shown as a "Matched: …" hint when set. */
+  matchedKeyword: string | null;
+}
+
 interface GroupedResults {
   category: SearchCategory;
-  entries: SearchIndexEntry[];
+  entries: MatchedEntry[];
 }
 
 function groupResults(index: SearchIndexEntry[], query: string): GroupedResults[] {
-  const matched = index.filter((entry) => matchesEntry(entry, query));
+  const matched = index
+    .map((entry) => ({ entry, ...matchEntry(entry, query) }))
+    .filter((result) => result.matched);
   return CATEGORY_ORDER.map((category) => ({
     category,
-    entries: matched.filter((entry) => entry.category === category).slice(0, MAX_RESULTS_PER_CATEGORY),
+    entries: matched.filter((result) => result.entry.category === category).slice(0, MAX_RESULTS_PER_CATEGORY),
   })).filter((group) => group.entries.length > 0);
 }
 
@@ -102,8 +110,8 @@ export function GlobalSearch() {
       setActiveIndex((current) => Math.max(current - 1, 0));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      const entry = flatResults[activeIndex];
-      if (entry) navigateTo(entry);
+      const result = flatResults[activeIndex];
+      if (result) navigateTo(result.entry);
     }
   };
 
@@ -164,7 +172,7 @@ export function GlobalSearch() {
                     {group.category}
                   </p>
                   <div className="flex flex-col gap-0.5">
-                    {group.entries.map((entry) => {
+                    {group.entries.map(({ entry, matchedKeyword }) => {
                       rowIndex += 1;
                       const isActive = rowIndex === activeIndex;
                       return (
@@ -188,6 +196,15 @@ export function GlobalSearch() {
                           </span>
                           {entry.description ? (
                             <span className="line-clamp-1 text-xs text-fg-muted">{entry.description}</span>
+                          ) : null}
+                          {/* The query didn't match this entry's own label/description at all -
+                              it matched a hidden field (e.g. "Slot rules" for "book", via its
+                              "Max advance booking (days)" field). Without this, that result looks
+                              unrelated to the query rather than correct. */}
+                          {matchedKeyword ? (
+                            <span className="line-clamp-1 text-xs text-fg-subtle">
+                              Matched: <span className="text-fg-muted">{matchedKeyword}</span>
+                            </span>
                           ) : null}
                         </button>
                       );

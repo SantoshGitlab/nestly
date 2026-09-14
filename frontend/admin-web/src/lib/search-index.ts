@@ -34,8 +34,16 @@ export interface SearchIndexEntry {
   description?: string;
   category: SearchCategory;
   href: string;
-  /** Extra terms to match against that are not shown in the result row. */
-  keywords?: string;
+  /**
+   * Extra terms to match against that are not shown in the result row by
+   * default - kept as individual strings (not one joined blob) so a match
+   * that lands here rather than in the visible label/description can still
+   * be attributed to a specific one and surfaced as a "matched: …" hint
+   * (see {@link matchEntry}). A query that only matches here would otherwise
+   * make a result look wrong - "Slot rules" for "book" is correct (it has a
+   * "Max advance booking (days)" field) but inexplicable without this.
+   */
+  keywords?: readonly string[];
 }
 
 /**
@@ -87,7 +95,7 @@ function buildSettingsEntries(): SearchIndexEntry[] {
     description: terms.description,
     category: "Settings",
     href: "/settings",
-    keywords: terms.fields.join(" "),
+    keywords: terms.fields,
   }));
 
   // Named individually too (not just folded into "Feature flags" above) -
@@ -98,7 +106,7 @@ function buildSettingsEntries(): SearchIndexEntry[] {
     description: flag.description,
     category: "Settings",
     href: "/settings",
-    keywords: "feature flag toggle setting",
+    keywords: ["feature flag", "toggle", "setting"],
   }));
 
   return [...groupEntries, ...flagEntries];
@@ -132,11 +140,32 @@ export function buildSearchIndex(claims: AdminSessionClaims | null): SearchIndex
   return [...pageEntries, ...subPageEntries, ...buildSettingsEntries()];
 }
 
+export interface EntryMatch {
+  matched: boolean;
+  /**
+   * The specific hidden keyword the query matched, when the match came from
+   * `keywords` rather than the visible label/description - null whenever the
+   * label or description alone already explains the result, or when nothing
+   * matched at all. `GlobalSearch` shows this as a "Matched: …" hint so a
+   * result like "Slot rules" for the query "book" (it has no "book" in its
+   * own title or description, only a "Max advance booking (days)" field)
+   * doesn't look like a broken/unrelated result.
+   */
+  matchedKeyword: string | null;
+}
+
 /** Case-insensitive substring match against an entry's visible text plus its hidden keywords. Same "simple, no fuzzy-matching" rule as the settings page's own search. */
-export function matchesEntry(entry: SearchIndexEntry, query: string): boolean {
+export function matchEntry(entry: SearchIndexEntry, query: string): EntryMatch {
   const needle = query.trim().toLowerCase();
-  if (!needle) return false;
-  return [entry.label, entry.description, entry.keywords]
+  if (!needle) return { matched: false, matchedKeyword: null };
+
+  const visibleMatch = [entry.label, entry.description]
     .filter((text): text is string => Boolean(text))
     .some((text) => text.toLowerCase().includes(needle));
+  if (visibleMatch) return { matched: true, matchedKeyword: null };
+
+  const matchedKeyword = (entry.keywords ?? []).find((keyword) => keyword.toLowerCase().includes(needle));
+  return matchedKeyword !== undefined
+    ? { matched: true, matchedKeyword }
+    : { matched: false, matchedKeyword: null };
 }
