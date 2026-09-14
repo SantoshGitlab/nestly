@@ -132,6 +132,31 @@ export interface ProviderSearchParams {
   cityId?: string;
   page?: number;
   pageSize?: number;
+  /**
+   * Provider Onboarding Overview dashboard: bounds `Provider.createdAt`, ISO
+   * UTC instants (inclusive both ends), same convention as
+   * `AdminBookingSearchRequest.createdFromUtc/createdToUtc`. What makes a
+   * dashboard tile's click-through land on exactly that day's cohort.
+   */
+  createdFromUtc?: string;
+  createdToUtc?: string;
+}
+
+/**
+ * Provider Onboarding Overview dashboard (Admin Web new page): a
+ * cohort-of-the-day funnel. Every count reads providers created on `date` -
+ * see the matching C# `AdminProviderOnboardingOverviewResponse`'s doc
+ * comment for why these six counts are NOT mutually exclusive partitions of
+ * the cohort.
+ */
+export interface AdminProviderOnboardingOverview {
+  date: string;
+  todayOnboardingCount: number;
+  documentVerificationCount: number;
+  verifiedCount: number;
+  pendingCount: number;
+  liveCount: number;
+  activeCount: number;
 }
 
 export interface CreateProviderRequest {

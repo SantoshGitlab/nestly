@@ -8,6 +8,7 @@
  */
 import { API_V1, apiFetch } from "./api";
 import type {
+  AdminProviderOnboardingOverview,
   AssignProviderRequest,
   BookingProviderAssignment,
   CreateProviderPayoutRequest,
@@ -54,6 +55,16 @@ function query(params: object): string {
 
 export const searchProviders = (params: ProviderSearchParams) =>
   apiFetch<ProviderSearchResponse>(`${PROVIDERS_BASE}${query(params)}`, { authenticated: true });
+
+/**
+ * Provider Onboarding Overview dashboard's funnel counts for one day
+ * (defaults to today server-side when `date` is omitted) - mirrors
+ * bookings-api.ts's `getFulfilmentBoard` shape.
+ */
+export const getProviderOnboardingOverview = (date?: string) =>
+  apiFetch<AdminProviderOnboardingOverview>(`${PROVIDERS_BASE}/onboarding-overview${query({ date })}`, {
+    authenticated: true,
+  });
 
 export const getProviderDetail = (providerId: string) =>
   apiFetch<ProviderDetail>(`${PROVIDERS_BASE}/${providerId}`, { authenticated: true });
