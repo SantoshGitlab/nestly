@@ -63,7 +63,6 @@ const EMPTY_FILTERS: FilterFormState = { bookingId: "", status: "", fromDate: ""
  */
 export default function PaymentsPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
   // "Booking ID" stays a plain GUID text field (PaymentTransactionRepository
@@ -75,6 +74,11 @@ export default function PaymentsPage() {
   // is the reference the admin actually recognises. Debounced and gated at
   // 2+ chars, same as every other live-search datalist in this app - so an
   // empty/just-clicked field shows nothing, only typing narrows it down.
+  //
+  // Live filtering (no Search button): the debounced booking search this
+  // field already computes for its typeahead suggestions is reused as the
+  // live query filter too, same as customers/page.tsx's Name field. Status
+  // and the two date fields apply immediately.
   const [debouncedBookingSearch, setDebouncedBookingSearch] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedBookingSearch(filters.bookingId.trim()), 300);
@@ -88,28 +92,28 @@ export default function PaymentsPage() {
     placeholderData: keepPreviousData,
   });
 
+  // Any filter change resets to page 1 - same pattern as customers/page.tsx.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedBookingSearch, filters.status, filters.fromDate, filters.toDate]);
+
   const query = useQuery({
-    queryKey: ["admin-payments", appliedFilters, page],
+    queryKey: ["admin-payments", debouncedBookingSearch, filters.status, filters.fromDate, filters.toDate, page],
     queryFn: () =>
       searchPaymentTransactions({
-        bookingId: appliedFilters.bookingId || undefined,
-        status: appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as PaymentTransactionStatus),
-        fromUtc: appliedFilters.fromDate ? new Date(`${appliedFilters.fromDate}T00:00:00.000Z`).toISOString() : undefined,
-        toUtc: appliedFilters.toDate ? new Date(`${appliedFilters.toDate}T23:59:59.999Z`).toISOString() : undefined,
+        bookingId: debouncedBookingSearch || undefined,
+        status: filters.status === "" ? undefined : (Number(filters.status) as PaymentTransactionStatus),
+        fromUtc: filters.fromDate ? new Date(`${filters.fromDate}T00:00:00.000Z`).toISOString() : undefined,
+        toUtc: filters.toDate ? new Date(`${filters.toDate}T23:59:59.999Z`).toISOString() : undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
     placeholderData: keepPreviousData,
   });
 
-  const onSubmit = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedBookingSearch("");
     setPage(1);
   };
 
@@ -180,9 +184,8 @@ export default function PaymentsPage() {
       <PaymentsTabs />
 
       <FilterBar
-        onSubmit={onSubmit}
         onClear={onClear}
-        activeCount={countActiveFilters(appliedFilters)}
+        activeCount={countActiveFilters(filters)}
         busy={query.isFetching}
       >
         <Field
