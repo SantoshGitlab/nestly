@@ -72,7 +72,6 @@ function buildQueryString(filters: FilterFormState, page: number): string {
  */
 export default function CustomersPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
   // Real city list to suggest against the City field, which stays a plain
@@ -85,16 +84,48 @@ export default function CustomersPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Live typeahead for Name - reuses the same customer search this page
-  // already calls, same pattern as bookings/page.tsx's Booking # suggestions
-  // (there is no standalone exported customer-search client to reuse from
-  // elsewhere, so this reuses the page's own endpoint with a small pageSize).
+  // Live filtering (no Search button - task: "auto search when searching
+  // something"): every free-text field (Name, Mobile, Email, City) is
+  // debounced 300ms before it hits the query, same convention as the Name
+  // typeahead below and as payments/reconciliation/page.tsx's search box;
+  // Account status (a dropdown) applies immediately.
   const [debouncedName, setDebouncedName] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.name]);
 
+  const [debouncedMobile, setDebouncedMobile] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedMobile(filters.mobile.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.mobile]);
+
+  const [debouncedEmail, setDebouncedEmail] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedEmail(filters.email.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.email]);
+
+  const [debouncedCity, setDebouncedCity] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCity(filters.city.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.city]);
+
+  // Any filter change resets to page 1 - staying on page 3 of a now-smaller
+  // result set would just show an empty page (same pattern as
+  // payments/reconciliation/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status]);
+
+  // Live typeahead for Name - reuses the same customer search this page
+  // already calls, same pattern as bookings/page.tsx's Booking # suggestions
+  // (there is no standalone exported customer-search client to reuse from
+  // elsewhere, so this reuses the page's own endpoint with a small pageSize).
+  // Shares `debouncedName` with the main query below rather than debouncing
+  // twice.
   const nameSuggestionsQuery = useQuery({
     queryKey: ["admin-customers-name-suggestions", debouncedName],
     queryFn: () =>
@@ -107,22 +138,24 @@ export default function CustomersPage() {
   });
 
   const query = useQuery({
-    queryKey: ["admin-customers", appliedFilters, page],
+    queryKey: ["admin-customers", page, debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status] as const,
     queryFn: () =>
-      apiFetch<CustomerSearchResponse>(`${API_V1}/customers?${buildQueryString(appliedFilters, page)}`, {
-        authenticated: true,
-      }),
+      apiFetch<CustomerSearchResponse>(
+        `${API_V1}/customers?${buildQueryString(
+          { name: debouncedName, mobile: debouncedMobile, email: debouncedEmail, city: debouncedCity, status: filters.status },
+          page,
+        )}`,
+        { authenticated: true },
+      ),
     placeholderData: keepPreviousData,
   });
 
-  const onSubmit = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedName("");
+    setDebouncedMobile("");
+    setDebouncedEmail("");
+    setDebouncedCity("");
     setPage(1);
   };
 
@@ -170,9 +203,8 @@ export default function CustomersPage() {
       <CustomersTabs />
 
       <FilterBar
-        onSubmit={onSubmit}
         onClear={onClear}
-        activeCount={countActiveFilters(appliedFilters)}
+        activeCount={countActiveFilters(filters)}
         busy={query.isFetching}
         columns={3}
       >
