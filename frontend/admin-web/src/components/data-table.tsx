@@ -697,9 +697,17 @@ export function DensityToggle({
 
 /**
  * The filter pattern that sits above every list: a responsive grid of kit
- * controls, then one action row. Submitting is explicit rather than
- * filter-on-keystroke — these screens are backed by paged server queries, and
- * a request per keystroke is both slow and unreadable.
+ * controls, then one action row.
+ *
+ * Two submission modes:
+ * - `onSubmit` provided: explicit Search button, filters apply only once
+ *   clicked (or Enter pressed) — for filter sets with no debounced live
+ *   query behind them.
+ * - `onSubmit` omitted: no Search button. The caller applies filters live
+ *   (immediately for dropdowns/dates, debounced for text fields — see e.g.
+ *   payments/reconciliation/page.tsx, providers/page.tsx,
+ *   customers/page.tsx), so there is nothing left to submit; the form still
+ *   swallows a native Enter-triggered submit/page-reload via `preventDefault`.
  */
 export function FilterBar({
   children,
@@ -713,7 +721,8 @@ export function FilterBar({
   className = "",
 }: {
   children: ReactNode;
-  onSubmit: () => void;
+  /** Omit for a live-filtering list (no Search button rendered). */
+  onSubmit?: () => void;
   /** Omit for a filter set that cannot be meaningfully emptied. */
   onClear?: () => void;
   /** How many filters currently hold a value — shown as a pill. */
@@ -727,7 +736,7 @@ export function FilterBar({
 }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSubmit();
+    onSubmit?.();
   };
 
   const grid =
@@ -762,9 +771,11 @@ export function FilterBar({
               Clear
             </Button>
           ) : null}
-          <Button type="submit" loading={busy}>
-            {submitLabel}
-          </Button>
+          {onSubmit ? (
+            <Button type="submit" loading={busy}>
+              {submitLabel}
+            </Button>
+          ) : null}
         </div>
       </div>
     </form>
