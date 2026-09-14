@@ -37,8 +37,11 @@ const PAGE_SIZE = 20;
  * the 20 rows on screen.
  */
 export default function SupportTicketsPage() {
+  // Live filtering (no Search button): Customer ID, Booking ID and Assigned
+  // admin ID are debounced 300ms, same convention as customers/page.tsx;
+  // Status, Category, Priority, Assignment and the date range are all
+  // dropdowns/date-pickers and apply immediately.
   const [draft, setDraft] = useState<SupportTicketFilters>(DEFAULT_SUPPORT_TICKET_FILTERS);
-  const [applied, setApplied] = useState<SupportTicketFilters>(DEFAULT_SUPPORT_TICKET_FILTERS);
   const [page, setPage] = useState(1);
 
   // Real assignable-admin list to suggest against the "Assigned admin ID"
@@ -58,7 +61,9 @@ export default function SupportTicketsPage() {
   // equality (SupportTicketRepository.SearchAsync), so it's suggested the
   // same way as Payments' Booking ID field: search by the booking's
   // human-readable reference (Contains, already exposed via searchBookings)
-  // and fill the field with the real GUID the search actually needs.
+  // and fill the field with the real GUID the search actually needs. The
+  // same debounced value doubles as the live filter's bookingId, rather than
+  // debouncing it twice.
   const [debouncedBookingSearch, setDebouncedBookingSearch] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedBookingSearch(draft.bookingId.trim()), 300);
@@ -72,20 +77,59 @@ export default function SupportTicketsPage() {
     placeholderData: keepPreviousData,
   });
 
+  const [debouncedCustomerId, setDebouncedCustomerId] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCustomerId(draft.customerId.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.customerId]);
+
+  const [debouncedAssignedAdminUserId, setDebouncedAssignedAdminUserId] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(
+      () => setDebouncedAssignedAdminUserId(draft.assignedAdminUserId.trim()),
+      300,
+    );
+    return () => window.clearTimeout(handle);
+  }, [draft.assignedAdminUserId]);
+
+  const liveFilters: SupportTicketFilters = {
+    status: draft.status,
+    category: draft.category,
+    priority: draft.priority,
+    unassigned: draft.unassigned,
+    fromDate: draft.fromDate,
+    toDate: draft.toDate,
+    customerId: debouncedCustomerId,
+    bookingId: debouncedBookingSearch,
+    assignedAdminUserId: debouncedAssignedAdminUserId,
+  };
+
+  // Any filter change resets to page 1 (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [
+    draft.status,
+    draft.category,
+    draft.priority,
+    draft.unassigned,
+    draft.fromDate,
+    draft.toDate,
+    debouncedCustomerId,
+    debouncedBookingSearch,
+    debouncedAssignedAdminUserId,
+  ]);
+
   const query = useQuery({
-    queryKey: ["admin-support-tickets", applied, page],
-    queryFn: () => searchSupportTickets(buildSupportTicketSearchQuery(applied, { page, pageSize: PAGE_SIZE })),
+    queryKey: ["admin-support-tickets", liveFilters, page],
+    queryFn: () => searchSupportTickets(buildSupportTicketSearchQuery(liveFilters, { page, pageSize: PAGE_SIZE })),
     placeholderData: keepPreviousData,
   });
 
-  const onApply = () => {
-    setPage(1);
-    setApplied(draft);
-  };
-
   const onReset = () => {
     setDraft(DEFAULT_SUPPORT_TICKET_FILTERS);
-    setApplied(DEFAULT_SUPPORT_TICKET_FILTERS);
+    setDebouncedCustomerId("");
+    setDebouncedBookingSearch("");
+    setDebouncedAssignedAdminUserId("");
     setPage(1);
   };
 
@@ -141,9 +185,8 @@ export default function SupportTicketsPage() {
       />
 
       <FilterBar
-        onSubmit={onApply}
         onClear={onReset}
-        activeCount={countActiveFilters(applied)}
+        activeCount={countActiveFilters(draft)}
         busy={query.isFetching}
       >
         <Select
@@ -246,7 +289,7 @@ export default function SupportTicketsPage() {
           emptyTitle="No tickets match these filters"
           emptyDescription="Try broadening the date range, or clear the filters to see every ticket."
           emptyAction={
-            countActiveFilters(applied) > 0 ? (
+            countActiveFilters(draft) > 0 ? (
               <Button variant="secondary" onClick={onReset}>
                 Clear filters
               </Button>
