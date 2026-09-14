@@ -133,6 +133,18 @@ public class ProviderRepository : IProviderRepository
                 .Any(a => a.ProviderId == p.Id && a.CityId == filter.CityId.Value && a.IsActive));
         }
 
+        // Provider Onboarding Overview dashboard: lets a tile click-through
+        // land here filtered to exactly the day's registration cohort.
+        if (filter.CreatedFromUtc.HasValue)
+        {
+            query = query.Where(p => p.CreatedAt >= filter.CreatedFromUtc.Value);
+        }
+
+        if (filter.CreatedToUtc.HasValue)
+        {
+            query = query.Where(p => p.CreatedAt <= filter.CreatedToUtc.Value);
+        }
+
         int totalCount = await query.CountAsync();
 
         var rows = await query
@@ -141,5 +153,29 @@ public class ProviderRepository : IProviderRepository
             .ToListAsync();
 
         return new ProviderSearchResult(rows, totalCount);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly date, CancellationToken cancellationToken = default)
+    {
+        var startOfDayUtc = date.ToDateTime(TimeOnly.MinValue);
+        var startOfNextDayUtc = startOfDayUtc.AddDays(1);
+
+        // One round trip: project just the two status columns for the day's
+        // cohort, then compute all six counts in memory - see this method's
+        // interface doc comment for why that stays cheap at this scale.
+        var cohort = await _context.Set<Provider>()
+            .AsNoTracking()
+            .Where(p => p.CreatedAt >= startOfDayUtc && p.CreatedAt < startOfNextDayUtc)
+            .Select(p => new { p.OnboardingStatus, p.Status })
+            .ToListAsync(cancellationToken);
+
+        return new ProviderOnboardingOverviewCounts(
+            TodayOnboardingCount: cohort.Count,
+            DocumentVerificationCount: cohort.Count(p => p.OnboardingStatus == ProviderOnboardingStatus.KycSubmitted),
+            VerifiedCount: cohort.Count(p => p.OnboardingStatus == ProviderOnboardingStatus.KycVerified),
+            PendingCount: cohort.Count(p => p.Status == ProviderStatus.PendingVerification),
+            LiveCount: cohort.Count(p => p.OnboardingStatus == ProviderOnboardingStatus.Completed),
+            ActiveCount: cohort.Count(p => p.Status == ProviderStatus.Active));
     }
 }

@@ -192,5 +192,132 @@ public sealed class ProviderManagementServiceTests : IDisposable
         final.IsActive.Should().BeFalse();
     }
 
+    /// <summary>
+    /// Backdates a provider's <c>created_at</c> directly in the database, via
+    /// a context separate from the one under test - same reasoning as
+    /// <see cref="BackdatePendingAutoDisableAsync"/> above: EF Core's
+    /// identity map would otherwise keep serving the original context's
+    /// already-tracked (recent) copy of the row instead of this update.
+    /// <see cref="Provider"/> stamps <c>CreatedAt</c> to
+    /// <c>DateTime.UtcNow</c> in its constructor with no way to pass one in,
+    /// so a cohort-of-a-different-day fixture has no route but a direct SQL
+    /// update.
+    /// </summary>
+    private async Task BackdateCreatedAtAsync(Guid providerId, DateTime createdAtUtc)
+    {
+        await using var backdateContext = _database.CreateContext();
+        await backdateContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE provider SET created_at = {createdAtUtc} WHERE id = {providerId}");
+    }
+
+    private static Provider NewProvider(ProviderOnboardingStatus onboardingStatus, ProviderStatus status)
+    {
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "9" + Guid.NewGuid().ToString("N")[..9]);
+        // Drive OnboardingStatus through its real transitions (Registered ->
+        // ProfileCompleted -> KycSubmitted -> KycVerified -> Completed)
+        // rather than reflection, so these fixtures never desync from what
+        // Provider's own state machine actually allows.
+        if (onboardingStatus is ProviderOnboardingStatus.ProfileCompleted or ProviderOnboardingStatus.KycSubmitted
+            or ProviderOnboardingStatus.KycVerified or ProviderOnboardingStatus.Completed)
+        {
+            provider.UpdateProfile(provider.LegalName, provider.DisplayName, provider.Email);
+        }
+
+        if (onboardingStatus is ProviderOnboardingStatus.KycSubmitted or ProviderOnboardingStatus.KycVerified or ProviderOnboardingStatus.Completed)
+        {
+            provider.MarkKycSubmitted();
+        }
+
+        if (onboardingStatus is ProviderOnboardingStatus.KycVerified or ProviderOnboardingStatus.Completed)
+        {
+            provider.MarkKycVerified();
+        }
+
+        if (onboardingStatus == ProviderOnboardingStatus.Completed)
+        {
+            provider.MarkOnboardingCompleted();
+        }
+
+        provider.ChangeStatus(status);
+        return provider;
+    }
+
+    /// <summary>
+    /// Provider Onboarding Overview dashboard: the six funnel counts must
+    /// read only today's cohort (task's "of everyone who registered on the
+    /// selected date, how many are now at each stage"), each dimension
+    /// independently - not a mutually-exclusive partition. Seeds one provider
+    /// per bucket plus a same-day Registered provider (counts only toward the
+    /// cohort total) and a provider created yesterday (must not count at
+    /// all), then asserts every count in one pass.
+    /// </summary>
+    [Fact]
+    public async Task GetOnboardingOverviewAsync_counts_only_todays_cohort_per_stage()
+    {
+        await using var context = _database.CreateContext();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var registeredToday = NewProvider(ProviderOnboardingStatus.Registered, ProviderStatus.PendingVerification);
+        var kycSubmittedToday = NewProvider(ProviderOnboardingStatus.KycSubmitted, ProviderStatus.PendingVerification);
+        var kycVerifiedToday = NewProvider(ProviderOnboardingStatus.KycVerified, ProviderStatus.PendingVerification);
+        var liveAndActiveToday = NewProvider(ProviderOnboardingStatus.Completed, ProviderStatus.Active);
+        var suspendedYesterday = NewProvider(ProviderOnboardingStatus.Completed, ProviderStatus.Active);
+
+        context.AddRange(registeredToday, kycSubmittedToday, kycVerifiedToday, liveAndActiveToday, suspendedYesterday);
+        await context.SaveChangesAsync();
+        await BackdateCreatedAtAsync(suspendedYesterday.Id, DateTime.UtcNow.AddDays(-1));
+
+        var result = await CreateService(context).GetOnboardingOverviewAsync(new AdminProviderOnboardingOverviewRequest(today));
+
+        result.IsSuccess.Should().BeTrue();
+        var overview = result.Value;
+        overview.Date.Should().Be(today);
+        overview.TodayOnboardingCount.Should().Be(4, "the cohort is everyone created today, regardless of stage - yesterday's provider is excluded");
+        overview.DocumentVerificationCount.Should().Be(1);
+        overview.VerifiedCount.Should().Be(1);
+        overview.PendingCount.Should().Be(3, "Registered/KycSubmitted/KycVerified all leave ProviderStatus at PendingVerification");
+        overview.LiveCount.Should().Be(1);
+        overview.ActiveCount.Should().Be(1, "LiveCount and ActiveCount both come from the same provider here - the two dimensions are independent, not partitions");
+    }
+
+    /// <summary>Defaults to today when no date is supplied (mirrors <c>GetFulfilmentBoardAsync</c>'s own default).</summary>
+    [Fact]
+    public async Task GetOnboardingOverviewAsync_defaults_to_today_when_no_date_given()
+    {
+        await using var context = _database.CreateContext();
+
+        var result = await CreateService(context).GetOnboardingOverviewAsync(new AdminProviderOnboardingOverviewRequest(null));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Date.Should().Be(DateOnly.FromDateTime(DateTime.UtcNow));
+    }
+
+    /// <summary>
+    /// Provider Onboarding Overview dashboard's click-through: SearchAsync's
+    /// new CreatedFromUtc/CreatedToUtc range must land exactly on the day's
+    /// cohort a tile summarized, excluding a provider created outside it.
+    /// </summary>
+    [Fact]
+    public async Task SearchAsync_filters_by_created_date_range()
+    {
+        await using var context = _database.CreateContext();
+        var inRange = NewProvider(ProviderOnboardingStatus.Registered, ProviderStatus.PendingVerification);
+        var outOfRange = NewProvider(ProviderOnboardingStatus.Registered, ProviderStatus.PendingVerification);
+        context.AddRange(inRange, outOfRange);
+        await context.SaveChangesAsync();
+        await BackdateCreatedAtAsync(outOfRange.Id, DateTime.UtcNow.AddDays(-5));
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var startOfDayUtc = today.ToDateTime(TimeOnly.MinValue);
+        var endOfDayUtc = startOfDayUtc.AddDays(1).AddTicks(-1);
+
+        var result = await CreateService(context).SearchAsync(
+            new ProviderSearchRequest(null, null, null, null, CreatedFromUtc: startOfDayUtc, CreatedToUtc: endOfDayUtc));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Items.Should().ContainSingle(p => p.Id == inRange.Id);
+        result.Value.Items.Should().NotContain(p => p.Id == outOfRange.Id);
+    }
+
     public void Dispose() => _database.Dispose();
 }

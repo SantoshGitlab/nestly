@@ -53,4 +53,12 @@ public interface IProviderManagementService
 
     /// <summary>Sets a provider's dispatch capacity limits, hard-enforced by the automatic-assignment engine (task 245, 308).</summary>
     Task<Result<ProviderCapacityResponse>> SetCapacityAsync(Guid providerId, SetProviderCapacityRequest request);
+
+    /// <summary>
+    /// The Provider Onboarding Overview dashboard's cohort-of-the-day funnel
+    /// counts (Admin Web new page) - see
+    /// <see cref="AdminProviderOnboardingOverviewResponse"/>'s doc comment
+    /// for exactly what each count means.
+    /// </summary>
+    Task<Result<AdminProviderOnboardingOverviewResponse>> GetOnboardingOverviewAsync(AdminProviderOnboardingOverviewRequest request);
 }

@@ -91,9 +91,16 @@ public class ProvidersController : ControllerBase
         [FromQuery] ProviderOnboardingStatus? onboardingStatus,
         [FromQuery] Guid? cityId,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20)
+        [FromQuery] int pageSize = 20,
+        // Provider Onboarding Overview dashboard: same createdFromUtc/createdToUtc
+        // naming as AdminBookingSearchRequest/BookingsController.Search, so a
+        // dashboard tile click-through lands here filtered to that day's
+        // registration cohort.
+        [FromQuery] DateTime? createdFromUtc = null,
+        [FromQuery] DateTime? createdToUtc = null)
     {
-        var request = new ProviderSearchRequest(name, phone, status, onboardingStatus, cityId, page, pageSize);
+        var request = new ProviderSearchRequest(
+            name, phone, status, onboardingStatus, cityId, page, pageSize, createdFromUtc, createdToUtc);
         var validation = await _searchValidator.ValidateAsync(request);
         if (!validation.IsValid)
         {
@@ -101,6 +108,24 @@ public class ProvidersController : ControllerBase
         }
 
         var result = await _providerManagementService.SearchAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// The Provider Onboarding Overview dashboard's cohort-of-the-day funnel
+    /// counts (Admin Web new page): of every provider who registered on
+    /// <paramref name="date"/> (defaults to today), how many are now at each
+    /// onboarding/status stage - see <see cref="AdminProviderOnboardingOverviewResponse"/>'s
+    /// doc comment for exactly what each count means. Static route declared
+    /// ahead of <see cref="GetDetail"/>'s <c>{providerId:guid}</c> route, same
+    /// non-clash reasoning as <see cref="ListPerformance"/> above.
+    /// </summary>
+    [HttpGet("onboarding-overview")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(AdminProviderOnboardingOverviewResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetOnboardingOverview([FromQuery] DateOnly? date = null)
+    {
+        var result = await _providerManagementService.GetOnboardingOverviewAsync(new AdminProviderOnboardingOverviewRequest(date));
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
