@@ -146,7 +146,6 @@ function ProvidersPageContent() {
   // comment). Lazy useState initializer so a later, unrelated re-render never
   // stomps on filters the admin has since edited by hand.
   const [filters, setFilters] = useState<FilterFormState>(() => filtersFromSearchParams(searchParams));
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(() => filtersFromSearchParams(searchParams));
   const [page, setPage] = useState(1);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState<CreateProviderRequest>(EMPTY_CREATE);
@@ -154,15 +153,37 @@ function ProvidersPageContent() {
 
   const citiesQuery = useQuery({ queryKey: ["cities"], queryFn: () => listCities() });
 
-  // Live typeahead for Name - reuses the same server-side search this page
-  // already calls (searchProviders), same pattern as bookings/page.tsx's
-  // Booking # suggestions.
-  const [debouncedName, setDebouncedName] = useState("");
+  // Live filtering (no Search button - task: "auto search when searching
+  // something"): text fields (Name, Phone) are debounced 300ms before they
+  // hit the query, same convention as the Name typeahead below and as
+  // payments/reconciliation/page.tsx's search box; dropdowns/date pickers
+  // apply immediately, same as every other filter page. Both debounced
+  // values are seeded from the same URL-param read as `filters` (not "") so
+  // a dashboard tile click-through (see filtersFromSearchParams) shows its
+  // filtered list on first render, no 300ms gap and no click needed.
+  const [debouncedName, setDebouncedName] = useState(() => filtersFromSearchParams(searchParams).name);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.name]);
 
+  const [debouncedPhone, setDebouncedPhone] = useState(() => filtersFromSearchParams(searchParams).phone);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedPhone(filters.phone.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.phone]);
+
+  // Any filter change resets to page 1 - staying on page 3 of a now-smaller
+  // result set would just show an empty page (same pattern as
+  // payments/reconciliation/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedName, debouncedPhone, filters.status, filters.onboardingStatus, filters.cityId, filters.createdFrom, filters.createdTo]);
+
+  // Live typeahead for Name - reuses the same server-side search this page
+  // already calls (searchProviders), same pattern as bookings/page.tsx's
+  // Booking # suggestions. Shares `debouncedName` with the main query above
+  // rather than debouncing twice.
   const nameSuggestionsQuery = useQuery({
     queryKey: ["admin-providers-name-suggestions", debouncedName],
     queryFn: () => searchProviders({ name: debouncedName, page: 1, pageSize: 8 }),
@@ -171,19 +192,29 @@ function ProvidersPageContent() {
   });
 
   const query = useQuery({
-    queryKey: ["admin-providers", appliedFilters, page],
+    queryKey: [
+      "admin-providers",
+      page,
+      debouncedName,
+      debouncedPhone,
+      filters.status,
+      filters.onboardingStatus,
+      filters.cityId,
+      filters.createdFrom,
+      filters.createdTo,
+    ] as const,
     queryFn: () =>
       searchProviders({
-        name: appliedFilters.name || undefined,
-        phone: appliedFilters.phone || undefined,
-        status: appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as ProviderStatus),
+        name: debouncedName || undefined,
+        phone: debouncedPhone || undefined,
+        status: filters.status === "" ? undefined : (Number(filters.status) as ProviderStatus),
         onboardingStatus:
-          appliedFilters.onboardingStatus === "" ? undefined : (Number(appliedFilters.onboardingStatus) as ProviderOnboardingStatus),
-        cityId: appliedFilters.cityId || undefined,
+          filters.onboardingStatus === "" ? undefined : (Number(filters.onboardingStatus) as ProviderOnboardingStatus),
+        cityId: filters.cityId || undefined,
         // Local day boundaries, not `${date}T00:00:00Z` - see lib/day-range's
         // own doc comment on why (5h30m IST shift).
-        createdFromUtc: appliedFilters.createdFrom ? (startOfLocalDayUtc(appliedFilters.createdFrom) ?? undefined) : undefined,
-        createdToUtc: appliedFilters.createdTo ? (endOfLocalDayUtc(appliedFilters.createdTo) ?? undefined) : undefined,
+        createdFromUtc: filters.createdFrom ? (startOfLocalDayUtc(filters.createdFrom) ?? undefined) : undefined,
+        createdToUtc: filters.createdTo ? (endOfLocalDayUtc(filters.createdTo) ?? undefined) : undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -208,14 +239,10 @@ function ProvidersPageContent() {
     onError: (err) => setCreateError(describeError(err)),
   });
 
-  const onSubmit = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedName("");
+    setDebouncedPhone("");
     setPage(1);
   };
 
@@ -295,9 +322,8 @@ function ProvidersPageContent() {
       <ProvidersTabs />
 
       <FilterBar
-        onSubmit={onSubmit}
         onClear={onClear}
-        activeCount={countActiveFilters(appliedFilters)}
+        activeCount={countActiveFilters(filters)}
         busy={query.isFetching}
         columns={4}
       >
