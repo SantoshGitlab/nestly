@@ -204,6 +204,12 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
 // daily.
 app.ScheduleBookingFulfilmentPromotion();
 
+// docs/OPEN-FIXES-FEATURES.csv "Service to pincode mapping" follow-up: the
+// periodic backstop for AutoDisableUnservedMappingsAsync's grace period - see
+// IServiceabilityAutoDisableSweepJob's doc comment for why a mapping cannot
+// simply rely on being touched again by the next provider event.
+app.ScheduleServiceabilityAutoDisableSweepJob();
+
 // Task 294: delivers customer notifications whose in-process, post-commit
 // dispatch never completed. This is the "and a retry path that does not depend
 // on the in-process handler having run" half of the rule docs/ARCHITECTURE.md

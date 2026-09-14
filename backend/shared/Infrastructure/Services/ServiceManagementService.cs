@@ -318,16 +318,22 @@ public class ServiceManagementService : IServiceManagementService
 
         // Four independent lookups, each one query, rather than a per-service
         // round trip for any of them (avoids N+1 over the active catalog).
-        var categoryNamesTask = BuildCategoryNameLookupAsync(activeServices.Select(s => s.CategoryId));
-        var pricedServiceIdsTask = _serviceCityPriceRepository.ListServiceIdsWithActivePriceAsync();
-        var everBookedServiceIdsTask = _bookingRepository.ListServiceIdsEverBookedAsync();
-        var unmappedServiceIdsTask = _mappingManagementService.ListUnmappedActiveServicesAsync();
-        await Task.WhenAll(categoryNamesTask, pricedServiceIdsTask, everBookedServiceIdsTask, unmappedServiceIdsTask);
-
-        var categoryNames = categoryNamesTask.Result;
-        var pricedServiceIds = pricedServiceIdsTask.Result.ToHashSet();
-        var everBookedServiceIds = everBookedServiceIdsTask.Result.ToHashSet();
-        var unmappedServiceIds = unmappedServiceIdsTask.Result.Select(u => u.ServiceId).ToHashSet();
+        // Awaited sequentially, NOT via Task.WhenAll: all four repositories
+        // above resolve through the same request-scoped DbContext (standard
+        // EF Core DI lifetime), and DbContext is not thread-safe for
+        // concurrent operations - running these "in parallel" throws
+        // InvalidOperationException ("A second operation was started on this
+        // context instance before a previous operation completed") and this
+        // endpoint 500s. Reproduced live: a direct curl right after server
+        // startup can slip through the race, but any real page load reliably
+        // hits it. Sequential awaits still cost only 4 round trips total,
+        // same as before - the fix removes the (incorrect) concurrency, not
+        // the query-count optimisation.
+        var categoryNames = await BuildCategoryNameLookupAsync(activeServices.Select(s => s.CategoryId));
+        var pricedServiceIds = (await _serviceCityPriceRepository.ListServiceIdsWithActivePriceAsync()).ToHashSet();
+        var everBookedServiceIds = (await _bookingRepository.ListServiceIdsEverBookedAsync()).ToHashSet();
+        var unmappedServiceIds = (await _mappingManagementService.ListUnmappedActiveServicesAsync())
+            .Select(u => u.ServiceId).ToHashSet();
 
         var issues = new List<CatalogHealthIssueResponse>();
         foreach (var service in activeServices)

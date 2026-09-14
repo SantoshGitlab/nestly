@@ -21,6 +21,7 @@ import {
 import { isNotImplemented } from "@/lib/api";
 import { isoDateOffsetFromToday, toLocalIsoDate } from "@/lib/date";
 import { listEarningsLedger } from "@/lib/earnings-api";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import { EarningEntryType, earningSourceLabel } from "@/lib/earnings-types";
 import { formatDateTime, formatInr, formatSignedInr } from "@/lib/format";
 import type { EarningLedgerEntry } from "@/lib/earnings-types";
@@ -51,8 +52,17 @@ const PERIOD_TABS = [
  * changing the request.
  */
 export function LedgerSection() {
+  const { earningsLedgerEnabled } = useFeatureFlags();
   const [period, setPeriod] = useState<Period>("all");
-  const query = useQuery({ queryKey: ["provider-earnings-ledger"], queryFn: listEarningsLedger });
+  const query = useQuery({
+    queryKey: ["provider-earnings-ledger"],
+    queryFn: listEarningsLedger,
+    enabled: earningsLedgerEnabled,
+  });
+
+  if (!earningsLedgerEnabled) {
+    return null;
+  }
 
   if (query.isPending) {
     return (

@@ -40,6 +40,7 @@ import {
 } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, ApiError, apiFetch, describeError, errorCode } from "@/lib/api";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import { type BookingDraft, readDraft, writeDraft } from "@/lib/booking-draft";
 import { addRecurrenceInterval, todayIsoDate } from "@/lib/date";
 import { RecurringBookingRecurrenceFrequency } from "@/lib/types";
@@ -174,6 +175,8 @@ function BookingSummaryScreen() {
    */
   const idempotencyKeyRef = useRef<string | null>(null);
   const idempotencyRequestSignatureRef = useRef<string | null>(null);
+
+  const { walletEnabled, couponsEnabled } = useFeatureFlags();
 
   // Coupon (task 77, SRS 11.10.3). appliedCouponCode is the code the backend
   // has confirmed - couponInput is just the text box's draft value, kept
@@ -998,6 +1001,7 @@ function BookingSummaryScreen() {
         </Card>
 
         {/* Coupon (task 62d, 77; SRS 11.10.3). */}
+        {couponsEnabled ? (
         <Card title="Coupon" description="Have a code? Apply it before you pay.">
           <div className="flex flex-col gap-3">
             {appliedCouponCode ? (
@@ -1043,11 +1047,12 @@ function BookingSummaryScreen() {
             {couponError ? <Alert tone="error">{couponError}</Alert> : null}
           </div>
         </Card>
+        ) : null}
 
         {/* Wallet credit (task 310, SRS 11.7.2). Only shown once the summary
             has actually loaded and there is a balance to offer - a customer
             with nothing in their wallet has nothing to decide here. */}
-        {summary && summary.wallet.balance > 0 ? (
+        {walletEnabled && summary && summary.wallet.balance > 0 ? (
           <Card title="Wallet credit" description="Use your Glavyx wallet balance towards this booking.">
             <CheckboxField
               label={`Use my wallet balance (${inr(summary.wallet.balance)} available)`}

@@ -1,7 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Settings;
+using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
@@ -43,4 +46,17 @@ internal static class TestServices
                 NullLogger<ProviderTravelFeasibilityService>.Instance,
                 Occupancy()),
             NullLogger<OverrunReassignmentService>.Instance);
+
+    /// <summary>Mirrors <c>Nestly.Catalog.Tests.TestServices</c>'s own equivalent - see its doc comment.</summary>
+    public static IAuditLogWriter AuditLogWriter(NestlyDbContext context) =>
+        new AuditLogWriter(context, SystemAuditContextProvider.Instance);
+
+    public static ISystemSettingsService SystemSettings(NestlyDbContext context) =>
+        new SystemSettingsService(new SystemSettingRepository(context), AuditLogWriter(context), SystemAuditContextProvider.Instance);
+
+    private sealed class SystemAuditContextProvider : IAuditContextProvider
+    {
+        public static readonly SystemAuditContextProvider Instance = new();
+        public AuditContext GetCurrent() => AuditContext.System;
+    }
 }

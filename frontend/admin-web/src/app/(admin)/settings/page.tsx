@@ -12,17 +12,35 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { z } from "zod";
-import { Alert, Button, Card, CheckboxField, Field, PageHeading, Skeleton, useToast } from "@/components/ui";
+import { Alert, Button, Card, CheckboxField, cx, EmptyState, Field, PageHeading, Skeleton, useToast } from "@/components/ui";
 import { FormActions, FormGrid } from "@/components/data-table";
 import { SectionError } from "@/components/screen-states";
 import { apiFetch, describeError } from "@/lib/api";
 import { canWriteModule } from "@/lib/permissions";
+import {
+  BOOKING_SEARCH_TERMS,
+  CANCELLATION_SEARCH_TERMS,
+  COUPON_SEARCH_TERMS,
+  COUPONS_ENABLED_DESCRIPTION,
+  CUSTOMER_FLAGS,
+  FEATURE_SEARCH_TERMS,
+  PLATFORM_FLAGS,
+  PROVIDER_FLAGS,
+  RESCHEDULE_SEARCH_TERMS,
+  SLOT_SEARCH_TERMS,
+  TAX_SEARCH_TERMS,
+  WALLET_SEARCH_TERMS,
+  hasAnySettingsMatch,
+  matchesSearch,
+  type SettingsSearchTerms,
+} from "@/lib/settings-search-terms";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import type {
   AllSystemSettingsResponse,
   BookingSettings,
   CancellationSettings,
   CouponSettings,
+  FeatureFlagSettings,
   RescheduleSettings,
   SlotSettings,
   TaxSettings,
@@ -127,13 +145,54 @@ function NullableTextField<T extends FieldValues>({
  * own explanation reads badly squeezed into one half-width column next to a
  * numeric input, and the feature flags here are the highest-consequence
  * controls on the page.
+ *
+ * `hidden` backs the on-page search box below: the row stays mounted (and
+ * its `Controller` stays registered with react-hook-form) so filtering never
+ * touches save/validation, it's just visually removed via CSS.
  */
-function ToggleRow(props: ComponentProps<typeof CheckboxField>) {
+function ToggleRow({ hidden, ...props }: ComponentProps<typeof CheckboxField> & { hidden?: boolean }) {
   return (
-    <div className="sm:col-span-2">
+    <div className={cx("sm:col-span-2", hidden && "hidden")}>
       <CheckboxField {...props} />
     </div>
   );
+}
+
+/**
+ * Wraps one non-toggle field (`Field`, `NullableNumberField`,
+ * `NullableTextField`) so the search box can hide it without unmounting -
+ * same reasoning as {@link ToggleRow}'s `hidden` prop, kept as a separate
+ * wrapper here since those fields don't own their outer grid cell the way
+ * `ToggleRow` does.
+ */
+function SearchableField({ hidden, children }: { hidden: boolean; children: ReactNode }) {
+  return <div className={hidden ? "hidden" : undefined}>{children}</div>;
+}
+
+/**
+ * `SettingsSearchTerms` (title/description/fields per group) lives in
+ * `lib/settings-search-terms.ts` now, shared with the global command-palette
+ * search - see that module's doc comment. Used two ways here: (1) each
+ * group's own section component hides individual fields whose label doesn't
+ * match, unless the *card's* title/description already matched (in which
+ * case the whole card is shown unfiltered - see `getSearchVisibility`
+ * below); (2) the page aggregates every group's terms (`hasAnySettingsMatch`)
+ * to render the shared "no matching settings" empty state when nothing
+ * anywhere matches.
+ */
+function getSearchVisibility(query: string, terms: SettingsSearchTerms) {
+  const titleMatches = matchesSearch(query, terms.title, terms.description);
+  const cardVisible = titleMatches || matchesSearch(query, ...terms.fields);
+  return {
+    cardVisible,
+    // Once the card matched on its own title/description, showing only a
+    // subset of its fields would be confusing (an admin who typed "wallet"
+    // to find the Wallet settings card should see the whole card, not just
+    // whichever field happens to contain "wallet"). Field-level filtering
+    // only kicks in when the card is being shown *because* some field(s)
+    // matched.
+    isFieldVisible: (label: string) => titleMatches || matchesSearch(query, label),
+  };
 }
 
 function useAllSettings() {
@@ -246,11 +305,24 @@ const bookingSchema = z.object({
   allowSameDayBooking: z.boolean(),
 });
 
-function BookingSettingsSection({ initial, queryClient, canWrite }: { initial: BookingSettings; queryClient: QueryClient; canWrite: boolean }) {
+function BookingSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: BookingSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, BOOKING_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<BookingSettings>
-      title="Booking rules"
-      description="How far ahead, and how close to a slot, a booking may be created (SRS 12.19)."
+      title={BOOKING_SEARCH_TERMS.title}
+      description={BOOKING_SEARCH_TERMS.description}
       groupPath="booking"
       schema={bookingSchema}
       defaultValues={initial}
@@ -259,28 +331,39 @@ function BookingSettingsSection({ initial, queryClient, canWrite }: { initial: B
     >
       {(form) => (
         <>
-          <Field
-            label="Minimum lead time (hours)"
-            type="number"
-            error={form.formState.errors.minLeadTimeHours?.message}
-            {...form.register("minLeadTimeHours", { valueAsNumber: true })}
-          />
-          <Field
-            label="Max advance booking (days)"
-            type="number"
-            error={form.formState.errors.maxAdvanceBookingDays?.message}
-            {...form.register("maxAdvanceBookingDays", { valueAsNumber: true })}
-          />
-          <NullableNumberField
-            form={form}
-            name="maxActiveBookingsPerCustomer"
-            label="Max active bookings per customer (blank = unlimited)"
-          />
+          <SearchableField hidden={!isFieldVisible("Minimum lead time (hours)")}>
+            <Field
+              label="Minimum lead time (hours)"
+              type="number"
+              error={form.formState.errors.minLeadTimeHours?.message}
+              {...form.register("minLeadTimeHours", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Max advance booking (days)")}>
+            <Field
+              label="Max advance booking (days)"
+              type="number"
+              error={form.formState.errors.maxAdvanceBookingDays?.message}
+              {...form.register("maxAdvanceBookingDays", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Max active bookings per customer (blank = unlimited)")}>
+            <NullableNumberField
+              form={form}
+              name="maxActiveBookingsPerCustomer"
+              label="Max active bookings per customer (blank = unlimited)"
+            />
+          </SearchableField>
           <Controller
             control={form.control}
             name="allowSameDayBooking"
             render={({ field }) => (
-              <ToggleRow label="Allow same-day booking" checked={field.value} onChange={field.onChange} />
+              <ToggleRow
+                label="Allow same-day booking"
+                checked={field.value}
+                onChange={field.onChange}
+                hidden={!isFieldVisible("Allow same-day booking")}
+              />
             )}
           />
         </>
@@ -297,11 +380,24 @@ const slotSchema = z.object({
   allowOverbooking: z.boolean(),
 });
 
-function SlotSettingsSection({ initial, queryClient, canWrite }: { initial: SlotSettings; queryClient: QueryClient; canWrite: boolean }) {
+function SlotSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: SlotSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, SLOT_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<SlotSettings>
-      title="Slot rules"
-      description="How slots are generated and offered: duration, same-day cutoff, and capacity (SRS 15.2)."
+      title={SLOT_SEARCH_TERMS.title}
+      description={SLOT_SEARCH_TERMS.description}
       groupPath="slot"
       schema={slotSchema}
       defaultValues={initial}
@@ -310,35 +406,48 @@ function SlotSettingsSection({ initial, queryClient, canWrite }: { initial: Slot
     >
       {(form) => (
         <>
-          <Field
-            label="Default slot duration (minutes)"
-            type="number"
-            error={form.formState.errors.defaultSlotDurationMinutes?.message}
-            {...form.register("defaultSlotDurationMinutes", { valueAsNumber: true })}
-          />
-          <Field
-            label="Same-day cutoff (hours)"
-            type="number"
-            error={form.formState.errors.sameDayCutoffHours?.message}
-            {...form.register("sameDayCutoffHours", { valueAsNumber: true })}
-          />
-          <Field
-            label="Max advance booking (days)"
-            type="number"
-            error={form.formState.errors.maxAdvanceBookingDays?.message}
-            {...form.register("maxAdvanceBookingDays", { valueAsNumber: true })}
-          />
-          <Field
-            label="Default slot capacity"
-            type="number"
-            error={form.formState.errors.defaultSlotCapacity?.message}
-            {...form.register("defaultSlotCapacity", { valueAsNumber: true })}
-          />
+          <SearchableField hidden={!isFieldVisible("Default slot duration (minutes)")}>
+            <Field
+              label="Default slot duration (minutes)"
+              type="number"
+              error={form.formState.errors.defaultSlotDurationMinutes?.message}
+              {...form.register("defaultSlotDurationMinutes", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Same-day cutoff (hours)")}>
+            <Field
+              label="Same-day cutoff (hours)"
+              type="number"
+              error={form.formState.errors.sameDayCutoffHours?.message}
+              {...form.register("sameDayCutoffHours", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Max advance booking (days)")}>
+            <Field
+              label="Max advance booking (days)"
+              type="number"
+              error={form.formState.errors.maxAdvanceBookingDays?.message}
+              {...form.register("maxAdvanceBookingDays", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Default slot capacity")}>
+            <Field
+              label="Default slot capacity"
+              type="number"
+              error={form.formState.errors.defaultSlotCapacity?.message}
+              {...form.register("defaultSlotCapacity", { valueAsNumber: true })}
+            />
+          </SearchableField>
           <Controller
             control={form.control}
             name="allowOverbooking"
             render={({ field }) => (
-              <ToggleRow label="Allow overbooking" checked={field.value} onChange={field.onChange} />
+              <ToggleRow
+                label="Allow overbooking"
+                checked={field.value}
+                onChange={field.onChange}
+                hidden={!isFieldVisible("Allow overbooking")}
+              />
             )}
           />
         </>
@@ -353,11 +462,24 @@ const cancellationSchema = z.object({
   allowAdminOverride: z.boolean(),
 });
 
-function CancellationSettingsSection({ initial, queryClient, canWrite }: { initial: CancellationSettings; queryClient: QueryClient; canWrite: boolean }) {
+function CancellationSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: CancellationSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, CANCELLATION_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<CancellationSettings>
-      title="Cancellation policy"
-      description="Free cancellation window and the late-cancellation fee (SRS 11.14.1)."
+      title={CANCELLATION_SEARCH_TERMS.title}
+      description={CANCELLATION_SEARCH_TERMS.description}
       groupPath="cancellation"
       schema={cancellationSchema}
       defaultValues={initial}
@@ -366,25 +488,34 @@ function CancellationSettingsSection({ initial, queryClient, canWrite }: { initi
     >
       {(form) => (
         <>
-          <Field
-            label="Free cancellation window (hours)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.freeCancellationWindowHours?.message}
-            {...form.register("freeCancellationWindowHours", { valueAsNumber: true })}
-          />
-          <Field
-            label="Late cancellation fee (%)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.lateCancellationFeePercentage?.message}
-            {...form.register("lateCancellationFeePercentage", { valueAsNumber: true })}
-          />
+          <SearchableField hidden={!isFieldVisible("Free cancellation window (hours)")}>
+            <Field
+              label="Free cancellation window (hours)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.freeCancellationWindowHours?.message}
+              {...form.register("freeCancellationWindowHours", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Late cancellation fee (%)")}>
+            <Field
+              label="Late cancellation fee (%)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.lateCancellationFeePercentage?.message}
+              {...form.register("lateCancellationFeePercentage", { valueAsNumber: true })}
+            />
+          </SearchableField>
           <Controller
             control={form.control}
             name="allowAdminOverride"
             render={({ field }) => (
-              <ToggleRow label="Allow admin override of the late fee" checked={field.value} onChange={field.onChange} />
+              <ToggleRow
+                label="Allow admin override of the late fee"
+                checked={field.value}
+                onChange={field.onChange}
+                hidden={!isFieldVisible("Allow admin override of the late fee")}
+              />
             )}
           />
         </>
@@ -400,11 +531,24 @@ const rescheduleSchema = z.object({
   lateRescheduleFeePercentage: z.number().min(0).max(100),
 });
 
-function RescheduleSettingsSection({ initial, queryClient, canWrite }: { initial: RescheduleSettings; queryClient: QueryClient; canWrite: boolean }) {
+function RescheduleSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: RescheduleSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, RESCHEDULE_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<RescheduleSettings>
-      title="Reschedule policy"
-      description="Reschedule blocking window, count limit, and the late-reschedule fee (SRS 11.15.1)."
+      title={RESCHEDULE_SEARCH_TERMS.title}
+      description={RESCHEDULE_SEARCH_TERMS.description}
       groupPath="reschedule"
       schema={rescheduleSchema}
       defaultValues={initial}
@@ -413,33 +557,41 @@ function RescheduleSettingsSection({ initial, queryClient, canWrite }: { initial
     >
       {(form) => (
         <>
-          <Field
-            label="Blocked within (hours before slot)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.minHoursBeforeSlot?.message}
-            {...form.register("minHoursBeforeSlot", { valueAsNumber: true })}
-          />
-          <Field
-            label="Max reschedules per booking"
-            type="number"
-            error={form.formState.errors.maxReschedulesPerBooking?.message}
-            {...form.register("maxReschedulesPerBooking", { valueAsNumber: true })}
-          />
-          <Field
-            label="Late fee threshold (hours before slot)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.lateFeeThresholdHours?.message}
-            {...form.register("lateFeeThresholdHours", { valueAsNumber: true })}
-          />
-          <Field
-            label="Late reschedule fee (%)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.lateRescheduleFeePercentage?.message}
-            {...form.register("lateRescheduleFeePercentage", { valueAsNumber: true })}
-          />
+          <SearchableField hidden={!isFieldVisible("Blocked within (hours before slot)")}>
+            <Field
+              label="Blocked within (hours before slot)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.minHoursBeforeSlot?.message}
+              {...form.register("minHoursBeforeSlot", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Max reschedules per booking")}>
+            <Field
+              label="Max reschedules per booking"
+              type="number"
+              error={form.formState.errors.maxReschedulesPerBooking?.message}
+              {...form.register("maxReschedulesPerBooking", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Late fee threshold (hours before slot)")}>
+            <Field
+              label="Late fee threshold (hours before slot)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.lateFeeThresholdHours?.message}
+              {...form.register("lateFeeThresholdHours", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Late reschedule fee (%)")}>
+            <Field
+              label="Late reschedule fee (%)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.lateRescheduleFeePercentage?.message}
+              {...form.register("lateRescheduleFeePercentage", { valueAsNumber: true })}
+            />
+          </SearchableField>
         </>
       )}
     </SettingsGroupCard>
@@ -452,11 +604,24 @@ const taxSchema = z.object({
   taxInclusivePricing: z.boolean(),
 });
 
-function TaxSettingsSection({ initial, queryClient, canWrite }: { initial: TaxSettings; queryClient: QueryClient; canWrite: boolean }) {
+function TaxSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: TaxSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, TAX_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<TaxSettings>
-      title="Tax settings"
-      description="Default tax rate and registration details shown on customer invoices."
+      title={TAX_SEARCH_TERMS.title}
+      description={TAX_SEARCH_TERMS.description}
       groupPath="tax"
       schema={taxSchema}
       defaultValues={initial}
@@ -465,23 +630,32 @@ function TaxSettingsSection({ initial, queryClient, canWrite }: { initial: TaxSe
     >
       {(form) => (
         <>
-          <Field
-            label="Default tax rate (%)"
-            type="number"
-            step="0.01"
-            error={form.formState.errors.defaultTaxPercentage?.message}
-            {...form.register("defaultTaxPercentage", { valueAsNumber: true })}
-          />
-          <NullableTextField
-            form={form}
-            name="taxRegistrationNumber"
-            label="Tax registration number (blank = not configured)"
-          />
+          <SearchableField hidden={!isFieldVisible("Default tax rate (%)")}>
+            <Field
+              label="Default tax rate (%)"
+              type="number"
+              step="0.01"
+              error={form.formState.errors.defaultTaxPercentage?.message}
+              {...form.register("defaultTaxPercentage", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Tax registration number (blank = not configured)")}>
+            <NullableTextField
+              form={form}
+              name="taxRegistrationNumber"
+              label="Tax registration number (blank = not configured)"
+            />
+          </SearchableField>
           <Controller
             control={form.control}
             name="taxInclusivePricing"
             render={({ field }) => (
-              <ToggleRow label="Displayed prices already include tax" checked={field.value} onChange={field.onChange} />
+              <ToggleRow
+                label="Displayed prices already include tax"
+                checked={field.value}
+                onChange={field.onChange}
+                hidden={!isFieldVisible("Displayed prices already include tax")}
+              />
             )}
           />
         </>
@@ -497,11 +671,24 @@ const walletSchema = z.object({
   allowWalletTopUp: z.boolean(),
 });
 
-function WalletSettingsSection({ initial, queryClient, canWrite }: { initial: WalletSettings; queryClient: QueryClient; canWrite: boolean }) {
+function WalletSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: WalletSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, WALLET_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<WalletSettings>
-      title="Wallet settings"
-      description="Balance cap, how much of a booking wallet may cover, and credit expiry (SRS 14.5)."
+      title={WALLET_SEARCH_TERMS.title}
+      description={WALLET_SEARCH_TERMS.description}
       groupPath="wallet"
       schema={walletSchema}
       defaultValues={initial}
@@ -510,30 +697,41 @@ function WalletSettingsSection({ initial, queryClient, canWrite }: { initial: Wa
     >
       {(form) => (
         <>
-          <Field
-            label="Max wallet balance"
-            type="number"
-            step="0.01"
-            error={form.formState.errors.maxWalletBalance?.message}
-            {...form.register("maxWalletBalance", { valueAsNumber: true })}
-          />
-          <Field
-            label="Max wallet usage per booking (%)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.maxWalletUsagePercentagePerBooking?.message}
-            {...form.register("maxWalletUsagePercentagePerBooking", { valueAsNumber: true })}
-          />
-          <NullableNumberField
-            form={form}
-            name="walletCreditExpiryDays"
-            label="Wallet credit expiry (days, blank = never)"
-          />
+          <SearchableField hidden={!isFieldVisible("Max wallet balance")}>
+            <Field
+              label="Max wallet balance"
+              type="number"
+              step="0.01"
+              error={form.formState.errors.maxWalletBalance?.message}
+              {...form.register("maxWalletBalance", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Max wallet usage per booking (%)")}>
+            <Field
+              label="Max wallet usage per booking (%)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.maxWalletUsagePercentagePerBooking?.message}
+              {...form.register("maxWalletUsagePercentagePerBooking", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Wallet credit expiry (days, blank = never)")}>
+            <NullableNumberField
+              form={form}
+              name="walletCreditExpiryDays"
+              label="Wallet credit expiry (days, blank = never)"
+            />
+          </SearchableField>
           <Controller
             control={form.control}
             name="allowWalletTopUp"
             render={({ field }) => (
-              <ToggleRow label="Allow customers to top up their wallet directly" checked={field.value} onChange={field.onChange} />
+              <ToggleRow
+                label="Allow customers to top up their wallet directly"
+                checked={field.value}
+                onChange={field.onChange}
+                hidden={!isFieldVisible("Allow customers to top up their wallet directly")}
+              />
             )}
           />
         </>
@@ -549,11 +747,24 @@ const couponSchema = z.object({
   couponsEnabled: z.boolean(),
 });
 
-function CouponSettingsSection({ initial, queryClient, canWrite }: { initial: CouponSettings; queryClient: QueryClient; canWrite: boolean }) {
+function CouponSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: CouponSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, COUPON_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
   return (
     <SettingsGroupCard<CouponSettings>
-      title="Coupon settings"
-      description="Platform-wide guardrails applied across every coupon, plus the coupons feature flag (SRS 14.2)."
+      title={COUPON_SEARCH_TERMS.title}
+      description={COUPON_SEARCH_TERMS.description}
       groupPath="coupon"
       schema={couponSchema}
       defaultValues={initial}
@@ -562,23 +773,32 @@ function CouponSettingsSection({ initial, queryClient, canWrite }: { initial: Co
     >
       {(form) => (
         <>
-          <Field
-            label="Max discount per coupon (%)"
-            type="number"
-            step="0.5"
-            error={form.formState.errors.maxDiscountPercentagePerCoupon?.message}
-            {...form.register("maxDiscountPercentagePerCoupon", { valueAsNumber: true })}
-          />
-          <NullableNumberField
-            form={form}
-            name="maxActiveCouponsPerCustomer"
-            label="Max active coupons per customer (blank = unlimited)"
-          />
+          <SearchableField hidden={!isFieldVisible("Max discount per coupon (%)")}>
+            <Field
+              label="Max discount per coupon (%)"
+              type="number"
+              step="0.5"
+              error={form.formState.errors.maxDiscountPercentagePerCoupon?.message}
+              {...form.register("maxDiscountPercentagePerCoupon", { valueAsNumber: true })}
+            />
+          </SearchableField>
+          <SearchableField hidden={!isFieldVisible("Max active coupons per customer (blank = unlimited)")}>
+            <NullableNumberField
+              form={form}
+              name="maxActiveCouponsPerCustomer"
+              label="Max active coupons per customer (blank = unlimited)"
+            />
+          </SearchableField>
           <Controller
             control={form.control}
             name="allowCouponStacking"
             render={({ field }) => (
-              <ToggleRow label="Allow more than one coupon per booking" checked={field.value} onChange={field.onChange} />
+              <ToggleRow
+                label="Allow more than one coupon per booking"
+                checked={field.value}
+                onChange={field.onChange}
+                hidden={!isFieldVisible("Allow more than one coupon per booking")}
+              />
             )}
           />
           <Controller
@@ -587,12 +807,116 @@ function CouponSettingsSection({ initial, queryClient, canWrite }: { initial: Co
             render={({ field }) => (
               <ToggleRow
                 label="Coupons enabled"
-                description="Feature flag: turning this off disables coupon redemption everywhere, regardless of individual coupon state."
+                description={COUPONS_ENABLED_DESCRIPTION}
                 checked={field.value}
                 onChange={field.onChange}
+                hidden={!isFieldVisible(`Coupons enabled ${COUPONS_ENABLED_DESCRIPTION}`)}
               />
             )}
           />
+        </>
+      )}
+    </SettingsGroupCard>
+  );
+}
+
+const featureSchema = z.object({
+  walletEnabled: z.boolean(),
+  referralsEnabled: z.boolean(),
+  amcSubscriptionsEnabled: z.boolean(),
+  serviceRatingsEnabled: z.boolean(),
+  bookingHelpLinkEnabled: z.boolean(),
+  ratingsPageEnabled: z.boolean(),
+  calendarViewEnabled: z.boolean(),
+  earningsLedgerEnabled: z.boolean(),
+  offersScreenEnabled: z.boolean(),
+  autoManageServiceabilityEnabled: z.boolean(),
+});
+
+/** Full-width subheading between the Customer/Provider flag groups within one FormGrid - same span as ToggleRow, so it lines up rather than sitting in a half-width column. */
+function FlagGroupHeading({ children, hidden }: { children: ReactNode; hidden?: boolean }) {
+  return (
+    <p
+      className={cx(
+        "sm:col-span-2 mt-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle first:mt-0",
+        hidden && "hidden",
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+function FeatureFlagToggle({
+  form,
+  name,
+  label,
+  description,
+  hidden,
+}: {
+  form: UseFormReturn<FeatureFlagSettings>;
+  name: keyof FeatureFlagSettings;
+  label: string;
+  description: string;
+  hidden: boolean;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <ToggleRow label={label} description={description} checked={field.value} onChange={field.onChange} hidden={hidden} />
+      )}
+    />
+  );
+}
+
+function FeatureFlagSettingsSection({
+  initial,
+  queryClient,
+  canWrite,
+  query,
+}: {
+  initial: FeatureFlagSettings;
+  queryClient: QueryClient;
+  canWrite: boolean;
+  query: string;
+}) {
+  const { cardVisible, isFieldVisible } = getSearchVisibility(query, FEATURE_SEARCH_TERMS);
+  if (!cardVisible) return null;
+
+  const isFlagVisible = (flag: { label: string; description: string }) =>
+    isFieldVisible(`${flag.label} ${flag.description}`);
+  const customerVisible = CUSTOMER_FLAGS.some(isFlagVisible);
+  const providerVisible = PROVIDER_FLAGS.some(isFlagVisible);
+  const platformVisible = PLATFORM_FLAGS.some(isFlagVisible);
+
+  return (
+    <SettingsGroupCard<FeatureFlagSettings>
+      title={FEATURE_SEARCH_TERMS.title}
+      description={FEATURE_SEARCH_TERMS.description}
+      groupPath="features"
+      schema={featureSchema}
+      defaultValues={initial}
+      onSaved={(value) => updateSettingsCache(queryClient, "feature", value)}
+      canWrite={canWrite}
+    >
+      {(form) => (
+        <>
+          <FlagGroupHeading hidden={!customerVisible}>Customer app</FlagGroupHeading>
+          {CUSTOMER_FLAGS.map((flag) => (
+            <FeatureFlagToggle key={flag.name} form={form} {...flag} hidden={!isFlagVisible(flag)} />
+          ))}
+
+          <FlagGroupHeading hidden={!providerVisible}>Provider app</FlagGroupHeading>
+          {PROVIDER_FLAGS.map((flag) => (
+            <FeatureFlagToggle key={flag.name} form={form} {...flag} hidden={!isFlagVisible(flag)} />
+          ))}
+
+          <FlagGroupHeading hidden={!platformVisible}>Platform</FlagGroupHeading>
+          {PLATFORM_FLAGS.map((flag) => (
+            <FeatureFlagToggle key={flag.name} form={form} {...flag} hidden={!isFlagVisible(flag)} />
+          ))}
         </>
       )}
     </SettingsGroupCard>
@@ -628,33 +952,71 @@ export default function SystemSettingsPage() {
   const claims = useAdminClaims();
   const canWrite = canWriteModule(claims, "settings");
   const { data, isPending, isError, error, refetch } = useAllSettings();
+  // Client-side only: filters what's already rendered, across every group
+  // and subgroup regardless of scroll position. No new endpoint - the whole
+  // settings payload is already on the page.
+  const [searchQuery, setSearchQuery] = useState("");
+  const trimmedQuery = searchQuery.trim();
+  const noMatches = trimmedQuery !== "" && !hasAnySettingsMatch(searchQuery);
 
   return (
     <div className="flex w-full max-w-4xl animate-rise flex-col gap-6">
       <PageHeading
         title="System settings"
-        subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet and coupon rules (SRS 12.19)."
+        subtitle="Admin-configurable booking, slot, cancellation, reschedule, tax, wallet, coupon and feature-flag rules (SRS 12.19)."
       />
+
+      {!isPending && !isError ? (
+        <Field
+          type="search"
+          label="Search settings"
+          placeholder="Search by setting name, e.g. “wallet”, “overbooking”, “tax rate”…"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+      ) : null}
 
       {isPending ? (
         <>
           <SettingsCardSkeleton fields={4} />
           <SettingsCardSkeleton fields={5} />
           <SettingsCardSkeleton fields={3} />
+          <SettingsCardSkeleton fields={9} />
         </>
       ) : isError ? (
         // Previously a bare Alert with no way out: a transient failure left
         // the whole screen empty until the admin reloaded the browser.
         <SectionError error={error} onRetry={() => void refetch()} />
+      ) : noMatches ? (
+        <EmptyState
+          title="No matching settings"
+          description={`No setting matched "${trimmedQuery}". Try a different search term.`}
+        />
       ) : (
         <>
-          <BookingSettingsSection initial={data.booking} queryClient={queryClient} canWrite={canWrite} />
-          <SlotSettingsSection initial={data.slot} queryClient={queryClient} canWrite={canWrite} />
-          <CancellationSettingsSection initial={data.cancellation} queryClient={queryClient} canWrite={canWrite} />
-          <RescheduleSettingsSection initial={data.reschedule} queryClient={queryClient} canWrite={canWrite} />
-          <TaxSettingsSection initial={data.tax} queryClient={queryClient} canWrite={canWrite} />
-          <WalletSettingsSection initial={data.wallet} queryClient={queryClient} canWrite={canWrite} />
-          <CouponSettingsSection initial={data.coupon} queryClient={queryClient} canWrite={canWrite} />
+          <BookingSettingsSection initial={data.booking} queryClient={queryClient} canWrite={canWrite} query={searchQuery} />
+          <SlotSettingsSection initial={data.slot} queryClient={queryClient} canWrite={canWrite} query={searchQuery} />
+          <CancellationSettingsSection
+            initial={data.cancellation}
+            queryClient={queryClient}
+            canWrite={canWrite}
+            query={searchQuery}
+          />
+          <RescheduleSettingsSection
+            initial={data.reschedule}
+            queryClient={queryClient}
+            canWrite={canWrite}
+            query={searchQuery}
+          />
+          <TaxSettingsSection initial={data.tax} queryClient={queryClient} canWrite={canWrite} query={searchQuery} />
+          <WalletSettingsSection initial={data.wallet} queryClient={queryClient} canWrite={canWrite} query={searchQuery} />
+          <CouponSettingsSection initial={data.coupon} queryClient={queryClient} canWrite={canWrite} query={searchQuery} />
+          <FeatureFlagSettingsSection
+            initial={data.feature}
+            queryClient={queryClient}
+            canWrite={canWrite}
+            query={searchQuery}
+          />
         </>
       )}
     </div>

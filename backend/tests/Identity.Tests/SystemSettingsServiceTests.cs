@@ -116,6 +116,7 @@ public sealed class SystemSettingsServiceTests : IDisposable
         Seed(SystemSettingGroups.Tax, "{\"defaultTaxPercentage\":18,\"taxRegistrationNumber\":null,\"taxInclusivePricing\":false}");
         Seed(SystemSettingGroups.Wallet, "{\"maxWalletBalance\":50000,\"maxWalletUsagePercentagePerBooking\":100,\"walletCreditExpiryDays\":null,\"allowWalletTopUp\":true}");
         Seed(SystemSettingGroups.Coupon, "{\"maxDiscountPercentagePerCoupon\":50,\"maxActiveCouponsPerCustomer\":null,\"allowCouponStacking\":false,\"couponsEnabled\":true}");
+        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true}");
 
         using var context = _database.CreateContext();
         var service = CreateService(context);
@@ -125,6 +126,7 @@ public sealed class SystemSettingsServiceTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.Value.Booking.Should().Be(new BookingSettings(2, 30, null, true));
         result.Value.Coupon.CouponsEnabled.Should().BeTrue();
+        result.Value.Feature.WalletEnabled.Should().BeTrue();
     }
 
     [Fact]
@@ -138,6 +140,75 @@ public sealed class SystemSettingsServiceTests : IDisposable
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Settings.GroupNotInitialized");
+    }
+
+    [Fact]
+    public async Task GetFeatureFlagSettingsAsync_ReturnsDeserializedValue_WhenGroupSeeded()
+    {
+        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true,\"autoManageServiceabilityEnabled\":true}");
+        using var context = _database.CreateContext();
+        var service = CreateService(context);
+
+        var result = await service.GetFeatureFlagSettingsAsync();
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().Be(new FeatureFlagSettings(true, true, true, true, true, true, true, true, true, true));
+    }
+
+    [Fact]
+    public async Task GetFeatureFlagSettingsAsync_ReturnsNotFound_WhenGroupNeverSeeded()
+    {
+        using var context = _database.CreateContext();
+        var service = CreateService(context);
+
+        var result = await service.GetFeatureFlagSettingsAsync();
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Settings.GroupNotInitialized");
+    }
+
+    [Fact]
+    public async Task UpdateFeatureFlagSettingsAsync_PersistsNewValue_AndWritesAuditEntry()
+    {
+        Seed(SystemSettingGroups.Feature, "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true,\"autoManageServiceabilityEnabled\":true}");
+        var updated = new FeatureFlagSettings(
+            WalletEnabled: false,
+            ReferralsEnabled: true,
+            AmcSubscriptionsEnabled: true,
+            ServiceRatingsEnabled: true,
+            BookingHelpLinkEnabled: true,
+            RatingsPageEnabled: true,
+            CalendarViewEnabled: true,
+            EarningsLedgerEnabled: true,
+            OffersScreenEnabled: false,
+            AutoManageServiceabilityEnabled: true);
+
+        using (var context = _database.CreateContext())
+        {
+            var service = CreateService(context);
+            var result = await service.UpdateFeatureFlagSettingsAsync(updated);
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Should().Be(updated);
+        }
+
+        // Re-read through a brand-new context: proves the change and the
+        // audit row both actually committed to the database, not just to
+        // the first context's change tracker (same rationale as the
+        // cancellation-group test above).
+        using (var context = _database.CreateContext())
+        {
+            var service = CreateService(context);
+            var reread = await service.GetFeatureFlagSettingsAsync();
+            reread.Value.Should().Be(updated);
+
+            var auditRows = context.Set<AuditLog>()
+                .Where(a => a.EntityName == "SystemSetting" && a.EntityId == SystemSettingGroups.Feature)
+                .ToList();
+            auditRows.Should().ContainSingle();
+            auditRows[0].Action.Should().Be("Updated");
+            auditRows[0].ActorId.Should().Be(_actorId);
+            auditRows[0].NewValues.Should().Contain("\"walletEnabled\":false");
+        }
     }
 
     private sealed class StubAuditContextProvider : IAuditContextProvider

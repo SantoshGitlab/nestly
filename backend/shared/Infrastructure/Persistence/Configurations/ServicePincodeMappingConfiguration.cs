@@ -11,6 +11,7 @@ public class ServicePincodeMappingConfiguration : IEntityTypeConfiguration<Servi
         builder.ToTable("service_pincode_mapping");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.IsActive).IsRequired();
+        builder.Property(x => x.IsPinned).IsRequired();
 
         builder.Property(x => x.ServiceId).IsRequired();
         builder.HasOne<Service>()

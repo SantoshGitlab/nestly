@@ -70,6 +70,18 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 | `provider_availability` | Day-of-week windows, blackout dates — feeds the existing Slot Engine |
 | `provider_capacity` | Max jobs per day/slot, if capacity-based dispatch is used |
 
+**This coverage now drives Catalog serviceability automatically**, not just
+booking eligibility. `service_pincode_mapping.is_active` (the Catalog
+domain's own table, SRS 12.9.2) auto-enables once a provider with matching
+`provider_skill_mapping` + `provider_service_area` coverage appears, and
+auto-disables (after a grace period) once the last covering provider is
+gone — see docs/DATABASE.md's SERVICEABILITY AUTO-MANAGEMENT section for the
+mechanism, safety net (pin, flap-protection cooldown, grace period, audit
+trail) and the admin kill switch. This is the one direction Provider data is
+allowed to reach into Catalog: read-only, through
+`IServiceabilityMappingManagementService`, and it never writes back to
+Provider's own tables — the SCOPE BOUNDARY above still holds.
+
 ### Assignment Bridge
 
 | Table | Purpose |
@@ -96,11 +108,12 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 ### Provider-Facing (new `provider-api`, same pattern as `admin-api` / `consumer-api`)
 
 - **Auth:** register, otp/send, otp/verify, login, refresh, logout
-- **Profile/Onboarding:** get/update profile, upload KYC documents, get KYC status, update service areas, update skills
-- **Availability:** get/update availability, set blackout dates
-- **Jobs:** list jobs (filter by status/date), get job detail, accept/reject/start/complete job, mark en-route/arrived (task 270 — both optional, start stays reachable without them), report location (task 269), upload completion proof
-- **Earnings:** get earnings summary, get earnings ledger, list payouts, get payout detail
-- **Ratings:** get running rating summary (average + count), list own recent reviews (paginated, PII-minimized)
+- **Profile/Onboarding:** get/update profile, upload KYC documents, get KYC status, update service areas, update skills — provider-web's onboarding checklist and go-live status banner are a client-side view over this same profile/KYC/skills/service-area state, no new endpoint
+- **Availability:** get/update availability, set blackout dates — provider-web's Calendar and week view render these windows together with Jobs below, no new endpoint
+- **Jobs:** list jobs (filter by status/date), get job detail, accept/reject/start/complete job, mark en-route/arrived (task 270 — both optional, start stays reachable without them), report location (task 269), upload completion proof, extend a job's response deadline (row 38, docs/OPEN-FIXES-FEATURES.csv — recovers the response window after a transient accept/reject failure that was not the provider's fault). provider-web's Today/Now screen and Job offers screen (with live response countdowns) are both views over this list, no new endpoint beyond the deadline extension
+- **Feature flags:** public, unauthenticated `GET /feature-flags` — which of the Ratings page, Calendar view, Earnings ledger section and Offers screen are enabled (admin-configurable, docs/API.md's SystemSettings section)
+- **Earnings:** get earnings summary, get earnings ledger, list payouts, get payout detail — the earnings ledger page now renders a job-level breakdown and payout-status timeline from this same ledger, no new endpoint
+- **Ratings:** get running rating summary (average + count), list own recent reviews (paginated, PII-minimized) — now its own provider-web "Ratings and feedback" page
 
 ### Admin-Facing Additions (extend existing `admin-api`)
 
@@ -108,7 +121,7 @@ Note on terminology: the SRS uses "vendor" only to mean external third-party pro
 - KYC approval: approve/reject provider KYC
 - Assignment: assign provider to a booking
 - Assignment conflicts: list standing double-bookings, count them
-- Performance: get provider performance metrics
+- Performance: get provider performance metrics, list the provider-performance ranking (admin-web's "Provider performance" page)
 - Payouts: run payout batch, list payouts
 
 ## ASSIGNMENT CONFLICTS (tasks 321-322)

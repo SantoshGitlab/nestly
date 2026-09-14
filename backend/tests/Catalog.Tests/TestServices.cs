@@ -1,7 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Settings;
+using Nestly.Infrastructure.Auditing;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
@@ -82,6 +85,27 @@ internal static class TestServices
     /// </summary>
     public static IOptionsMonitor<T> Monitor<T>(T value) where T : class =>
         new StaticOptionsMonitor<T>(value);
+
+    /// <summary>
+    /// Attributed to <see cref="AuditContext.System"/> unconditionally -
+    /// suites that construct <see cref="ServiceabilityMappingManagementService"/>
+    /// (etc.) directly need a real <see cref="IAuditLogWriter"/> but are not
+    /// themselves testing attribution, so there is nothing to stub per-suite
+    /// the way <c>StubAuditContextProvider</c> is (that pattern still applies
+    /// wherever a suite asserts on the ambient actor).
+    /// </summary>
+    public static IAuditLogWriter AuditLogWriter(NestlyDbContext context) =>
+        new AuditLogWriter(context, SystemAuditContextProvider.Instance);
+
+    /// <summary>Real <see cref="ISystemSettingsService"/> over the test database, for suites that need one only as a collaborator (not under test).</summary>
+    public static ISystemSettingsService SystemSettings(NestlyDbContext context) =>
+        new SystemSettingsService(new SystemSettingRepository(context), AuditLogWriter(context), SystemAuditContextProvider.Instance);
+
+    private sealed class SystemAuditContextProvider : IAuditContextProvider
+    {
+        public static readonly SystemAuditContextProvider Instance = new();
+        public AuditContext GetCurrent() => AuditContext.System;
+    }
 
     private sealed class StaticOptionsMonitor<T>(T value) : IOptionsMonitor<T>
     {

@@ -15,6 +15,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, EmptyState, LinkButton, Skeleton, Tabs } from "@/components/ui";
 import { isBookingTrackable } from "@/hooks/useBookingTracking";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import { BookingStatus } from "@/lib/types";
 import type { BookingDetail, BookingListResponse, BookingStatusBucket, ReviewResponse } from "@/lib/types";
 
@@ -63,6 +64,7 @@ export default function BookingsPage() {
 
 function BookingsScreen() {
   const [bucket, setBucket] = useState<BookingStatusBucket>("Upcoming");
+  const { amcSubscriptionsEnabled } = useFeatureFlags();
 
   const query = useInfiniteQuery({
     queryKey: ["bookings", bucket],
@@ -198,14 +200,16 @@ function BookingsScreen() {
       <div className="flex flex-col gap-6 lg:col-span-4 lg:sticky lg:top-20 lg:self-start">
         <LastBookingCard />
 
-        <Card
-          title="AMC plans"
-          description="Cover an appliance for a fixed number of visits over the year, redeemed as bookings whenever you need one."
-        >
-          <LinkButton href="/amc" variant="secondary">
-            View AMC plans
-          </LinkButton>
-        </Card>
+        {amcSubscriptionsEnabled ? (
+          <Card
+            title="AMC plans"
+            description="Cover an appliance for a fixed number of visits over the year, redeemed as bookings whenever you need one."
+          >
+            <LinkButton href="/amc" variant="secondary">
+              View AMC plans
+            </LinkButton>
+          </Card>
+        ) : null}
 
         <Card
           title="Need help with a booking?"

@@ -45,8 +45,16 @@ public interface IAdminPaymentReconciliationService
     /// voided order) - either way, no successful payment and nothing
     /// currently in flight either.</item>
     /// </list>
+    ///
+    /// <paramref name="category"/> narrows to one bucket when supplied.
+    /// <paramref name="search"/> is a case-insensitive substring match
+    /// against the booking reference or customer name. Both are applied
+    /// before paging; the three bucket counts on the response always reflect
+    /// every matching row regardless of category/search (a summary strip the
+    /// UI can render, and filter from, without them shifting under it).
     /// </summary>
-    Task<Result<AdminPaymentReconciliationResponse>> GetReconciliationAsync(int page, int pageSize);
+    Task<Result<AdminPaymentReconciliationResponse>> GetReconciliationAsync(
+        int page, int pageSize, PaymentReconciliationCategory? category = null, string? search = null);
 
     /// <summary>
     /// Voids a stuck pending payment transaction - marks OUR record

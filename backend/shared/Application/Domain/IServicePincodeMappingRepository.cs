@@ -73,4 +73,15 @@ public interface IServicePincodeMappingRepository : IRepository<ServicePincodeMa
     /// <see cref="ListPincodesWithProviderCoverageButNoServiceMappingAsync"/>.
     /// </summary>
     Task<IReadOnlyList<MappedPincodeWithoutProviderCoverageResponse>> ListMappedPincodesWithoutProviderCoverageAsync();
+
+    /// <summary>
+    /// Mappings with a pending auto-disable timer (<see cref="ServicePincodeMapping.PendingAutoDisableSince"/>)
+    /// that was set at or before <paramref name="cutoffUtc"/> - i.e. their
+    /// grace period has fully elapsed. The trigger query for
+    /// <c>IServiceabilityAutoDisableSweepJob</c>'s periodic recheck: each
+    /// pass still confirms coverage is actually still lost (via
+    /// <see cref="HasActiveProviderCoverageAsync"/>) before disabling, since
+    /// coverage may have returned since the pending timer was set.
+    /// </summary>
+    Task<IReadOnlyList<ServicePincodeMapping>> ListPendingAutoDisableDueByAsync(DateTime cutoffUtc);
 }

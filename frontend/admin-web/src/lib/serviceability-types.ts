@@ -122,6 +122,8 @@ export interface ServicePincodeMappingResponse {
   pincodeId: string;
   pincodeCode: string;
   isActive: boolean;
+  /** True when an admin has pinned this mapping's active state - auto-enable/auto-disable skip it entirely regardless of live provider coverage. */
+  isPinned: boolean;
 }
 
 export interface ServicePincodeMappingCreateRequest {

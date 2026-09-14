@@ -36,9 +36,33 @@ public sealed class ProviderManagementServiceTests : IDisposable
         new ProviderSessionRepository(context),
         new ServiceabilityMappingManagementService(
             new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
-            new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context)),
+            new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
+            TestServices.AuditLogWriter(context), TestServices.SystemSettings(context)),
         new ProviderAvailabilityWindowRepository(context),
         new ReviewRepository(context));
+
+    private static ServiceabilityMappingManagementService CreateMappingService(NestlyDbContext context) => new(
+        new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
+        new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
+        TestServices.AuditLogWriter(context), TestServices.SystemSettings(context));
+
+    /// <summary>
+    /// Backdates a mapping's pending-auto-disable timer past the grace
+    /// period directly in the database, via a context separate from the one
+    /// under test - EF Core's identity map would otherwise keep serving the
+    /// original context's own already-tracked (recent) copy of the row
+    /// instead of this update. See
+    /// <c>Nestly.Catalog.Tests.ServiceabilityMappingManagementServiceTests</c>'s
+    /// identical helper for the same reasoning.
+    /// </summary>
+    private async Task BackdatePendingAutoDisableAsync(Guid serviceId, Guid pincodeId)
+    {
+        await using var backdateContext = _database.CreateContext();
+        var mapping = await backdateContext.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
+        var pastCutoff = DateTime.UtcNow.AddMinutes(-(Nestly.Application.Serviceability.ServiceabilityAutoManagementDefaults.AutoDisableGracePeriodMinutes + 1));
+        await backdateContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE service_pincode_mapping SET pending_auto_disable_since = {pastCutoff} WHERE id = {mapping.Id}");
+    }
 
     /// <summary>Seeds an Active provider with skill + area coverage for one (service, pincode) pair, and the resulting active mapping.</summary>
     private async Task<(Guid ProviderId, Guid ServiceId, Guid PincodeId)> SeedSoleCoverageAsync(NestlyDbContext context)
@@ -84,9 +108,22 @@ public sealed class ProviderManagementServiceTests : IDisposable
         var (providerId, serviceId, pincodeId) = await SeedSoleCoverageAsync(context);
 
         var result = await CreateService(context).SuspendAsync(providerId, new SuspendProviderRequest("Policy violation"));
-
         result.IsSuccess.Should().BeTrue();
-        var mapping = await context.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
+
+        // The grace period means SuspendAsync's own auto-disable call only
+        // starts the pending timer - see AutoDisableUnservedMappingsAsync's
+        // doc comment. This test is about the eventual outcome once that
+        // timer has elapsed, so it fast-forwards past it and re-checks
+        // through a fresh context/service (the original context's copy of
+        // the mapping would otherwise still show its pre-backdate state).
+        var pending = await context.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
+        pending.IsActive.Should().BeTrue("the mapping is only pending disable until the grace period elapses");
+
+        await BackdatePendingAutoDisableAsync(serviceId, pincodeId);
+        await using var freshContext = _database.CreateContext();
+        (await CreateMappingService(freshContext).AutoDisableUnservedMappingsAsync(providerId)).Should().Be(1);
+
+        var mapping = await freshContext.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
         mapping.IsActive.Should().BeFalse();
     }
 
@@ -97,9 +134,13 @@ public sealed class ProviderManagementServiceTests : IDisposable
         var (providerId, serviceId, pincodeId) = await SeedSoleCoverageAsync(context);
 
         var result = await CreateService(context).DeleteAsync(providerId);
-
         result.IsSuccess.Should().BeTrue();
-        var mapping = await context.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
+
+        await BackdatePendingAutoDisableAsync(serviceId, pincodeId);
+        await using var freshContext = _database.CreateContext();
+        (await CreateMappingService(freshContext).AutoDisableUnservedMappingsAsync(providerId)).Should().Be(1);
+
+        var mapping = await freshContext.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
         mapping.IsActive.Should().BeFalse();
     }
 
@@ -140,7 +181,14 @@ public sealed class ProviderManagementServiceTests : IDisposable
 
         (await management.SuspendAsync(providerId, new SuspendProviderRequest("Policy violation again"))).IsSuccess.Should().BeTrue();
 
-        var final = await context.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
+        // Still pending, not yet disabled - the grace period from this
+        // second suspend has not elapsed. Fast-forward past it the same way
+        // the other grace-period tests in this file do, then re-check.
+        await BackdatePendingAutoDisableAsync(serviceId, pincodeId);
+        await using var freshContext = _database.CreateContext();
+        (await CreateMappingService(freshContext).AutoDisableUnservedMappingsAsync(providerId)).Should().Be(1);
+
+        var final = await freshContext.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
         final.IsActive.Should().BeFalse();
     }
 

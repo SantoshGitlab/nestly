@@ -38,6 +38,10 @@ public interface ISystemSettingsService
 
     Task<Result<CouponSettings>> UpdateCouponSettingsAsync(CouponSettings settings, CancellationToken cancellationToken = default);
 
+    Task<Result<FeatureFlagSettings>> GetFeatureFlagSettingsAsync(CancellationToken cancellationToken = default);
+
+    Task<Result<FeatureFlagSettings>> UpdateFeatureFlagSettingsAsync(FeatureFlagSettings settings, CancellationToken cancellationToken = default);
+
     /// <summary>Every settings group at once, for the admin Settings landing page (task 131h).</summary>
     Task<Result<AllSystemSettingsResponse>> GetAllAsync(CancellationToken cancellationToken = default);
 }

@@ -41,6 +41,19 @@ public interface IServiceabilityMappingManagementService
     Task<Result> DeactivateServicePincodeMappingAsync(Guid id);
 
     /// <summary>
+    /// Marks this mapping's active state as admin-owned: from now on,
+    /// <see cref="AutoEnableProviderCoverageAsync"/> and
+    /// <see cref="AutoDisableUnservedMappingsAsync"/> both skip it entirely,
+    /// regardless of live provider coverage, until it is
+    /// <see cref="UnpinServicePincodeMappingAsync"/>-ed. Does not itself
+    /// change <see cref="Nestly.Domain.ServicePincodeMapping.IsActive"/>.
+    /// </summary>
+    Task<Result> PinServicePincodeMappingAsync(Guid id);
+
+    /// <summary>Hands this mapping's active state back to auto-enable/auto-disable.</summary>
+    Task<Result> UnpinServicePincodeMappingAsync(Guid id);
+
+    /// <summary>
     /// docs/OPEN-FIXES-FEATURES.csv "Service pincode mapping coverage":
     /// active services with no active pincode mapping anywhere - launched,
     /// but unbookable in every city, with nothing today that would have told
@@ -82,6 +95,24 @@ public interface IServiceabilityMappingManagementService
     /// created or reactivated, for logging/testing. The reverse direction -
     /// coverage lost - is <see cref="AutoDisableUnservedMappingsAsync"/>.
     /// </summary>
+    /// <remarks>
+    /// Three safety mechanisms, added on further follow-up review, sit in
+    /// front of every toggle this method (and <see cref="AutoDisableUnservedMappingsAsync"/>)
+    /// makes:
+    /// <list type="bullet">
+    /// <item>The <c>FeatureFlagSettings.AutoManageServiceabilityEnabled</c>
+    /// kill switch, checked first - false means this call does nothing at
+    /// all.</item>
+    /// <item>A mapping with <see cref="Nestly.Domain.ServicePincodeMapping.IsPinned"/>
+    /// set is skipped entirely - an admin owns its active state now.</item>
+    /// <item>Flap protection: a mapping auto-toggled within the last
+    /// <c>ServiceabilityAutoManagementDefaults.AutoToggleCooldownMinutes</c>
+    /// is left alone, so a rapidly flapping provider cannot toggle the same
+    /// mapping on every pass.</item>
+    /// </list>
+    /// Auto-<i>enable</i> has no grace period, unlike auto-disable - coverage
+    /// that already exists is always safe to turn on immediately.
+    /// </remarks>
     Task<int> AutoEnableProviderCoverageAsync(Guid providerId);
 
     /// <summary>
@@ -120,6 +151,21 @@ public interface IServiceabilityMappingManagementService
     /// by someone, is left alone; re-running finds nothing left to disable.
     /// Returns the number of mappings deactivated, for logging/testing.
     /// </summary>
+    /// <remarks>
+    /// Same kill switch, pin and cooldown safety checks as
+    /// <see cref="AutoEnableProviderCoverageAsync"/> (see its remarks), plus
+    /// one more specific to disabling: a grace period
+    /// (<c>ServiceabilityAutoManagementDefaults.AutoDisableGracePeriodMinutes</c>).
+    /// The first time a candidate pair is found unserved, the mapping is only
+    /// marked pending (<see cref="Nestly.Domain.ServicePincodeMapping.PendingAutoDisableSince"/>) -
+    /// not yet deactivated - so a provider's brief suspend/reactivate blip
+    /// does not take a pincode dark. It is actually deactivated only once a
+    /// later call (from any trigger, for any provider) finds the same pair
+    /// still unserved and the pending timer already past the grace period.
+    /// <c>IServiceabilityAutoDisableSweepJob</c> is the periodic, provider-
+    /// independent backstop that guarantees that recheck happens even when
+    /// nothing else touches the pair again.
+    /// </remarks>
     Task<int> AutoDisableUnservedMappingsAsync(Guid providerId, IReadOnlyList<ServiceabilityCoverageGapResponse>? candidatePairs = null);
 
     /// <summary>

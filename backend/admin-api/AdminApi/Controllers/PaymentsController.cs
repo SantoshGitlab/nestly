@@ -70,9 +70,13 @@ public class PaymentsController : ControllerBase
     [HttpGet("reconciliation")]
     [Authorize(Policy = ReadPolicy)]
     [ProducesResponseType(typeof(AdminPaymentReconciliationResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetReconciliation([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetReconciliation(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] PaymentReconciliationCategory? category = null,
+        [FromQuery] string? search = null)
     {
-        var result = await _reconciliationService.GetReconciliationAsync(page, pageSize);
+        var result = await _reconciliationService.GetReconciliationAsync(page, pageSize, category, search);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

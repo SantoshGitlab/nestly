@@ -13,13 +13,19 @@ public sealed record CategoryCityMappingResponse(
 public sealed record CategoryCityMappingCreateRequest(Guid CategoryId, Guid CityId);
 
 /// <summary>Whether a service is active in a pincode (SRS 12.9.2), for the admin mapping screen.</summary>
+/// <param name="IsPinned">
+/// True when an admin has pinned this mapping's active state - auto-enable/
+/// auto-disable then skip it entirely regardless of live provider coverage
+/// (see <see cref="Nestly.Domain.ServicePincodeMapping.IsPinned"/>).
+/// </param>
 public sealed record ServicePincodeMappingResponse(
     Guid Id,
     Guid ServiceId,
     string ServiceName,
     Guid PincodeId,
     string PincodeCode,
-    bool IsActive);
+    bool IsActive,
+    bool IsPinned);
 
 /// <summary>Admin request to map a service as active in a pincode (SRS 12.9.2).</summary>
 public sealed record ServicePincodeMappingCreateRequest(Guid ServiceId, Guid PincodeId);

@@ -97,6 +97,73 @@ public sealed record CouponSettings(
     bool AllowCouponStacking,
     bool CouponsEnabled);
 
+/// <summary>
+/// Customer- and provider-facing feature flags (SRS 12.19 "Feature flags").
+/// Every flag here gates a genuinely optional, already-wired UI surface that
+/// can disappear without breaking the booking/payment/fulfilment lifecycle -
+/// core flow steps (booking creation, payment, provider job accept/status
+/// advance, availability, profile) are deliberately never represented here.
+/// Coupons already has its own platform-wide flag
+/// (<see cref="CouponSettings.CouponsEnabled"/>) predating this group, so it
+/// is not duplicated here - the public feature-flags endpoints project that
+/// existing flag alongside these instead.
+/// </summary>
+/// <param name="WalletEnabled">Customer-web: the Wallet nav entry, account-menu link and bottom-tab entry (SRS 11.17).</param>
+/// <param name="ReferralsEnabled">Customer-web: the Refer &amp; Earn nav entry and page (SRS 14.3).</param>
+/// <param name="AmcSubscriptionsEnabled">Customer-web: the AMC Plans nav entry and promo card (SRS 14.6-ish AMC module).</param>
+/// <param name="ServiceRatingsEnabled">Customer-web: the rating/review-count trust badge on the service detail page (<c>ServiceRatingBadge</c>).</param>
+/// <param name="BookingHelpLinkEnabled">Customer-web: the "Need help? Contact support" link on the booking summary/payment pages (<c>BookingHelpLink</c>).</param>
+/// <param name="RatingsPageEnabled">Provider-web: the Ratings &amp; feedback promo card on Profile and the <c>/ratings</c> page.</param>
+/// <param name="CalendarViewEnabled">Provider-web: the "View week calendar" entry points on Jobs/Availability and the <c>/calendar</c> page.</param>
+/// <param name="EarningsLedgerEnabled">Provider-web: only the ledger section of the Earnings page (<c>LedgerSection</c>) - the rest of Earnings (summary, per-job earnings, payouts) is unaffected.</param>
+/// <param name="OffersScreenEnabled">Provider-web: the dedicated <c>/offers</c> screen - offer accept/decline stays reachable from <c>/today</c> and <c>/jobs</c>, which are never gated.</param>
+/// <param name="AutoManageServiceabilityEnabled">
+/// Internal/admin-only operational kill switch (docs/OPEN-FIXES-FEATURES.csv
+/// "Service to pincode mapping" follow-up) - not customer- or provider-
+/// facing, so deliberately absent from <see cref="CustomerFeatureFlagsResponse"/>/
+/// <see cref="ProviderFeatureFlagsResponse"/> and their public
+/// <c>GET /api/v1/feature-flags</c> endpoints. When false,
+/// <c>IServiceabilityMappingManagementService.AutoEnableProviderCoverageAsync</c>
+/// and <c>AutoDisableUnservedMappingsAsync</c> both no-op entirely, checked at
+/// the start of each call before any work. Defaults true.
+/// </param>
+public sealed record FeatureFlagSettings(
+    bool WalletEnabled,
+    bool ReferralsEnabled,
+    bool AmcSubscriptionsEnabled,
+    bool ServiceRatingsEnabled,
+    bool BookingHelpLinkEnabled,
+    bool RatingsPageEnabled,
+    bool CalendarViewEnabled,
+    bool EarningsLedgerEnabled,
+    bool OffersScreenEnabled,
+    bool AutoManageServiceabilityEnabled);
+
+/// <summary>
+/// The customer-facing subset of <see cref="FeatureFlagSettings"/>, plus the
+/// pre-existing coupons flag, for the public unauthenticated
+/// <c>GET /api/v1/feature-flags</c> on consumer-api. Deliberately narrower
+/// than the admin shape - an anonymous endpoint must never leak provider-side
+/// flags or the full settings record.
+/// </summary>
+public sealed record CustomerFeatureFlagsResponse(
+    bool WalletEnabled,
+    bool CouponsEnabled,
+    bool ReferralsEnabled,
+    bool AmcSubscriptionsEnabled,
+    bool ServiceRatingsEnabled,
+    bool BookingHelpLinkEnabled);
+
+/// <summary>
+/// The provider-facing subset of <see cref="FeatureFlagSettings"/>, for the
+/// public unauthenticated <c>GET /api/v1/feature-flags</c> on provider-api.
+/// </summary>
+public sealed record ProviderFeatureFlagsResponse(
+    bool RatingsPageEnabled,
+    bool CalendarViewEnabled,
+    bool EarningsLedgerEnabled,
+    bool OffersScreenEnabled);
+
 /// <summary>Every settings group at once, for the admin Settings landing page (task 131h).</summary>
 public sealed record AllSystemSettingsResponse(
     BookingSettings Booking,
@@ -105,4 +172,5 @@ public sealed record AllSystemSettingsResponse(
     RescheduleSettings Reschedule,
     TaxSettings Tax,
     WalletSettings Wallet,
-    CouponSettings Coupon);
+    CouponSettings Coupon,
+    FeatureFlagSettings Feature);

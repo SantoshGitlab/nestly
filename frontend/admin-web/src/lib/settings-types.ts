@@ -54,6 +54,20 @@ export interface CouponSettings {
   couponsEnabled: boolean;
 }
 
+export interface FeatureFlagSettings {
+  walletEnabled: boolean;
+  referralsEnabled: boolean;
+  amcSubscriptionsEnabled: boolean;
+  serviceRatingsEnabled: boolean;
+  bookingHelpLinkEnabled: boolean;
+  ratingsPageEnabled: boolean;
+  calendarViewEnabled: boolean;
+  earningsLedgerEnabled: boolean;
+  offersScreenEnabled: boolean;
+  /** Internal/admin-only kill switch for the service/pincode mapping auto-enable/auto-disable safety net - not customer- or provider-facing. */
+  autoManageServiceabilityEnabled: boolean;
+}
+
 /** Every settings group at once - what `GET /api/v1/settings` returns. */
 export interface AllSystemSettingsResponse {
   booking: BookingSettings;
@@ -63,4 +77,5 @@ export interface AllSystemSettingsResponse {
   tax: TaxSettings;
   wallet: WalletSettings;
   coupon: CouponSettings;
+  feature: FeatureFlagSettings;
 }

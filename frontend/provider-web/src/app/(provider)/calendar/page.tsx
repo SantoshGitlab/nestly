@@ -9,6 +9,7 @@ import { isNotImplemented } from "@/lib/api";
 import { getAvailability } from "@/lib/availability-api";
 import { addDays, computeJobConflicts, dayOfWeekOf, startOfWeek, weekDates } from "@/lib/calendar";
 import { toLocalIsoDate, todayIsoDate } from "@/lib/date";
+import { useFeatureFlags, useRedirectIfDisabled } from "@/lib/feature-flags";
 import { formatIsoDate, formatTime } from "@/lib/format";
 import { listJobs } from "@/lib/jobs-api";
 import { isActiveJobStatus } from "@/lib/jobs-active";
@@ -44,6 +45,9 @@ const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", 
  * need a grid to stay legible.
  */
 export default function CalendarPage() {
+  const { calendarViewEnabled } = useFeatureFlags();
+  useRedirectIfDisabled(calendarViewEnabled, "/today");
+
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
 
   const jobsQuery = useQuery({

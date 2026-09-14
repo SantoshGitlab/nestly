@@ -14,6 +14,7 @@ import type {
   AdminPaymentTransactionSearchParams,
   AdminVoidPaymentTransactionRequest,
   PagedAdminPaymentTransactionResponse,
+  PaymentReconciliationCategory,
 } from "./payments-types";
 
 const PAYMENTS_BASE = `${API_V1}/payments`;
@@ -33,10 +34,16 @@ export const searchPaymentTransactions = (params: AdminPaymentTransactionSearchP
 export const getPaymentTransactionDetail = (transactionId: string) =>
   apiFetch<AdminPaymentTransactionDetail>(`${PAYMENTS_BASE}/${transactionId}`, { authenticated: true });
 
-export const getPaymentReconciliation = (page: number, pageSize: number) =>
-  apiFetch<AdminPaymentReconciliationResponse>(`${PAYMENTS_BASE}/reconciliation${query({ page, pageSize })}`, {
-    authenticated: true,
-  });
+export interface PaymentReconciliationFilters {
+  category?: PaymentReconciliationCategory;
+  search?: string;
+}
+
+export const getPaymentReconciliation = (page: number, pageSize: number, filters: PaymentReconciliationFilters = {}) =>
+  apiFetch<AdminPaymentReconciliationResponse>(
+    `${PAYMENTS_BASE}/reconciliation${query({ page, pageSize, ...filters })}`,
+    { authenticated: true },
+  );
 
 export const voidPaymentTransaction = (transactionId: string, request: AdminVoidPaymentTransactionRequest) =>
   apiFetch<AdminPaymentTransactionListItem>(`${PAYMENTS_BASE}/${transactionId}/void`, {

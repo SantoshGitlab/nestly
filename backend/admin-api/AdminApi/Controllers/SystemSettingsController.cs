@@ -13,8 +13,8 @@ namespace Nestly.AdminApi.Controllers;
 
 /// <summary>
 /// Admin-configurable system settings/feature-flag management (SRS 12.19,
-/// tasks 131a-131h): booking, slot, cancellation, reschedule, tax, wallet
-/// and coupon settings groups, each independently readable/editable. Gated
+/// tasks 131a-131h): booking, slot, cancellation, reschedule, tax, wallet,
+/// coupon and feature-flag settings groups, each independently readable/editable. Gated
 /// behind "settings.read"/"settings.write" - the same two policies every
 /// module's <see cref="AdminModules"/> code already generates via
 /// <c>AdminPermissionCatalog</c>, so no new policy registration was needed.
@@ -35,6 +35,7 @@ public class SystemSettingsController : ControllerBase
     private readonly IValidator<TaxSettings> _taxValidator;
     private readonly IValidator<WalletSettings> _walletValidator;
     private readonly IValidator<CouponSettings> _couponValidator;
+    private readonly IValidator<FeatureFlagSettings> _featureValidator;
 
     public SystemSettingsController(
         ISystemSettingsService settingsService,
@@ -44,7 +45,8 @@ public class SystemSettingsController : ControllerBase
         IValidator<RescheduleSettings> rescheduleValidator,
         IValidator<TaxSettings> taxValidator,
         IValidator<WalletSettings> walletValidator,
-        IValidator<CouponSettings> couponValidator)
+        IValidator<CouponSettings> couponValidator,
+        IValidator<FeatureFlagSettings> featureValidator)
     {
         _settingsService = settingsService;
         _bookingValidator = bookingValidator;
@@ -54,6 +56,7 @@ public class SystemSettingsController : ControllerBase
         _taxValidator = taxValidator;
         _walletValidator = walletValidator;
         _couponValidator = couponValidator;
+        _featureValidator = featureValidator;
     }
 
     /// <summary>Every settings group at once, for the admin Settings landing page.</summary>
@@ -282,6 +285,37 @@ public class SystemSettingsController : ControllerBase
         }
 
         var result = await _settingsService.UpdateCouponSettingsAsync(request, HttpContext.RequestAborted);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    [HttpGet("features")]
+    [Authorize(AuthenticationSchemes = DependencyInjection.AdminJwtBearerScheme, Policy = SettingsReadPolicy)]
+    [ProducesResponseType(typeof(FeatureFlagSettings), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetFeatures()
+    {
+        var result = await _settingsService.GetFeatureFlagSettingsAsync(HttpContext.RequestAborted);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    [HttpPut("features")]
+    [Authorize(AuthenticationSchemes = DependencyInjection.AdminJwtBearerScheme, Policy = SettingsWritePolicy)]
+    [ProducesResponseType(typeof(FeatureFlagSettings), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateFeatures([FromBody] FeatureFlagSettings request)
+    {
+        var validation = await _featureValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _settingsService.UpdateFeatureFlagSettingsAsync(request, HttpContext.RequestAborted);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

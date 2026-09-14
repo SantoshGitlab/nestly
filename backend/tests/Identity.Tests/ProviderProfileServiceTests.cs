@@ -52,7 +52,32 @@ public class ProviderProfileServiceTests : IDisposable
 
     private static ServiceabilityMappingManagementService CreateServiceabilityMappingManagementService(NestlyDbContext context) =>
         new(new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
-            new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context));
+            new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
+            TestServices.AuditLogWriter(context), TestServices.SystemSettings(context));
+
+    private static Nestly.Application.Serviceability.IServiceabilityAutoDisableSweepJob CreateSweepJob(NestlyDbContext context) =>
+        new ServiceabilityAutoDisableSweepJob(
+            new ServicePincodeMappingRepository(context),
+            TestServices.AuditLogWriter(context),
+            TestServices.SystemSettings(context),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceabilityAutoDisableSweepJob>.Instance);
+
+    /// <summary>
+    /// Backdates a mapping's pending-auto-disable timer past the grace
+    /// period, via a context separate from the one under test - EF Core's
+    /// identity map would otherwise keep serving that context's own
+    /// already-tracked (recent) copy of the row. See
+    /// <c>Nestly.Catalog.Tests.ServiceabilityMappingManagementServiceTests</c>'s
+    /// identical helper for the same reasoning.
+    /// </summary>
+    private async Task BackdatePendingAutoDisableAsync(Guid serviceId, Guid pincodeId)
+    {
+        await using var backdateContext = _database.CreateContext();
+        var mapping = await backdateContext.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
+        var pastCutoff = DateTime.UtcNow.AddMinutes(-(Nestly.Application.Serviceability.ServiceabilityAutoManagementDefaults.AutoDisableGracePeriodMinutes + 1));
+        await backdateContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE service_pincode_mapping SET pending_auto_disable_since = {pastCutoff} WHERE id = {mapping.Id}");
+    }
 
     [Fact]
     public async Task GetAsync_returns_the_provider_profile()
@@ -281,9 +306,19 @@ public class ProviderProfileServiceTests : IDisposable
         // Skills replace-all with an empty set - the provider no longer has
         // any skill covering this service.
         var result = await service.UpdateSkillsAsync(_providerId, new UpdateProviderSkillsRequest([]));
-
         result.IsSuccess.Should().BeTrue();
-        var mapping = await context.Set<ServicePincodeMapping>()
+
+        // The grace period means that call only starts the pending-disable
+        // timer - see AutoDisableUnservedMappingsAsync's doc comment. This
+        // test is about the eventual outcome, so it fast-forwards past the
+        // grace period and re-checks through a fresh context/service (the
+        // original context's copy of the mapping would otherwise still show
+        // its pre-backdate state).
+        await BackdatePendingAutoDisableAsync(catalogService.Id, pincode.Id);
+        await using var freshContext = _database.CreateContext();
+        (await CreateSweepJob(freshContext).SweepAsync()).Should().Be(1);
+
+        var mapping = await freshContext.Set<ServicePincodeMapping>()
             .SingleAsync(m => m.ServiceId == catalogService.Id && m.PincodeId == pincode.Id);
         mapping.IsActive.Should().BeFalse();
     }
@@ -307,9 +342,13 @@ public class ProviderProfileServiceTests : IDisposable
             new UpdateProviderServiceAreasRequest([new ProviderServiceAreaInput(_cityId, null, pincode.Id)]));
 
         // Areas replace-all that drops the pincode entirely.
-        await service.UpdateServiceAreasAsync(_providerId, new UpdateProviderServiceAreasRequest([]));
+        (await service.UpdateServiceAreasAsync(_providerId, new UpdateProviderServiceAreasRequest([]))).IsSuccess.Should().BeTrue();
 
-        var mapping = await context.Set<ServicePincodeMapping>()
+        await BackdatePendingAutoDisableAsync(catalogService.Id, pincode.Id);
+        await using var freshContext = _database.CreateContext();
+        (await CreateSweepJob(freshContext).SweepAsync()).Should().Be(1);
+
+        var mapping = await freshContext.Set<ServicePincodeMapping>()
             .SingleAsync(m => m.ServiceId == catalogService.Id && m.PincodeId == pincode.Id);
         mapping.IsActive.Should().BeFalse();
     }
@@ -368,7 +407,17 @@ public class ProviderProfileServiceTests : IDisposable
 
         first.IsSuccess.Should().BeTrue();
         second.IsSuccess.Should().BeTrue();
-        var mapping = await context.Set<ServicePincodeMapping>()
+
+        // Both saves only marked the mapping pending (grace period) - fast-
+        // forward past it, then re-run the auto-disable check twice more to
+        // prove that part stays idempotent too.
+        await BackdatePendingAutoDisableAsync(catalogService.Id, pincode.Id);
+        await using var freshContext = _database.CreateContext();
+        var sweepJob = CreateSweepJob(freshContext);
+        (await sweepJob.SweepAsync()).Should().Be(1);
+        (await sweepJob.SweepAsync()).Should().Be(0);
+
+        var mapping = await freshContext.Set<ServicePincodeMapping>()
             .SingleAsync(m => m.ServiceId == catalogService.Id && m.PincodeId == pincode.Id);
         mapping.IsActive.Should().BeFalse();
     }

@@ -85,6 +85,12 @@ public class SystemSettingsService : ISystemSettingsService
     public Task<Result<CouponSettings>> UpdateCouponSettingsAsync(CouponSettings settings, CancellationToken cancellationToken = default) =>
         UpdateGroupAsync(SystemSettingGroups.Coupon, settings, cancellationToken);
 
+    public Task<Result<FeatureFlagSettings>> GetFeatureFlagSettingsAsync(CancellationToken cancellationToken = default) =>
+        GetGroupAsync<FeatureFlagSettings>(SystemSettingGroups.Feature, cancellationToken);
+
+    public Task<Result<FeatureFlagSettings>> UpdateFeatureFlagSettingsAsync(FeatureFlagSettings settings, CancellationToken cancellationToken = default) =>
+        UpdateGroupAsync(SystemSettingGroups.Feature, settings, cancellationToken);
+
     public async Task<Result<AllSystemSettingsResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         IReadOnlyList<SystemSetting> rows = await _repository.GetAllAsync(cancellationToken);
@@ -165,7 +171,8 @@ public class SystemSettingsService : ISystemSettingsService
             JsonSerializer.Deserialize<RescheduleSettings>(byGroup[SystemSettingGroups.Reschedule], JsonOptions)!,
             JsonSerializer.Deserialize<TaxSettings>(byGroup[SystemSettingGroups.Tax], JsonOptions)!,
             JsonSerializer.Deserialize<WalletSettings>(byGroup[SystemSettingGroups.Wallet], JsonOptions)!,
-            JsonSerializer.Deserialize<CouponSettings>(byGroup[SystemSettingGroups.Coupon], JsonOptions)!);
+            JsonSerializer.Deserialize<CouponSettings>(byGroup[SystemSettingGroups.Coupon], JsonOptions)!,
+            JsonSerializer.Deserialize<FeatureFlagSettings>(byGroup[SystemSettingGroups.Feature], JsonOptions)!);
         return true;
     }
 

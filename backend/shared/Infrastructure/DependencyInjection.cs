@@ -706,6 +706,7 @@ public static class DependencyInjection
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
         services.AddScoped<IAssignmentResponseExpirySweepJob, AssignmentResponseExpirySweepJob>();
         services.AddScoped<IBookingFulfilmentPromotionJob, BookingFulfilmentPromotionJob>();
+        services.AddScoped<IServiceabilityAutoDisableSweepJob, ServiceabilityAutoDisableSweepJob>();
         services.AddScoped<INestlyCoinsProgramConfigRepository, NestlyCoinsProgramConfigRepository>();
         services.AddScoped<INestlyCoinsService, NestlyCoinsService>();
         services.AddScoped<INestlyCoinsAdminService, NestlyCoinsAdminService>();

@@ -32,7 +32,9 @@ public sealed class ServiceManagementServiceTests : IClassFixture<TestDatabase>
                 new CategoryRepository(context),
                 new CityRepository(context),
                 new ServiceRepository(context),
-                new PincodeRepository(context)));
+                new PincodeRepository(context),
+                TestServices.AuditLogWriter(context),
+                TestServices.SystemSettings(context)));
 
     private static async Task<CategoryResponse> SeedCategoryAsync(NestlyDbContext context)
     {

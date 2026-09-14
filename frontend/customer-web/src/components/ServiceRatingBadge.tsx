@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { API_V1, apiFetch } from "@/lib/api";
+import { useFeatureFlags } from "@/lib/feature-flags";
 import type { ServiceReviewSummary } from "@/lib/types";
 
 /**
@@ -20,12 +21,14 @@ import type { ServiceReviewSummary } from "@/lib/types";
  * fetched data, so it only ever shows a number that means something.
  */
 export function ServiceRatingBadge({ slug }: { slug: string }) {
+  const { serviceRatingsEnabled } = useFeatureFlags();
   const query = useQuery({
     queryKey: ["service-reviews-summary", slug],
     queryFn: () => apiFetch<ServiceReviewSummary>(`${API_V1}/services/${slug}/reviews-summary`),
+    enabled: serviceRatingsEnabled,
   });
 
-  if (!query.data || query.data.totalCount === 0) {
+  if (!serviceRatingsEnabled || !query.data || query.data.totalCount === 0) {
     return null;
   }
 

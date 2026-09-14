@@ -61,31 +61,34 @@ export function RequireProviderAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     hasClientRendered = true;
-    let cancelled = false;
 
-    const sync = async () => {
+    // If the access token has already expired at mount time (very common -
+    // it only lives 15 minutes, so any page load after a short break lands
+    // here) but a refresh token is still stored, try one silent refresh
+    // before treating this as a real sign-out. Only a refresh token that's
+    // actually missing, or a refresh call that itself fails (expired/
+    // revoked), should bounce to /login - a technically-expired access token
+    // alone must not.
+    const sync = () => {
       if (isAuthenticated()) {
-        if (!cancelled) setAuthed(true);
+        setAuthed(true);
         return;
       }
-      // Locally expired (or never set) - a refresh token still in storage
-      // means this could be the "just reopened the tab" case, not a real
-      // sign-out. Skip the attempt entirely when there's nothing to redeem,
-      // so a genuinely first-time visitor doesn't wait on a network call
-      // that was always going to fail.
-      const renewed = getRefreshToken() !== null && (await refreshAccessToken());
-      if (!cancelled) setAuthed(renewed ? true : isAuthenticated());
+      if (!getRefreshToken()) {
+        setAuthed(false);
+        return;
+      }
+      // A stored refresh token means this tab did hold a real session before
+      // now, even though `authed` itself hasn't been `true` yet this mount -
+      // mark it so a refresh failure below reads as "session expired", not
+      // "never signed in" (see wasAuthedRef's own comment).
+      wasAuthedRef.current = true;
+      void refreshAccessToken().then((refreshed) => {
+        setAuthed(refreshed);
+      });
     };
-
-    void sync();
-    const unsubscribe = subscribeToAuthChanges(() => void sync());
-    // Guards the async `sync` above against setting state after this guard
-    // has unmounted - e.g. the refresh call is still in flight when the
-    // provider navigates away or signs out elsewhere.
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
+    sync();
+    return subscribeToAuthChanges(sync);
   }, []);
 
   useEffect(() => {

@@ -73,6 +73,7 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
   skeletonRows = 5,
   hideDensityToggle = false,
   footer,
+  extraRowActions,
 }: {
   items: T[] | undefined;
   columns: readonly EntityTableColumn<T>[];
@@ -106,6 +107,8 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
   skeletonRows?: number;
   hideDensityToggle?: boolean;
   footer?: ReactNode;
+  /** Extra per-row action(s) rendered alongside the built-in Suspend/Activate button (e.g. a pin/unpin toggle) - hidden automatically when `canWrite` is false, same as the built-in button. */
+  extraRowActions?: (item: T) => ReactNode;
 }) {
   const [pendingSuspend, setPendingSuspend] = useState<T | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -204,22 +207,25 @@ export function EntityTable<T extends { id: string; isActive: boolean }>({
         rowActions={
           canWrite
             ? (item) => (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={item.isActive ? "secondary" : "subtle"}
-                  disabled={togglingId === item.id}
-                  loading={togglingId === item.id && !pendingSuspend}
-                  onClick={() => {
-                    if (item.isActive) {
-                      setPendingSuspend(item);
-                    } else {
-                      onToggleActive(item);
-                    }
-                  }}
-                >
-                  {item.isActive ? "Suspend" : "Activate"}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={item.isActive ? "secondary" : "subtle"}
+                    disabled={togglingId === item.id}
+                    loading={togglingId === item.id && !pendingSuspend}
+                    onClick={() => {
+                      if (item.isActive) {
+                        setPendingSuspend(item);
+                      } else {
+                        onToggleActive(item);
+                      }
+                    }}
+                  >
+                    {item.isActive ? "Suspend" : "Activate"}
+                  </Button>
+                  {extraRowActions?.(item)}
+                </>
               )
             : undefined
         }

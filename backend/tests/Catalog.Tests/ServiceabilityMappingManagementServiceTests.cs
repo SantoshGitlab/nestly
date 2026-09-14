@@ -4,6 +4,7 @@ using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace Nestly.Catalog.Tests;
 
@@ -23,7 +24,12 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
         var service = new Service(Guid.NewGuid(), category.Id, "Deep Cleaning", "deep-cleaning-" + Guid.NewGuid(), "desc", 999m);
         var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
         var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
-        var pincode = new Pincode(Guid.NewGuid(), city.Id, "560" + Guid.NewGuid().ToString("N")[..3]);
+        // 6 hex chars (not 3) - this suite now has enough test methods
+        // sharing one IClassFixture<TestDatabase> that a 3-char suffix
+        // (4096 possibilities) collided across methods often enough to be
+        // flaky; Pincode.Code allows up to 10 characters, so "560" + 6 stays
+        // well within that.
+        var pincode = new Pincode(Guid.NewGuid(), city.Id, "560" + Guid.NewGuid().ToString("N")[..6]);
 
         context.Add(category);
         context.Add(service);
@@ -38,7 +44,9 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
             new CategoryRepository(context),
             new CityRepository(context),
             new ServiceRepository(context),
-            new PincodeRepository(context));
+            new PincodeRepository(context),
+            TestServices.AuditLogWriter(context),
+            TestServices.SystemSettings(context));
 
         return (managementService, category, city, service, pincode);
     }
@@ -329,6 +337,44 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
         gaps.Should().Contain(g => g.MappingId == mapping.Id);
     }
 
+    /// <summary>
+    /// Backdates a mapping's pending-auto-disable timer past the grace
+    /// period, directly in the database - the tests below have no injectable
+    /// clock to fast-forward instead (this service uses <c>DateTime.UtcNow</c>
+    /// directly, matching this codebase's convention for this kind of
+    /// timestamp; see <c>AdminLoginService</c>/<c>AdminUserManagementService</c>
+    /// for other examples of that same convention).
+    /// </summary>
+    private async Task BackdatePendingAutoDisableAsync(Guid mappingId)
+    {
+        var pastCutoff = DateTime.UtcNow.AddMinutes(-(ServiceabilityAutoManagementDefaults.AutoDisableGracePeriodMinutes + 1));
+        using var backdateContext = _db.CreateContext();
+        await backdateContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE service_pincode_mapping SET pending_auto_disable_since = {pastCutoff} WHERE id = {mappingId}");
+    }
+
+    /// <summary>
+    /// A second <see cref="ServiceabilityMappingManagementService"/> over its
+    /// own fresh <see cref="NestlyDbContext"/> - needed after
+    /// <see cref="BackdatePendingAutoDisableAsync"/> because EF Core's
+    /// identity map would otherwise keep serving the original service's own
+    /// already-tracked (pre-backdate) copy of the mapping instead of the row
+    /// as it now stands in the database.
+    /// </summary>
+    private ServiceabilityMappingManagementService CreateServiceOverFreshContext()
+    {
+        var context = _db.CreateContext();
+        return new ServiceabilityMappingManagementService(
+            new CategoryCityMappingRepository(context),
+            new ServicePincodeMappingRepository(context),
+            new CategoryRepository(context),
+            new CityRepository(context),
+            new ServiceRepository(context),
+            new PincodeRepository(context),
+            TestServices.AuditLogWriter(context),
+            TestServices.SystemSettings(context));
+    }
+
     private static Provider SeedActiveProviderCoveringPincode(NestlyDbContext context, Guid categoryId, Guid cityId, Guid pincodeId)
     {
         var provider = new Provider(Guid.NewGuid(), "Legal", "Covering Provider", ProviderType.Individual, "9" + Guid.NewGuid().ToString("N")[..9]);
@@ -441,7 +487,15 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
         skill.Deactivate();
         context.SaveChanges();
 
-        var disabledCount = await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered);
+        // First call only starts the grace-period timer - see
+        // AutoDisableUnservedMappingsAsync_waits_for_the_grace_period_before_disabling
+        // for that behaviour in isolation. This test is about the eventual
+        // outcome, so it fast-forwards past the grace period.
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered)).Should().Be(0);
+        var mappingId = (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().Id;
+
+        await BackdatePendingAutoDisableAsync(mappingId);
+        var disabledCount = await CreateServiceOverFreshContext().AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered);
 
         disabledCount.Should().Be(1);
         var mappings = await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id);
@@ -491,7 +545,11 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
         suspended.ChangeStatus(ProviderStatus.Suspended);
         context.SaveChanges();
 
-        var disabledCount = await service.AutoDisableUnservedMappingsAsync(provider.Id);
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id)).Should().Be(0, "the grace period has not elapsed yet");
+        var mappingId = (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().Id;
+
+        await BackdatePendingAutoDisableAsync(mappingId);
+        var disabledCount = await CreateServiceOverFreshContext().AutoDisableUnservedMappingsAsync(provider.Id);
 
         disabledCount.Should().Be(1);
         var mappings = await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id);
@@ -512,8 +570,13 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
         suspended.ChangeStatus(ProviderStatus.Suspended);
         context.SaveChanges();
 
-        (await service.AutoDisableUnservedMappingsAsync(provider.Id)).Should().Be(1);
-        (await service.AutoDisableUnservedMappingsAsync(provider.Id)).Should().Be(0);
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id)).Should().Be(0, "the grace period has not elapsed yet");
+        var mappingId = (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().Id;
+        await BackdatePendingAutoDisableAsync(mappingId);
+
+        var freshService = CreateServiceOverFreshContext();
+        (await freshService.AutoDisableUnservedMappingsAsync(provider.Id)).Should().Be(1);
+        (await freshService.AutoDisableUnservedMappingsAsync(provider.Id)).Should().Be(0);
 
         var mappings = await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id);
         mappings.Single().IsActive.Should().BeFalse();
@@ -528,5 +591,205 @@ public sealed class ServiceabilityMappingManagementServiceTests : IClassFixture<
         var disabledCount = await service.AutoDisableUnservedMappingsAsync(Guid.NewGuid());
 
         disabledCount.Should().Be(0);
+    }
+
+    // ---- Auto-management safety net: audit trail, pin, flap-protection cooldown, auto-disable grace period, kill switch ----
+
+    /// <summary>A real auto-enable writes a System-attributed audit entry naming the mapping and the triggering provider.</summary>
+    [Fact]
+    public async Task AutoEnableProviderCoverageAsync_writes_a_system_attributed_audit_entry_on_a_real_toggle()
+    {
+        var (service, category, city, catalogService, pincode) = SeedAndCreateService();
+        var context = _db.CreateContext();
+        var provider = SeedActiveProviderCoveringPincode(context, category.Id, city.Id, pincode.Id);
+
+        (await service.AutoEnableProviderCoverageAsync(provider.Id)).Should().Be(1);
+
+        var mapping = (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single();
+
+        using var auditContext = _db.CreateContext();
+        var audit = auditContext.Set<AuditLog>().Single(a => a.EntityName == "ServicePincodeMapping" && a.EntityId == mapping.Id.ToString());
+        audit.Action.Should().Be("AutoEnabled");
+        audit.ActorType.Should().Be(AuditActorType.System);
+        audit.ActorId.Should().BeNull();
+        audit.NewValues.Should().Contain(provider.Id.ToString());
+    }
+
+    /// <summary>Pinning a mapping's active state means auto-enable never touches it, even when it is genuinely coverable.</summary>
+    [Fact]
+    public async Task AutoEnableProviderCoverageAsync_skips_a_pinned_mapping()
+    {
+        var (service, category, city, catalogService, pincode) = SeedAndCreateService();
+        var context = _db.CreateContext();
+        var provider = SeedActiveProviderCoveringPincode(context, category.Id, city.Id, pincode.Id);
+        var mapping = (await service.CreateServicePincodeMappingAsync(new ServicePincodeMappingCreateRequest(catalogService.Id, pincode.Id))).Value;
+        (await service.DeactivateServicePincodeMappingAsync(mapping.Id)).IsSuccess.Should().BeTrue();
+        (await service.PinServicePincodeMappingAsync(mapping.Id)).IsSuccess.Should().BeTrue();
+
+        var enabledCount = await service.AutoEnableProviderCoverageAsync(provider.Id);
+
+        enabledCount.Should().Be(0);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().IsActive.Should().BeFalse();
+    }
+
+    /// <summary>Pinning a mapping's active state means auto-disable never touches it, even when coverage is genuinely lost.</summary>
+    [Fact]
+    public async Task AutoDisableUnservedMappingsAsync_skips_a_pinned_mapping()
+    {
+        var (service, category, city, catalogService, pincode) = SeedAndCreateService();
+        var context = _db.CreateContext();
+        var provider = SeedActiveProviderCoveringPincode(context, category.Id, city.Id, pincode.Id);
+        var mapping = (await service.CreateServicePincodeMappingAsync(new ServicePincodeMappingCreateRequest(catalogService.Id, pincode.Id))).Value;
+        (await service.PinServicePincodeMappingAsync(mapping.Id)).IsSuccess.Should().BeTrue();
+
+        var previouslyCovered = await service.ListMappedPairsCoveredByProviderAsync(provider.Id);
+        var skill = context.Set<ProviderSkillMapping>().Single(s => s.ProviderId == provider.Id);
+        skill.Deactivate();
+        context.SaveChanges();
+
+        var disabledCount = await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered);
+
+        disabledCount.Should().Be(0);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().IsActive.Should().BeTrue();
+
+        using var readContext = _db.CreateContext();
+        readContext.Set<ServicePincodeMapping>().Single(m => m.Id == mapping.Id).PendingAutoDisableSince.Should().BeNull();
+        readContext.Set<AuditLog>().Where(a => a.EntityId == mapping.Id.ToString()).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Flap protection: an auto-enable followed almost immediately by a
+    /// coverage loss, followed almost immediately by coverage returning -
+    /// two rapid loss-then-gain cycles within the cooldown window - toggles
+    /// the mapping exactly once (the original auto-enable), not twice.
+    /// </summary>
+    [Fact]
+    public async Task Rapid_coverage_flapping_within_the_cooldown_window_toggles_the_mapping_only_once()
+    {
+        var (service, category, city, catalogService, pincode) = SeedAndCreateService();
+        var context = _db.CreateContext();
+        var provider = SeedActiveProviderCoveringPincode(context, category.Id, city.Id, pincode.Id);
+
+        // Cycle 0: coverage gained - the one real toggle this test expects.
+        (await service.AutoEnableProviderCoverageAsync(provider.Id)).Should().Be(1);
+
+        // Cycle 1: coverage lost, then gained again, both well within
+        // ServiceabilityAutoManagementDefaults.AutoToggleCooldownMinutes of
+        // the toggle above.
+        var previouslyCovered = await service.ListMappedPairsCoveredByProviderAsync(provider.Id);
+        var skill = context.Set<ProviderSkillMapping>().Single(s => s.ProviderId == provider.Id);
+        skill.Deactivate();
+        context.SaveChanges();
+
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered)).Should().Be(0, "the cooldown must suppress the disable");
+
+        skill.Activate();
+        context.SaveChanges();
+
+        (await service.AutoEnableProviderCoverageAsync(provider.Id)).Should().Be(0, "the mapping never actually left the active state");
+
+        var mappings = await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id);
+        mappings.Single().IsActive.Should().BeTrue();
+
+        var mappingId = mappings.Single().Id;
+
+        using var auditContext = _db.CreateContext();
+        var auditActions = auditContext.Set<AuditLog>()
+            .Where(a => a.EntityName == "ServicePincodeMapping" && a.EntityId == mappingId.ToString())
+            .Select(a => a.Action)
+            .ToList();
+        auditActions.Should().ContainSingle().Which.Should().Be("AutoEnabled");
+    }
+
+    /// <summary>Auto-disable does not fire the instant coverage is lost - it waits for the grace period, then disables once it has actually elapsed.</summary>
+    [Fact]
+    public async Task AutoDisableUnservedMappingsAsync_waits_for_the_grace_period_before_disabling()
+    {
+        var (service, category, city, catalogService, pincode) = SeedAndCreateService();
+        var context = _db.CreateContext();
+        var provider = SeedActiveProviderCoveringPincode(context, category.Id, city.Id, pincode.Id);
+        var mapping = (await service.CreateServicePincodeMappingAsync(new ServicePincodeMappingCreateRequest(catalogService.Id, pincode.Id))).Value;
+
+        var previouslyCovered = await service.ListMappedPairsCoveredByProviderAsync(provider.Id);
+        var skill = context.Set<ProviderSkillMapping>().Single(s => s.ProviderId == provider.Id);
+        skill.Deactivate();
+        context.SaveChanges();
+
+        // First observation of lost coverage: only starts the grace-period timer.
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered)).Should().Be(0);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().IsActive.Should().BeTrue();
+
+        using (var checkContext = _db.CreateContext())
+        {
+            checkContext.Set<ServicePincodeMapping>().Single(m => m.Id == mapping.Id).PendingAutoDisableSince.Should().NotBeNull();
+        }
+
+        // A second call while still within the grace period changes nothing.
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered)).Should().Be(0);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().IsActive.Should().BeTrue();
+
+        // Simulate the grace period having fully elapsed by backdating the
+        // pending timer directly in the database - there is no injectable
+        // clock on this service (it uses DateTime.UtcNow, matching this
+        // codebase's convention for this kind of timestamp), so this is the
+        // most direct way to exercise "after the grace period" without an
+        // actual 30-minute wait. A fresh service/context is required to
+        // observe it: EF Core's identity map would otherwise keep serving
+        // `service`'s own already-tracked (recent) copy of this mapping
+        // instead of the backdated row.
+        await BackdatePendingAutoDisableAsync(mapping.Id);
+        var disabledCount = await CreateServiceOverFreshContext().AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered);
+
+        disabledCount.Should().Be(1);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().IsActive.Should().BeFalse();
+
+        using var auditContext = _db.CreateContext();
+        var audit = auditContext.Set<AuditLog>().Single(a =>
+            a.EntityName == "ServicePincodeMapping" && a.EntityId == mapping.Id.ToString() && a.Action == "AutoDisabled");
+        audit.ActorType.Should().Be(AuditActorType.System);
+        audit.NewValues.Should().Contain(provider.Id.ToString());
+    }
+
+    /// <summary>The admin kill switch (FeatureFlagSettings.AutoManageServiceabilityEnabled = false) makes both methods no-op entirely, with no audit trail.</summary>
+    [Fact]
+    public async Task Both_auto_enable_and_auto_disable_are_no_ops_when_the_kill_switch_is_off()
+    {
+        var (service, category, city, catalogService, pincode) = SeedAndCreateService();
+        var context = _db.CreateContext();
+        SeedKillSwitchOff(context);
+
+        var provider = SeedActiveProviderCoveringPincode(context, category.Id, city.Id, pincode.Id);
+        (await service.AutoEnableProviderCoverageAsync(provider.Id)).Should().Be(0);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Should().BeEmpty();
+
+        var mapping = (await service.CreateServicePincodeMappingAsync(new ServicePincodeMappingCreateRequest(catalogService.Id, pincode.Id))).Value;
+        var previouslyCovered = await service.ListMappedPairsCoveredByProviderAsync(provider.Id);
+        var skill = context.Set<ProviderSkillMapping>().Single(s => s.ProviderId == provider.Id);
+        skill.Deactivate();
+        context.SaveChanges();
+
+        (await service.AutoDisableUnservedMappingsAsync(provider.Id, previouslyCovered)).Should().Be(0);
+        (await service.ListServicePincodeMappingsAsync(catalogService.Id, pincode.Id)).Single().IsActive.Should().BeTrue();
+
+        using var readContext = _db.CreateContext();
+        readContext.Set<ServicePincodeMapping>().Single(m => m.Id == mapping.Id).PendingAutoDisableSince.Should().BeNull();
+        readContext.Set<AuditLog>().Where(a => a.EntityId == mapping.Id.ToString()).Should().BeEmpty();
+
+        // Restore the default (no "features" row -> fails open as enabled)
+        // so later tests in this class - which share one TestDatabase fixture
+        // - are not left running with the kill switch permanently off.
+        using var cleanupContext = _db.CreateContext();
+        cleanupContext.Remove(cleanupContext.Set<SystemSetting>().Single(s => s.GroupKey == SystemSettingGroups.Feature));
+        cleanupContext.SaveChanges();
+    }
+
+    /// <summary>Seeds the "features" settings group with the kill switch off - every other flag value is irrelevant to these tests.</summary>
+    private static void SeedKillSwitchOff(NestlyDbContext context)
+    {
+        context.Add(new SystemSetting(
+            Guid.NewGuid(),
+            SystemSettingGroups.Feature,
+            "{\"walletEnabled\":true,\"referralsEnabled\":true,\"amcSubscriptionsEnabled\":true,\"serviceRatingsEnabled\":true,\"bookingHelpLinkEnabled\":true,\"ratingsPageEnabled\":true,\"calendarViewEnabled\":true,\"earningsLedgerEnabled\":true,\"offersScreenEnabled\":true,\"autoManageServiceabilityEnabled\":false}"));
+        context.SaveChanges();
     }
 }

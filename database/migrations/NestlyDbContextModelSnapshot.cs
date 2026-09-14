@@ -5343,6 +5343,18 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_pinned");
+
+                    b.Property<DateTime?>("LastAutoToggledAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_auto_toggled_at_utc");
+
+                    b.Property<DateTime?>("PendingAutoDisableSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pending_auto_disable_since");
+
                     b.Property<Guid>("PincodeId")
                         .HasColumnType("uuid")
                         .HasColumnName("pincode_id");

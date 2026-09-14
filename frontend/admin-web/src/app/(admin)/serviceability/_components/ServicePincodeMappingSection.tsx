@@ -15,6 +15,7 @@ import {
   listServiceLookups,
   listServicePincodeMappings,
   setServicePincodeMappingActive,
+  setServicePincodeMappingPinned,
 } from "@/lib/serviceability-api";
 import type { ServicePincodeMappingResponse } from "@/lib/serviceability-types";
 import { toLookupOptions } from "./lookup-options";
@@ -56,6 +57,11 @@ export function ServicePincodeMappingSection({ canWrite }: { canWrite: boolean }
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => setServicePincodeMappingActive(id, isActive),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-pincode-mappings"] }),
+  });
+
+  const pinMutation = useMutation({
+    mutationFn: ({ id, isPinned }: { id: string; isPinned: boolean }) => setServicePincodeMappingPinned(id, isPinned),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["service-pincode-mappings"] }),
   });
 
@@ -127,6 +133,23 @@ export function ServicePincodeMappingSection({ canWrite }: { canWrite: boolean }
         togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
         toggleError={toggleMutation.error}
         onToggleActive={(mapping) => toggleMutation.mutate({ id: mapping.id, isActive: !mapping.isActive })}
+        extraRowActions={(mapping) => (
+          <Button
+            type="button"
+            size="sm"
+            variant="subtle"
+            disabled={pinMutation.isPending && pinMutation.variables?.id === mapping.id}
+            loading={pinMutation.isPending && pinMutation.variables?.id === mapping.id}
+            title={
+              mapping.isPinned
+                ? "Admin-pinned - auto-enable/auto-disable never touch this mapping. Click to unpin."
+                : "Pin - keep this mapping's active state admin-owned, ignoring live provider coverage."
+            }
+            onClick={() => pinMutation.mutate({ id: mapping.id, isPinned: !mapping.isPinned })}
+          >
+            {mapping.isPinned ? "Unpin" : "Pin"}
+          </Button>
+        )}
         columns={[
           {
             header: "Service",
@@ -138,8 +161,19 @@ export function ServicePincodeMappingSection({ canWrite }: { canWrite: boolean }
             sortValue: (mapping) => mapping.pincodeCode,
             render: (mapping) => <span className="nums">{mapping.pincodeCode}</span>,
           },
+          {
+            header: "Pinned",
+            sortValue: (mapping) => mapping.isPinned,
+            render: (mapping) =>
+              mapping.isPinned ? (
+                <span className="text-xs font-medium text-fg-subtle">Pinned</span>
+              ) : (
+                <span className="text-xs text-fg-subtle">—</span>
+              ),
+          },
         ]}
       />
+      {pinMutation.isError ? <Alert>{describeError(pinMutation.error)}</Alert> : null}
 
       {canWrite ? (
         <Card

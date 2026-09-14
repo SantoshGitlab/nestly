@@ -39,7 +39,9 @@ public sealed class CatalogHealthTests : IClassFixture<TestDatabase>
                 new CategoryRepository(context),
                 new CityRepository(context),
                 new ServiceRepository(context),
-                new PincodeRepository(context)));
+                new PincodeRepository(context),
+                TestServices.AuditLogWriter(context),
+                TestServices.SystemSettings(context)));
 
     private static (Category Category, Service Service, City City, Pincode Pincode) SeedActiveService(NestlyDbContext context, string? coverImageUrl = null)
     {

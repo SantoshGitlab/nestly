@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cx } from "@/components/ui";
@@ -90,6 +91,7 @@ export function AdminHeader({
 
       <div className="flex-1" />
 
+      <GlobalSearch />
       <NotificationBell />
       <ThemeToggle />
 
