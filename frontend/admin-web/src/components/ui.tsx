@@ -909,7 +909,7 @@ export function StatTile({
  * no interactivity — matching the KPI dashboards it decorates.
  */
 
-const CHART_TONES = {
+export const CHART_TONES = {
   brand: "rgb(var(--brand-600))",
   accent: "rgb(var(--accent-500))",
   success: "rgb(var(--success))",
@@ -968,6 +968,12 @@ export function Sparkline({
  * Filled trend chart for a dashboard's headline series (bookings/revenue over
  * time). `labels` render along the x-axis when given; omit them for a dense
  * sparkline-scale chart with no axis.
+ *
+ * `interactive` (default off, so the three pre-existing callers render
+ * byte-for-byte the same) adds a crosshair+tooltip hover layer, per the
+ * dataviz skill's interaction rules: a vertical hairline snaps to the nearest
+ * point, a tooltip reads its value, and the same readout is reachable on
+ * keyboard focus via Left/Right arrows — a tooltip must enhance, never gate.
  */
 export function AreaChart({
   values,
@@ -975,17 +981,21 @@ export function AreaChart({
   tone = "brand",
   height = 220,
   className = "",
+  interactive = false,
 }: {
   values: readonly number[];
   labels?: readonly string[];
   tone?: ChartTone;
   height?: number;
   className?: string;
+  interactive?: boolean;
 }) {
   const width = 640;
   const padBottom = labels ? 24 : 4;
   const points = normalizePoints(values, width, height - padBottom, 4);
   const gradientId = useId().replace(/:/g, "");
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   if (points.length < 2) {
     return (
@@ -1002,94 +1012,236 @@ export function AreaChart({
   const areaPath = `${linePath} L${points[points.length - 1].x} ${height - padBottom} L${points[0].x} ${height - padBottom} Z`;
   const color = CHART_TONES[tone];
 
+  // Nearest-point lookup from a pointer's clientX — the crosshair snaps to a
+  // data position, never sits at a raw pixel (interaction.md: "readers aim at
+  // a date, never at a 2px line").
+  function indexFromClientX(clientX: number): number {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return points.length - 1;
+    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const targetX = fraction * width;
+    let nearest = 0;
+    let nearestDistance = Infinity;
+    points.forEach((point, index) => {
+      const distance = Math.abs(point.x - targetX);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = index;
+      }
+    });
+    return nearest;
+  }
+
+  const active = activeIndex !== null ? points[activeIndex] : null;
+  const activeLabel = activeIndex !== null ? labels?.[activeIndex] : undefined;
+  const activeValue = activeIndex !== null ? values[activeIndex] : undefined;
+
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className={cx("w-full", className)} preserveAspectRatio="none" role="img" aria-label="Trend chart">
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={areaPath} fill={`url(#${gradientId})`} />
-      <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-      {labels
-        ? labels.map((label, index) => {
-            const point = points[index];
-            if (!point || (labels.length > 8 && index % Math.ceil(labels.length / 8) !== 0)) return null;
-            return (
-              <text
-                key={index}
-                x={point.x}
-                y={height - 6}
-                textAnchor="middle"
-                className="fill-fg-subtle text-[10px]"
-              >
-                {label}
-              </text>
-            );
-          })
-        : null}
-    </svg>
+    <div className={cx("relative", className)}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Trend chart"
+        tabIndex={interactive ? 0 : undefined}
+        onPointerMove={interactive ? (event) => setActiveIndex(indexFromClientX(event.clientX)) : undefined}
+        onPointerLeave={interactive ? () => setActiveIndex(null) : undefined}
+        onFocus={interactive ? () => setActiveIndex((current) => current ?? points.length - 1) : undefined}
+        onBlur={interactive ? () => setActiveIndex(null) : undefined}
+        onKeyDown={
+          interactive
+            ? (event) => {
+                if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  setActiveIndex((current) => Math.max(0, (current ?? points.length - 1) - 1));
+                } else if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  setActiveIndex((current) => Math.min(points.length - 1, (current ?? 0) + 1));
+                }
+              }
+            : undefined
+        }
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#${gradientId})`} />
+        <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        {labels
+          ? labels.map((label, index) => {
+              const point = points[index];
+              if (!point || (labels.length > 8 && index % Math.ceil(labels.length / 8) !== 0)) return null;
+              return (
+                <text
+                  key={index}
+                  x={point.x}
+                  y={height - 6}
+                  textAnchor="middle"
+                  className="fill-fg-subtle text-[10px]"
+                >
+                  {label}
+                </text>
+              );
+            })
+          : null}
+        {active ? (
+          <g aria-hidden>
+            {/* Recessive hairline — solid, one shade off the surface, never dashed (anti-patterns.md). */}
+            <line
+              x1={active.x}
+              x2={active.x}
+              y1={2}
+              y2={height - padBottom}
+              stroke="rgb(var(--border))"
+              strokeWidth={1}
+            />
+            <circle cx={active.x} cy={active.y} r={4} fill="rgb(var(--surface))" stroke={color} strokeWidth={2} />
+          </g>
+        ) : null}
+      </svg>
+      {active && activeValue !== undefined ? (
+        <div
+          role="status"
+          className="pointer-events-none absolute top-2 z-10 -translate-x-1/2 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs shadow-md"
+          style={{ left: `${(active.x / width) * 100}%` }}
+        >
+          {activeLabel ? <p className="text-fg-subtle">{activeLabel}</p> : null}
+          <p className="nums font-semibold text-fg">{activeValue.toLocaleString("en-IN")}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-/** Proportional breakdown (revenue by category, jobs by status) as a ring. */
+/**
+ * Proportional breakdown (revenue by category, jobs by status) as a ring.
+ *
+ * `interactive` (default off — the two pre-existing callers are unaffected)
+ * adds a per-slice hover/focus tooltip: hovering or keyboard-focusing either
+ * a ring segment or its legend row lifts that slice (a lightened stroke,
+ * per interaction.md) and shows its label/value/share in a readout, with the
+ * legend row itself carrying the same info at all times so the tooltip only
+ * ever enhances, never gates.
+ */
 export function DonutChart({
   data,
   size = 140,
   strokeWidth = 18,
+  interactive = false,
 }: {
   data: readonly { label: string; value: number; tone: ChartTone }[];
   size?: number;
   strokeWidth?: number;
+  interactive?: boolean;
 }) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const clearActive = () => setActiveIndex(null);
+  const active = activeIndex !== null ? data[activeIndex] : null;
+  const activeShare = active && total > 0 ? Math.round((active.value / total) * 100) : null;
 
   return (
-    <div className="flex items-center gap-5">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0 -rotate-90" role="img" aria-label="Breakdown chart">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgb(var(--surface-3))" strokeWidth={strokeWidth} />
-        {total > 0
-          ? data.map((slice, index) => {
-              const fraction = slice.value / total;
-              const dash = fraction * circumference;
-              const circle = (
-                <circle
-                  key={index}
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={radius}
-                  fill="none"
-                  stroke={CHART_TONES[slice.tone]}
-                  strokeWidth={strokeWidth}
-                  strokeDasharray={`${dash} ${circumference - dash}`}
-                  strokeDashoffset={-offset}
-                  strokeLinecap="butt"
-                />
-              );
-              offset += dash;
-              return circle;
-            })
-          : null}
-      </svg>
-      <ul className="flex min-w-0 flex-col gap-2 text-sm">
-        {data.map((slice, index) => (
-          <li key={index} className="flex items-center gap-2 text-fg-muted">
-            <span
-              aria-hidden
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: CHART_TONES[slice.tone] }}
-            />
-            <span className="min-w-0 truncate">{slice.label}</span>
-            <span className="ml-auto shrink-0 nums font-medium text-fg">
-              {total > 0 ? Math.round((slice.value / total) * 100) : 0}%
-            </span>
-          </li>
-        ))}
-      </ul>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-5">
+        <div className="relative shrink-0">
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            className="-rotate-90"
+            role="img"
+            aria-label="Breakdown chart"
+          >
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgb(var(--surface-3))" strokeWidth={strokeWidth} />
+            {total > 0
+              ? data.map((slice, index) => {
+                  const fraction = slice.value / total;
+                  const dash = fraction * circumference;
+                  // A 2px surface-colour gap between slices (anti-patterns.md:
+                  // "a 2px surface gap between fills", not a drawn border).
+                  const gap = data.length > 1 ? 2 : 0;
+                  const isActive = interactive && activeIndex === index;
+                  const circle = (
+                    <circle
+                      key={index}
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={radius}
+                      fill="none"
+                      stroke={CHART_TONES[slice.tone]}
+                      strokeWidth={isActive ? strokeWidth + 3 : strokeWidth}
+                      strokeOpacity={interactive && activeIndex !== null && !isActive ? 0.45 : 1}
+                      strokeDasharray={`${Math.max(0, dash - gap)} ${circumference - dash + gap}`}
+                      strokeDashoffset={-offset}
+                      strokeLinecap="butt"
+                      className={interactive ? "cursor-pointer transition-all duration-fast ease-out" : undefined}
+                      tabIndex={interactive ? 0 : undefined}
+                      role={interactive ? "button" : undefined}
+                      aria-label={interactive ? `${slice.label}: ${slice.value.toLocaleString("en-IN")}` : undefined}
+                      onPointerEnter={interactive ? () => setActiveIndex(index) : undefined}
+                      onPointerLeave={interactive ? clearActive : undefined}
+                      onFocus={interactive ? () => setActiveIndex(index) : undefined}
+                      onBlur={interactive ? clearActive : undefined}
+                    />
+                  );
+                  offset += dash;
+                  return circle;
+                })
+              : null}
+          </svg>
+          {interactive && active ? (
+            <div
+              role="status"
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center"
+            >
+              <p className="nums text-lg font-semibold leading-tight text-fg">{activeShare}%</p>
+              <p className="max-w-[6rem] truncate text-[0.6875rem] leading-tight text-fg-muted">{active.label}</p>
+            </div>
+          ) : null}
+        </div>
+        <ul className="flex min-w-0 flex-col gap-2 text-sm">
+          {data.map((slice, index) => (
+            <li key={index}>
+              {interactive ? (
+                <button
+                  type="button"
+                  onPointerEnter={() => setActiveIndex(index)}
+                  onPointerLeave={clearActive}
+                  onFocus={() => setActiveIndex(index)}
+                  onBlur={clearActive}
+                  className={cx(
+                    "flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-fg-muted transition-colors duration-fast ease-out hover:bg-surface-2",
+                    activeIndex === index && "bg-surface-2 text-fg",
+                  )}
+                >
+                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: CHART_TONES[slice.tone] }} />
+                  <span className="min-w-0 truncate">{slice.label}</span>
+                  <span className="ml-auto shrink-0 nums font-medium text-fg">
+                    {total > 0 ? Math.round((slice.value / total) * 100) : 0}%
+                  </span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 text-fg-muted">
+                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: CHART_TONES[slice.tone] }} />
+                  <span className="min-w-0 truncate">{slice.label}</span>
+                  <span className="ml-auto shrink-0 nums font-medium text-fg">
+                    {total > 0 ? Math.round((slice.value / total) * 100) : 0}%
+                  </span>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
