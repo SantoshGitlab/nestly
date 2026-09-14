@@ -158,7 +158,12 @@ public class ProviderRepository : IProviderRepository
     /// <inheritdoc/>
     public async Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly date, CancellationToken cancellationToken = default)
     {
-        var startOfDayUtc = date.ToDateTime(TimeOnly.MinValue);
+        // The bare ToDateTime(TimeOnly) overload produces Kind=Unspecified;
+        // Npgsql refuses that against a timestamptz column ("only UTC is
+        // supported") even though every CreatedAt value it's compared against
+        // already is UTC - same fix as DashboardQueryService/
+        // ProviderEarningLedgerRepository's own date-range queries.
+        var startOfDayUtc = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var startOfNextDayUtc = startOfDayUtc.AddDays(1);
 
         // One round trip: project just the two status columns for the day's
