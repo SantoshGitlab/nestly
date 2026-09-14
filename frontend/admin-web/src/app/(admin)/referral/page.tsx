@@ -41,7 +41,6 @@ type ReferralTab = "all" | "fraud-queue";
 export default function ReferralsPage() {
   const [tab, setTab] = useState<ReferralTab>("all");
   const [filters, setFilters] = useState<ReferralFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<ReferralFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
   // Live typeahead for Customer - reuses the same searchReferrals call the
@@ -64,17 +63,23 @@ export default function ReferralsPage() {
     placeholderData: keepPreviousData,
   });
 
+  // Live filtering (no Search button): Customer reuses the debounce it
+  // already computes for its typeahead suggestions above; Status (a
+  // dropdown) applies immediately. Any change resets to page 1, same as
+  // customers/page.tsx.
+  useEffect(() => {
+    if (tab !== "all") return;
+    setPage(1);
+  }, [tab, debouncedCustomerSearch, filters.status]);
+
   const referralsQuery = useQuery({
-    // The applied filters, not the live ones: the previous screen re-fetched on
-    // every keystroke of a filter it did not actually expose.
-    queryKey: ["referrals", "search", tab, appliedFilters, page] as const,
+    queryKey: ["referrals", "search", tab, debouncedCustomerSearch, filters.status, page] as const,
     queryFn: () =>
       tab === "fraud-queue"
         ? listFraudQueue({ page, pageSize: PAGE_SIZE })
         : searchReferrals({
-            customerSearch: appliedFilters.customerSearch || undefined,
-            status:
-              appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as ReferralStatus),
+            customerSearch: debouncedCustomerSearch || undefined,
+            status: filters.status === "" ? undefined : (Number(filters.status) as ReferralStatus),
             page,
             pageSize: PAGE_SIZE,
           }),
@@ -83,14 +88,9 @@ export default function ReferralsPage() {
     placeholderData: keepPreviousData,
   });
 
-  const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedCustomerSearch("");
     setPage(1);
   };
 
@@ -100,7 +100,7 @@ export default function ReferralsPage() {
     setPage(1);
   };
 
-  const activeFilterCount = tab === "all" ? countActiveFilters(appliedFilters) : 0;
+  const activeFilterCount = tab === "all" ? countActiveFilters(filters) : 0;
 
   const columns: DataTableColumn<ReferralAdminListItem>[] = [
     {
@@ -159,7 +159,6 @@ export default function ReferralsPage() {
         {tab === "all" ? (
           <FilterBar
             columns={2}
-            onSubmit={applyFilters}
             onClear={clearFilters}
             activeCount={activeFilterCount}
             busy={referralsQuery.isFetching}
