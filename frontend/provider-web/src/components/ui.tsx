@@ -470,10 +470,20 @@ interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
    * (typed `string`) that this interface would otherwise clash with.
    */
   leading?: ReactNode;
+  /**
+   * Trailing adornment — e.g. a show/hide-password toggle. Positioned
+   * relative to the input box itself (not the label above it), so it stays
+   * vertically centered regardless of label/error text height - unlike a
+   * caller wrapping the whole `Field` in its own `relative` and guessing a
+   * fixed top offset, which drifts out of alignment the moment this
+   * component's label styling changes. Unlike `leading` this is interactive
+   * (not `pointer-events-none`); callers supply their own button.
+   */
+  trailing?: ReactNode;
 }
 
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
-  { label, error, hint, leading, id, className = "", ...props },
+  { label, error, hint, leading, trailing, id, className = "", ...props },
   ref,
 ) {
   const reactId = useId();
@@ -491,6 +501,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         CONTROL_FIXED_HEIGHT,
         error ? CONTROL_INVALID : CONTROL_IDLE,
         Boolean(leading) && "pl-9",
+        Boolean(trailing) && "pr-10",
         className,
       )}
     />
@@ -504,12 +515,17 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
       error={error}
       required={props.required}
     >
-      {leading ? (
+      {leading || trailing ? (
         <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg-subtle">
-            {leading}
-          </span>
+          {leading ? (
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-fg-subtle">
+              {leading}
+            </span>
+          ) : null}
           {input}
+          {trailing ? (
+            <span className="absolute right-1 top-1/2 -translate-y-1/2">{trailing}</span>
+          ) : null}
         </div>
       ) : (
         input

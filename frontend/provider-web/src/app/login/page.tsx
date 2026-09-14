@@ -331,24 +331,22 @@ function PasswordLogin() {
         error={form.formState.errors.email?.message}
         {...form.register("email")}
       />
-      <div className="relative">
-        <Field
-          label="Password"
-          type={passwordVisible ? "text" : "password"}
-          autoComplete="current-password"
-          className="pr-11"
-          error={form.formState.errors.password?.message}
-          {...form.register("password")}
-        />
-        <IconButton
-          type="button"
-          label={passwordVisible ? "Hide password" : "Show password"}
-          onClick={() => setPasswordVisible((visible) => !visible)}
-          className="absolute right-1 top-[30px]"
-        >
-          {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
-        </IconButton>
-      </div>
+      <Field
+        label="Password"
+        type={passwordVisible ? "text" : "password"}
+        autoComplete="current-password"
+        error={form.formState.errors.password?.message}
+        trailing={
+          <IconButton
+            type="button"
+            label={passwordVisible ? "Hide password" : "Show password"}
+            onClick={() => setPasswordVisible((visible) => !visible)}
+          >
+            {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+          </IconButton>
+        }
+        {...form.register("password")}
+      />
       <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
         Sign in
       </Button>
