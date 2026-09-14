@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card, PageHeading, Select } from "@/components/ui";
 import { FilterBar, Pagination, countActiveFilters } from "@/components/data-table";
 import { describeError } from "@/lib/api";
@@ -39,7 +39,6 @@ const EMPTY_FILTERS: FaqFilters = { placement: "", status: "" };
 export default function CmsFaqsPage() {
   const claims = useAdminClaims();
   const [filters, setFilters] = useState<FaqFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FaqFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [editingFaq, setEditingFaq] = useState<CmsFaqResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -47,16 +46,20 @@ export default function CmsFaqsPage() {
   const canWrite = canWriteModule(claims, "cms");
   const queryClient = useQueryClient();
 
+  // Live filtering (no Search button): both fields are dropdowns, so no
+  // debouncing is needed - a change just resets to page 1 (same pattern as
+  // customers/page.tsx), staying on a now out-of-range page would otherwise
+  // show an empty result.
+  useEffect(() => {
+    setPage(1);
+  }, [filters.placement, filters.status]);
+
   const faqsQuery = useQuery({
-    queryKey: ["cms", "faqs", "search", appliedFilters, page] as const,
+    queryKey: ["cms", "faqs", "search", filters, page] as const,
     queryFn: () =>
       searchCmsFaqs({
-        placement:
-          appliedFilters.placement === ""
-            ? undefined
-            : (Number(appliedFilters.placement) as CmsPlacement),
-        status:
-          appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as CmsContentStatus),
+        placement: filters.placement === "" ? undefined : (Number(filters.placement) as CmsPlacement),
+        status: filters.status === "" ? undefined : (Number(filters.status) as CmsContentStatus),
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -97,14 +100,8 @@ export default function CmsFaqsPage() {
     }
   };
 
-  const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
     setPage(1);
   };
 
@@ -142,9 +139,8 @@ export default function CmsFaqsPage() {
 
         <FilterBar
           columns={2}
-          onSubmit={applyFilters}
           onClear={clearFilters}
-          activeCount={countActiveFilters(appliedFilters)}
+          activeCount={countActiveFilters(filters)}
           busy={faqsQuery.isFetching}
         >
           <Select
@@ -178,7 +174,7 @@ export default function CmsFaqsPage() {
           togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
           toggleError={toggleMutation.error}
           emptyAction={
-            countActiveFilters(appliedFilters) > 0 ? (
+            countActiveFilters(filters) > 0 ? (
               <Button variant="secondary" onClick={clearFilters}>
                 Clear filters
               </Button>
