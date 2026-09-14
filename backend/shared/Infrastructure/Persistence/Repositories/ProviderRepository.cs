@@ -158,7 +158,14 @@ public class ProviderRepository : IProviderRepository
     /// <inheritdoc/>
     public async Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly date, CancellationToken cancellationToken = default)
     {
-        var startOfDayUtc = date.ToDateTime(TimeOnly.MinValue);
+        // DateOnly.ToDateTime(TimeOnly) alone returns Kind=Unspecified, which
+        // Npgsql refuses to bind against a timestamptz column
+        // ("Cannot write DateTime with Kind=Unspecified... only UTC is
+        // supported") - this endpoint always 500'd against real Postgres,
+        // invisible in the SQLite-backed unit tests. Same fix already used
+        // by DashboardQueryService/ProviderEarningLedgerRepository's own
+        // date-range queries: the explicit-Kind overload.
+        var startOfDayUtc = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var startOfNextDayUtc = startOfDayUtc.AddDays(1);
 
         // One round trip: project just the two status columns for the day's
