@@ -30,4 +30,13 @@ public interface ICustomerManagementService
     /// is the acting admin, for audit.
     /// </summary>
     Task<Result<CustomerDetailResponse>> DeleteAsync(Guid customerId, Guid adminUserId, string reason);
+
+    /// <summary>
+    /// The Customer Analytics dashboard's KPI counts and registration-trend
+    /// series (Admin Web new page, customer counterpart to the Provider
+    /// Onboarding Overview/Performance dashboards) - see
+    /// <see cref="CustomerAnalyticsResponse"/>'s doc comment for exactly
+    /// what each field means and what was deliberately left out.
+    /// </summary>
+    Task<Result<CustomerAnalyticsResponse>> GetAnalyticsAsync(CustomerAnalyticsRequest request);
 }

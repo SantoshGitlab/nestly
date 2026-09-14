@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
 using Nestly.Application.CustomerRatings;
 using Nestly.Application.Customers;
@@ -302,6 +303,86 @@ public class CustomerManagementServiceTests : IDisposable
         await using var context2 = _database.CreateContext();
         var notes = await new CustomerNoteRepository(context2).ListByCustomerAsync(customer.Id);
         notes.Should().ContainSingle(n => n.Note == "Called about a refund query.");
+    }
+
+    /// <summary>
+    /// Customer Analytics dashboard (Admin Web new page): one customer per
+    /// status bucket, a same-day registration, a booking to exercise the
+    /// acquisition-vs-activation funnel, and a city to exercise the
+    /// breakdown table - then asserts every aggregate in one pass, same
+    /// "seed the whole cohort, assert every count" shape as
+    /// Identity.Tests/ProviderManagementServiceTests's
+    /// GetOnboardingOverviewAsync_counts_only_todays_cohort_per_stage.
+    /// </summary>
+    [Fact]
+    public async Task GetAnalyticsAsync_ComputesCountsTrendAndCityBreakdown()
+    {
+        var activeBengaluru = NewCustomer("Active Bengaluru", "9000000080", CustomerStatus.Active, city: "Bengaluru");
+        var activeMumbai = NewCustomer("Active Mumbai", "9000000081", CustomerStatus.Active, city: "Mumbai");
+        var blocked = NewCustomer("Blocked Customer", "9000000082", CustomerStatus.Blocked, city: "Bengaluru");
+        var unverified = NewCustomer("Unverified Customer", "9000000083", CustomerStatus.Unverified);
+        var softDeleted = NewCustomer("Deleted Customer", "9000000084", CustomerStatus.SoftDeleted);
+        var oldNoBooking = NewCustomer("Old No Booking", "9000000085", CustomerStatus.Active);
+
+        await using (var context = _database.CreateContext())
+        {
+            context.AddRange(activeBengaluru, activeMumbai, blocked, unverified, softDeleted, oldNoBooking);
+            context.Add(CreateBooking(activeBengaluru.Id));
+            await context.SaveChangesAsync();
+        }
+
+        // oldNoBooking registered outside the 30-day trend window - must not
+        // count toward NewInTrendWindow/NewLast7Days/RegistrationTrend, but
+        // must still count toward TotalCustomers and CustomersWithZeroBookings.
+        await BackdateCustomerCreatedAtAsync(oldNoBooking.Id, DateTime.UtcNow.AddDays(-45));
+
+        await using var readContext = _database.CreateContext();
+        var result = await CreateService(readContext).GetAnalyticsAsync(new CustomerAnalyticsRequest(TrendDays: 30));
+
+        result.IsSuccess.Should().BeTrue();
+        var analytics = result.Value;
+
+        analytics.TrendDays.Should().Be(30);
+        analytics.TotalCustomers.Should().Be(6);
+        analytics.ActiveCount.Should().Be(3, "activeBengaluru, activeMumbai and oldNoBooking are all Active");
+        analytics.BlockedCount.Should().Be(1);
+        analytics.UnverifiedCount.Should().Be(1);
+        analytics.SoftDeletedCount.Should().Be(1);
+        analytics.NewToday.Should().Be(5, "every seeded customer except the backdated one registered today");
+        analytics.NewLast7Days.Should().Be(5);
+        analytics.NewInTrendWindow.Should().Be(5);
+        analytics.CustomersWithBookings.Should().Be(1);
+        analytics.CustomersWithZeroBookings.Should().Be(5);
+
+        analytics.RegistrationTrend.Should().HaveCount(30, "zero-filled for every day in the trend window");
+        analytics.RegistrationTrend.Last().Date.Should().Be(DateOnly.FromDateTime(DateTime.UtcNow));
+        analytics.RegistrationTrend.Last().Count.Should().Be(5);
+        analytics.RegistrationTrend.Sum(p => p.Count).Should().Be(5, "the backdated customer falls outside the window entirely");
+
+        analytics.TopCities.Should().ContainSingle(c => c.City == "Bengaluru" && c.Count == 2);
+        analytics.TopCities.Should().ContainSingle(c => c.City == "Mumbai" && c.Count == 1);
+    }
+
+    [Fact]
+    public async Task GetAnalyticsAsync_NoCustomers_ReturnsZeroedResponse()
+    {
+        await using var context = _database.CreateContext();
+        var result = await CreateService(context).GetAnalyticsAsync(new CustomerAnalyticsRequest(TrendDays: 7));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.TotalCustomers.Should().Be(0);
+        result.Value.CustomersWithBookings.Should().Be(0);
+        result.Value.CustomersWithZeroBookings.Should().Be(0);
+        result.Value.RegistrationTrend.Should().HaveCount(7);
+        result.Value.RegistrationTrend.Should().OnlyContain(p => p.Count == 0);
+        result.Value.TopCities.Should().BeEmpty();
+    }
+
+    private async Task BackdateCustomerCreatedAtAsync(Guid customerId, DateTime createdAtUtc)
+    {
+        await using var backdateContext = _database.CreateContext();
+        await backdateContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE customer SET created_at = {createdAtUtc} WHERE id = {customerId}");
     }
 
     private static Booking CreateBooking(Guid customerId) =>

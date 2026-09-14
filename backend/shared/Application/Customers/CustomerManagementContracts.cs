@@ -148,3 +148,77 @@ public sealed record BlockCustomerRequest(string Reason);
 
 /// <summary>Add an internal note to a customer's record (SRS 12.4.3, task 101d).</summary>
 public sealed record AddCustomerNoteRequest(string Note);
+
+/// <summary>
+/// Query-string shape of the Customer Analytics dashboard request (Admin Web
+/// new page, customer counterpart to the Provider Onboarding Overview/
+/// Performance dashboards). <see cref="TrendDays"/> is a caller-tunable
+/// rolling window (mirrors <c>ProviderPerformanceListRequest.PeriodDays</c>)
+/// that sizes both the registration-trend series and the "new in this
+/// window" KPI tile - there is no separate calendar-month concept on
+/// <see cref="Customer"/>.
+/// </summary>
+public sealed record CustomerAnalyticsRequest(int TrendDays = 30);
+
+/// <summary>One day of the registration-trend series - always present for every day in the window, zero-filled where nothing registered.</summary>
+public sealed record CustomerRegistrationTrendPoint(DateOnly Date, int Count);
+
+/// <summary>One row of the "top cities by customer count" breakdown table. Customers with a blank/null <see cref="Customer.City"/> are excluded rather than bucketed as "Unknown" - see <see cref="CustomerAnalyticsResponse"/>'s doc comment.</summary>
+public sealed record CustomerCityBreakdown(string City, int Count);
+
+/// <summary>
+/// Repository-level result behind <see cref="CustomerAnalyticsResponse"/> -
+/// the same aggregates, before the request's echoed
+/// <see cref="CustomerAnalyticsRequest.TrendDays"/> is attached and
+/// <see cref="CustomerAnalyticsResponse.CustomersWithZeroBookings"/> is
+/// derived.
+/// </summary>
+public sealed record CustomerAnalyticsCounts(
+    int TotalCustomers,
+    int ActiveCount,
+    int BlockedCount,
+    int UnverifiedCount,
+    int SoftDeletedCount,
+    int NewToday,
+    int NewLast7Days,
+    int NewInTrendWindow,
+    int CustomersWithBookings,
+    IReadOnlyList<CustomerRegistrationTrendPoint> RegistrationTrend,
+    IReadOnlyList<CustomerCityBreakdown> TopCities);
+
+/// <summary>
+/// Customer Analytics dashboard (Admin Web new page): KPI counts plus a
+/// registration-trend graph, computed from real <see cref="Customer"/> and
+/// <see cref="Nestly.Domain.Booking"/> data only - no invented metrics.
+/// Deliberately excludes any KYC/verification concept (customers, unlike
+/// providers, have no onboarding funnel - just <see cref="CustomerStatus"/>)
+/// and any wallet/referral rollup (out of scope for this dashboard; see the
+/// Customer 360 view for those per-customer).
+/// </summary>
+/// <param name="TrendDays">Echoes the request's rolling-window size.</param>
+/// <param name="TotalCustomers">Every customer record, any status.</param>
+/// <param name="ActiveCount">Current <see cref="CustomerStatus.Active"/> count.</param>
+/// <param name="BlockedCount">Current <see cref="CustomerStatus.Blocked"/> count.</param>
+/// <param name="UnverifiedCount">Current <see cref="CustomerStatus.Unverified"/> count.</param>
+/// <param name="SoftDeletedCount">Current <see cref="CustomerStatus.SoftDeleted"/> count.</param>
+/// <param name="NewToday">Registered on today's UTC calendar date.</param>
+/// <param name="NewLast7Days">Registered in the trailing 7 days (today inclusive).</param>
+/// <param name="NewInTrendWindow">Registered in the trailing <see cref="TrendDays"/> days (today inclusive) - the same window <see cref="RegistrationTrend"/> covers.</param>
+/// <param name="CustomersWithBookings">Customers with at least one booking, of any status (SRS 12.4.1's own booking-count filter) - the activation half of the acquisition-vs-activation funnel.</param>
+/// <param name="CustomersWithZeroBookings">Derived as <see cref="TotalCustomers"/> minus <see cref="CustomersWithBookings"/> - registered but never booked.</param>
+/// <param name="RegistrationTrend">Daily registration counts for the trailing <see cref="TrendDays"/> days, oldest first, zero-filled.</param>
+/// <param name="TopCities">Top 10 cities by customer count (customers with a blank/null city excluded - see <see cref="CustomerCityBreakdown"/>).</param>
+public sealed record CustomerAnalyticsResponse(
+    int TrendDays,
+    int TotalCustomers,
+    int ActiveCount,
+    int BlockedCount,
+    int UnverifiedCount,
+    int SoftDeletedCount,
+    int NewToday,
+    int NewLast7Days,
+    int NewInTrendWindow,
+    int CustomersWithBookings,
+    int CustomersWithZeroBookings,
+    IReadOnlyList<CustomerRegistrationTrendPoint> RegistrationTrend,
+    IReadOnlyList<CustomerCityBreakdown> TopCities);

@@ -146,4 +146,80 @@ public class CustomerRepository : ICustomerRepository
         var rows = page.Select(x => new CustomerSearchRow(x.Customer, x.BookingCount)).ToList();
         return new CustomerSearchResult(rows, totalCount);
     }
+
+    /// <summary>Top N cities by customer count, for the Customer Analytics breakdown table (task: Admin Web Customer Analytics dashboard).</summary>
+    private const int TopCitiesLimit = 10;
+
+    /// <inheritdoc/>
+    public async Task<CustomerAnalyticsCounts> GetAnalyticsCountsAsync(int trendDays, CancellationToken cancellationToken = default)
+    {
+        // Local "today" pinned once so every query below (and the caller's
+        // echoed window) agrees on the same instant - mirrors
+        // ProviderRepository.GetOnboardingOverviewCountsAsync's own
+        // single-`date` convention.
+        var todayUtc = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+        var trendStartUtc = todayUtc.AddDays(-(trendDays - 1));
+        var sevenDayStartUtc = todayUtc.AddDays(-6);
+        var tomorrowUtc = todayUtc.AddDays(1);
+
+        var customers = _context.Set<Customer>().AsNoTracking();
+
+        int totalCustomers = await customers.CountAsync(cancellationToken);
+
+        // One round trip for the four status buckets rather than four
+        // separate CountAsync calls.
+        var statusCounts = await customers
+            .GroupBy(c => c.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        int CountFor(CustomerStatus status) => statusCounts.FirstOrDefault(s => s.Status == status)?.Count ?? 0;
+
+        int newToday = await customers.CountAsync(c => c.CreatedAt >= todayUtc && c.CreatedAt < tomorrowUtc, cancellationToken);
+        int newLast7Days = await customers.CountAsync(c => c.CreatedAt >= sevenDayStartUtc, cancellationToken);
+        int newInTrendWindow = await customers.CountAsync(c => c.CreatedAt >= trendStartUtc, cancellationToken);
+
+        // Activation half of the acquisition-vs-activation funnel: an EXISTS
+        // subquery against Bookings (backed by its CustomerId index), same
+        // correlated-subquery shape SearchAsync's own BookingCount uses -
+        // never a join+Distinct that would fan out per booking.
+        int customersWithBookings = await customers
+            .CountAsync(c => _context.Bookings.Any(b => b.CustomerId == c.Id), cancellationToken);
+
+        // Registration trend: one GroupBy over the window, then zero-fill
+        // every day so the chart never has to guess at a missing point.
+        var trendRaw = await customers
+            .Where(c => c.CreatedAt >= trendStartUtc)
+            .GroupBy(c => c.CreatedAt.Date)
+            .Select(g => new { Date = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        var trendByDate = trendRaw.ToDictionary(x => DateOnly.FromDateTime(x.Date), x => x.Count);
+
+        var registrationTrend = new List<CustomerRegistrationTrendPoint>(trendDays);
+        for (var date = DateOnly.FromDateTime(trendStartUtc); date <= DateOnly.FromDateTime(todayUtc); date = date.AddDays(1))
+        {
+            registrationTrend.Add(new CustomerRegistrationTrendPoint(date, trendByDate.GetValueOrDefault(date)));
+        }
+
+        var topCities = await customers
+            .Where(c => c.City != null && c.City != "")
+            .GroupBy(c => c.City!)
+            .Select(g => new { City = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.City)
+            .Take(TopCitiesLimit)
+            .ToListAsync(cancellationToken);
+
+        return new CustomerAnalyticsCounts(
+            TotalCustomers: totalCustomers,
+            ActiveCount: CountFor(CustomerStatus.Active),
+            BlockedCount: CountFor(CustomerStatus.Blocked),
+            UnverifiedCount: CountFor(CustomerStatus.Unverified),
+            SoftDeletedCount: CountFor(CustomerStatus.SoftDeleted),
+            NewToday: newToday,
+            NewLast7Days: newLast7Days,
+            NewInTrendWindow: newInTrendWindow,
+            CustomersWithBookings: customersWithBookings,
+            RegistrationTrend: registrationTrend,
+            TopCities: topCities.Select(x => new CustomerCityBreakdown(x.City, x.Count)).ToList());
+    }
 }
