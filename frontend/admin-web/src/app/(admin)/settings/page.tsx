@@ -17,6 +17,23 @@ import { FormActions, FormGrid } from "@/components/data-table";
 import { SectionError } from "@/components/screen-states";
 import { apiFetch, describeError } from "@/lib/api";
 import { canWriteModule } from "@/lib/permissions";
+import {
+  BOOKING_SEARCH_TERMS,
+  CANCELLATION_SEARCH_TERMS,
+  COUPON_SEARCH_TERMS,
+  COUPONS_ENABLED_DESCRIPTION,
+  CUSTOMER_FLAGS,
+  FEATURE_SEARCH_TERMS,
+  PLATFORM_FLAGS,
+  PROVIDER_FLAGS,
+  RESCHEDULE_SEARCH_TERMS,
+  SLOT_SEARCH_TERMS,
+  TAX_SEARCH_TERMS,
+  WALLET_SEARCH_TERMS,
+  hasAnySettingsMatch,
+  matchesSearch,
+  type SettingsSearchTerms,
+} from "@/lib/settings-search-terms";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import type {
   AllSystemSettingsResponse,
@@ -142,18 +159,6 @@ function ToggleRow({ hidden, ...props }: ComponentProps<typeof CheckboxField> & 
 }
 
 /**
- * Case-insensitive substring match against the on-page settings search box.
- * An empty query matches everything (the unfiltered, default state). Kept
- * intentionally simple per the search feature's scope - no fuzzy matching,
- * no tokenization - this is "find a setting fast," not a command palette.
- */
-function matchesSearch(query: string, ...texts: string[]): boolean {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return true;
-  return texts.some((text) => text.toLowerCase().includes(needle));
-}
-
-/**
  * Wraps one non-toggle field (`Field`, `NullableNumberField`,
  * `NullableTextField`) so the search box can hide it without unmounting -
  * same reasoning as {@link ToggleRow}'s `hidden` prop, kept as a separate
@@ -165,28 +170,16 @@ function SearchableField({ hidden, children }: { hidden: boolean; children: Reac
 }
 
 /**
- * Per-settings-group search corpus: the card's own title/description plus
- * every field's visible label (and, where present, its description) - no
- * metadata invented beyond what's already rendered. Used two ways: (1) each
+ * `SettingsSearchTerms` (title/description/fields per group) lives in
+ * `lib/settings-search-terms.ts` now, shared with the global command-palette
+ * search - see that module's doc comment. Used two ways here: (1) each
  * group's own section component hides individual fields whose label doesn't
  * match, unless the *card's* title/description already matched (in which
- * case the whole card is shown unfiltered - see `getSearchVisibility`);
- * (2) the page aggregates every group's terms to render the shared
- * "no matching settings" empty state when nothing anywhere matches.
- *
- * Kept as a small constant sitting right above each section rather than
- * derived from the JSX below it: the field list is a fixed, explicit set
- * (same "explicit over generic/metadata-driven" choice `SettingsGroupCard`'s
- * own doc comment makes for the seven groups), so this trades a few literal
- * strings that must stay in sync with the JSX for not restructuring how
- * those fields render.
+ * case the whole card is shown unfiltered - see `getSearchVisibility`
+ * below); (2) the page aggregates every group's terms (`hasAnySettingsMatch`)
+ * to render the shared "no matching settings" empty state when nothing
+ * anywhere matches.
  */
-interface SettingsSearchTerms {
-  readonly title: string;
-  readonly description: string;
-  readonly fields: readonly string[];
-}
-
 function getSearchVisibility(query: string, terms: SettingsSearchTerms) {
   const titleMatches = matchesSearch(query, terms.title, terms.description);
   const cardVisible = titleMatches || matchesSearch(query, ...terms.fields);
@@ -312,17 +305,6 @@ const bookingSchema = z.object({
   allowSameDayBooking: z.boolean(),
 });
 
-const BOOKING_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Booking rules",
-  description: "How far ahead, and how close to a slot, a booking may be created (SRS 12.19).",
-  fields: [
-    "Minimum lead time (hours)",
-    "Max advance booking (days)",
-    "Max active bookings per customer (blank = unlimited)",
-    "Allow same-day booking",
-  ],
-};
-
 function BookingSettingsSection({
   initial,
   queryClient,
@@ -397,18 +379,6 @@ const slotSchema = z.object({
   defaultSlotCapacity: z.number().int().min(1).max(1000),
   allowOverbooking: z.boolean(),
 });
-
-const SLOT_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Slot rules",
-  description: "How slots are generated and offered: duration, same-day cutoff, and capacity (SRS 15.2).",
-  fields: [
-    "Default slot duration (minutes)",
-    "Same-day cutoff (hours)",
-    "Max advance booking (days)",
-    "Default slot capacity",
-    "Allow overbooking",
-  ],
-};
 
 function SlotSettingsSection({
   initial,
@@ -492,12 +462,6 @@ const cancellationSchema = z.object({
   allowAdminOverride: z.boolean(),
 });
 
-const CANCELLATION_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Cancellation policy",
-  description: "Free cancellation window and the late-cancellation fee (SRS 11.14.1).",
-  fields: ["Free cancellation window (hours)", "Late cancellation fee (%)", "Allow admin override of the late fee"],
-};
-
 function CancellationSettingsSection({
   initial,
   queryClient,
@@ -566,17 +530,6 @@ const rescheduleSchema = z.object({
   lateFeeThresholdHours: z.number().min(0).max(720),
   lateRescheduleFeePercentage: z.number().min(0).max(100),
 });
-
-const RESCHEDULE_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Reschedule policy",
-  description: "Reschedule blocking window, count limit, and the late-reschedule fee (SRS 11.15.1).",
-  fields: [
-    "Blocked within (hours before slot)",
-    "Max reschedules per booking",
-    "Late fee threshold (hours before slot)",
-    "Late reschedule fee (%)",
-  ],
-};
 
 function RescheduleSettingsSection({
   initial,
@@ -651,16 +604,6 @@ const taxSchema = z.object({
   taxInclusivePricing: z.boolean(),
 });
 
-const TAX_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Tax settings",
-  description: "Default tax rate and registration details shown on customer invoices.",
-  fields: [
-    "Default tax rate (%)",
-    "Tax registration number (blank = not configured)",
-    "Displayed prices already include tax",
-  ],
-};
-
 function TaxSettingsSection({
   initial,
   queryClient,
@@ -727,17 +670,6 @@ const walletSchema = z.object({
   walletCreditExpiryDays: z.number().int().min(1).max(3650).nullable(),
   allowWalletTopUp: z.boolean(),
 });
-
-const WALLET_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Wallet settings",
-  description: "Balance cap, how much of a booking wallet may cover, and credit expiry (SRS 14.5).",
-  fields: [
-    "Max wallet balance",
-    "Max wallet usage per booking (%)",
-    "Wallet credit expiry (days, blank = never)",
-    "Allow customers to top up their wallet directly",
-  ],
-};
 
 function WalletSettingsSection({
   initial,
@@ -814,20 +746,6 @@ const couponSchema = z.object({
   allowCouponStacking: z.boolean(),
   couponsEnabled: z.boolean(),
 });
-
-const COUPONS_ENABLED_DESCRIPTION =
-  "Feature flag: turning this off disables coupon redemption everywhere, regardless of individual coupon state.";
-
-const COUPON_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Coupon settings",
-  description: "Platform-wide guardrails applied across every coupon, plus the coupons feature flag (SRS 14.2).",
-  fields: [
-    "Max discount per coupon (%)",
-    "Max active coupons per customer (blank = unlimited)",
-    "Allow more than one coupon per booking",
-    `Coupons enabled ${COUPONS_ENABLED_DESCRIPTION}`,
-  ],
-};
 
 function CouponSettingsSection({
   initial,
@@ -953,67 +871,6 @@ function FeatureFlagToggle({
   );
 }
 
-/**
- * Each flag's search text is `"<label> <description>"` - same convention as
- * the coupons feature flag above - so e.g. typing "nav" surfaces every flag
- * whose *description* mentions a nav entry, not just ones with "nav" in the
- * short label.
- */
-const CUSTOMER_FLAGS = [
-  { name: "walletEnabled", label: "Wallet", description: "Wallet nav entry, account-menu link and bottom-tab entry." },
-  { name: "referralsEnabled", label: "Refer & earn", description: "Refer & Earn nav entry and page." },
-  { name: "amcSubscriptionsEnabled", label: "AMC plans", description: "AMC Plans nav entry and promo card." },
-  {
-    name: "serviceRatingsEnabled",
-    label: "Service rating badge",
-    description: "Rating/review-count trust badge on the service detail page.",
-  },
-  {
-    name: "bookingHelpLinkEnabled",
-    label: "Booking help link",
-    description: '"Need help? Contact support" link on the booking summary/payment pages.',
-  },
-] as const satisfies readonly { name: keyof FeatureFlagSettings; label: string; description: string }[];
-
-const PROVIDER_FLAGS = [
-  {
-    name: "ratingsPageEnabled",
-    label: "Ratings & feedback",
-    description: "Ratings promo card on Profile and the Ratings page.",
-  },
-  {
-    name: "calendarViewEnabled",
-    label: "Calendar view",
-    description: "Week calendar entry points on Jobs/Availability and the Calendar page.",
-  },
-  {
-    name: "earningsLedgerEnabled",
-    label: "Earnings ledger",
-    description: "Only the transaction ledger section of Earnings - summary, per-job earnings and payouts stay visible.",
-  },
-  {
-    name: "offersScreenEnabled",
-    label: "Offers screen",
-    description: "The dedicated Offers screen. Accepting/declining an offer stays available from Today and Jobs either way.",
-  },
-] as const satisfies readonly { name: keyof FeatureFlagSettings; label: string; description: string }[];
-
-const PLATFORM_FLAGS = [
-  {
-    name: "autoManageServiceabilityEnabled",
-    label: "Auto-manage serviceability",
-    description:
-      "Master kill switch for auto-enabling/auto-disabling service/pincode mappings from live provider coverage. Turning this off freezes every mapping's active state at whatever it is now, until an admin changes it by hand.",
-  },
-] as const satisfies readonly { name: keyof FeatureFlagSettings; label: string; description: string }[];
-
-const FEATURE_SEARCH_TERMS: SettingsSearchTerms = {
-  title: "Feature flags",
-  description:
-    "Turn optional customer- and provider-facing features on or off. Core booking, payment and fulfilment steps are never affected (SRS 12.19).",
-  fields: [...CUSTOMER_FLAGS, ...PROVIDER_FLAGS, ...PLATFORM_FLAGS].map((flag) => `${flag.label} ${flag.description}`),
-};
-
 function FeatureFlagSettingsSection({
   initial,
   queryClient,
@@ -1087,29 +944,6 @@ function SettingsCardSkeleton({ fields = 4 }: { fields?: number }) {
         <Skeleton className="h-10 w-32" />
       </div>
     </div>
-  );
-}
-
-/**
- * Every group's search corpus, for the page-level "nothing matched anywhere"
- * empty state - see {@link SettingsSearchTerms}'s doc comment for why this
- * lives as data next to each section rather than being derived from the
- * rendered DOM.
- */
-const ALL_SETTINGS_SEARCH_TERMS: readonly SettingsSearchTerms[] = [
-  BOOKING_SEARCH_TERMS,
-  SLOT_SEARCH_TERMS,
-  CANCELLATION_SEARCH_TERMS,
-  RESCHEDULE_SEARCH_TERMS,
-  TAX_SEARCH_TERMS,
-  WALLET_SEARCH_TERMS,
-  COUPON_SEARCH_TERMS,
-  FEATURE_SEARCH_TERMS,
-];
-
-function hasAnySettingsMatch(query: string): boolean {
-  return ALL_SETTINGS_SEARCH_TERMS.some(
-    (terms) => matchesSearch(query, terms.title, terms.description) || matchesSearch(query, ...terms.fields),
   );
 }
 
