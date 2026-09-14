@@ -121,7 +121,19 @@ export interface ApiFetchOptions extends RequestInit {
  */
 let refreshPromise: Promise<boolean> | null = null;
 
-function refreshAccessToken(): Promise<boolean> {
+/**
+ * Exported so `RequireProviderAuth` can call it directly: the access token
+ * (15min, `ProviderJwtOptions.AccessTokenMinutes`) is routinely expired by
+ * the time a provider reopens the app after a short break, while the refresh
+ * token (30 days) is very likely still good. `isAuthenticated()` alone can't
+ * tell the difference - it's a pure local expiry check - so without this the
+ * guard would bounce a returning provider to a full re-login on every page
+ * load past 15 minutes, even though a silent refresh would keep them signed
+ * in. The module-level `refreshPromise` above still applies here, so a guard
+ * refresh racing an in-flight `apiFetch` refresh (e.g. a query firing during
+ * the same mount) shares one request rather than doubling up.
+ */
+export function refreshAccessToken(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
       const refreshToken = getRefreshToken();

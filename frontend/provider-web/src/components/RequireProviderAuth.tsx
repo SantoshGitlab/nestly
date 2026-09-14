@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ScreenSkeleton } from "@/components/states";
-import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
+import { refreshAccessToken } from "@/lib/api";
+import { getRefreshToken, isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
 
 /**
  * Client-side guard for the authenticated provider shell.
@@ -42,7 +43,32 @@ export function RequireProviderAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     hasClientRendered = true;
-    const sync = () => setAuthed(isAuthenticated());
+
+    // If the access token has already expired at mount time (very common -
+    // it only lives 15 minutes, so any page load after a short break lands
+    // here) but a refresh token is still stored, try one silent refresh
+    // before treating this as a real sign-out. Only a refresh token that's
+    // actually missing, or a refresh call that itself fails (expired/
+    // revoked), should bounce to /login - a technically-expired access token
+    // alone must not.
+    const sync = () => {
+      if (isAuthenticated()) {
+        setAuthed(true);
+        return;
+      }
+      if (!getRefreshToken()) {
+        setAuthed(false);
+        return;
+      }
+      // A stored refresh token means this tab did hold a real session before
+      // now, even though `authed` itself hasn't been `true` yet this mount -
+      // mark it so a refresh failure below reads as "session expired", not
+      // "never signed in" (see wasAuthedRef's own comment).
+      wasAuthedRef.current = true;
+      void refreshAccessToken().then((refreshed) => {
+        setAuthed(refreshed);
+      });
+    };
     sync();
     return subscribeToAuthChanges(sync);
   }, []);
