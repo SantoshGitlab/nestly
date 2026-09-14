@@ -333,3 +333,40 @@ export interface CustomerDetail {
   notes: CustomerNote[];
   providerRatings: CustomerProviderRatings;
 }
+
+/** One day of the Customer Analytics registration-trend series - always present for every day in the window, zero-filled where nothing registered. */
+export interface CustomerRegistrationTrendPoint {
+  date: string;
+  count: number;
+}
+
+/** One row of the Customer Analytics "top cities" breakdown table. */
+export interface CustomerCityBreakdown {
+  city: string;
+  count: number;
+}
+
+/**
+ * Customer Analytics dashboard (Admin Web new page, customer counterpart to
+ * the Provider Onboarding Overview/Performance dashboards): KPI counts plus
+ * a registration-trend graph, computed from real Customer/Booking data only.
+ * Mirrors `Nestly.Application.Customers.CustomerAnalyticsResponse` field for
+ * field - see that record's doc comment for exactly what each count means
+ * and what was deliberately left out (no KYC/verification concept, no
+ * wallet/referral rollup).
+ */
+export interface CustomerAnalyticsResponse {
+  trendDays: number;
+  totalCustomers: number;
+  activeCount: number;
+  blockedCount: number;
+  unverifiedCount: number;
+  softDeletedCount: number;
+  newToday: number;
+  newLast7Days: number;
+  newInTrendWindow: number;
+  customersWithBookings: number;
+  customersWithZeroBookings: number;
+  registrationTrend: CustomerRegistrationTrendPoint[];
+  topCities: CustomerCityBreakdown[];
+}

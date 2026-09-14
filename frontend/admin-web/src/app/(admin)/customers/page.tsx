@@ -17,6 +17,7 @@ import { API_V1, apiFetch } from "@/lib/api";
 import { listCities } from "@/lib/serviceability-api";
 import { CustomerStatus } from "@/lib/types";
 import type { CustomerSearchParams, CustomerSearchResponse, CustomerSummary } from "@/lib/types";
+import { CustomersTabs } from "./_components/CustomersTabs";
 
 const PAGE_SIZE = 20;
 
@@ -166,6 +167,7 @@ export default function CustomersPage() {
   return (
     <div className="w-full max-w-7xl">
       <PageHeading title="Customers" subtitle="Search and manage customer accounts (SRS 12.4)." />
+      <CustomersTabs />
 
       <FilterBar
         onSubmit={onSubmit}
