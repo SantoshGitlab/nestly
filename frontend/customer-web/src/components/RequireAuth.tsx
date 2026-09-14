@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { ScreenSkeleton } from "@/components/patterns";
-import { isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
+import { refreshAccessToken } from "@/lib/api";
+import { getRefreshToken, isAuthenticated, subscribeToAuthChanges } from "@/lib/auth";
 import { buildLoginHref } from "@/lib/return-to";
 
 // Flips true after this tab's first client render commits. `window` exists
@@ -35,7 +36,26 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     hasClientRendered = true;
-    const sync = () => setAuthed(isAuthenticated());
+
+    // If the access token has already expired at mount time (routine after
+    // any break away from the tab) but a refresh token is still stored, try
+    // one silent refresh before treating this as a real sign-out - matches
+    // what apiFetch already does mid-session on a 401. Only a genuinely
+    // missing refresh token, or a refresh call that itself fails
+    // (expired/revoked), should bounce to /login.
+    const sync = () => {
+      if (isAuthenticated()) {
+        setAuthed(true);
+        return;
+      }
+      if (!getRefreshToken()) {
+        setAuthed(false);
+        return;
+      }
+      void refreshAccessToken().then((refreshed) => {
+        setAuthed(refreshed);
+      });
+    };
     sync();
     return subscribeToAuthChanges(sync);
   }, []);
