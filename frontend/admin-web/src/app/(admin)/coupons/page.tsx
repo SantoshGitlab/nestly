@@ -38,7 +38,6 @@ const EMPTY_FILTERS: CouponFilters = { code: "", status: "" };
 export default function CouponsPage() {
   const claims = useAdminClaims();
   const [filters, setFilters] = useState<CouponFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<CouponFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [editingCoupon, setEditingCoupon] = useState<CouponAdminResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -46,13 +45,19 @@ export default function CouponsPage() {
   const canWrite = canWriteModule(claims, "coupons");
   const queryClient = useQueryClient();
 
-  // Live typeahead for Code - reuses the same searchCoupons call the list
-  // below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  // Live filtering (no Search button): Code is debounced 300ms, shared with
+  // the typeahead below rather than debounced twice; Status (a dropdown)
+  // applies immediately.
   const [debouncedCode, setDebouncedCode] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedCode(filters.code.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.code]);
+
+  // Any filter change resets to page 1 (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedCode, filters.status]);
 
   const codeSuggestionsQuery = useQuery({
     queryKey: ["coupons", "code-suggestions", debouncedCode] as const,
@@ -62,13 +67,11 @@ export default function CouponsPage() {
   });
 
   const couponsQuery = useQuery({
-    // The code filter used to sit straight in the key, firing a paged search
-    // per keystroke. Applying explicitly is one request per search.
-    queryKey: ["coupons", "search", appliedFilters, page] as const,
+    queryKey: ["coupons", "search", debouncedCode, filters.status, page] as const,
     queryFn: () =>
       searchCoupons({
-        code: appliedFilters.code || undefined,
-        isActive: appliedFilters.status === "" ? undefined : appliedFilters.status === "true",
+        code: debouncedCode || undefined,
+        isActive: filters.status === "" ? undefined : filters.status === "true",
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -109,14 +112,9 @@ export default function CouponsPage() {
     }
   };
 
-  const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedCode("");
     setPage(1);
   };
 
@@ -158,9 +156,8 @@ export default function CouponsPage() {
 
         <FilterBar
           columns={2}
-          onSubmit={applyFilters}
           onClear={clearFilters}
-          activeCount={countActiveFilters(appliedFilters)}
+          activeCount={countActiveFilters(filters)}
           busy={couponsQuery.isFetching}
         >
           <Field
@@ -200,7 +197,7 @@ export default function CouponsPage() {
           togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
           toggleError={toggleMutation.error}
           emptyAction={
-            countActiveFilters(appliedFilters) > 0 ? (
+            countActiveFilters(filters) > 0 ? (
               <Button variant="secondary" onClick={clearFilters}>
                 Clear filters
               </Button>
