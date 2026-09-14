@@ -66,19 +66,31 @@ export default function AdminUsersPage() {
   const pushToast = useToast();
 
   const [filters, setFilters] = useState<AdminUserFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<AdminUserFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [isCreating, setIsCreating] = useState(false);
 
   const rolesQuery = useQuery({ queryKey: ["admin-user-roles"], queryFn: listAdminRoles });
 
-  // Live typeahead for Name - reuses the same searchAdminUsers call the list
-  // below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  // Live filtering (no Search button): Name and Email are debounced 300ms
+  // before they hit the query, same convention as customers/page.tsx; Status
+  // (a dropdown) applies immediately. Name's debounce is shared with the
+  // typeahead below rather than debounced twice.
   const [debouncedName, setDebouncedName] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.name]);
+
+  const [debouncedEmail, setDebouncedEmail] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedEmail(filters.email.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.email]);
+
+  // Any filter change resets to page 1 (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedName, debouncedEmail, filters.status]);
 
   const nameSuggestionsQuery = useQuery({
     queryKey: ["admin-users", "name-suggestions", debouncedName] as const,
@@ -88,13 +100,12 @@ export default function AdminUsersPage() {
   });
 
   const listQuery = useQuery({
-    queryKey: ["admin-users", "search", appliedFilters, page] as const,
+    queryKey: ["admin-users", "search", debouncedName, debouncedEmail, filters.status, page] as const,
     queryFn: () =>
       searchAdminUsers({
-        email: appliedFilters.email || undefined,
-        name: appliedFilters.name || undefined,
-        status:
-          appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as AdminUserStatus),
+        email: debouncedEmail || undefined,
+        name: debouncedName || undefined,
+        status: filters.status === "" ? undefined : (Number(filters.status) as AdminUserStatus),
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -117,14 +128,10 @@ export default function AdminUsersPage() {
     },
   });
 
-  const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedName("");
+    setDebouncedEmail("");
     setPage(1);
   };
 
@@ -135,7 +142,7 @@ export default function AdminUsersPage() {
     { value: "", label: "No role assigned" },
     ...(rolesQuery.data ?? []).map((role) => ({ value: role.id, label: role.name })),
   ];
-  const activeFilterCount = countActiveFilters(appliedFilters);
+  const activeFilterCount = countActiveFilters(filters);
 
   const columns: DataTableColumn<AdminUserSummary>[] = [
     {
@@ -191,7 +198,6 @@ export default function AdminUsersPage() {
       <div className="flex flex-col gap-6">
         <FilterBar
           columns={3}
-          onSubmit={applyFilters}
           onClear={clearFilters}
           activeCount={activeFilterCount}
           busy={listQuery.isFetching}
