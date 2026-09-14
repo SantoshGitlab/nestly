@@ -15,6 +15,7 @@ import {
   Select,
   Skeleton,
   SkeletonText,
+  Tabs,
   Textarea,
 } from "@/components/ui";
 import {
@@ -25,6 +26,7 @@ import {
   FormGrid,
   formatCurrency,
   formatDateTime,
+  RecordMetaRow,
 } from "@/components/data-table";
 import { BookingStatusBadge } from "@/components/status-badges";
 import { ReschedulePicker } from "@/components/ReschedulePicker";
@@ -190,6 +192,19 @@ export default function BookingDetailPage() {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Enterprise redesign pilot (docs/OPEN-FIXES-FEATURES.csv, admin-web
+  // information-density pass): this page used to stack every panel - summary,
+  // address, payment, tracking, timeline, assignment, history, every write
+  // action - in one long column, all visible at once regardless of whether it
+  // applied to this booking's current state. Grouped into tabs instead: only
+  // one section's worth of cards renders at a time, and a tab that would be
+  // empty for this booking (History with no cancellation/reschedule/refund
+  // yet, Actions without write access) is left out of the strip entirely
+  // rather than rendered empty.
+  const [detailTab, setDetailTab] = useState<"overview" | "timeline" | "assignment" | "history" | "actions">(
+    "overview",
+  );
 
   const [newStatus, setNewStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
@@ -418,6 +433,9 @@ export default function BookingDetailPage() {
     liveAssignment.providerOnboardingStatus !== ProviderOnboardingStatus.KycVerified &&
     liveAssignment.providerOnboardingStatus !== ProviderOnboardingStatus.Completed;
 
+  const hasHistory = booking.cancellation !== null || booking.reschedules.length > 0 || booking.refunds.length > 0;
+  const activeTab = detailTab === "history" && !hasHistory ? "overview" : detailTab === "actions" && !canWrite ? "overview" : detailTab;
+
   return (
     <div className="flex w-full max-w-7xl flex-col gap-6">
       <PageHeading
@@ -432,109 +450,121 @@ export default function BookingDetailPage() {
       {actionError ? <Alert tone="error">{actionError}</Alert> : null}
       {actionNotice ? <Alert tone="success">{actionNotice}</Alert> : null}
 
-      <Card title="Booking summary" description={`Status: ${booking.statusLabel}`}>
-        <DescriptionList
-          columns={3}
-          items={[
-            { label: "Customer mobile", value: <span className="nums">{booking.customer.mobile}</span> },
-            {
-              label: "Slot",
-              value: (
-                <span className="nums">
-                  {booking.slot.date} · {booking.slot.startTime}–{booking.slot.endTime}
-                </span>
-              ),
-            },
-            { label: "City", value: booking.address.city },
-            { label: "Total payable", value: <span className="nums font-medium">{formatCurrency(booking.price.finalPayable)}</span> },
-            { label: "Coupon", value: booking.price.couponCode ?? "—" },
-            { label: "Created", value: formatDateTime(booking.createdAtUtc) },
-          ]}
-        />
-      </Card>
+      <RecordMetaRow
+        className="border-b border-line pb-5"
+        items={[
+          { label: "Customer mobile", value: <span className="nums">{booking.customer.mobile}</span> },
+          {
+            label: "Slot",
+            value: (
+              <span className="nums">
+                {booking.slot.date} · {booking.slot.startTime}–{booking.slot.endTime}
+              </span>
+            ),
+          },
+          { label: "City", value: booking.address.city },
+          { label: "Coupon", value: booking.price.couponCode ?? "—" },
+          { label: "Total payable", value: <span className="nums font-semibold">{formatCurrency(booking.price.finalPayable)}</span> },
+          { label: "Created", value: formatDateTime(booking.createdAtUtc) },
+        ]}
+      />
 
-      <Card title="Address" description="Snapshot at booking time">
-        <p className="text-sm leading-relaxed text-fg">
-          {[booking.address.label, booking.address.line1, booking.address.line2, booking.address.landmark, booking.address.city, booking.address.state, booking.address.pincode]
-            .filter(Boolean)
-            .join(", ")}
-        </p>
-        <p className="mt-1.5 text-sm text-fg-muted">
-          Contact: {booking.address.contactName} · <span className="nums">{booking.address.contactMobile}</span>
-        </p>
-      </Card>
+      <Tabs
+        label="Booking sections"
+        value={activeTab}
+        onChange={setDetailTab}
+        tabs={[
+          { value: "overview", label: "Overview" },
+          { value: "timeline", label: "Timeline" },
+          { value: "assignment", label: "Assignment" },
+          ...(hasHistory ? [{ value: "history" as const, label: "History" }] : []),
+          ...(canWrite ? [{ value: "actions" as const, label: "Actions" }] : []),
+        ]}
+      />
 
-      {/* Paired, not thirded with Status timeline below: both of these are
-          compact, fixed-shape summaries, but the timeline renders one row
-          per status transition (up to 8-10 for a booking that has been
-          through most of the lifecycle) - an equal-width row with that would
-          either cramp the history or leave these two towering-empty to match
-          its height under CSS grid's default row-stretch. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card title="Services booked">
-          <ul className="flex flex-col gap-2 text-sm">
-            {booking.items.map((item) => (
-              <li key={item.id} className="rounded-xl border border-line p-3">
+      {activeTab === "overview" ? (
+        <div className="flex flex-col gap-6">
+          <Card title="Address" description="Snapshot at booking time">
+            <p className="text-sm leading-relaxed text-fg">
+              {[booking.address.label, booking.address.line1, booking.address.line2, booking.address.landmark, booking.address.city, booking.address.state, booking.address.pincode]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+            <p className="mt-1.5 text-sm text-fg-muted">
+              Contact: {booking.address.contactName} · <span className="nums">{booking.address.contactMobile}</span>
+            </p>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card title="Services booked">
+              <ul className="flex flex-col gap-2 text-sm">
+                {booking.items.map((item) => (
+                  <li key={item.id} className="rounded-xl border border-line p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-fg">{item.name}</span>
+                      <span className="nums text-fg">{formatCurrency(item.lineTotal)}</span>
+                    </div>
+                    {item.addOns.length > 0 ? (
+                      <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-fg-muted">
+                        {item.addOns.map((addOn) => (
+                          <li key={addOn.id} className="flex items-center justify-between gap-3">
+                            <span>{addOn.name}</span>
+                            <span className="nums">{formatCurrency(addOn.lineTotal)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
+            <Card title="Payment">
+              {booking.payment === null ? (
+                <p className="text-sm text-fg-muted">No payment transaction yet.</p>
+              ) : (
+                <DescriptionList
+                  columns={1}
+                  items={[
+                    {
+                      label: "Amount",
+                      value: (
+                        <span className="nums">
+                          {booking.payment.currency} {booking.payment.amount.toFixed(2)}
+                        </span>
+                      ),
+                    },
+                    { label: "Gateway ref", value: booking.payment.gatewayPaymentRef ?? "—" },
+                    { label: "Updated", value: formatDateTime(booking.payment.updatedAtUtc) },
+                  ]}
+                />
+              )}
+            </Card>
+          </div>
+
+          {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+
+          <TrackingCard bookingId={booking.id} bookingStatus={booking.status} />
+        </div>
+      ) : null}
+
+      {activeTab === "timeline" ? (
+        <Card title="Status timeline" description="Full history (SRS 12.11.2-3)">
+          <ol className="flex flex-col gap-2 text-sm">
+            {booking.timeline.map((entry, index) => (
+              <li key={index} className="rounded-xl border border-line p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-fg">{item.name}</span>
-                  <span className="nums text-fg">{formatCurrency(item.lineTotal)}</span>
+                  <span className="font-medium text-fg">{entry.toStatusLabel}</span>
+                  <span className="text-xs text-fg-subtle">{formatDateTime(entry.changedAtUtc)}</span>
                 </div>
-                {item.addOns.length > 0 ? (
-                  <ul className="mt-2 flex flex-col gap-1 pl-4 text-xs text-fg-muted">
-                    {item.addOns.map((addOn) => (
-                      <li key={addOn.id} className="flex items-center justify-between gap-3">
-                        <span>{addOn.name}</span>
-                        <span className="nums">{formatCurrency(addOn.lineTotal)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                {entry.reason ? <p className="mt-1 text-xs text-fg-muted">{entry.reason}</p> : null}
               </li>
             ))}
-          </ul>
+          </ol>
         </Card>
+      ) : null}
 
-        <Card title="Payment">
-          {booking.payment === null ? (
-            <p className="text-sm text-fg-muted">No payment transaction yet.</p>
-          ) : (
-            <DescriptionList
-              columns={1}
-              items={[
-                {
-                  label: "Amount",
-                  value: (
-                    <span className="nums">
-                      {booking.payment.currency} {booking.payment.amount.toFixed(2)}
-                    </span>
-                  ),
-                },
-                { label: "Gateway ref", value: booking.payment.gatewayPaymentRef ?? "—" },
-                { label: "Updated", value: formatDateTime(booking.payment.updatedAtUtc) },
-              ]}
-            />
-          )}
-        </Card>
-      </div>
-
-      {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
-
-      <TrackingCard bookingId={booking.id} bookingStatus={booking.status} />
-
-      <Card title="Status timeline" description="Full history (SRS 12.11.2-3)">
-        <ol className="flex flex-col gap-2 text-sm">
-          {booking.timeline.map((entry, index) => (
-            <li key={index} className="rounded-xl border border-line p-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-fg">{entry.toStatusLabel}</span>
-                <span className="text-xs text-fg-subtle">{formatDateTime(entry.changedAtUtc)}</span>
-              </div>
-              {entry.reason ? <p className="mt-1 text-xs text-fg-muted">{entry.reason}</p> : null}
-            </li>
-          ))}
-        </ol>
-      </Card>
-
+      {activeTab === "assignment" ? (
       <Card
         title="Provider assignment"
         description="Assign a provider below, or leave it: a Confirmed booking moves to Awaiting Fulfilment automatically as its slot approaches, and the system then offers it to the nearest eligible provider (tasks 147, 159, 246, 333)"
@@ -705,64 +735,69 @@ export default function BookingDetailPage() {
           </div>
         ) : null}
       </Card>
+      ) : null}
 
-      {booking.cancellation ? (
-        <Card title="Cancellation">
-          <DescriptionList
-            columns={3}
-            items={[
-              { label: "Actor", value: CANCELLATION_ACTOR_LABELS[booking.cancellation.actor] },
-              { label: "Fee", value: <span className="nums">{formatCurrency(booking.cancellation.cancellationFeeAmount)}</span> },
-              { label: "Refund amount", value: <span className="nums">{formatCurrency(booking.cancellation.refundAmount)}</span> },
-            ]}
-          />
-          <p className="mt-4 text-sm text-fg">{booking.cancellation.reason}</p>
-          {booking.cancellation.internalNotes ? (
-            <p className="mt-1 text-xs text-fg-subtle">Internal notes: {booking.cancellation.internalNotes}</p>
+      {activeTab === "history" && hasHistory ? (
+        <div className="flex flex-col gap-6">
+          {booking.cancellation ? (
+            <Card title="Cancellation">
+              <DescriptionList
+                columns={3}
+                items={[
+                  { label: "Actor", value: CANCELLATION_ACTOR_LABELS[booking.cancellation.actor] },
+                  { label: "Fee", value: <span className="nums">{formatCurrency(booking.cancellation.cancellationFeeAmount)}</span> },
+                  { label: "Refund amount", value: <span className="nums">{formatCurrency(booking.cancellation.refundAmount)}</span> },
+                ]}
+              />
+              <p className="mt-4 text-sm text-fg">{booking.cancellation.reason}</p>
+              {booking.cancellation.internalNotes ? (
+                <p className="mt-1 text-xs text-fg-subtle">Internal notes: {booking.cancellation.internalNotes}</p>
+              ) : null}
+            </Card>
           ) : null}
-        </Card>
+
+          {booking.reschedules.length > 0 ? (
+            <Card title="Reschedule history">
+              <ul className="flex flex-col gap-2 text-sm">
+                {booking.reschedules.map((reschedule) => (
+                  <li key={reschedule.id} className="rounded-xl border border-line p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="nums text-fg">
+                        {reschedule.fromSlotDate} {reschedule.fromSlotStartTime} → {reschedule.toSlotDate}{" "}
+                        {reschedule.toSlotStartTime}
+                      </span>
+                      <span className="text-xs text-fg-subtle">{RESCHEDULE_ACTOR_LABELS[reschedule.actor]}</span>
+                    </div>
+                    {reschedule.feeAmount > 0 ? (
+                      <p className="mt-1 text-xs text-fg-muted">Fee: {formatCurrency(reschedule.feeAmount)}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          {booking.refunds.length > 0 ? (
+            <Card title="Refund history">
+              <ul className="flex flex-col gap-2 text-sm">
+                {booking.refunds.map((refund) => (
+                  <li
+                    key={refund.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
+                  >
+                    <span className="min-w-0 flex-1 text-fg">{refund.reason}</span>
+                    <Badge tone={REFUND_STATUS_TONES[refund.status]}>{REFUND_STATUS_LABELS[refund.status]}</Badge>
+                    <span className="nums font-medium text-fg">{formatCurrency(refund.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+        </div>
       ) : null}
 
-      {booking.reschedules.length > 0 ? (
-        <Card title="Reschedule history">
-          <ul className="flex flex-col gap-2 text-sm">
-            {booking.reschedules.map((reschedule) => (
-              <li key={reschedule.id} className="rounded-xl border border-line p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="nums text-fg">
-                    {reschedule.fromSlotDate} {reschedule.fromSlotStartTime} → {reschedule.toSlotDate}{" "}
-                    {reschedule.toSlotStartTime}
-                  </span>
-                  <span className="text-xs text-fg-subtle">{RESCHEDULE_ACTOR_LABELS[reschedule.actor]}</span>
-                </div>
-                {reschedule.feeAmount > 0 ? (
-                  <p className="mt-1 text-xs text-fg-muted">Fee: {formatCurrency(reschedule.feeAmount)}</p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      {booking.refunds.length > 0 ? (
-        <Card title="Refund history">
-          <ul className="flex flex-col gap-2 text-sm">
-            {booking.refunds.map((refund) => (
-              <li
-                key={refund.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
-              >
-                <span className="min-w-0 flex-1 text-fg">{refund.reason}</span>
-                <Badge tone={REFUND_STATUS_TONES[refund.status]}>{REFUND_STATUS_LABELS[refund.status]}</Badge>
-                <span className="nums font-medium text-fg">{formatCurrency(refund.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
-      {canWrite ? (
-        <>
+      {activeTab === "actions" && canWrite ? (
+        <div className="flex flex-col gap-6">
           <Card title="Update status" description="General operational status transitions (task 115d)">
             {/* max-w-2xl: this Card is now as wide as the page (matched to
                 the list it's reached from), but a status dropdown and a
@@ -925,7 +960,7 @@ export default function BookingDetailPage() {
               </FormActions>
             </div>
           </Card>
-        </>
+        </div>
       ) : null}
 
       <ConfirmDialog

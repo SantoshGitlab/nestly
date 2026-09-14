@@ -1051,6 +1051,33 @@ export function Breadcrumbs({
  * `<dl>` rather than a two-column table, because this is describing one record
  * rather than comparing many.
  */
+/**
+ * Compact horizontal strip of key facts for a detail page's header - the
+ * "record header" pattern (Linear/Stripe/GitHub issue meta row): a handful
+ * of always-relevant facts read at a glance, inline under the title, not
+ * boxed in their own Card the way a page's actual content sections are.
+ * Replaces what used to be a redundant "Summary" Card duplicating what
+ * PageHeading's title/subtitle/badge already established.
+ */
+export function RecordMetaRow({
+  items,
+  className = "",
+}: {
+  items: readonly { label: string; value: ReactNode }[];
+  className?: string;
+}) {
+  return (
+    <dl className={cx("flex flex-wrap gap-x-8 gap-y-3", className)}>
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <dt className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{item.label}</dt>
+          <dd className="mt-1 text-sm font-medium text-fg">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function DescriptionList({
   items,
   columns = 2,

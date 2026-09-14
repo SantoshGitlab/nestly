@@ -17,6 +17,7 @@ import {
   Select,
   SkeletonText,
   StatTile,
+  Tabs,
 } from "@/components/ui";
 import {
   Breadcrumbs,
@@ -26,6 +27,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  RecordMetaRow,
 } from "@/components/data-table";
 import { DetailError, DetailSkeleton, SectionError } from "@/components/screen-states";
 import { ProviderStatusBadge } from "@/components/status-badges";
@@ -193,6 +195,13 @@ export default function ProviderDetailPage() {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Enterprise redesign pass (docs/OPEN-FIXES-FEATURES.csv, admin-web
+  // information-density) - same pattern as the booking detail page: group the
+  // 8 always-stacked cards (Profile, Capacity, Photo, KYC, Background check,
+  // Performance, Earnings, Payouts) behind tabs instead of rendering all of
+  // them at once.
+  const [detailTab, setDetailTab] = useState<"overview" | "verification" | "performance" | "earnings">("overview");
 
   const [suspendReason, setSuspendReason] = useState("");
   const [confirmSuspend, setConfirmSuspend] = useState(false);
@@ -402,6 +411,43 @@ export default function ProviderDetailPage() {
       {actionError ? <Alert tone="error">{actionError}</Alert> : null}
       {actionNotice ? <Alert tone="success">{actionNotice}</Alert> : null}
 
+      <RecordMetaRow
+        className="border-b border-line pb-5"
+        items={[
+          { label: "Registered", value: <span className="nums">{formatDate(provider.createdAt)}</span> },
+          {
+            label: "Completed jobs",
+            value: (
+              <span className="nums">
+                {performanceQuery.data ? performanceQuery.data.completedJobs : "—"}
+              </span>
+            ),
+          },
+          {
+            label: "Current balance",
+            value: (
+              <span className="nums font-semibold">
+                {earningsQuery.data ? formatCurrency(earningsQuery.data.currentBalance) : "—"}
+              </span>
+            ),
+          },
+        ]}
+      />
+
+      <Tabs
+        label="Provider sections"
+        value={detailTab}
+        onChange={setDetailTab}
+        tabs={[
+          { value: "overview", label: "Overview" },
+          { value: "verification", label: "Verification" },
+          { value: "performance", label: "Performance" },
+          { value: "earnings", label: "Earnings" },
+        ]}
+      />
+
+      {detailTab === "overview" ? (
+      <div className="flex flex-col gap-6">
       <Card
         title="Profile"
         description={
@@ -554,7 +600,11 @@ export default function ProviderDetailPage() {
           </div>
         )}
       </Card>
+      </div>
+      ) : null}
 
+      {detailTab === "verification" ? (
+      <div className="flex flex-col gap-6">
       <Card title="KYC documents" description="Approve or reject each submitted document (task 150b)">
         {provider.kycDocuments.length === 0 ? (
           <EmptyState
@@ -702,7 +752,10 @@ export default function ProviderDetailPage() {
           </div>
         ) : null}
       </Card>
+      </div>
+      ) : null}
 
+      {detailTab === "performance" ? (
       <Card title="Performance" description="Job-fulfilment summary (task 150c)">
         {performanceQuery.isPending ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -737,7 +790,10 @@ export default function ProviderDetailPage() {
           </Reveal>
         )}
       </Card>
+      ) : null}
 
+      {detailTab === "earnings" ? (
+      <div className="flex flex-col gap-6">
       <Card
         title="Earnings ledger"
         description={
@@ -904,6 +960,8 @@ export default function ProviderDetailPage() {
           </div>
         ) : null}
       </Card>
+      </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmSuspend}

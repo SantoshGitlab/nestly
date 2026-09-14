@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { Alert, Badge, Button, Card, EmptyState, Field, PageHeading } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, Field, PageHeading, Tabs } from "@/components/ui";
 import {
   Breadcrumbs,
   ConfirmDialog,
@@ -12,6 +12,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  RecordMetaRow,
 } from "@/components/data-table";
 import { DetailError, DetailSkeleton } from "@/components/screen-states";
 import { BookingStatusBadge, CustomerStatusBadge, TicketStatusBadge } from "@/components/status-badges";
@@ -86,6 +87,11 @@ export default function CustomerDetailPage() {
   const [noteText, setNoteText] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Enterprise redesign pass (docs/OPEN-FIXES-FEATURES.csv, admin-web
+  // information-density) - same tabbed grouping as the booking/provider
+  // detail pages: 8 always-stacked cards behind 4 tabs instead.
+  const [detailTab, setDetailTab] = useState<"overview" | "activity" | "wallet" | "support">("overview");
 
   const invalidateDetail = () =>
     queryClient.invalidateQueries({ queryKey: ["admin-customer-detail", customerId] });
@@ -172,6 +178,32 @@ export default function CustomerDetailPage() {
       {actionError ? <Alert tone="error">{actionError}</Alert> : null}
       {actionNotice ? <Alert tone="success">{actionNotice}</Alert> : null}
 
+      <RecordMetaRow
+        className="border-b border-line pb-5"
+        items={[
+          { label: "Registered", value: <span className="nums">{formatDate(customer.createdAtUtc)}</span> },
+          { label: "Bookings", value: <span className="nums">{customer.bookings.length}</span> },
+          {
+            label: "Wallet balance",
+            value: <span className="nums font-semibold">{formatCurrency(customer.walletBalance)}</span>,
+          },
+        ]}
+      />
+
+      <Tabs
+        label="Customer sections"
+        value={detailTab}
+        onChange={setDetailTab}
+        tabs={[
+          { value: "overview", label: "Overview" },
+          { value: "activity", label: "Activity" },
+          { value: "wallet", label: "Wallet & coupons" },
+          { value: "support", label: "Support & notes" },
+        ]}
+      />
+
+      {detailTab === "overview" ? (
+      <div className="flex flex-col gap-6">
       <Card title="Profile" description="Account snapshot (SRS 12.4.2).">
         <DescriptionList
           columns={3}
@@ -179,12 +211,6 @@ export default function CustomerDetailPage() {
             { label: "City", value: customer.city ?? "—" },
             { label: "State", value: customer.state ?? "—" },
             { label: "Pincode", value: <span className="nums">{customer.pincode ?? "—"}</span> },
-            { label: "Registered", value: <span className="nums">{formatDate(customer.createdAtUtc)}</span> },
-            {
-              label: "Wallet balance",
-              value: <span className="nums font-medium">{formatCurrency(customer.walletBalance)}</span>,
-            },
-            { label: "Bookings", value: <span className="nums">{customer.bookings.length}</span> },
           ]}
         />
 
@@ -275,7 +301,10 @@ export default function CustomerDetailPage() {
           </ul>
         )}
       </Card>
+      </div>
+      ) : null}
 
+      {detailTab === "activity" ? (
       <Card title="Booking history" description="SRS 12.4.2">
         {customer.bookings.length === 0 ? (
           <EmptyState title="No bookings yet" description="This customer has not completed a booking." />
@@ -294,7 +323,10 @@ export default function CustomerDetailPage() {
           </ul>
         )}
       </Card>
+      ) : null}
 
+      {detailTab === "wallet" ? (
+      <div className="flex flex-col gap-6">
       <Card
         title="Wallet / refund history"
         description={`Current balance: ${formatCurrency(customer.walletBalance)}`}
@@ -344,7 +376,11 @@ export default function CustomerDetailPage() {
           </ul>
         )}
       </Card>
+      </div>
+      ) : null}
 
+      {detailTab === "support" ? (
+      <div className="flex flex-col gap-6">
       <Card title="Support tickets" description="SRS 12.4.2">
         {customer.supportTickets.length === 0 ? (
           <EmptyState title="No support tickets" description="This customer has never raised a ticket." />
@@ -404,6 +440,8 @@ export default function CustomerDetailPage() {
           </ul>
         )}
       </Card>
+      </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmBlock}
