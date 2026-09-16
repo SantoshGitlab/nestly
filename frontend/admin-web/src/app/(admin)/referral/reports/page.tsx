@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FilterBar, countActiveFilters, formatCurrency } from "@/components/data-table";
 import { Reveal, revealItem } from "@/components/motion";
 import { SectionError } from "@/components/screen-states";
@@ -30,42 +30,39 @@ const EMPTY_FILTERS: DateRangeFilters = { fromDate: "", toDate: "" };
  */
 export default function ReferralReportsPage() {
   const [filters, setFilters] = useState<DateRangeFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<DateRangeFilters>(EMPTY_FILTERS);
   const [rangeError, setRangeError] = useState<string | null>(null);
 
+  // Live filtering (no Apply button): both fields are date pickers, so a
+  // change applies immediately - but "to" before "from" is still nonsense,
+  // so an invalid range is flagged and left disabled rather than fired at
+  // the report endpoints, same validation the old Apply button ran.
+  const isRangeInvalid = Boolean(filters.fromDate && filters.toDate && filters.toDate < filters.fromDate);
+  useEffect(() => {
+    setRangeError(isRangeInvalid ? "The end date cannot be before the start date." : null);
+  }, [isRangeInvalid]);
+
   const range = {
-    fromUtc: appliedFilters.fromDate ? startOfLocalDayUtc(appliedFilters.fromDate) ?? undefined : undefined,
-    toUtc: appliedFilters.toDate ? endOfLocalDayUtc(appliedFilters.toDate) ?? undefined : undefined,
+    fromUtc: filters.fromDate ? startOfLocalDayUtc(filters.fromDate) ?? undefined : undefined,
+    toUtc: filters.toDate ? endOfLocalDayUtc(filters.toDate) ?? undefined : undefined,
   };
 
   const funnelQuery = useQuery({
-    // The applied range, not the live one: the report used to re-fetch on every
-    // keystroke inside the date control, including the half-typed years a date
-    // input emits while it is being filled in.
-    queryKey: ["referral-reports", "funnel", appliedFilters] as const,
+    queryKey: ["referral-reports", "funnel", filters] as const,
     queryFn: () => getReferralFunnelReport(range),
+    enabled: !isRangeInvalid,
     placeholderData: keepPreviousData,
   });
 
   const costQuery = useQuery({
-    queryKey: ["referral-reports", "cost", appliedFilters] as const,
+    queryKey: ["referral-reports", "cost", filters] as const,
     queryFn: () => getReferralCostReport(range),
+    enabled: !isRangeInvalid,
     placeholderData: keepPreviousData,
   });
-
-  const applyFilters = () => {
-    if (filters.fromDate && filters.toDate && filters.toDate < filters.fromDate) {
-      setRangeError("The end date cannot be before the start date.");
-      return;
-    }
-    setRangeError(null);
-    setAppliedFilters(filters);
-  };
 
   const clearFilters = () => {
     setRangeError(null);
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
   };
 
   const isBusy = funnelQuery.isFetching || costQuery.isFetching;
@@ -82,10 +79,8 @@ export default function ReferralReportsPage() {
       <div className="flex flex-col gap-6">
         <FilterBar
           columns={2}
-          submitLabel="Apply range"
-          onSubmit={applyFilters}
           onClear={clearFilters}
-          activeCount={countActiveFilters(appliedFilters)}
+          activeCount={countActiveFilters(filters)}
           busy={isBusy}
         >
           <Field

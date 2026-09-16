@@ -2,7 +2,8 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Button, Field, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
@@ -17,6 +18,7 @@ import { API_V1, apiFetch } from "@/lib/api";
 import { listCities } from "@/lib/serviceability-api";
 import { CustomerStatus } from "@/lib/types";
 import type { CustomerSearchParams, CustomerSearchResponse, CustomerSummary } from "@/lib/types";
+import { CustomersTabs } from "./_components/CustomersTabs";
 
 const PAGE_SIZE = 20;
 
@@ -37,6 +39,23 @@ interface FilterFormState {
 }
 
 const EMPTY_FILTERS: FilterFormState = { name: "", mobile: "", email: "", city: "", status: "" };
+
+/**
+ * Seeds the filter form from the URL's query params - the Customer Analytics
+ * dashboard's status tiles link here as `/customers?status=X` and expect the
+ * list to open already filtered, not requiring the admin to re-pick the
+ * status by hand (same reasoning, and the same pattern, as
+ * providers/page.tsx's own filtersFromSearchParams).
+ */
+function filtersFromSearchParams(params: URLSearchParams): FilterFormState {
+  return {
+    name: params.get("name") ?? "",
+    mobile: params.get("mobile") ?? "",
+    email: params.get("email") ?? "",
+    city: params.get("city") ?? "",
+    status: params.get("status") ?? "",
+  };
+}
 
 function buildParamsQuery(params: CustomerSearchParams): string {
   const query = new URLSearchParams();
@@ -68,10 +87,23 @@ function buildQueryString(filters: FilterFormState, page: number): string {
  * Built on the task 221 pattern. Columns are deliberately NOT sortable: the
  * list is paged server-side and the endpoint takes no sort parameter, so a
  * header sort would silently reorder only the 20 rows on screen.
+ *
+ * Wrapped in Suspense: `useSearchParams` (reading the Customer Analytics
+ * dashboard's click-through filters) opts the tree below it out of static
+ * rendering, and Next's App Router requires a Suspense boundary around that
+ * or the production build fails (same pattern providers/page.tsx uses).
  */
 export default function CustomersPage() {
-  const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
+  return (
+    <Suspense fallback={<div className="w-full max-w-7xl px-6 py-10" />}>
+      <CustomersPageContent />
+    </Suspense>
+  );
+}
+
+function CustomersPageContent() {
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<FilterFormState>(() => filtersFromSearchParams(searchParams));
   const [page, setPage] = useState(1);
 
   // Real city list to suggest against the City field, which stays a plain
@@ -84,16 +116,48 @@ export default function CustomersPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Live typeahead for Name - reuses the same customer search this page
-  // already calls, same pattern as bookings/page.tsx's Booking # suggestions
-  // (there is no standalone exported customer-search client to reuse from
-  // elsewhere, so this reuses the page's own endpoint with a small pageSize).
-  const [debouncedName, setDebouncedName] = useState("");
+  // Live filtering (no Search button - task: "auto search when searching
+  // something"): every free-text field (Name, Mobile, Email, City) is
+  // debounced 300ms before it hits the query, same convention as the Name
+  // typeahead below and as payments/reconciliation/page.tsx's search box;
+  // Account status (a dropdown) applies immediately.
+  const [debouncedName, setDebouncedName] = useState(filters.name);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.name]);
 
+  const [debouncedMobile, setDebouncedMobile] = useState(filters.mobile);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedMobile(filters.mobile.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.mobile]);
+
+  const [debouncedEmail, setDebouncedEmail] = useState(filters.email);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedEmail(filters.email.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.email]);
+
+  const [debouncedCity, setDebouncedCity] = useState(filters.city);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCity(filters.city.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.city]);
+
+  // Any filter change resets to page 1 - staying on page 3 of a now-smaller
+  // result set would just show an empty page (same pattern as
+  // payments/reconciliation/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status]);
+
+  // Live typeahead for Name - reuses the same customer search this page
+  // already calls, same pattern as bookings/page.tsx's Booking # suggestions
+  // (there is no standalone exported customer-search client to reuse from
+  // elsewhere, so this reuses the page's own endpoint with a small pageSize).
+  // Shares `debouncedName` with the main query below rather than debouncing
+  // twice.
   const nameSuggestionsQuery = useQuery({
     queryKey: ["admin-customers-name-suggestions", debouncedName],
     queryFn: () =>
@@ -106,22 +170,24 @@ export default function CustomersPage() {
   });
 
   const query = useQuery({
-    queryKey: ["admin-customers", appliedFilters, page],
+    queryKey: ["admin-customers", page, debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status] as const,
     queryFn: () =>
-      apiFetch<CustomerSearchResponse>(`${API_V1}/customers?${buildQueryString(appliedFilters, page)}`, {
-        authenticated: true,
-      }),
+      apiFetch<CustomerSearchResponse>(
+        `${API_V1}/customers?${buildQueryString(
+          { name: debouncedName, mobile: debouncedMobile, email: debouncedEmail, city: debouncedCity, status: filters.status },
+          page,
+        )}`,
+        { authenticated: true },
+      ),
     placeholderData: keepPreviousData,
   });
 
-  const onSubmit = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedName("");
+    setDebouncedMobile("");
+    setDebouncedEmail("");
+    setDebouncedCity("");
     setPage(1);
   };
 
@@ -166,11 +232,11 @@ export default function CustomersPage() {
   return (
     <div className="w-full max-w-7xl">
       <PageHeading title="Customers" subtitle="Search and manage customer accounts (SRS 12.4)." />
+      <CustomersTabs />
 
       <FilterBar
-        onSubmit={onSubmit}
         onClear={onClear}
-        activeCount={countActiveFilters(appliedFilters)}
+        activeCount={countActiveFilters(filters)}
         busy={query.isFetching}
         columns={3}
       >

@@ -33,7 +33,6 @@ const EMPTY_FILTERS: PageFilters = { title: "", status: "" };
 export default function CmsPagesPage() {
   const claims = useAdminClaims();
   const [filters, setFilters] = useState<PageFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<PageFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [editingPage, setEditingPage] = useState<CmsPageResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -41,13 +40,21 @@ export default function CmsPagesPage() {
   const canWrite = canWriteModule(claims, "cms");
   const queryClient = useQueryClient();
 
-  // Live typeahead for Title - reuses the same searchCmsPages call the list
-  // below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  // Live filtering (no Search button): Title is a free-text field, debounced
+  // 300ms before hitting the query - shared with the typeahead suggestions
+  // below rather than debouncing twice. Status (a dropdown) applies
+  // immediately.
   const [debouncedTitle, setDebouncedTitle] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedTitle(filters.title.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.title]);
+
+  // Any filter change resets to page 1 - staying on a now out-of-range page
+  // would just show an empty result (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedTitle, filters.status]);
 
   const titleSuggestionsQuery = useQuery({
     queryKey: ["cms", "pages", "title-suggestions", debouncedTitle] as const,
@@ -57,14 +64,11 @@ export default function CmsPagesPage() {
   });
 
   const pagesQuery = useQuery({
-    // The title filter used to sit straight in the key, so every keystroke
-    // fired a paged search. Applying explicitly is one request per search.
-    queryKey: ["cms", "pages", "search", appliedFilters, page] as const,
+    queryKey: ["cms", "pages", "search", debouncedTitle, filters.status, page] as const,
     queryFn: () =>
       searchCmsPages({
-        title: appliedFilters.title || undefined,
-        status:
-          appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as CmsContentStatus),
+        title: debouncedTitle || undefined,
+        status: filters.status === "" ? undefined : (Number(filters.status) as CmsContentStatus),
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -105,14 +109,9 @@ export default function CmsPagesPage() {
     }
   };
 
-  const applyFilters = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedTitle("");
     setPage(1);
   };
 
@@ -150,9 +149,8 @@ export default function CmsPagesPage() {
 
         <FilterBar
           columns={2}
-          onSubmit={applyFilters}
           onClear={clearFilters}
-          activeCount={countActiveFilters(appliedFilters)}
+          activeCount={countActiveFilters(filters)}
           busy={pagesQuery.isFetching}
         >
           <Field
@@ -197,7 +195,7 @@ export default function CmsPagesPage() {
           togglingId={toggleMutation.isPending ? toggleMutation.variables?.id : undefined}
           toggleError={toggleMutation.error}
           emptyAction={
-            countActiveFilters(appliedFilters) > 0 ? (
+            countActiveFilters(filters) > 0 ? (
               <Button variant="secondary" onClick={clearFilters}>
                 Clear filters
               </Button>

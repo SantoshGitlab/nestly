@@ -4,7 +4,18 @@ namespace Nestly.Application.ProviderManagement;
 
 // ---- CRUD (task 150a) ----
 
-/// <summary>Search/filter criteria for the admin provider list (mirrors <c>CustomerSearchFilter</c>). <see cref="CityId"/> matches a provider with an active <see cref="ProviderServiceArea"/> covering that city (task 371) - ops finding "which providers serve city X" without opening every provider's detail page.</summary>
+/// <summary>
+/// Search/filter criteria for the admin provider list (mirrors
+/// <c>CustomerSearchFilter</c>). <see cref="CityId"/> matches a provider with
+/// an active <see cref="ProviderServiceArea"/> covering that city (task 371)
+/// - ops finding "which providers serve city X" without opening every
+/// provider's detail page. <see cref="CreatedFromUtc"/>/<see cref="CreatedToUtc"/>
+/// (Provider Onboarding Overview dashboard) bound <see cref="Provider.CreatedAt"/>
+/// the same inclusive way <c>BookingSearchFilter.CreatedFromUtc/CreatedToUtc</c>
+/// already does - this is what lets a click on one of that dashboard's tiles
+/// land here filtered to exactly the cohort ("registered on this day") it
+/// summarized.
+/// </summary>
 public sealed record ProviderSearchFilter(
     string? Name,
     string? Phone,
@@ -12,7 +23,9 @@ public sealed record ProviderSearchFilter(
     ProviderOnboardingStatus? OnboardingStatus,
     Guid? CityId,
     int Page,
-    int PageSize);
+    int PageSize,
+    DateTime? CreatedFromUtc = null,
+    DateTime? CreatedToUtc = null);
 
 public sealed record ProviderSearchResult(IReadOnlyList<Provider> Rows, int TotalCount);
 
@@ -23,7 +36,9 @@ public sealed record ProviderSearchRequest(
     ProviderOnboardingStatus? OnboardingStatus,
     Guid? CityId = null,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    DateTime? CreatedFromUtc = null,
+    DateTime? CreatedToUtc = null);
 
 /// <summary><see cref="ServiceCities"/> (task 371) names the cities this provider has an active <see cref="ProviderServiceArea"/> for, alphabetically - empty if the provider has not configured any service areas yet.</summary>
 public sealed record ProviderSummaryResponse(
@@ -262,3 +277,49 @@ public sealed record ProviderPerformanceListResponse(
     int Page,
     int PageSize,
     int PeriodDays);
+
+// ---- Provider Onboarding Overview dashboard ----
+
+/// <summary>
+/// Request for the Provider Onboarding Overview dashboard's funnel counts
+/// (Admin Web new page). Mirrors <c>AdminFulfilmentBoardRequest</c>'s own
+/// single-optional-date shape exactly - same "defaults to today when absent"
+/// convention.
+/// </summary>
+public sealed record AdminProviderOnboardingOverviewRequest(DateOnly? Date);
+
+/// <summary>
+/// A cohort-of-the-day funnel: of every provider whose <see cref="Provider.CreatedAt"/>
+/// falls on <see cref="Date"/>, how many are now at each stage. The six
+/// counts are NOT mutually exclusive partitions of the cohort - they read
+/// two independent dimensions of the same <see cref="Provider"/> row
+/// (<see cref="ProviderOnboardingStatus"/> and <see cref="ProviderStatus"/>,
+/// per that type's own doc comment) at once, so a provider already
+/// <see cref="ProviderOnboardingStatus.Completed"/> and
+/// <see cref="ProviderStatus.Active"/> counts toward both
+/// <see cref="LiveCount"/> and <see cref="ActiveCount"/>, and every provider
+/// in every other bucket also counts toward <see cref="TodayOnboardingCount"/>.
+/// </summary>
+/// <param name="TodayOnboardingCount">Every provider created on <see cref="Date"/>, regardless of current stage - the cohort itself.</param>
+/// <param name="DocumentVerificationCount">Cohort currently at <see cref="ProviderOnboardingStatus.KycSubmitted"/> - KYC documents uploaded, awaiting an admin verdict.</param>
+/// <param name="VerifiedCount">Cohort currently at <see cref="ProviderOnboardingStatus.KycVerified"/> - at least one KYC document approved.</param>
+/// <param name="PendingCount">Cohort currently at <see cref="ProviderStatus.PendingVerification"/> - not yet activated.</param>
+/// <param name="LiveCount">Cohort currently at <see cref="ProviderOnboardingStatus.Completed"/> - the one-time onboarding flow is done.</param>
+/// <param name="ActiveCount">Cohort currently at <see cref="ProviderStatus.Active"/> - live and assignable.</param>
+public sealed record AdminProviderOnboardingOverviewResponse(
+    DateOnly Date,
+    int TodayOnboardingCount,
+    int DocumentVerificationCount,
+    int VerifiedCount,
+    int PendingCount,
+    int LiveCount,
+    int ActiveCount);
+
+/// <summary>Repository-level result behind <see cref="AdminProviderOnboardingOverviewResponse"/> - the same six counts, before the request's echoed <see cref="AdminProviderOnboardingOverviewRequest.Date"/> is attached.</summary>
+public sealed record ProviderOnboardingOverviewCounts(
+    int TodayOnboardingCount,
+    int DocumentVerificationCount,
+    int VerifiedCount,
+    int PendingCount,
+    int LiveCount,
+    int ActiveCount);

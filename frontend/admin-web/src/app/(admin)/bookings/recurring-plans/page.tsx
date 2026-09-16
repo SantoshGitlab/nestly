@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Reveal, revealItem } from "@/components/motion";
 import { Badge, Button, Card, Field, PageHeading, Select, Skeleton, StatTile } from "@/components/ui";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
@@ -67,7 +67,6 @@ const EMPTY_FILTERS: FilterFormState = { status: "", frequency: "" };
  */
 export default function RecurringPlansPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -77,26 +76,27 @@ export default function RecurringPlansPage() {
     queryFn: () => getRecurringPlanReport(fromDate || undefined, toDate || undefined),
   });
 
+  // Live filtering (no Search button): both fields are dropdowns, so there is
+  // nothing to debounce - a change applies immediately, same as the Account
+  // status field in customers/page.tsx.
+  useEffect(() => {
+    setPage(1);
+  }, [filters.status, filters.frequency]);
+
   const listQuery = useQuery({
-    queryKey: ["recurring-plans", "list", appliedFilters, page] as const,
+    queryKey: ["recurring-plans", "list", filters, page] as const,
     queryFn: () =>
       searchRecurringPlans({
-        status: appliedFilters.status || undefined,
-        frequency: appliedFilters.frequency || undefined,
+        status: filters.status || undefined,
+        frequency: filters.frequency || undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
     placeholderData: keepPreviousData,
   });
 
-  const onSubmit = () => {
-    setAppliedFilters(filters);
-    setPage(1);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
     setPage(1);
   };
 
@@ -290,9 +290,8 @@ export default function RecurringPlansPage() {
 
         <div>
           <FilterBar
-            onSubmit={onSubmit}
             onClear={onClear}
-            activeCount={countActiveFilters(appliedFilters)}
+            activeCount={countActiveFilters(filters)}
             busy={listQuery.isFetching}
           >
             <Select

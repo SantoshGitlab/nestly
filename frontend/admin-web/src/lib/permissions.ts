@@ -35,6 +35,7 @@ import type { AdminSessionClaims } from "./types";
 
 export type NavModuleKey =
   | "dashboard"
+  | "overview"
   | "fulfilment"
   | "customers"
   | "catalog"
@@ -71,6 +72,13 @@ export interface NavModule {
 
 export const NAV_MODULES: readonly NavModule[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", srsRef: "SRS 12.3", requiredPermission: "dashboard.read" },
+  // Executive Overview: a higher-altitude, cross-module read over data every
+  // one of the six domain endpoints below already exposes and already gates
+  // behind its own module permission - so this page is gated the same way
+  // /dashboard is (reusing "dashboard.read"), same reasoning as "fulfilment"
+  // reusing "bookings.read" above, rather than a new permission code an admin
+  // could hold without also holding read on any of the modules it summarizes.
+  { key: "overview", label: "Executive Overview", href: "/overview", srsRef: "docs/OPEN-FIXES-FEATURES.csv", requiredPermission: "dashboard.read" },
   // Row "Fulfilment control room", docs/OPEN-FIXES-FEATURES.csv: gated on
   // "bookings.read" rather than a new permission code - this is a live-state
   // view over the Booking domain (BookingsController's own module), not a
@@ -132,14 +140,14 @@ export function canWriteModule(claims: AdminSessionClaims | null, moduleKey: Nav
  */
 const ROLE_MODULE_FALLBACK: Record<string, NavModuleKey[] | "*"> = {
   "Super Admin": "*",
-  "Operations Admin": ["dashboard", "fulfilment", "customers", "bookings", "serviceability", "slots", "support", "chat", "provider", "payments", "provider-referral"],
-  "Booking Admin": ["dashboard", "fulfilment", "bookings", "slots", "serviceability"],
-  "Support Admin": ["dashboard", "support", "chat", "customers", "reviews"],
-  "Catalog Admin": ["dashboard", "catalog", "pricing"],
-  "Pricing Admin": ["dashboard", "pricing", "coupons"],
-  "Marketing Admin": ["dashboard", "coupons", "cms", "landing", "notifications", "reviews", "referral", "nestly-coins", "subscription"],
-  "Finance Admin": ["dashboard", "fulfilment", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments", "provider-referral"],
-  "Read-only Analyst": ["dashboard", "reports"],
+  "Operations Admin": ["dashboard", "overview", "fulfilment", "customers", "bookings", "serviceability", "slots", "support", "chat", "provider", "payments", "provider-referral"],
+  "Booking Admin": ["dashboard", "overview", "fulfilment", "bookings", "slots", "serviceability"],
+  "Support Admin": ["dashboard", "overview", "support", "chat", "customers", "reviews"],
+  "Catalog Admin": ["dashboard", "overview", "catalog", "pricing"],
+  "Pricing Admin": ["dashboard", "overview", "pricing", "coupons"],
+  "Marketing Admin": ["dashboard", "overview", "coupons", "cms", "landing", "notifications", "reviews", "referral", "nestly-coins", "subscription"],
+  "Finance Admin": ["dashboard", "overview", "fulfilment", "bookings", "reports", "provider", "nestly-coins", "subscription", "payments", "provider-referral"],
+  "Read-only Analyst": ["dashboard", "overview", "reports"],
 };
 
 function isModuleVisibleByRole(role: string | null, key: NavModuleKey): boolean {

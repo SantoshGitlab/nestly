@@ -56,7 +56,8 @@ public class ProviderManagementService : IProviderManagementService
     public async Task<Result<ProviderSearchResponse>> SearchAsync(ProviderSearchRequest request)
     {
         var filter = new ProviderSearchFilter(
-            request.Name, request.Phone, request.Status, request.OnboardingStatus, request.CityId, request.Page, request.PageSize);
+            request.Name, request.Phone, request.Status, request.OnboardingStatus, request.CityId, request.Page, request.PageSize,
+            request.CreatedFromUtc, request.CreatedToUtc);
         var result = await _providerRepository.SearchAsync(filter);
 
         // Batched per page rather than per row (task 371) - one query for
@@ -414,5 +415,21 @@ public class ProviderManagementService : IProviderManagementService
         var backgroundChecks = await _backgroundCheckRepository.ListByProviderAsync(provider.Id);
 
         return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Result<AdminProviderOnboardingOverviewResponse>> GetOnboardingOverviewAsync(AdminProviderOnboardingOverviewRequest request)
+    {
+        var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var counts = await _providerRepository.GetOnboardingOverviewCountsAsync(date);
+
+        return new AdminProviderOnboardingOverviewResponse(
+            date,
+            counts.TodayOnboardingCount,
+            counts.DocumentVerificationCount,
+            counts.VerifiedCount,
+            counts.PendingCount,
+            counts.LiveCount,
+            counts.ActiveCount);
     }
 }

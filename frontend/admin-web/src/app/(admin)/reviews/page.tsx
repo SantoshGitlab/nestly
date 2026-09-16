@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Field, PageHeading, Select, Skeleton } from "@/components/ui";
 import {
   ConfirmDialog,
@@ -66,7 +66,6 @@ export default function ReviewModerationPage() {
   const queryClient = useQueryClient();
 
   const [draft, setDraft] = useState<ReviewModerationFilters>(DEFAULT_REVIEW_MODERATION_FILTERS);
-  const [applied, setApplied] = useState<ReviewModerationFilters>(DEFAULT_REVIEW_MODERATION_FILTERS);
   const [page, setPage] = useState(1);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [pendingHide, setPendingHide] = useState<ReviewModerationItem | null>(null);
@@ -90,11 +89,62 @@ export default function ReviewModerationPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Live filtering (no Search button): Service ID, Category ID and the
+  // rating fields are free-text/number inputs, debounced 300ms before
+  // hitting the query, same convention as customers/page.tsx; Status,
+  // Flagged and the Posted from/to date pickers apply immediately.
+  const [debouncedServiceId, setDebouncedServiceId] = useState(draft.serviceId);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedServiceId(draft.serviceId.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.serviceId]);
+
+  const [debouncedCategoryId, setDebouncedCategoryId] = useState(draft.categoryId);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCategoryId(draft.categoryId.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.categoryId]);
+
+  const [debouncedMinRating, setDebouncedMinRating] = useState(draft.minRating);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedMinRating(draft.minRating), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.minRating]);
+
+  const [debouncedMaxRating, setDebouncedMaxRating] = useState(draft.maxRating);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedMaxRating(draft.maxRating), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.maxRating]);
+
+  const effectiveFilters: ReviewModerationFilters = {
+    ...draft,
+    serviceId: debouncedServiceId,
+    categoryId: debouncedCategoryId,
+    minRating: debouncedMinRating,
+    maxRating: debouncedMaxRating,
+  };
+
+  // Any filter change resets to page 1 - staying on a now out-of-range page
+  // would just show an empty result (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [
+    debouncedServiceId,
+    debouncedCategoryId,
+    debouncedMinRating,
+    debouncedMaxRating,
+    draft.status,
+    draft.flagged,
+    draft.fromDate,
+    draft.toDate,
+  ]);
+
   const query = useQuery({
-    queryKey: ["admin-reviews", applied, page],
+    queryKey: ["admin-reviews", effectiveFilters, page],
     queryFn: () =>
       apiFetch<ReviewModerationSearchResponse>(
-        `${API_V1}/reviews?${buildReviewModerationQuery(applied, { page, pageSize: PAGE_SIZE })}`,
+        `${API_V1}/reviews?${buildReviewModerationQuery(effectiveFilters, { page, pageSize: PAGE_SIZE })}`,
         { authenticated: true },
       ),
     placeholderData: keepPreviousData,
@@ -139,14 +189,12 @@ export default function ReviewModerationPage() {
   const moderationError =
     hideMutation.error ?? unhideMutation.error ?? flagMutation.error ?? unflagMutation.error;
 
-  const onApply = () => {
-    setPage(1);
-    setApplied(draft);
-  };
-
   const onReset = () => {
     setDraft(DEFAULT_REVIEW_MODERATION_FILTERS);
-    setApplied(DEFAULT_REVIEW_MODERATION_FILTERS);
+    setDebouncedServiceId("");
+    setDebouncedCategoryId("");
+    setDebouncedMinRating("");
+    setDebouncedMaxRating("");
     setPage(1);
   };
 
@@ -155,7 +203,7 @@ export default function ReviewModerationPage() {
     setExportError(null);
     try {
       const blob = await apiFetchBlob(
-        `${API_V1}/reviews/export?${buildReviewModerationQuery(applied, { page: 1, pageSize: PAGE_SIZE })}`,
+        `${API_V1}/reviews/export?${buildReviewModerationQuery(effectiveFilters, { page: 1, pageSize: PAGE_SIZE })}`,
         { authenticated: true },
       );
       const url = URL.createObjectURL(blob);
@@ -186,9 +234,8 @@ export default function ReviewModerationPage() {
 
       <FilterBar
         columns={3}
-        onSubmit={onApply}
         onClear={onReset}
-        activeCount={countActiveFilters(applied)}
+        activeCount={countActiveFilters(draft)}
         busy={query.isFetching}
         actions={
           <Button type="button" variant="secondary" loading={isExporting} onClick={onExport}>
@@ -304,7 +351,7 @@ export default function ReviewModerationPage() {
             title="No reviews match these filters"
             description="Try broadening the rating or date range, or clear the filters to see every review."
             action={
-              countActiveFilters(applied) > 0 ? (
+              countActiveFilters(draft) > 0 ? (
                 <Button variant="secondary" onClick={onReset}>
                   Clear filters
                 </Button>

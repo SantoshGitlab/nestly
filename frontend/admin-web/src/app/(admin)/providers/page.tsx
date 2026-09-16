@@ -2,8 +2,8 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Alert, Badge, Button, Field, Modal, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
@@ -16,6 +16,7 @@ import {
 } from "@/components/data-table";
 import type { CsvColumn, DataTableColumn } from "@/components/data-table";
 import { todayIsoDate } from "@/lib/date";
+import { endOfLocalDayUtc, startOfLocalDayUtc } from "@/lib/day-range";
 import { ProviderStatusBadge } from "@/components/status-badges";
 import { describeError } from "@/lib/api";
 import { createProvider, searchProviders } from "@/lib/providers-api";
@@ -43,6 +44,15 @@ const ONBOARDING_LABELS: Record<ProviderOnboardingStatus, string> = {
   [ProviderOnboardingStatus.Completed]: "Onboarding complete",
 };
 
+const ONBOARDING_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Any stage" },
+  { value: String(ProviderOnboardingStatus.Registered), label: ONBOARDING_LABELS[ProviderOnboardingStatus.Registered] },
+  { value: String(ProviderOnboardingStatus.ProfileCompleted), label: ONBOARDING_LABELS[ProviderOnboardingStatus.ProfileCompleted] },
+  { value: String(ProviderOnboardingStatus.KycSubmitted), label: ONBOARDING_LABELS[ProviderOnboardingStatus.KycSubmitted] },
+  { value: String(ProviderOnboardingStatus.KycVerified), label: ONBOARDING_LABELS[ProviderOnboardingStatus.KycVerified] },
+  { value: String(ProviderOnboardingStatus.Completed), label: ONBOARDING_LABELS[ProviderOnboardingStatus.Completed] },
+];
+
 function statusLabel(status: ProviderStatus): string {
   return STATUS_OPTIONS.find((o) => o.value === String(status))?.label ?? "Unknown";
 }
@@ -51,11 +61,43 @@ interface FilterFormState {
   name: string;
   phone: string;
   status: string;
+  onboardingStatus: string;
   cityId: string;
+  /** Local calendar dates (`YYYY-MM-DD`) - converted to UTC instants for the API at the point of use, same split as dashboard/page.tsx's own date filters. */
+  createdFrom: string;
+  createdTo: string;
 }
 
-const EMPTY_FILTERS: FilterFormState = { name: "", phone: "", status: "", cityId: "" };
+const EMPTY_FILTERS: FilterFormState = {
+  name: "",
+  phone: "",
+  status: "",
+  onboardingStatus: "",
+  cityId: "",
+  createdFrom: "",
+  createdTo: "",
+};
 const EMPTY_CREATE: CreateProviderRequest = { legalName: "", displayName: "", phone: "", email: "" };
+
+/**
+ * Provider Onboarding Overview dashboard's click-through target: a tile
+ * links here with `status`/`onboardingStatus`/`createdFrom`/`createdTo`
+ * query params (see that page's own doc comment) - this reads them as the
+ * initial filter set so the list opens already scoped to the cohort the
+ * tile summarized, rather than requiring the admin to re-enter the same
+ * filters by hand.
+ */
+function filtersFromSearchParams(params: URLSearchParams): FilterFormState {
+  return {
+    name: params.get("name") ?? "",
+    phone: params.get("phone") ?? "",
+    status: params.get("status") ?? "",
+    onboardingStatus: params.get("onboardingStatus") ?? "",
+    cityId: params.get("cityId") ?? "",
+    createdFrom: params.get("createdFrom") ?? "",
+    createdTo: params.get("createdTo") ?? "",
+  };
+}
 
 const PROVIDER_CSV_COLUMNS: readonly CsvColumn<ProviderSummary>[] = [
   { header: "Name", value: (provider) => provider.displayName },
@@ -77,15 +119,33 @@ const PROVIDER_CSV_COLUMNS: readonly CsvColumn<ProviderSummary>[] = [
  * pushed the whole list down into a `Modal`, which restores focus to the "New
  * provider" button on close. Columns are NOT sortable: the list is paged
  * server-side and the endpoint takes no sort parameter.
+ *
+ * Wrapped in Suspense: `useSearchParams` (reading the Provider Onboarding
+ * Overview dashboard's click-through filters) opts the tree below it out of
+ * static rendering, and Next's App Router requires a Suspense boundary
+ * around that or the production build fails (same pattern
+ * coupons/redemptions/page.tsx uses).
  */
 export default function ProvidersPage() {
+  return (
+    <Suspense fallback={<div className="w-full max-w-7xl px-6 py-10" />}>
+      <ProvidersPageContent />
+    </Suspense>
+  );
+}
+
+function ProvidersPageContent() {
   const claims = useAdminClaims();
   const canWrite = claims?.permissions.includes("provider.write") ?? false;
   const router = useRouter();
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
 
-  const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
+  // Read once, on mount: the Onboarding Overview dashboard's tiles land here
+  // with the day's cohort pre-filtered (see filtersFromSearchParams's doc
+  // comment). Lazy useState initializer so a later, unrelated re-render never
+  // stomps on filters the admin has since edited by hand.
+  const [filters, setFilters] = useState<FilterFormState>(() => filtersFromSearchParams(searchParams));
   const [page, setPage] = useState(1);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState<CreateProviderRequest>(EMPTY_CREATE);
@@ -93,15 +153,37 @@ export default function ProvidersPage() {
 
   const citiesQuery = useQuery({ queryKey: ["cities"], queryFn: () => listCities() });
 
-  // Live typeahead for Name - reuses the same server-side search this page
-  // already calls (searchProviders), same pattern as bookings/page.tsx's
-  // Booking # suggestions.
-  const [debouncedName, setDebouncedName] = useState("");
+  // Live filtering (no Search button - task: "auto search when searching
+  // something"): text fields (Name, Phone) are debounced 300ms before they
+  // hit the query, same convention as the Name typeahead below and as
+  // payments/reconciliation/page.tsx's search box; dropdowns/date pickers
+  // apply immediately, same as every other filter page. Both debounced
+  // values are seeded from the same URL-param read as `filters` (not "") so
+  // a dashboard tile click-through (see filtersFromSearchParams) shows its
+  // filtered list on first render, no 300ms gap and no click needed.
+  const [debouncedName, setDebouncedName] = useState(() => filtersFromSearchParams(searchParams).name);
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedName(filters.name.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.name]);
 
+  const [debouncedPhone, setDebouncedPhone] = useState(() => filtersFromSearchParams(searchParams).phone);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedPhone(filters.phone.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [filters.phone]);
+
+  // Any filter change resets to page 1 - staying on page 3 of a now-smaller
+  // result set would just show an empty page (same pattern as
+  // payments/reconciliation/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedName, debouncedPhone, filters.status, filters.onboardingStatus, filters.cityId, filters.createdFrom, filters.createdTo]);
+
+  // Live typeahead for Name - reuses the same server-side search this page
+  // already calls (searchProviders), same pattern as bookings/page.tsx's
+  // Booking # suggestions. Shares `debouncedName` with the main query above
+  // rather than debouncing twice.
   const nameSuggestionsQuery = useQuery({
     queryKey: ["admin-providers-name-suggestions", debouncedName],
     queryFn: () => searchProviders({ name: debouncedName, page: 1, pageSize: 8 }),
@@ -110,13 +192,29 @@ export default function ProvidersPage() {
   });
 
   const query = useQuery({
-    queryKey: ["admin-providers", appliedFilters, page],
+    queryKey: [
+      "admin-providers",
+      page,
+      debouncedName,
+      debouncedPhone,
+      filters.status,
+      filters.onboardingStatus,
+      filters.cityId,
+      filters.createdFrom,
+      filters.createdTo,
+    ] as const,
     queryFn: () =>
       searchProviders({
-        name: appliedFilters.name || undefined,
-        phone: appliedFilters.phone || undefined,
-        status: appliedFilters.status === "" ? undefined : (Number(appliedFilters.status) as ProviderStatus),
-        cityId: appliedFilters.cityId || undefined,
+        name: debouncedName || undefined,
+        phone: debouncedPhone || undefined,
+        status: filters.status === "" ? undefined : (Number(filters.status) as ProviderStatus),
+        onboardingStatus:
+          filters.onboardingStatus === "" ? undefined : (Number(filters.onboardingStatus) as ProviderOnboardingStatus),
+        cityId: filters.cityId || undefined,
+        // Local day boundaries, not `${date}T00:00:00Z` - see lib/day-range's
+        // own doc comment on why (5h30m IST shift).
+        createdFromUtc: filters.createdFrom ? (startOfLocalDayUtc(filters.createdFrom) ?? undefined) : undefined,
+        createdToUtc: filters.createdTo ? (endOfLocalDayUtc(filters.createdTo) ?? undefined) : undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -141,14 +239,10 @@ export default function ProvidersPage() {
     onError: (err) => setCreateError(describeError(err)),
   });
 
-  const onSubmit = () => {
-    setPage(1);
-    setAppliedFilters(filters);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedName("");
+    setDebouncedPhone("");
     setPage(1);
   };
 
@@ -228,9 +322,8 @@ export default function ProvidersPage() {
       <ProvidersTabs />
 
       <FilterBar
-        onSubmit={onSubmit}
         onClear={onClear}
-        activeCount={countActiveFilters(appliedFilters)}
+        activeCount={countActiveFilters(filters)}
         busy={query.isFetching}
         columns={4}
       >
@@ -268,6 +361,26 @@ export default function ProvidersPage() {
             { value: "", label: "Any city" },
             ...(citiesQuery.data ?? []).map((city) => ({ value: city.id, label: city.name })),
           ]}
+        />
+        <Select
+          label="Onboarding stage"
+          value={filters.onboardingStatus}
+          onChange={(e) => setFilters((f) => ({ ...f, onboardingStatus: e.target.value }))}
+          options={ONBOARDING_OPTIONS}
+        />
+        {/* Registered-date range - what the Provider Onboarding Overview
+            dashboard's tiles filter on (createdFrom/createdTo). */}
+        <Field
+          label="Registered from"
+          type="date"
+          value={filters.createdFrom}
+          onChange={(e) => setFilters((f) => ({ ...f, createdFrom: e.target.value }))}
+        />
+        <Field
+          label="Registered to"
+          type="date"
+          value={filters.createdTo}
+          onChange={(e) => setFilters((f) => ({ ...f, createdTo: e.target.value }))}
         />
       </FilterBar>
 

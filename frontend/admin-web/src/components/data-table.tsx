@@ -718,9 +718,17 @@ export function DensityToggle({
 
 /**
  * The filter pattern that sits above every list: a responsive grid of kit
- * controls, then one action row. Submitting is explicit rather than
- * filter-on-keystroke — these screens are backed by paged server queries, and
- * a request per keystroke is both slow and unreadable.
+ * controls, then one action row.
+ *
+ * Two submission modes:
+ * - `onSubmit` provided: explicit Search button, filters apply only once
+ *   clicked (or Enter pressed) — for filter sets with no debounced live
+ *   query behind them.
+ * - `onSubmit` omitted: no Search button. The caller applies filters live
+ *   (immediately for dropdowns/dates, debounced for text fields — see e.g.
+ *   payments/reconciliation/page.tsx, providers/page.tsx,
+ *   customers/page.tsx), so there is nothing left to submit; the form still
+ *   swallows a native Enter-triggered submit/page-reload via `preventDefault`.
  */
 export function FilterBar({
   children,
@@ -734,7 +742,8 @@ export function FilterBar({
   className = "",
 }: {
   children: ReactNode;
-  onSubmit: () => void;
+  /** Omit for a live-filtering list (no Search button rendered). */
+  onSubmit?: () => void;
   /** Omit for a filter set that cannot be meaningfully emptied. */
   onClear?: () => void;
   /** How many filters currently hold a value — shown as a pill. */
@@ -748,7 +757,7 @@ export function FilterBar({
 }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSubmit();
+    onSubmit?.();
   };
 
   const grid =
@@ -783,9 +792,11 @@ export function FilterBar({
               Clear
             </Button>
           ) : null}
-          <Button type="submit" loading={busy}>
-            {submitLabel}
-          </Button>
+          {onSubmit ? (
+            <Button type="submit" loading={busy}>
+              {submitLabel}
+            </Button>
+          ) : null}
         </div>
       </div>
     </form>
@@ -1061,6 +1072,33 @@ export function Breadcrumbs({
  * `<dl>` rather than a two-column table, because this is describing one record
  * rather than comparing many.
  */
+/**
+ * Compact horizontal strip of key facts for a detail page's header - the
+ * "record header" pattern (Linear/Stripe/GitHub issue meta row): a handful
+ * of always-relevant facts read at a glance, inline under the title, not
+ * boxed in their own Card the way a page's actual content sections are.
+ * Replaces what used to be a redundant "Summary" Card duplicating what
+ * PageHeading's title/subtitle/badge already established.
+ */
+export function RecordMetaRow({
+  items,
+  className = "",
+}: {
+  items: readonly { label: string; value: ReactNode }[];
+  className?: string;
+}) {
+  return (
+    <dl className={cx("flex flex-wrap gap-x-8 gap-y-3", className)}>
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <dt className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{item.label}</dt>
+          <dd className="mt-1 text-sm font-medium text-fg">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 export function DescriptionList({
   items,
   columns = 2,

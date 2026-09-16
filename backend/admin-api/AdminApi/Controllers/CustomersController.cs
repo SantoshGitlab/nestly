@@ -33,17 +33,20 @@ public class CustomersController : ControllerBase
     private readonly IValidator<CustomerSearchRequest> _searchValidator;
     private readonly IValidator<BlockCustomerRequest> _blockValidator;
     private readonly IValidator<AddCustomerNoteRequest> _addNoteValidator;
+    private readonly IValidator<CustomerAnalyticsRequest> _analyticsValidator;
 
     public CustomersController(
         ICustomerManagementService customerManagementService,
         IValidator<CustomerSearchRequest> searchValidator,
         IValidator<BlockCustomerRequest> blockValidator,
-        IValidator<AddCustomerNoteRequest> addNoteValidator)
+        IValidator<AddCustomerNoteRequest> addNoteValidator,
+        IValidator<CustomerAnalyticsRequest> analyticsValidator)
     {
         _customerManagementService = customerManagementService;
         _searchValidator = searchValidator;
         _blockValidator = blockValidator;
         _addNoteValidator = addNoteValidator;
+        _analyticsValidator = analyticsValidator;
     }
 
     /// <summary>Search/filter customers (SRS 12.4.1, task 101a).</summary>
@@ -75,6 +78,33 @@ public class CustomersController : ControllerBase
         }
 
         var result = await _customerManagementService.SearchAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Customer Analytics dashboard (Admin Web new page): total/active/
+    /// blocked/unverified/deleted counts, new-today/7-day/trend-window
+    /// registration counts, the acquisition-vs-activation booking funnel,
+    /// a daily registration-trend series and a top-cities breakdown - see
+    /// <see cref="CustomerAnalyticsResponse"/>'s doc comment for exactly
+    /// what each field means. Static route declared ahead of
+    /// <see cref="GetDetail"/>'s <c>{customerId:guid}</c> route, same
+    /// non-clash reasoning as <see cref="ProvidersController.ListPerformance"/>'s own precedent.
+    /// </summary>
+    [HttpGet("analytics")]
+    [Authorize(Policy = CustomersReadPolicy)]
+    [ProducesResponseType(typeof(CustomerAnalyticsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetAnalytics([FromQuery] int trendDays = 30)
+    {
+        var request = new CustomerAnalyticsRequest(trendDays);
+        var validation = await _analyticsValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _customerManagementService.GetAnalyticsAsync(request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

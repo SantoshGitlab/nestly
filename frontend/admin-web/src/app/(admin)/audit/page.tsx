@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Field, PageHeading, Select } from "@/components/ui";
 import { DataTable, FilterBar, Pagination, countActiveFilters } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
@@ -119,15 +119,47 @@ const COLUMNS: DataTableColumn<AuditLogEntry>[] = [
 ];
 
 export default function AuditLogPage() {
-  // Draft filters track the form inputs; `applied` only changes on submit (or
-  // Reset) so the query does not refetch on every keystroke.
+  // Live filtering (no Search button): `draft` tracks the form inputs
+  // directly. Actor ID, Entity/module and Action are free-text and debounced
+  // 300ms before hitting the query, same convention as customers/page.tsx;
+  // Actor type, Outcome and the From/To date pickers apply immediately.
   const [draft, setDraft] = useState<AuditLogFilters>(DEFAULT_AUDIT_LOG_FILTERS);
-  const [applied, setApplied] = useState<AuditLogFilters>(DEFAULT_AUDIT_LOG_FILTERS);
+
+  const [debouncedActorId, setDebouncedActorId] = useState(draft.actorId);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedActorId(draft.actorId.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.actorId]);
+
+  const [debouncedEntityName, setDebouncedEntityName] = useState(draft.entityName);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedEntityName(draft.entityName.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.entityName]);
+
+  const [debouncedAction, setDebouncedAction] = useState(draft.action);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedAction(draft.action.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draft.action]);
+
+  // Any filter change resets to page 1 - staying on a now out-of-range page
+  // would just show an empty result (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setDraft((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+  }, [debouncedActorId, debouncedEntityName, debouncedAction, draft.actorType, draft.outcome, draft.fromDate, draft.toDate]);
+
+  const effectiveFilters: AuditLogFilters = {
+    ...draft,
+    actorId: debouncedActorId,
+    entityName: debouncedEntityName,
+    action: debouncedAction,
+  };
 
   const query = useQuery({
-    queryKey: ["admin-audit-log", applied] as const,
+    queryKey: ["admin-audit-log", effectiveFilters] as const,
     queryFn: () =>
-      apiFetch<PagedAuditLogResponse>(`${API_V1}/audit-log?${buildAuditLogQuery(applied)}`, {
+      apiFetch<PagedAuditLogResponse>(`${API_V1}/audit-log?${buildAuditLogQuery(effectiveFilters)}`, {
         authenticated: true,
       }),
     // Paging used to blank the table and drop the pager back to its loading
@@ -137,7 +169,7 @@ export default function AuditLogPage() {
   });
 
   const totalCount = query.data?.totalCount ?? 0;
-  const pageSize = query.data?.pageSize ?? applied.pageSize;
+  const pageSize = query.data?.pageSize ?? draft.pageSize;
   const activeCount = activeFilterCount(draft);
 
   return (
@@ -152,11 +184,11 @@ export default function AuditLogPage() {
           columns={4}
           activeCount={activeCount}
           busy={query.isFetching}
-          submitLabel="Apply filters"
-          onSubmit={() => setApplied({ ...draft, page: 1 })}
           onClear={() => {
             setDraft(DEFAULT_AUDIT_LOG_FILTERS);
-            setApplied(DEFAULT_AUDIT_LOG_FILTERS);
+            setDebouncedActorId("");
+            setDebouncedEntityName("");
+            setDebouncedAction("");
           }}
         >
           <Select
@@ -231,7 +263,7 @@ export default function AuditLogPage() {
           caption="Audit trail entries matching the current filters"
           emptyTitle="No audit entries match these filters"
           emptyDescription={
-            activeFilterCount(applied) > 0
+            activeCount > 0
               ? "Widen the date range, or clear the filters to see the whole trail."
               : "Nothing has been recorded to the audit trail yet."
           }
@@ -239,13 +271,13 @@ export default function AuditLogPage() {
           minWidth="1040px"
           footer={
             <Pagination
-              page={applied.page}
+              page={draft.page}
               pageSize={pageSize}
               totalCount={totalCount}
               busy={query.isFetching}
               itemLabel="entry"
               itemLabelPlural="entries"
-              onPageChange={(page) => setApplied((current) => ({ ...current, page }))}
+              onPageChange={(page) => setDraft((current) => ({ ...current, page }))}
             />
           }
         />

@@ -50,17 +50,22 @@ const EMPTY_FILTERS: FilterFormState = { status: "", customerSearch: "" };
  */
 export default function AmcContractsPage() {
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [openContractId, setOpenContractId] = useState<string | null>(null);
 
-  // Live typeahead for Customer - reuses the same searchAmcContracts call the
-  // list below uses, same pattern as bookings/page.tsx's Booking # suggestions.
+  // Live filtering (no Search button): Customer is debounced 300ms, shared
+  // with the typeahead below rather than debounced twice; Status (a
+  // dropdown) applies immediately.
   const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedCustomerSearch(filters.customerSearch.trim()), 300);
     return () => window.clearTimeout(handle);
   }, [filters.customerSearch]);
+
+  // Any filter change resets to page 1 (same pattern as customers/page.tsx).
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedCustomerSearch, filters.status]);
 
   const customerSuggestionsQuery = useQuery({
     queryKey: ["amc-contracts", "customer-suggestions", debouncedCustomerSearch] as const,
@@ -70,11 +75,11 @@ export default function AmcContractsPage() {
   });
 
   const listQuery = useQuery({
-    queryKey: ["amc-contracts", "list", appliedFilters, page] as const,
+    queryKey: ["amc-contracts", "list", filters.status, debouncedCustomerSearch, page] as const,
     queryFn: () =>
       searchAmcContracts({
-        status: appliedFilters.status || undefined,
-        customerSearch: appliedFilters.customerSearch || undefined,
+        status: filters.status || undefined,
+        customerSearch: debouncedCustomerSearch || undefined,
         page,
         pageSize: PAGE_SIZE,
       }),
@@ -87,14 +92,9 @@ export default function AmcContractsPage() {
     enabled: openContractId !== null,
   });
 
-  const onSubmit = () => {
-    setAppliedFilters(filters);
-    setPage(1);
-  };
-
   const onClear = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
+    setDebouncedCustomerSearch("");
     setPage(1);
   };
 
@@ -163,9 +163,8 @@ export default function AmcContractsPage() {
 
       <div className="flex flex-col gap-6">
         <FilterBar
-          onSubmit={onSubmit}
           onClear={onClear}
-          activeCount={countActiveFilters(appliedFilters)}
+          activeCount={countActiveFilters(filters)}
           busy={listQuery.isFetching}
         >
           <Select

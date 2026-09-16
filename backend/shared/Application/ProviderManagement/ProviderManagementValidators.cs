@@ -3,7 +3,13 @@ using Nestly.Domain;
 
 namespace Nestly.Application.ProviderManagement;
 
-/// <summary>Bounds paging, mirroring <c>CustomerSearchRequestValidator</c> (task 150a).</summary>
+/// <summary>
+/// Bounds paging, mirroring <c>CustomerSearchRequestValidator</c> (task
+/// 150a). The created-date range rule mirrors
+/// <c>AdminBookingSearchRequestValidator</c>'s identical guard (Provider
+/// Onboarding Overview dashboard) - a caller cannot request an inverted
+/// window.
+/// </summary>
 public class ProviderSearchRequestValidator : AbstractValidator<ProviderSearchRequest>
 {
     public const int MaxPageSize = 100;
@@ -12,6 +18,11 @@ public class ProviderSearchRequestValidator : AbstractValidator<ProviderSearchRe
     {
         RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
         RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize);
+
+        RuleFor(x => x.CreatedToUtc)
+            .GreaterThanOrEqualTo(x => x.CreatedFromUtc!.Value)
+            .When(x => x.CreatedFromUtc.HasValue && x.CreatedToUtc.HasValue)
+            .WithMessage("Created-to date must be on or after the created-from date.");
     }
 }
 

@@ -231,4 +231,25 @@ public class CustomerManagementService : ICustomerManagementService
             notes.Select(n => new CustomerNoteResponse(n.Id, n.AuthorAdminUserId, n.Note, n.CreatedAtUtc)).ToList(),
             new CustomerProviderRatingsResponse(ratingSummary?.AverageRating, ratingSummary?.RatingCount ?? 0, recentRatings));
     }
+
+    /// <inheritdoc/>
+    public async Task<Result<CustomerAnalyticsResponse>> GetAnalyticsAsync(CustomerAnalyticsRequest request)
+    {
+        var counts = await _customerRepository.GetAnalyticsCountsAsync(request.TrendDays);
+
+        return new CustomerAnalyticsResponse(
+            request.TrendDays,
+            counts.TotalCustomers,
+            counts.ActiveCount,
+            counts.BlockedCount,
+            counts.UnverifiedCount,
+            counts.SoftDeletedCount,
+            counts.NewToday,
+            counts.NewLast7Days,
+            counts.NewInTrendWindow,
+            counts.CustomersWithBookings,
+            CustomersWithZeroBookings: counts.TotalCustomers - counts.CustomersWithBookings,
+            counts.RegistrationTrend,
+            counts.TopCities);
+    }
 }

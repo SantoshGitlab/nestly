@@ -38,3 +38,14 @@ public class AddCustomerNoteRequestValidator : AbstractValidator<AddCustomerNote
         RuleFor(x => x.Note).NotEmpty().MaximumLength(4000);
     }
 }
+
+/// <summary>Bounds the Customer Analytics trend window (mirrors <c>ProviderPerformanceListRequestValidator</c>'s own <c>PeriodDays</c> bound).</summary>
+public class CustomerAnalyticsRequestValidator : AbstractValidator<CustomerAnalyticsRequest>
+{
+    public const int MaxTrendDays = 365;
+
+    public CustomerAnalyticsRequestValidator()
+    {
+        RuleFor(x => x.TrendDays).InclusiveBetween(1, MaxTrendDays);
+    }
+}

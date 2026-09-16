@@ -3,7 +3,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Reveal, revealItem } from "@/components/motion";
 import { Alert, Avatar, Button, Card, DonutChart, Field, KpiCard, PageHeading, Skeleton, cx } from "@/components/ui";
@@ -110,12 +110,35 @@ export default function DashboardPage() {
   // module — otherwise the dashboard would show a permanent 403 card.
   const canReadBookings = getVisibleNavModules(claims).some((module) => module.key === "bookings");
 
-  const [filters, setFilters] = useState<DashboardKpiFilters>({ dateFrom: todayIso, dateTo: todayIso });
-  const [activePreset, setActivePreset] = useState<string | null>("today");
+  // Live filtering (no Apply button): From/To (date pickers) and the preset
+  // buttons apply immediately, while City and Category - free text matched
+  // exactly (case-insensitively) server-side - get the same 300ms debounce
+  // as every other free-text filter in this app, same convention as
+  // customers/page.tsx.
   const [draftFrom, setDraftFrom] = useState(todayIso);
   const [draftTo, setDraftTo] = useState(todayIso);
   const [draftCity, setDraftCity] = useState("");
   const [draftCategory, setDraftCategory] = useState("");
+  const [activePreset, setActivePreset] = useState<string | null>("today");
+
+  const [debouncedCity, setDebouncedCity] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCity(draftCity.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draftCity]);
+
+  const [debouncedCategory, setDebouncedCategory] = useState("");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedCategory(draftCategory.trim()), 300);
+    return () => window.clearTimeout(handle);
+  }, [draftCategory]);
+
+  const filters: DashboardKpiFilters = {
+    dateFrom: draftFrom || undefined,
+    dateTo: draftTo || undefined,
+    city: debouncedCity || undefined,
+    category: debouncedCategory || undefined,
+  };
 
   // Real suggestion lists for the City/Category filters - both stay plain
   // text inputs (never converted to a dropdown), but the server matches them
@@ -208,7 +231,6 @@ export default function DashboardPage() {
     setDraftFrom(range.dateFrom);
     setDraftTo(range.dateTo);
     setActivePreset(preset.key);
-    setFilters((current) => ({ ...current, ...range }));
   };
 
   const onDraftDateChange = (setter: (value: string) => void) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -216,23 +238,14 @@ export default function DashboardPage() {
     setActivePreset(null);
   };
 
-  const applyCustomFilters = () => {
-    setActivePreset(null);
-    setFilters({
-      dateFrom: draftFrom || undefined,
-      dateTo: draftTo || undefined,
-      city: draftCity.trim() || undefined,
-      category: draftCategory.trim() || undefined,
-    });
-  };
-
   const clearFilters = () => {
     setDraftFrom(todayIso);
     setDraftTo(todayIso);
     setDraftCity("");
     setDraftCategory("");
+    setDebouncedCity("");
+    setDebouncedCategory("");
     setActivePreset("today");
-    setFilters({ dateFrom: todayIso, dateTo: todayIso });
   };
 
   const columns: DataTableColumn<AdminBookingListItem>[] = [
@@ -297,10 +310,8 @@ export default function DashboardPage() {
       />
 
       <FilterBar
-        onSubmit={applyCustomFilters}
         onClear={clearFilters}
         activeCount={countActiveFilters(filters)}
-        submitLabel="Apply filters"
         busy={query.isFetching}
         columns={4}
         actions={

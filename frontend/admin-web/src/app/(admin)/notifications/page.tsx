@@ -77,23 +77,23 @@ export default function NotificationTemplatesPage() {
   const pushToast = useToast();
 
   const [filters, setFilters] = useState<TemplateFilters>(EMPTY_FILTERS);
-  const [appliedFilters, setAppliedFilters] = useState<TemplateFilters>(EMPTY_FILTERS);
   const [editingTemplate, setEditingTemplate] = useState<NotificationTemplateResponse | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [draftValues, setDraftValues] = useState<NotificationTemplateFormValues | null>(null);
 
+  // Live filtering (no Search button): all three fields are dropdowns, so
+  // there is nothing to debounce - a change just applies immediately. The
+  // list is unpaged (listNotificationTemplates takes no page parameter), so
+  // there is no page state to reset either.
   const templatesQuery = useQuery({
-    queryKey: ["notification-templates", "list", appliedFilters] as const,
+    queryKey: ["notification-templates", "list", filters] as const,
     queryFn: () =>
       listNotificationTemplates({
-        channel:
-          appliedFilters.channel === "" ? undefined : (Number(appliedFilters.channel) as NotificationChannel),
+        channel: filters.channel === "" ? undefined : (Number(filters.channel) as NotificationChannel),
         eventType:
-          appliedFilters.eventType === ""
-            ? undefined
-            : (Number(appliedFilters.eventType) as NotificationEventType),
-        isActive: appliedFilters.status === "" ? undefined : appliedFilters.status === "true",
+          filters.eventType === "" ? undefined : (Number(filters.eventType) as NotificationEventType),
+        isActive: filters.status === "" ? undefined : filters.status === "true",
       }),
     // Applying a filter dims the current rows rather than replacing the whole
     // table with a skeleton.
@@ -147,15 +147,12 @@ export default function NotificationTemplatesPage() {
     }
   };
 
-  const applyFilters = () => setAppliedFilters(filters);
-
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
   };
 
   const isEditorOpen = canWrite && (isCreating || editingTemplate !== null);
-  const activeFilterCount = countActiveFilters(appliedFilters);
+  const activeFilterCount = countActiveFilters(filters);
 
   return (
     <div className="w-full max-w-7xl">
@@ -218,7 +215,6 @@ export default function NotificationTemplatesPage() {
 
         <FilterBar
           columns={3}
-          onSubmit={applyFilters}
           onClear={clearFilters}
           activeCount={activeFilterCount}
           busy={templatesQuery.isFetching}

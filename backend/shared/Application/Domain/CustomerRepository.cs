@@ -30,5 +30,15 @@ namespace Nestly.Application
         /// so callers keep their own "Unknown" fallback.
         /// </summary>
         Task<IReadOnlyDictionary<Guid, string>> GetNamesByIdsAsync(IReadOnlyCollection<Guid> ids);
+
+        /// <summary>
+        /// The Customer Analytics dashboard's aggregates, in a small,
+        /// bounded set of group-by/count queries rather than loading every
+        /// customer row into memory - mirrors
+        /// <see cref="IProviderRepository.GetOnboardingOverviewCountsAsync"/>'s
+        /// own fetch-then-compute discipline. <paramref name="trendDays"/>
+        /// sizes the registration-trend series and the "new in window" count.
+        /// </summary>
+        Task<CustomerAnalyticsCounts> GetAnalyticsCountsAsync(int trendDays, CancellationToken cancellationToken = default);
     }
 }
