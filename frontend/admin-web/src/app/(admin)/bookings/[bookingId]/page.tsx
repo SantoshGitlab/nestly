@@ -549,7 +549,9 @@ export default function BookingDetailPage() {
             </Card>
           </div>
 
-          {booking.status === BookingStatus.Completed ? <CompletionProofCard bookingId={booking.id} /> : null}
+          {booking.status === BookingStatus.Completed ? (
+            <CompletionProofCard bookingId={booking.id} canWrite={canWrite} />
+          ) : null}
 
           <TrackingCard bookingId={booking.id} bookingStatus={booking.status} />
         </div>
