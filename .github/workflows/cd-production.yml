@@ -170,8 +170,11 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Install dotnet-ef
-        run: dotnet tool install --global dotnet-ef --version 8.*
+      - name: Restore dotnet-ef (local tool)
+        # The repo pins dotnet-ef as a *local* tool (.config/dotnet-tools.json),
+        # so a global install is ignored - `dotnet ef` still refuses to run
+        # ("Run 'dotnet tool restore'...") until the manifest is restored.
+        run: dotnet tool restore
 
       - name: Apply EF Core migrations to production
         # Explicit, ordered deployment step, run before the app deploy step
