@@ -58,6 +58,23 @@ env:
   IMAGE_TAG: staging-${{ github.sha }}
 
 jobs:
+  vars:
+    name: Resolve image repository path
+    runs-on: ubuntu-latest
+    outputs:
+      repo: ${{ steps.lowercase.outputs.repo }}
+    steps:
+      # GHCR (and OCI registries generally) require an all-lowercase image
+      # path; github.repository preserves the actual account/repo casing
+      # (SantoshGitlab/nestly), which buildx then rejects outright with
+      # "invalid tag". Actions expression syntax has no lower() function, so
+      # this is computed once here, in bash, and reused via this job's
+      # output everywhere an image reference is built below - rather than
+      # repeating the same shell lowercasing in every job that needs it.
+      - name: Lowercase repository path
+        id: lowercase
+        run: echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
   test:
     name: Build & test gate
     runs-on: ubuntu-latest
@@ -107,7 +124,7 @@ jobs:
 
   build-and-push:
     name: Build & push images
-    needs: test
+    needs: [test, vars]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -141,8 +158,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/${{ matrix.service }}:${{ env.IMAGE_TAG }}
-            ghcr.io/${{ github.repository }}/${{ matrix.service }}:staging-latest
+            ghcr.io/${{ needs.vars.outputs.repo }}/${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ needs.vars.outputs.repo }}/${{ matrix.service }}:staging-latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
@@ -174,7 +191,7 @@ jobs:
 
   deploy:
     name: Deploy to staging
-    needs: migrate
+    needs: [migrate, vars]
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -205,9 +222,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key "${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}" bash -s <<EOF
             set -euo pipefail
             cd /opt/nestly
-            export CONSUMER_API_IMAGE=ghcr.io/${{ github.repository }}/consumer-api:${{ env.IMAGE_TAG }}
-            export ADMIN_API_IMAGE=ghcr.io/${{ github.repository }}/admin-api:${{ env.IMAGE_TAG }}
-            export PROVIDER_API_IMAGE=ghcr.io/${{ github.repository }}/provider-api:${{ env.IMAGE_TAG }}
+            export CONSUMER_API_IMAGE=ghcr.io/${{ needs.vars.outputs.repo }}/consumer-api:${{ env.IMAGE_TAG }}
+            export ADMIN_API_IMAGE=ghcr.io/${{ needs.vars.outputs.repo }}/admin-api:${{ env.IMAGE_TAG }}
+            export PROVIDER_API_IMAGE=ghcr.io/${{ needs.vars.outputs.repo }}/provider-api:${{ env.IMAGE_TAG }}
             docker compose pull
             docker compose up -d --remove-orphans
             docker image prune -f
