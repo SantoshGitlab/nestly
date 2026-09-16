@@ -12,6 +12,7 @@ using Nestly.BuildingBlocks.Middleware;
 using Nestly.Infrastructure;
 using Nestly.Infrastructure.BackgroundJobs;
 using Nestly.Infrastructure.Options;
+using Nestly.Infrastructure.Persistence.Migrations;
 using Nestly.Infrastructure.Persistence.Readiness;
 using Nestly.Infrastructure.Persistence.Seed;
 using Nestly.Infrastructure.Realtime;
@@ -67,6 +68,12 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// Opt-in schema catch-up (Migrations:ApplyOnStartup) - off unless an
+// operator has explicitly switched it on for this run; see
+// StartupMigrationExtensions for why this runs before every other startup
+// step below, including the permission reconciliation right after it.
+app.ApplyPendingMigrationsIfConfigured();
 
 // Task 332 (QA-REPORT-2026-08-18 bug #5): fills in admin_permission rows for
 // any module added since the last seed migration, and the default-role grants
