@@ -143,15 +143,14 @@ export interface ProviderSearchParams {
 }
 
 /**
- * Provider Onboarding Overview dashboard (Admin Web new page): a
- * cohort-of-the-day funnel. Every count reads providers created on `date` -
- * see the matching C# `AdminProviderOnboardingOverviewResponse`'s doc
- * comment for why these six counts are NOT mutually exclusive partitions of
- * the cohort.
+ * Provider Onboarding Overview dashboard (Admin Web new page): a cumulative
+ * funnel. Every count reads providers created on or before `date` - see the
+ * matching C# `AdminProviderOnboardingOverviewResponse`'s doc comment for why
+ * these six counts are NOT mutually exclusive partitions.
  */
 export interface AdminProviderOnboardingOverview {
   date: string;
-  todayOnboardingCount: number;
+  totalOnboardingCount: number;
   documentVerificationCount: number;
   verifiedCount: number;
   pendingCount: number;

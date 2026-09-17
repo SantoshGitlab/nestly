@@ -348,12 +348,12 @@ function PaymentsSection() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Providers module: `GET /providers/onboarding-overview?date=` - today's
- * registration cohort funnel, the same endpoint `/providers/onboarding`
- * renders as six tiles. The donut reads three onboarding-stage counts
- * (`ProviderOnboardingStatus`, a single field per provider, so these three
- * are mutually exclusive for a given provider - see that page's own doc
- * comment) as today's cohort distribution.
+ * Providers module: `GET /providers/onboarding-overview?date=` - the
+ * cumulative registration funnel as of today, the same endpoint
+ * `/providers/onboarding` renders as six tiles. The donut reads three
+ * onboarding-stage counts (`ProviderOnboardingStatus`, a single field per
+ * provider, so these three are mutually exclusive for a given provider - see
+ * that page's own doc comment) across every provider ever registered.
  */
 function ProvidersSection() {
   const today = todayIsoDate();
@@ -363,8 +363,8 @@ function ProvidersSection() {
   });
 
   const data = query.data;
-  const cohort = data?.todayOnboardingCount ?? 0;
-  const conversion = data && cohort > 0 ? Math.round((data.liveCount / cohort) * 100) : null;
+  const total = data?.totalOnboardingCount ?? 0;
+  const conversion = data && total > 0 ? Math.round((data.liveCount / total) * 100) : null;
 
   const donutData = data
     ? [
@@ -375,7 +375,7 @@ function ProvidersSection() {
     : [];
 
   return (
-    <Card title="Providers" description="Today's onboarding cohort, by stage.">
+    <Card title="Providers" description="Total onboarding funnel, by stage.">
       {query.isPending ? (
         <SectionSkeleton />
       ) : query.isError ? (
@@ -383,18 +383,18 @@ function ProvidersSection() {
       ) : (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
-            <KpiCard icon={<ProviderIcon />} tone="brand" label="Today's onboarding" value={cohort.toLocaleString("en-IN")} />
+            <KpiCard icon={<ProviderIcon />} tone="brand" label="Total onboarding" value={total.toLocaleString("en-IN")} />
             <KpiCard icon={<CheckCircleIcon />} tone="success" label="Live" value={(data?.liveCount ?? 0).toLocaleString("en-IN")} />
           </div>
-          {cohort === 0 ? (
-            <EmptyState title="No providers registered today" description="Nobody has started onboarding yet today." />
+          {total === 0 ? (
+            <EmptyState title="No providers registered" description="Nobody has started onboarding yet." />
           ) : (
             <DonutChart data={donutData} interactive />
           )}
           <Insight>
             {conversion !== null
-              ? `Provider onboarding conversion is ${conversion}% today (${data?.liveCount ?? 0} of ${cohort} registered providers are already live).`
-              : "No providers have registered yet today."}
+              ? `Provider onboarding conversion is ${conversion}% (${data?.liveCount ?? 0} of ${total} registered providers are already live).`
+              : "No providers have registered yet."}
           </Insight>
           <ViewDetailsLink href="/providers/onboarding">View onboarding overview</ViewDetailsLink>
         </div>

@@ -13,28 +13,30 @@ import { ProvidersTabs } from "../_components/ProvidersTabs";
 
 /**
  * Provider Onboarding Overview dashboard (new admin-web page, per the admin's
- * request: "today's registered-provider overview ... counts for today's
- * onboarding, document verification, verified, pending, live/active, with
- * each count clicking through to the filtered provider list").
+ * request: "the overview ... counts for onboarding, document verification,
+ * verified, pending, live/active, with each count clicking through to the
+ * filtered provider list").
  *
- * This is a cohort-of-the-day funnel, not six independent counts: every tile
- * reads providers whose `createdAt` falls on the selected date (default
- * today - same `date` query param, default-to-today convention as the
- * Fulfilment Control Room's own date picker), then asks where that cohort
- * currently stands across two independent dimensions of `Provider`
- * (`ProviderOnboardingStatus` and `ProviderStatus` - see Provider.cs's own
- * doc comments). "Live" and "Active" can both be true of the same provider
- * at once - they are not mutually exclusive buckets, matching
- * `AdminProviderOnboardingOverviewResponse`'s doc comment on the backend.
+ * This is a cumulative funnel, not a single day's cohort
+ * (docs/OPEN-FIXES-FEATURES.csv "Provider Onboarding Overview": counting only
+ * one day's registrations made the tiles look far emptier than the real,
+ * ongoing funnel): every tile reads every provider whose `createdAt` falls on
+ * or before the selected "as of" date (default today - same `date` query
+ * param, default-to-today convention as the Fulfilment Control Room's own
+ * date picker), then asks where that whole set currently stands across two
+ * independent dimensions of `Provider` (`ProviderOnboardingStatus` and
+ * `ProviderStatus` - see Provider.cs's own doc comments). "Live" and "Active"
+ * can both be true of the same provider at once - they are not mutually
+ * exclusive buckets, matching `AdminProviderOnboardingOverviewResponse`'s
+ * doc comment on the backend.
  *
  * Backend: one endpoint, `GET /admin/providers/onboarding-overview?date=`
- * (`getProviderOnboardingOverview`) - a single query on the day's cohort,
- * not six.
+ * (`getProviderOnboardingOverview`) - a single query as-of that date, not six.
  *
  * Each tile is a `KpiCard` (the same stat-tile component `/dashboard`
  * renders its own KPI row with - reused rather than rebuilt) wrapped in a
- * `Link` to `/providers`, pre-filtered to this day's cohort at that stage via
- * the search page's own `status`/`onboardingStatus`/`createdFrom`/`createdTo`
+ * `Link` to `/providers`, pre-filtered to on-or-before this date at that
+ * stage via the search page's own `status`/`onboardingStatus`/`createdTo`
  * query params (see providers/page.tsx's own doc comment on reading them).
  * Processing a provider from there (approve/reject KYC, activate, suspend)
  * reuses the directory's existing detail-page actions - this dashboard adds
@@ -49,20 +51,19 @@ export default function ProviderOnboardingOverviewPage() {
     queryFn: () => getProviderOnboardingOverview(date),
   });
 
-  // Passed as bare local calendar dates (`createdFrom`/`createdTo`), same as
-  // this page's own `date` field - providers/page.tsx converts to the UTC
-  // instants its search API takes (day-range.ts's startOfLocalDayUtc/
-  // endOfLocalDayUtc) the same way this dashboard's own query does, so a
-  // tile lands on exactly the cohort its count summarized.
-  const dayRangeParams = useMemo(() => {
+  // Only an upper bound - this dashboard is cumulative as-of `date`, so a
+  // tile's link must match every provider up to and including it, not just
+  // providers created on that exact day. providers/page.tsx converts to the
+  // UTC instant its search API takes (day-range.ts's endOfLocalDayUtc), the
+  // same way this dashboard's own query does.
+  const asOfParams = useMemo(() => {
     const params = new URLSearchParams();
-    params.set("createdFrom", date);
     params.set("createdTo", date);
     return params;
   }, [date]);
 
   function tileHref(extra?: Record<string, string>): string {
-    const params = new URLSearchParams(dayRangeParams);
+    const params = new URLSearchParams(asOfParams);
     for (const [key, value] of Object.entries(extra ?? {})) params.set(key, value);
     return `/providers?${params.toString()}`;
   }
@@ -77,11 +78,11 @@ export default function ProviderOnboardingOverviewPage() {
   }[] = [
     {
       key: "cohort",
-      label: "Today's onboarding",
+      label: "Total onboarding",
       tone: "brand",
-      value: query.data?.todayOnboardingCount,
+      value: query.data?.totalOnboardingCount,
       href: tileHref(),
-      hint: "Every provider registered on this date, at any stage.",
+      hint: "Every provider registered on or before this date, at any stage.",
     },
     {
       key: "docs",
@@ -129,13 +130,13 @@ export default function ProviderOnboardingOverviewPage() {
     <div className="w-full max-w-6xl">
       <PageHeading
         title="Provider Onboarding Overview"
-        subtitle="Today's registered-provider cohort, by onboarding stage - click a count to see and process those providers."
+        subtitle="Every registered provider as of the selected date, by onboarding stage - click a count to see and process those providers."
       />
       <ProvidersTabs />
 
       <div className="mb-6 mt-6 flex flex-wrap items-end justify-between gap-4">
         <Field
-          label="Date"
+          label="As of date"
           type="date"
           value={date}
           onChange={(event) => setDate(event.target.value)}
@@ -181,7 +182,7 @@ export default function ProviderOnboardingOverviewPage() {
               These six counts are not mutually exclusive buckets - a provider who is both fully onboarded and
               activated counts toward <span className="font-medium text-fg">Live</span> and{" "}
               <span className="font-medium text-fg">Active</span> at once, and every provider in every other tile
-              also counts toward <span className="font-medium text-fg">Today&apos;s onboarding</span>.{" "}
+              also counts toward <span className="font-medium text-fg">Total onboarding</span>.{" "}
               <span className="font-medium text-fg">Document verification</span>,{" "}
               <span className="font-medium text-fg">Verified</span> and <span className="font-medium text-fg">Live</span>{" "}
               read onboarding progress; <span className="font-medium text-fg">Pending</span> and{" "}
