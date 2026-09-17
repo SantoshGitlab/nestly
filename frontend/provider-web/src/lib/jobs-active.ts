@@ -76,6 +76,47 @@ export function pickActiveJob(jobs: readonly JobListItem[]): JobListItem | null 
 }
 
 /**
+ * Statuses where the provider is literally, physically doing the work right
+ * now (docs/OPEN-FIXES-FEATURES.csv "Provider Web, In Progress job own
+ * page"). Deliberately narrower than {@link isActiveJobStatus}'s "still in
+ * flight" set, which also counts `Assigned`/`Accepted`: this mirrors the
+ * backend's own one-active-job rule
+ * (`ProviderActiveJobLimitService.ActiveJobStatuses`, the check behind
+ * `ProviderJobService`'s "Complete your current active job before starting
+ * another one" error), so the exact job blocking a new "Start job" attempt
+ * can always be found here.
+ */
+const IN_PROGRESS_JOB_STATUSES: ReadonlySet<JobStatus> = new Set([
+  JobStatus.EnRoute,
+  JobStatus.Arrived,
+  JobStatus.InProgress,
+]);
+
+export function isInProgressJobStatus(status: JobStatus): boolean {
+  return IN_PROGRESS_JOB_STATUSES.has(status);
+}
+
+/**
+ * Every job the provider is currently, physically working, for the
+ * dedicated Active Job screen. Normally at most one - the backend enforces
+ * that before a job can be started - but this returns however many actually
+ * exist rather than picking a single "best" one (unlike {@link pickActiveJob}):
+ * a provider looking at this screen specifically to find what's blocking a
+ * new job should see every candidate, not have one silently hidden behind
+ * another. Soonest slot first.
+ */
+export function listInProgressJobs(jobs: readonly JobListItem[]): JobListItem[] {
+  return jobs
+    .filter((job) => isInProgressJobStatus(job.status))
+    .slice()
+    .sort((a, b) => {
+      const aKey = `${a.slotDate}T${a.slotStartTimeSnapshot}`;
+      const bKey = `${b.slotDate}T${b.slotStartTimeSnapshot}`;
+      return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+    });
+}
+
+/**
  * Every "offer" currently sitting with this provider - a job `Assigned` to
  * them that they have not yet accepted or declined, per the definition in
  * `docs/OPEN-FIXES-FEATURES.csv`'s "Provider Web, Proposed new page, Job
