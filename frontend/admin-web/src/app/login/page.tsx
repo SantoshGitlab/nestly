@@ -92,14 +92,22 @@ export default function AdminLoginPage() {
             error={form.formState.errors.password?.message}
             {...form.register("password")}
           />
-          <IconButton
-            type="button"
-            label={passwordVisible ? "Hide password" : "Show password"}
-            onClick={() => setPasswordVisible((visible) => !visible)}
-            className="absolute right-1 top-[30px]"
-          >
-            {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
-          </IconButton>
+          {/* The position must go on this wrapper, not IconButton's own
+              className: IconButton's base classes already include `relative`
+              (its hit-slop pseudo-element needs it), and cx() does no
+              Tailwind-conflict dedup - an `absolute` passed in alongside that
+              `relative` loses the cascade, leaving the button in normal flow
+              instead of over the input (docs/OPEN-FIXES-FEATURES.csv
+              "Provider sign in password toggle misplaced"). */}
+          <div className="absolute right-1 top-[30px]">
+            <IconButton
+              type="button"
+              label={passwordVisible ? "Hide password" : "Show password"}
+              onClick={() => setPasswordVisible((visible) => !visible)}
+            >
+              {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+            </IconButton>
+          </div>
         </div>
         <Button type="submit" size="lg" fullWidth loading={form.formState.isSubmitting}>
           Sign in
