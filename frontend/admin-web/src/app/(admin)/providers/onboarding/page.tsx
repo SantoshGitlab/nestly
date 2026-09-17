@@ -178,16 +178,28 @@ export default function ProviderOnboardingOverviewPage() {
           </div>
 
           <Card className="mt-6" title="How to read this">
-            <p className="text-sm text-fg-muted">
-              These six counts are not mutually exclusive buckets - a provider who is both fully onboarded and
-              activated counts toward <span className="font-medium text-fg">Live</span> and{" "}
-              <span className="font-medium text-fg">Active</span> at once, and every provider in every other tile
-              also counts toward <span className="font-medium text-fg">Total onboarding</span>.{" "}
-              <span className="font-medium text-fg">Document verification</span>,{" "}
-              <span className="font-medium text-fg">Verified</span> and <span className="font-medium text-fg">Live</span>{" "}
-              read onboarding progress; <span className="font-medium text-fg">Pending</span> and{" "}
-              <span className="font-medium text-fg">Active</span> read the account&apos;s operational status - the
-              two independent fields on a provider record (PROVIDER.md).
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">Onboarding progress</p>
+                <p className="mt-1.5 text-sm text-fg-muted">
+                  Has this provider finished signing up? <span className="font-medium text-fg">Document verification</span>{" "}
+                  → <span className="font-medium text-fg">Verified</span> →{" "}
+                  <span className="font-medium text-fg">Live</span> is the order it happens in.{" "}
+                  <span className="font-medium text-fg">Total onboarding</span> is everyone, at any stage.
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">Account status</p>
+                <p className="mt-1.5 text-sm text-fg-muted">
+                  Can this provider get jobs right now? <span className="font-medium text-fg">Pending</span> = not yet
+                  activated. <span className="font-medium text-fg">Active</span> = activated and assignable.
+                </p>
+              </div>
+            </div>
+            <p className="mt-4 border-t border-line pt-4 text-sm text-fg-muted">
+              These are two separate questions about the same provider, so counts overlap — a provider who is both{" "}
+              <span className="font-medium text-fg">Live</span> and <span className="font-medium text-fg">Active</span>{" "}
+              is counted in both tiles, not split between them.
             </p>
           </Card>
         </>
