@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/ui";
 import { canWriteModule } from "@/lib/permissions";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 import { CoverageGapsSection } from "../_components/CoverageGapsSection";
+import { MappedWithActiveProviderCoverageSection } from "../_components/MappedWithActiveProviderCoverageSection";
 import { MappedWithoutProviderCoverageSection } from "../_components/MappedWithoutProviderCoverageSection";
 import { ServiceabilityTabs } from "../_components/ServiceabilityTabs";
 import { UnmappedActiveServicesSection } from "../_components/UnmappedActiveServicesSection";
@@ -19,6 +20,9 @@ import { UnmappedActiveServicesSection } from "../_components/UnmappedActiveServ
  *   3. No coverage at all — an active service with neither, which shows up in
  *      quadrant 1 regardless of provider coverage (see that endpoint's doc
  *      comment: it does not depend on provider state).
+ *   4. Has mapping AND active provider — {@link MappedWithActiveProviderCoverageSection},
+ *      the "what's actually live" positive case the other quadrants don't
+ *      show (they only ever list gaps).
  *
  * Also surfaces the reverse of quadrant 1 — provider coverage with no mapping
  * yet ({@link CoverageGapsSection}) — completing the cross-reference between
@@ -45,6 +49,7 @@ export default function CoverageGapMapPage() {
         <UnmappedActiveServicesSection canWrite={canWrite} />
         <CoverageGapsSection canWrite={canWrite} />
         <MappedWithoutProviderCoverageSection />
+        <MappedWithActiveProviderCoverageSection />
       </div>
     </div>
   );

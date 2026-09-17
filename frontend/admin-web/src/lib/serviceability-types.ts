@@ -162,3 +162,16 @@ export interface MappedPincodeWithoutProviderCoverageResponse {
   pincodeId: string;
   pincodeCode: string;
 }
+
+/**
+ * The opposite of {@link MappedPincodeWithoutProviderCoverageResponse}: an
+ * active mapping that at least one active provider can actually fulfil.
+ */
+export interface MappedPincodeWithActiveProviderCoverageResponse {
+  mappingId: string;
+  serviceId: string;
+  serviceName: string;
+  pincodeId: string;
+  pincodeCode: string;
+  activeProviderCount: number;
+}

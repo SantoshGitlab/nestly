@@ -93,3 +93,18 @@ public sealed record MappedPincodeWithoutProviderCoverageResponse(
     string ServiceName,
     Guid PincodeId,
     string PincodeCode);
+
+/// <summary>
+/// The opposite quadrant of <see cref="MappedPincodeWithoutProviderCoverageResponse"/>:
+/// an active mapping that at least one active provider can actually fulfil,
+/// with how many. Answers "which services are live and bookable right now",
+/// which the coverage gap map's other three quadrants (all gap/warning lists)
+/// don't surface on their own.
+/// </summary>
+public sealed record MappedPincodeWithActiveProviderCoverageResponse(
+    Guid MappingId,
+    Guid ServiceId,
+    string ServiceName,
+    Guid PincodeId,
+    string PincodeCode,
+    int ActiveProviderCount);

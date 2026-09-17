@@ -338,6 +338,10 @@ public class ServiceabilityMappingManagementService : IServiceabilityMappingMana
     public Task<IReadOnlyList<MappedPincodeWithoutProviderCoverageResponse>> ListMappedPincodesWithoutProviderCoverageAsync() =>
         _servicePincodeMappingRepository.ListMappedPincodesWithoutProviderCoverageAsync();
 
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<MappedPincodeWithActiveProviderCoverageResponse>> ListMappedPincodesWithActiveProviderCoverageAsync() =>
+        _servicePincodeMappingRepository.ListMappedPincodesWithActiveProviderCoverageAsync();
+
     /// <summary>
     /// The <c>FeatureFlagSettings.AutoManageServiceabilityEnabled</c> kill
     /// switch. Fails open (treats the flag as enabled) when the settings
