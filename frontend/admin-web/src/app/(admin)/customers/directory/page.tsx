@@ -38,13 +38,16 @@ interface FilterFormState {
   status: string;
   /**
    * Form-hidden (no visible input - see this page's own doc comment): only
-   * ever set by the Customer Analytics dashboard's "With bookings"/"Zero
-   * bookings" tiles (`?minBookingCount=1`/`?maxBookingCount=0`), never typed
-   * by an admin. Still read from the URL and sent to the API like every
-   * other filter, or a tile click-through would silently do nothing.
+   * ever set by the Customer Analytics dashboard's tiles - "With bookings"/
+   * "Zero bookings" (`?minBookingCount=1`/`?maxBookingCount=0`) and "New
+   * today"/"New last 7 days"/"New last N days" (`?registeredFromUtc=...`,
+   * an ISO instant) - never typed by an admin. Still read from the URL and
+   * sent to the API like every other filter, or a tile click-through would
+   * silently do nothing.
    */
   minBookingCount: string;
   maxBookingCount: string;
+  registeredFromUtc: string;
 }
 
 const EMPTY_FILTERS: FilterFormState = {
@@ -55,6 +58,7 @@ const EMPTY_FILTERS: FilterFormState = {
   status: "",
   minBookingCount: "",
   maxBookingCount: "",
+  registeredFromUtc: "",
 };
 
 /**
@@ -73,6 +77,7 @@ function filtersFromSearchParams(params: URLSearchParams): FilterFormState {
     status: params.get("status") ?? "",
     minBookingCount: params.get("minBookingCount") ?? "",
     maxBookingCount: params.get("maxBookingCount") ?? "",
+    registeredFromUtc: params.get("registeredFromUtc") ?? "",
   };
 }
 
@@ -93,17 +98,21 @@ function buildQueryString(filters: FilterFormState, page: number): string {
     status: filters.status === "" ? undefined : (Number(filters.status) as CustomerStatus),
     minBookingCount: filters.minBookingCount === "" ? undefined : Number(filters.minBookingCount),
     maxBookingCount: filters.maxBookingCount === "" ? undefined : Number(filters.maxBookingCount),
+    registeredFromUtc: filters.registeredFromUtc || undefined,
     page,
     pageSize: PAGE_SIZE,
   });
 }
 
 /**
- * Customer search/list screen (SRS 12.4.1, task 102). Filters by name,
- * mobile, email, city and account status - the full SRS 12.4.1 filter list
- * also includes registration date and booking count, which are supported by
- * the API (CustomerSearchParams) but left off this form for now to keep the
- * first cut usable; add fields here without any backend change when needed.
+ * Customer search/list screen (SRS 12.4.1, task 102). Visible filters are
+ * name, mobile, email, city and account status; registration date
+ * (`registeredFromUtc`) and booking count (`minBookingCount`/
+ * `maxBookingCount`) are supported by the API and wired into this page's
+ * state, but have no visible form inputs of their own - they exist purely so
+ * the Customer Analytics dashboard's tile click-throughs actually filter
+ * (see FilterFormState's own doc comment). Add real inputs for them here
+ * without any backend change when needed.
  *
  * Built on the task 221 pattern. Columns are deliberately NOT sortable: the
  * list is paged server-side and the endpoint takes no sort parameter, so a
@@ -179,6 +188,7 @@ function CustomersPageContent() {
     filters.status,
     filters.minBookingCount,
     filters.maxBookingCount,
+    filters.registeredFromUtc,
   ]);
 
   // Live typeahead for Name - reuses the same customer search this page
@@ -209,6 +219,7 @@ function CustomersPageContent() {
       filters.status,
       filters.minBookingCount,
       filters.maxBookingCount,
+      filters.registeredFromUtc,
     ] as const,
     queryFn: () =>
       apiFetch<CustomerSearchResponse>(
@@ -221,6 +232,7 @@ function CustomersPageContent() {
             status: filters.status,
             minBookingCount: filters.minBookingCount,
             maxBookingCount: filters.maxBookingCount,
+            registeredFromUtc: filters.registeredFromUtc,
           },
           page,
         )}`,
