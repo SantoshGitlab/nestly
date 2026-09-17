@@ -108,3 +108,9 @@ public sealed record MappedPincodeWithActiveProviderCoverageResponse(
     Guid PincodeId,
     string PincodeCode,
     int ActiveProviderCount);
+
+/// <summary>One active provider covering a given mapping's (service, pincode) pair, for the coverage map's provider-list drill-down.</summary>
+public sealed record MappingCoveringProviderResponse(
+    Guid ProviderId,
+    string DisplayName,
+    string Phone);

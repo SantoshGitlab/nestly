@@ -188,4 +188,7 @@ public interface IServiceabilityMappingManagementService
     /// <see cref="ListMappedPincodesWithoutProviderCoverageAsync"/>.
     /// </summary>
     Task<IReadOnlyList<MappedPincodeWithActiveProviderCoverageResponse>> ListMappedPincodesWithActiveProviderCoverageAsync();
+
+    /// <summary>Drill-down for one row of <see cref="ListMappedPincodesWithActiveProviderCoverageAsync"/>: which providers.</summary>
+    Task<IReadOnlyList<MappingCoveringProviderResponse>> ListActiveProvidersForMappingAsync(Guid mappingId);
 }

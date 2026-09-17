@@ -175,3 +175,10 @@ export interface MappedPincodeWithActiveProviderCoverageResponse {
   pincodeCode: string;
   activeProviderCount: number;
 }
+
+/** One active provider covering a mapping's (service, pincode) pair - the coverage drill-down row. */
+export interface MappingCoveringProviderResponse {
+  providerId: string;
+  displayName: string;
+  phone: string;
+}

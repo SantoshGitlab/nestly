@@ -83,6 +83,14 @@ public interface IServicePincodeMappingRepository : IRepository<ServicePincodeMa
     Task<IReadOnlyList<MappedPincodeWithActiveProviderCoverageResponse>> ListMappedPincodesWithActiveProviderCoverageAsync();
 
     /// <summary>
+    /// The active providers actually covering one mapping's (service, pincode)
+    /// pair - same eligibility as <see cref="ListMappedPincodesWithActiveProviderCoverageAsync"/>,
+    /// scoped to a single mapping for the coverage map's provider-list
+    /// drill-down. Empty if the mapping doesn't exist or isn't active.
+    /// </summary>
+    Task<IReadOnlyList<MappingCoveringProviderResponse>> ListActiveProvidersForMappingAsync(Guid mappingId);
+
+    /// <summary>
     /// Mappings with a pending auto-disable timer (<see cref="ServicePincodeMapping.PendingAutoDisableSince"/>)
     /// that was set at or before <paramref name="cutoffUtc"/> - i.e. their
     /// grace period has fully elapsed. The trigger query for
