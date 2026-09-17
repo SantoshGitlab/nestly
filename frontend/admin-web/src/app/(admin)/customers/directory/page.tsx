@@ -36,9 +36,26 @@ interface FilterFormState {
   email: string;
   city: string;
   status: string;
+  /**
+   * Form-hidden (no visible input - see this page's own doc comment): only
+   * ever set by the Customer Analytics dashboard's "With bookings"/"Zero
+   * bookings" tiles (`?minBookingCount=1`/`?maxBookingCount=0`), never typed
+   * by an admin. Still read from the URL and sent to the API like every
+   * other filter, or a tile click-through would silently do nothing.
+   */
+  minBookingCount: string;
+  maxBookingCount: string;
 }
 
-const EMPTY_FILTERS: FilterFormState = { name: "", mobile: "", email: "", city: "", status: "" };
+const EMPTY_FILTERS: FilterFormState = {
+  name: "",
+  mobile: "",
+  email: "",
+  city: "",
+  status: "",
+  minBookingCount: "",
+  maxBookingCount: "",
+};
 
 /**
  * Seeds the filter form from the URL's query params - the Customer Analytics
@@ -54,6 +71,8 @@ function filtersFromSearchParams(params: URLSearchParams): FilterFormState {
     email: params.get("email") ?? "",
     city: params.get("city") ?? "",
     status: params.get("status") ?? "",
+    minBookingCount: params.get("minBookingCount") ?? "",
+    maxBookingCount: params.get("maxBookingCount") ?? "",
   };
 }
 
@@ -72,6 +91,8 @@ function buildQueryString(filters: FilterFormState, page: number): string {
     email: filters.email || undefined,
     city: filters.city || undefined,
     status: filters.status === "" ? undefined : (Number(filters.status) as CustomerStatus),
+    minBookingCount: filters.minBookingCount === "" ? undefined : Number(filters.minBookingCount),
+    maxBookingCount: filters.maxBookingCount === "" ? undefined : Number(filters.maxBookingCount),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -150,7 +171,15 @@ function CustomersPageContent() {
   // payments/reconciliation/page.tsx).
   useEffect(() => {
     setPage(1);
-  }, [debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status]);
+  }, [
+    debouncedName,
+    debouncedMobile,
+    debouncedEmail,
+    debouncedCity,
+    filters.status,
+    filters.minBookingCount,
+    filters.maxBookingCount,
+  ]);
 
   // Live typeahead for Name - reuses the same customer search this page
   // already calls, same pattern as bookings/page.tsx's Booking # suggestions
@@ -170,11 +199,29 @@ function CustomersPageContent() {
   });
 
   const query = useQuery({
-    queryKey: ["admin-customers", page, debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status] as const,
+    queryKey: [
+      "admin-customers",
+      page,
+      debouncedName,
+      debouncedMobile,
+      debouncedEmail,
+      debouncedCity,
+      filters.status,
+      filters.minBookingCount,
+      filters.maxBookingCount,
+    ] as const,
     queryFn: () =>
       apiFetch<CustomerSearchResponse>(
         `${API_V1}/customers?${buildQueryString(
-          { name: debouncedName, mobile: debouncedMobile, email: debouncedEmail, city: debouncedCity, status: filters.status },
+          {
+            name: debouncedName,
+            mobile: debouncedMobile,
+            email: debouncedEmail,
+            city: debouncedCity,
+            status: filters.status,
+            minBookingCount: filters.minBookingCount,
+            maxBookingCount: filters.maxBookingCount,
+          },
           page,
         )}`,
         { authenticated: true },
