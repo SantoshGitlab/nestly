@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, forwardRef, useContext, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -26,24 +27,24 @@ import type {
  * The three are NOT byte-identical, and have not been since customer-web grew
  * UI the other two never needed. This comment used to claim they were, which
  * sent a reader looking for a drift bug that was really a deliberate feature
- * (tasks.csv 336, 362). The truth: admin-web and provider-web ARE byte-
- * identical to each other; customer-web is that same file plus five intended
- * additions, listed here so nobody "restores" them by syncing the files:
+ * (tasks.csv 336, 362). Known deltas, listed here so nobody "fixes" them by
+ * re-syncing the files:
  *
- *   1. `hideLabel` on `FieldShell`/`Field` - renders the label `sr-only`, for
- *      the inline coupon-code field.
- *   2. `LinkButton` - a `next/link` anchor sharing `BUTTON_VARIANTS` and
- *      `BUTTON_SIZES`, so a navigation control can look like a button without
- *      pretending to be one.
- *   3. A `danger-soft` entry in `BUTTON_VARIANTS`.
+ *   1. `hideLabel` on `FieldShell`/`Field` (customer-web only) - renders the
+ *      label `sr-only`, for the inline coupon-code field.
+ *   2. `LinkButton` (customer-web only) - a `next/link` anchor sharing
+ *      `BUTTON_VARIANTS` and `BUTTON_SIZES`, so a navigation control can look
+ *      like a button without pretending to be one.
+ *   3. A `danger-soft` entry in `BUTTON_VARIANTS` (customer-web only).
  *   4. `Modal` portals to `document.body` via `createPortal` - a
- *      `backdrop-blur-md` ancestor makes `fixed inset-0` position against that
- *      ancestor rather than the viewport.
- *   5. The imports those four need: `next/link`, `createPortal`,
- *      `AnchorHTMLAttributes`.
+ *      `transform`/`filter`/`backdrop-filter` ancestor (e.g. `backdrop-blur-md`
+ *      on a sticky header) makes `fixed inset-0` position against that
+ *      ancestor rather than the viewport. All three apps now have this fix.
+ *   5. admin-web's `LineChart` has an `interactive` crosshair+tooltip mode
+ *      (and exports `CHART_TONES`) that provider-web's copy does not yet have.
  *
- * Porting one of those INTO another app is fine. Deleting it from customer-web
- * to make a diff come out clean is not.
+ * Porting one of those INTO another app is fine. Deleting it to make a diff
+ * come out clean is not.
  */
 
 /** Joins conditional class names, dropping falsy entries. */
@@ -1673,7 +1674,17 @@ export function Modal({
 
   const sizes = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" } as const;
 
-  return (
+  // Portalled to <body> rather than rendered in place: `fixed inset-0` only
+  // covers the actual viewport if every ancestor is un-filtered/untransformed
+  // - a `backdrop-filter`/`filter`/`transform` anywhere up the tree (e.g.
+  // AdminHeader's `backdrop-blur-md`) makes that ancestor the containing
+  // block instead, so a Modal opened from inside it renders squashed into
+  // that ancestor's own (much shorter) box instead of centered on the page -
+  // this is exactly what happened to GlobalSearch's palette, nested inside
+  // AdminHeader. A portal sidesteps the whole class of bug instead of
+  // requiring every future trigger location to stay filter/transform-free
+  // above it. Same fix customer-web's Modal already has for the same reason.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
       <div
         className="absolute inset-0 animate-fade-in bg-overlay/50 backdrop-blur-[2px]"
@@ -1690,7 +1701,17 @@ export function Modal({
         className={cx(
           // Borderless, shadow-only - matches the Card/DataTable treatment
           // (and the MatDash reference's card style generally).
-          "relative w-full animate-pop rounded-t-2xl bg-surface shadow-xl outline-none sm:rounded-2xl",
+          //
+          // flex flex-col + max-h-[90vh]: the header/footer used to have no
+          // height cap of their own - only the body below did - so a modal
+          // whose header+body+footer together exceeded the viewport (a tall
+          // result list, a short browser window) overflowed the outer
+          // `items-center` flex container equally top and bottom, pushing
+          // the title/close-button/search-field off the top of the screen
+          // with nothing visible to scroll it back into view. Capping the
+          // whole panel and letting only the body (flex-1 below) grow/scroll
+          // keeps header and footer always on screen.
+          "relative flex max-h-[90vh] w-full flex-col animate-pop rounded-t-2xl bg-surface shadow-xl outline-none sm:rounded-2xl",
           // Clears an iPhone's home-indicator bar in the bottom-sheet state;
           // reset on desktop where the dialog is centered, not sheet-anchored.
           "pb-[env(safe-area-inset-bottom)] sm:pb-0",
@@ -1717,7 +1738,7 @@ export function Modal({
           <span className="h-1.5 w-10 rounded-full bg-line-strong" aria-hidden />
         </div>
 
-        <div className="flex items-start justify-between gap-4 px-6 pt-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6">
           <div className="min-w-0">
             <h2 id={titleId} className="text-lg font-semibold text-fg">
               {title}
@@ -1743,15 +1764,16 @@ export function Modal({
           </IconButton>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
 
         {footer ? (
-          <div className="flex justify-end gap-3 border-t border-line bg-surface-2 px-6 py-4">
+          <div className="flex shrink-0 justify-end gap-3 border-t border-line bg-surface-2 px-6 py-4">
             {footer}
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
