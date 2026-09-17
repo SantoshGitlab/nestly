@@ -349,8 +349,8 @@ function PaymentsSection() {
 
 /**
  * Providers module: `GET /providers/onboarding-overview?date=` - the
- * cumulative registration funnel as of today, the same endpoint
- * `/providers/onboarding` renders as six tiles. The donut reads three
+ * cumulative registration funnel as of today, the same endpoint the
+ * `/providers` landing dashboard renders as six tiles. The donut reads three
  * onboarding-stage counts (`ProviderOnboardingStatus`, a single field per
  * provider, so these three are mutually exclusive for a given provider - see
  * that page's own doc comment) across every provider ever registered.
@@ -396,7 +396,7 @@ function ProvidersSection() {
               ? `Provider onboarding conversion is ${conversion}% (${data?.liveCount ?? 0} of ${total} registered providers are already live).`
               : "No providers have registered yet."}
           </Insight>
-          <ViewDetailsLink href="/providers/onboarding">View onboarding overview</ViewDetailsLink>
+          <ViewDetailsLink href="/providers">View onboarding overview</ViewDetailsLink>
         </div>
       )}
     </Card>
@@ -411,11 +411,11 @@ const CUSTOMER_TREND_DAYS = 30;
 
 /**
  * Customers module: `GET /customers/analytics?trendDays=30` - the same
- * endpoint `/customers/analytics` uses for its own tiles and trend graph.
- * The area chart is that page's registration trend verbatim, rendered with
- * `interactive` so this flagship page gets the hover crosshair+tooltip
- * upgrade (`/customers/analytics` itself keeps rendering non-interactive,
- * unaffected by the new opt-in prop).
+ * endpoint the Customer Analytics dashboard (`/customers`, the module's
+ * landing page) uses for its own tiles and trend graph. The area chart is
+ * that page's registration trend verbatim, rendered with `interactive` so
+ * this flagship page gets the hover crosshair+tooltip upgrade (`/customers`
+ * itself keeps rendering non-interactive, unaffected by the new opt-in prop).
  */
 function CustomersSection() {
   const query = useQuery({
@@ -456,7 +456,7 @@ function CustomersSection() {
               ? `${activationRate}% of customers have completed at least one booking.`
               : "No customers registered yet."}
           </Insight>
-          <ViewDetailsLink href="/customers/analytics">View customer analytics</ViewDetailsLink>
+          <ViewDetailsLink href="/customers">View customer analytics</ViewDetailsLink>
         </div>
       )}
     </Card>
