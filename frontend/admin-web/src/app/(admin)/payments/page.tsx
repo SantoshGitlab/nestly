@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Badge, Field, PageHeading, Select } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import {
   DataTable,
   FilterBar,
@@ -93,9 +94,10 @@ export default function PaymentsPage() {
   });
 
   // Any filter change resets to page 1 - same pattern as customers/page.tsx.
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedBookingSearch, filters.status, filters.fromDate, filters.toDate]);
+  useResetOnChange(
+    [debouncedBookingSearch, filters.status, filters.fromDate, filters.toDate],
+    () => setPage(1),
+  );
 
   const query = useQuery({
     queryKey: ["admin-payments", debouncedBookingSearch, filters.status, filters.fromDate, filters.toDate, page],

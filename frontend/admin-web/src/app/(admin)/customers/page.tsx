@@ -14,6 +14,7 @@ import {
 } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { CustomerStatusBadge } from "@/components/status-badges";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { API_V1, apiFetch } from "@/lib/api";
 import { listCities } from "@/lib/serviceability-api";
 import { CustomerStatus } from "@/lib/types";
@@ -148,9 +149,10 @@ function CustomersPageContent() {
   // Any filter change resets to page 1 - staying on page 3 of a now-smaller
   // result set would just show an empty page (same pattern as
   // payments/reconciliation/page.tsx).
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status]);
+  useResetOnChange(
+    [debouncedName, debouncedMobile, debouncedEmail, debouncedCity, filters.status],
+    () => setPage(1),
+  );
 
   // Live typeahead for Name - reuses the same customer search this page
   // already calls, same pattern as bookings/page.tsx's Booking # suggestions

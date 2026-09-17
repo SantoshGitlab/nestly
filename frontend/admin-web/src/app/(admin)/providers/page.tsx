@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Alert, Badge, Button, Field, Modal, PageHeading, Select } from "@/components/ui";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import {
   DataTable,
   ExportCsvButton,
@@ -176,9 +177,10 @@ function ProvidersPageContent() {
   // Any filter change resets to page 1 - staying on page 3 of a now-smaller
   // result set would just show an empty page (same pattern as
   // payments/reconciliation/page.tsx).
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedName, debouncedPhone, filters.status, filters.onboardingStatus, filters.cityId, filters.createdFrom, filters.createdTo]);
+  useResetOnChange(
+    [debouncedName, debouncedPhone, filters.status, filters.onboardingStatus, filters.cityId, filters.createdFrom, filters.createdTo],
+    () => setPage(1),
+  );
 
   // Live typeahead for Name - reuses the same server-side search this page
   // already calls (searchProviders), same pattern as bookings/page.tsx's

@@ -3,6 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, EmptyState, Field, PageHeading, Select, Skeleton } from "@/components/ui";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import {
   ConfirmDialog,
   FilterBar,
@@ -127,18 +128,19 @@ export default function ReviewModerationPage() {
 
   // Any filter change resets to page 1 - staying on a now out-of-range page
   // would just show an empty result (same pattern as customers/page.tsx).
-  useEffect(() => {
-    setPage(1);
-  }, [
-    debouncedServiceId,
-    debouncedCategoryId,
-    debouncedMinRating,
-    debouncedMaxRating,
-    draft.status,
-    draft.flagged,
-    draft.fromDate,
-    draft.toDate,
-  ]);
+  useResetOnChange(
+    [
+      debouncedServiceId,
+      debouncedCategoryId,
+      debouncedMinRating,
+      debouncedMaxRating,
+      draft.status,
+      draft.flagged,
+      draft.fromDate,
+      draft.toDate,
+    ],
+    () => setPage(1),
+  );
 
   const query = useQuery({
     queryKey: ["admin-reviews", effectiveFilters, page],

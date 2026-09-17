@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Badge, Button, Field, PageHeading, Select } from "@/components/ui";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { TicketPriorityBadge, TicketStatusBadge } from "@/components/status-badges";
 import { searchBookings } from "@/lib/bookings-api";
 import { listAssignableAdmins, searchSupportTickets } from "@/lib/support-api";
@@ -105,19 +106,20 @@ export default function SupportTicketsPage() {
   };
 
   // Any filter change resets to page 1 (same pattern as customers/page.tsx).
-  useEffect(() => {
-    setPage(1);
-  }, [
-    draft.status,
-    draft.category,
-    draft.priority,
-    draft.unassigned,
-    draft.fromDate,
-    draft.toDate,
-    debouncedCustomerId,
-    debouncedBookingSearch,
-    debouncedAssignedAdminUserId,
-  ]);
+  useResetOnChange(
+    [
+      draft.status,
+      draft.category,
+      draft.priority,
+      draft.unassigned,
+      draft.fromDate,
+      draft.toDate,
+      debouncedCustomerId,
+      debouncedBookingSearch,
+      debouncedAssignedAdminUserId,
+    ],
+    () => setPage(1),
+  );
 
   const query = useQuery({
     queryKey: ["admin-support-tickets", liveFilters, page],

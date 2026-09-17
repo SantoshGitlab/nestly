@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Reveal, revealItem } from "@/components/motion";
+import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Badge, Button, Card, Field, PageHeading, Select, Skeleton, StatTile } from "@/components/ui";
 import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
@@ -79,9 +80,7 @@ export default function RecurringPlansPage() {
   // Live filtering (no Search button): both fields are dropdowns, so there is
   // nothing to debounce - a change applies immediately, same as the Account
   // status field in customers/page.tsx.
-  useEffect(() => {
-    setPage(1);
-  }, [filters.status, filters.frequency]);
+  useResetOnChange([filters.status, filters.frequency], () => setPage(1));
 
   const listQuery = useQuery({
     queryKey: ["recurring-plans", "list", filters, page] as const,
