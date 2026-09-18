@@ -329,8 +329,20 @@ function buildDetectedAddressLabel(displayName: string, cityName: string): strin
     .join(", ");
 }
 
-function namesMatch(candidate: string, name: string): boolean {
-  return candidate.includes(name) || name.includes(candidate);
+/**
+ * Whole-word containment rather than raw substring: Nominatim/seed names are
+ * routinely multi-word ("Vaishali Nagar", "Malviya Nagar", "Shastri Nagar"),
+ * and a plain `.includes()` lets a single common word shared by many
+ * unrelated areas ("Nagar", "Colony", "Road") match any of them. Requiring
+ * every word of the shorter name to appear as a whole word in the longer one
+ * still matches genuine partial results (OSM returning "Mansarovar" for a
+ * seeded "Mansarovar Extension", or vice versa) without matching two areas
+ * that merely share one generic word.
+ */
+function namesMatch(a: string, b: string): boolean {
+  const wordsOf = (value: string) => value.split(/[^a-z0-9]+/).filter(Boolean);
+  const [shorter, longer] = wordsOf(a).length <= wordsOf(b).length ? [wordsOf(a), wordsOf(b)] : [wordsOf(b), wordsOf(a)];
+  return shorter.length > 0 && shorter.every((word) => longer.includes(word));
 }
 
 /** Matches a reverse-geocoded address against Glavyx's serviceable cities. */
@@ -346,31 +358,44 @@ function matchCity(address: NominatimAddress, cities: City[]): City | null {
 
 /**
  * Matches a reverse-geocoded address against the admin-seeded areas within
- * one already-matched city. Matched by area name first, not postcode:
- * OpenStreetMap's crowd-sourced `postcode` tagging in India is often
- * imprecise or street-level rather than the official India Post PIN (spot-
- * checked against this app's own seed data - the same coordinates that
- * clearly sit inside a seeded "Mansarovar" area came back tagged with a
- * different postcode than that area's seeded PIN code), so requiring an
- * exact postcode match would silently miss real matches. A postcode match is
- * still accepted as an alternate signal, since it costs nothing when it
- * happens to line up. No match (customer is inside a serviceable city but
- * an area Glavyx hasn't onboarded yet) is a normal outcome, not a failure -
- * the caller leaves the city-only selection in place rather than inventing
- * an unserviceable area.
+ * one already-matched city.
+ *
+ * Tried finest-grained field first: `neighbourhood` is the closest OSM
+ * equivalent to a seeded Locality, `suburb` and `quarter` progressively
+ * coarser, and `city_district` coarser still - it can span several actual
+ * seeded localities, so a match against it alone is the least trustworthy
+ * signal and is only consulted once every finer field has come up empty.
+ * Whichever field is tried, every locality is checked against it before
+ * moving on to the next, coarser field - so a `neighbourhood` match for a
+ * *different* candidate locality is still preferred over a `city_district`
+ * match, rather than the two being pooled together as equally good.
+ *
+ * Postcode is a fallback signal only, tried after every name field: OSM's
+ * crowd-sourced `postcode` tagging in India is often imprecise or
+ * street-level rather than the official India Post PIN (spot-checked
+ * against this app's own seed data - the same coordinates that clearly sit
+ * inside a seeded "Mansarovar" area came back tagged with a different
+ * postcode than that area's seeded PIN code), so it is not trusted to
+ * override a name-based result the way it used to.
+ *
+ * No match (customer is inside a serviceable city but an area Glavyx hasn't
+ * onboarded yet) is a normal outcome, not a failure - the caller leaves the
+ * city-only selection in place rather than inventing an unserviceable area.
  */
 function matchLocality(address: NominatimAddress, localities: LocalitySearchResult[]): LocalitySearchResult | null {
   if (localities.length === 0) return null;
 
-  const candidateNames = [address.neighbourhood, address.suburb, address.quarter, address.city_district]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => value.toLowerCase());
+  const fieldsByGranularity = [address.neighbourhood, address.suburb, address.quarter, address.city_district];
+  for (const field of fieldsByGranularity) {
+    if (!field) continue;
+    const candidate = field.toLowerCase();
+    const match = localities.find((locality) => namesMatch(candidate, locality.name.toLowerCase()));
+    if (match) return match;
+  }
 
-  return (
-    localities.find((locality) => {
-      if (address.postcode && address.postcode === locality.pincodeCode) return true;
-      const name = locality.name.toLowerCase();
-      return candidateNames.some((candidate) => namesMatch(candidate, name));
-    }) ?? null
-  );
+  if (address.postcode) {
+    return localities.find((locality) => address.postcode === locality.pincodeCode) ?? null;
+  }
+
+  return null;
 }
