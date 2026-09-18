@@ -27,6 +27,8 @@ export interface AdminFixture {
   seededAdminUserFullName: string;
   sampleBookingId: string;
   sampleBookingCustomerName: string;
+  /** What the Bookings list's "Booking #" filter actually searches - see seed-booking.ts's PaidBookingFixture. */
+  sampleBookingReference: string;
 }
 
 interface AdminLoginResponse {
@@ -100,7 +102,7 @@ export async function seedAdmin(): Promise<AdminFixture> {
     const twoDaysOut = new Date();
     twoDaysOut.setDate(twoDaysOut.getDate() + 2);
     const seeded = await createPaidBooking(catalog, session.accessToken, twoDaysOut.toISOString().slice(0, 10));
-    sampleBooking = { id: seeded.bookingId, customerName: seeded.customerName };
+    sampleBooking = { id: seeded.bookingId, customerName: seeded.customerName, reference: seeded.reference };
   }
 
   return {
@@ -112,5 +114,6 @@ export async function seedAdmin(): Promise<AdminFixture> {
     seededAdminUserFullName: "E2E Admin User",
     sampleBookingId: sampleBooking.id,
     sampleBookingCustomerName: sampleBooking.customerName,
+    sampleBookingReference: sampleBooking.reference,
   };
 }

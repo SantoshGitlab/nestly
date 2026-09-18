@@ -3,22 +3,27 @@ import { authenticateAsSeededAdmin, loadFixture } from "./setup/auth";
 
 /**
  * Task 317: bookings list/search -> detail (SRS 12.11.1-3, task 116). Filters
- * on the exact seeded booking id (an existing booking if this database
- * already has one from prior customer-web E2E runs / manual QA, or a fresh
- * one this suite pays for itself when it doesn't - see
+ * on the exact seeded booking's reference (an existing booking if this
+ * database already has one from prior customer-web E2E runs / manual QA, or
+ * a fresh one this suite pays for itself when it doesn't - see
  * e2e/setup/seed-admin.ts) so the search narrows to exactly one row
  * regardless of what else is in the table, then follows it into the detail
- * page.
+ * page. Reference, not id: the "Booking #" field (bookings/page.tsx) matches
+ * `BookingReference`, not the GUID - see seed-booking.ts's
+ * PaidBookingFixture.reference.
  */
 test.describe("Bookings list and detail", () => {
-  test("searches by booking ID and opens the matching booking's detail page", async ({ page }) => {
+  test("searches by booking reference and opens the matching booking's detail page", async ({ page }) => {
     const fixture = loadFixture();
     await authenticateAsSeededAdmin(page, fixture);
 
     await page.goto("/bookings");
     await expect(page.getByRole("heading", { name: "Bookings" })).toBeVisible();
 
-    await page.getByLabel("Booking ID").fill(fixture.sampleBookingId);
+    // "Booking #" filters by the human-facing reference (e.g.
+    // "GLX-260825-K7F3M"), not the GUID id - see seed-booking.ts's
+    // PaidBookingFixture.reference and bookings/page.tsx's "Booking #" field.
+    await page.getByLabel("Booking #").fill(fixture.sampleBookingReference);
     await page.getByRole("button", { name: "Search" }).click();
 
     // Matched by href rather than by customer name: the results table keeps
@@ -38,7 +43,8 @@ test.describe("Bookings list and detail", () => {
 
     await page.waitForURL(new RegExp(`/bookings/${fixture.sampleBookingId}`));
     await expect(page.getByRole("heading", { name: fixture.sampleBookingCustomerName })).toBeVisible();
-    await expect(page.getByText(`Booking ${fixture.sampleBookingId}`)).toBeVisible();
+    // The detail page's subtitle shows the human-facing reference, not the id.
+    await expect(page.getByText(`Booking ${fixture.sampleBookingReference}`)).toBeVisible();
     await expect(page.getByText("Status timeline")).toBeVisible();
   });
 });

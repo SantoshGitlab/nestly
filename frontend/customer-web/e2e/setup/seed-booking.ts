@@ -26,6 +26,8 @@ export interface PaidBookingFixture {
   bookingId: string;
   slotDate: string;
   customerName: string;
+  /** Short human-facing code (e.g. "GLX-260825-K7F3M") - what the Bookings list's "Booking #" filter actually searches, never the GUID in bookingId. */
+  reference: string;
 }
 
 /**
@@ -81,5 +83,5 @@ export async function createPaidBooking(
     );
   }
 
-  return { bookingId: booking.id, slotDate, customerName: confirmed.customerName };
+  return { bookingId: booking.id, slotDate, customerName: confirmed.customerName, reference: confirmed.reference };
 }
