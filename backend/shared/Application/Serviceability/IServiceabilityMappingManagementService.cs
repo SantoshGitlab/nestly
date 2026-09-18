@@ -180,4 +180,15 @@ public interface IServiceabilityMappingManagementService
     /// skill + area coverage, which this screen cannot create.
     /// </summary>
     Task<IReadOnlyList<MappedPincodeWithoutProviderCoverageResponse>> ListMappedPincodesWithoutProviderCoverageAsync();
+
+    /// <summary>
+    /// Coverage gap map, fourth grid category: active service/pincode
+    /// mappings that ARE actually fulfillable right now, with how many active
+    /// providers cover each - the inverse of
+    /// <see cref="ListMappedPincodesWithoutProviderCoverageAsync"/>.
+    /// </summary>
+    Task<IReadOnlyList<MappedPincodeWithActiveProviderCoverageResponse>> ListMappedPincodesWithActiveProviderCoverageAsync();
+
+    /// <summary>Drill-down for one row of <see cref="ListMappedPincodesWithActiveProviderCoverageAsync"/>: which providers.</summary>
+    Task<IReadOnlyList<MappingCoveringProviderResponse>> ListActiveProvidersForMappingAsync(Guid mappingId);
 }

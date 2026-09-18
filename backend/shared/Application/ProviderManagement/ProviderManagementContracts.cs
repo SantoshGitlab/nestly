@@ -282,33 +282,36 @@ public sealed record ProviderPerformanceListResponse(
 
 /// <summary>
 /// Request for the Provider Onboarding Overview dashboard's funnel counts
-/// (Admin Web new page). Mirrors <c>AdminFulfilmentBoardRequest</c>'s own
-/// single-optional-date shape exactly - same "defaults to today when absent"
+/// (Admin Web new page). <see cref="Date"/> is an "as of" cutoff, not a
+/// single day's cohort filter - mirrors <c>AdminFulfilmentBoardRequest</c>'s
+/// own single-optional-date shape, same "defaults to today when absent"
 /// convention.
 /// </summary>
 public sealed record AdminProviderOnboardingOverviewRequest(DateOnly? Date);
 
 /// <summary>
-/// A cohort-of-the-day funnel: of every provider whose <see cref="Provider.CreatedAt"/>
-/// falls on <see cref="Date"/>, how many are now at each stage. The six
-/// counts are NOT mutually exclusive partitions of the cohort - they read
-/// two independent dimensions of the same <see cref="Provider"/> row
-/// (<see cref="ProviderOnboardingStatus"/> and <see cref="ProviderStatus"/>,
-/// per that type's own doc comment) at once, so a provider already
-/// <see cref="ProviderOnboardingStatus.Completed"/> and
-/// <see cref="ProviderStatus.Active"/> counts toward both
+/// A cumulative funnel: of every provider ever registered on or before
+/// <see cref="Date"/>, how many are now at each stage
+/// (docs/OPEN-FIXES-FEATURES.csv "Provider Onboarding Overview": counting
+/// only <see cref="Date"/>'s own registrations made the tiles look far
+/// emptier than the real, ongoing funnel). The six counts are NOT mutually
+/// exclusive partitions - they read two independent dimensions of the same
+/// <see cref="Provider"/> row (<see cref="ProviderOnboardingStatus"/> and
+/// <see cref="ProviderStatus"/>, per that type's own doc comment) at once,
+/// so a provider already <see cref="ProviderOnboardingStatus.Completed"/>
+/// and <see cref="ProviderStatus.Active"/> counts toward both
 /// <see cref="LiveCount"/> and <see cref="ActiveCount"/>, and every provider
-/// in every other bucket also counts toward <see cref="TodayOnboardingCount"/>.
+/// in every other bucket also counts toward <see cref="TotalOnboardingCount"/>.
 /// </summary>
-/// <param name="TodayOnboardingCount">Every provider created on <see cref="Date"/>, regardless of current stage - the cohort itself.</param>
-/// <param name="DocumentVerificationCount">Cohort currently at <see cref="ProviderOnboardingStatus.KycSubmitted"/> - KYC documents uploaded, awaiting an admin verdict.</param>
-/// <param name="VerifiedCount">Cohort currently at <see cref="ProviderOnboardingStatus.KycVerified"/> - at least one KYC document approved.</param>
-/// <param name="PendingCount">Cohort currently at <see cref="ProviderStatus.PendingVerification"/> - not yet activated.</param>
-/// <param name="LiveCount">Cohort currently at <see cref="ProviderOnboardingStatus.Completed"/> - the one-time onboarding flow is done.</param>
-/// <param name="ActiveCount">Cohort currently at <see cref="ProviderStatus.Active"/> - live and assignable.</param>
+/// <param name="TotalOnboardingCount">Every provider created on or before <see cref="Date"/>, regardless of current stage.</param>
+/// <param name="DocumentVerificationCount">Currently at <see cref="ProviderOnboardingStatus.KycSubmitted"/> - KYC documents uploaded, awaiting an admin verdict.</param>
+/// <param name="VerifiedCount">Currently at <see cref="ProviderOnboardingStatus.KycVerified"/> - at least one KYC document approved.</param>
+/// <param name="PendingCount">Currently at <see cref="ProviderStatus.PendingVerification"/> - not yet activated.</param>
+/// <param name="LiveCount">Currently at <see cref="ProviderOnboardingStatus.Completed"/> - the one-time onboarding flow is done.</param>
+/// <param name="ActiveCount">Currently at <see cref="ProviderStatus.Active"/> - live and assignable.</param>
 public sealed record AdminProviderOnboardingOverviewResponse(
     DateOnly Date,
-    int TodayOnboardingCount,
+    int TotalOnboardingCount,
     int DocumentVerificationCount,
     int VerifiedCount,
     int PendingCount,
@@ -317,7 +320,7 @@ public sealed record AdminProviderOnboardingOverviewResponse(
 
 /// <summary>Repository-level result behind <see cref="AdminProviderOnboardingOverviewResponse"/> - the same six counts, before the request's echoed <see cref="AdminProviderOnboardingOverviewRequest.Date"/> is attached.</summary>
 public sealed record ProviderOnboardingOverviewCounts(
-    int TodayOnboardingCount,
+    int TotalOnboardingCount,
     int DocumentVerificationCount,
     int VerifiedCount,
     int PendingCount,

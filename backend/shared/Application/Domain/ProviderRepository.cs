@@ -64,17 +64,20 @@ public interface IProviderRepository : IRepository<Provider>
     Task<IReadOnlyList<Provider>> ListAllAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The Provider Onboarding Overview dashboard's six cohort-of-the-day
-    /// funnel counts, in one round trip: every provider whose
-    /// <see cref="Provider.CreatedAt"/> falls on <paramref name="date"/>
-    /// (local-to-UTC day boundary, computed by the caller), broken down by
-    /// current <see cref="ProviderOnboardingStatus"/>/<see cref="ProviderStatus"/>.
+    /// The Provider Onboarding Overview dashboard's six cumulative funnel
+    /// counts, in one round trip: every provider whose
+    /// <see cref="Provider.CreatedAt"/> falls on or before
+    /// <paramref name="asOfDate"/> (local-to-UTC day boundary, computed by
+    /// the caller) - not just that single day's registrations
+    /// (docs/OPEN-FIXES-FEATURES.csv "Provider Onboarding Overview": a
+    /// single-day cohort undercounted the funnel an admin actually wants to
+    /// see) - broken down by current
+    /// <see cref="ProviderOnboardingStatus"/>/<see cref="ProviderStatus"/>.
     /// Projects only the two status columns rather than loading full
     /// <see cref="Provider"/> rows, then counts in memory - mirrors
     /// <c>BookingManagementService.GetFulfilmentBoardAsync</c>'s own
-    /// fetch-then-compute split, and stays a single query because a
-    /// registration cohort for one day is always small at this
+    /// fetch-then-compute split, and stays a single query at this
     /// marketplace's scale.
     /// </summary>
-    Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly date, CancellationToken cancellationToken = default);
+    Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly asOfDate, CancellationToken cancellationToken = default);
 }

@@ -425,7 +425,7 @@ public class ProviderManagementService : IProviderManagementService
 
         return new AdminProviderOnboardingOverviewResponse(
             date,
-            counts.TodayOnboardingCount,
+            counts.TotalOnboardingCount,
             counts.DocumentVerificationCount,
             counts.VerifiedCount,
             counts.PendingCount,

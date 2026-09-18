@@ -365,7 +365,7 @@ export default function ProviderDetailPage() {
   });
 
   const breadcrumbs = [
-    { label: "Providers", href: "/providers" },
+    { label: "Providers", href: "/providers/directory" },
     { label: detailQuery.data?.displayName ?? "Provider" },
   ];
 

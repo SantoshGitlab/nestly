@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { cx } from "@/components/ui";
 import { useFeatureFlags } from "@/lib/feature-flags";
 import { listJobs } from "@/lib/jobs-api";
-import { listPendingOffers } from "@/lib/jobs-active";
+import { listInProgressJobs, listPendingOffers } from "@/lib/jobs-active";
 
 /**
  * Navigation for the provider portal. Unlike admin-web's AdminSidebar, there
@@ -29,6 +29,7 @@ const NAV_ITEMS: readonly {
 }[] = [
   { key: "today", href: "/today", label: "Today", icon: <TodayIcon /> },
   { key: "offers", href: "/offers", label: "Offers", icon: <OfferIcon />, flagKey: "offersScreenEnabled" },
+  { key: "active", href: "/active", label: "Active", icon: <ActiveJobIcon /> },
   { key: "jobs", href: "/jobs", label: "Jobs", icon: <BriefcaseIcon /> },
   { key: "availability", href: "/availability", label: "Availability", icon: <CalendarIcon /> },
   { key: "earnings", href: "/earnings", label: "Earnings", icon: <WalletIcon /> },
@@ -39,6 +40,7 @@ const NAV_ITEMS: readonly {
 const GRID_COLS_CLASS: Record<number, string> = {
   5: "grid-cols-5",
   6: "grid-cols-6",
+  7: "grid-cols-7",
 };
 
 /** `NAV_ITEMS` filtered by each entry's optional `flagKey` (SRS 12.19 "Feature flags"), shared by the side rail and the bottom tab bar. */
@@ -76,12 +78,43 @@ function usePendingOfferCount(): number {
   return listPendingOffers(query.data).length;
 }
 
-function OffersBadge({ count }: { count: number }) {
+/** Same reasoning as {@link usePendingOfferCount}, for the "Active" tab - shares the same cached `/jobs` fetch. */
+function useActiveJobCount(): number {
+  const query = useQuery({
+    queryKey: ["provider-jobs", "", ""],
+    queryFn: () => listJobs({}),
+    retry: false,
+  });
+  if (!query.data) return 0;
+  return listInProgressJobs(query.data).length;
+}
+
+/** Count pill for a nav item. `tone="danger"` is reserved for a countdown a provider can lose (an unanswered offer); "Active" uses `tone="brand"` since a job in progress is a status, not something urgently at risk. */
+function NavCountBadge({ count, tone, label }: { count: number; tone: "danger" | "brand"; label: string }) {
   if (count <= 0) return null;
   return (
     <span
-      className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white"
-      aria-label={`${count} offer${count === 1 ? "" : "s"} waiting`}
+      className={cx(
+        "ml-auto flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white",
+        tone === "danger" ? "bg-danger" : "bg-brand-600",
+      )}
+      aria-label={label}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+/** Same count/tone as {@link NavCountBadge}, styled as a corner dot for the icon-only tab bar instead of an inline pill. */
+function TabBarDot({ count, tone }: { count: number; tone: "danger" | "brand" }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        "absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-semibold text-white",
+        tone === "danger" ? "bg-danger" : "bg-brand-600",
+      )}
     >
       {count > 9 ? "9+" : count}
     </span>
@@ -133,6 +166,7 @@ function SidebarBrand() {
 export function ProviderSidebar() {
   const isActive = useActiveMatcher();
   const pendingOfferCount = usePendingOfferCount();
+  const activeJobCount = useActiveJobCount();
   const navItems = useVisibleNavItems();
 
   return (
@@ -166,7 +200,20 @@ export function ProviderSidebar() {
             ) : null}
             {item.icon}
             {item.label}
-            {item.key === "offers" ? <OffersBadge count={pendingOfferCount} /> : null}
+            {item.key === "offers" ? (
+              <NavCountBadge
+                count={pendingOfferCount}
+                tone="danger"
+                label={`${pendingOfferCount} offer${pendingOfferCount === 1 ? "" : "s"} waiting`}
+              />
+            ) : null}
+            {item.key === "active" ? (
+              <NavCountBadge
+                count={activeJobCount}
+                tone="brand"
+                label={`${activeJobCount} job${activeJobCount === 1 ? "" : "s"} in progress`}
+              />
+            ) : null}
           </Link>
         );
       })}
@@ -182,6 +229,7 @@ export function ProviderTabBar() {
   const pathname = usePathname();
   const isActive = useActiveMatcher();
   const pendingOfferCount = usePendingOfferCount();
+  const activeJobCount = useActiveJobCount();
   const navItems = useVisibleNavItems();
 
   // See isJobDetailPath's comment - redundant with that screen's own sticky
@@ -210,14 +258,8 @@ export function ProviderTabBar() {
           >
             <span className="relative">
               {item.icon}
-              {item.key === "offers" && pendingOfferCount > 0 ? (
-                <span
-                  aria-hidden
-                  className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-semibold text-white"
-                >
-                  {pendingOfferCount > 9 ? "9+" : pendingOfferCount}
-                </span>
-              ) : null}
+              {item.key === "offers" ? <TabBarDot count={pendingOfferCount} tone="danger" /> : null}
+              {item.key === "active" ? <TabBarDot count={activeJobCount} tone="brand" /> : null}
             </span>
             {item.label}
           </Link>
@@ -253,6 +295,16 @@ function OfferIcon(): ReactNode {
     <svg {...ICON_PROPS}>
       <path d="M3 8.5 12 14l9-5.5" />
       <rect x="3" y="5.5" width="18" height="13" rx="2" />
+    </svg>
+  );
+}
+
+/** A location pin - "Active" is specifically about the job you're physically at/working on, unlike "Jobs"' briefcase (the full queue). */
+function ActiveJobIcon(): ReactNode {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M12 21s7-6.5 7-11.5a7 7 0 0 0-14 0C5 14.5 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
     </svg>
   );
 }

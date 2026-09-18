@@ -150,6 +150,69 @@ public class ServicePincodeMappingRepository : IServicePincodeMappingRepository
         ).ToListAsync();
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<MappedPincodeWithActiveProviderCoverageResponse>> ListMappedPincodesWithActiveProviderCoverageAsync() =>
+        await (
+            from mapping in _context.Set<ServicePincodeMapping>()
+            where mapping.IsActive
+            join service in _context.Set<Service>() on mapping.ServiceId equals service.Id
+            join pincode in _context.Set<Pincode>() on mapping.PincodeId equals pincode.Id
+            // Same skill + area eligibility as ListMappedPincodesWithoutProviderCoverageAsync,
+            // counted instead of negated.
+            let activeProviderCount = _context.Set<Provider>().Count(p =>
+                p.Status == ProviderStatus.Active &&
+                _context.Set<ProviderSkillMapping>().Any(s =>
+                    s.ProviderId == p.Id && s.IsActive && s.CategoryId == service.CategoryId &&
+                    (s.ServiceId == null || s.ServiceId == service.Id)) &&
+                _context.Set<ProviderServiceArea>().Any(a =>
+                    a.ProviderId == p.Id && a.IsActive && a.CityId == pincode.CityId &&
+                    (a.PincodeId == null || a.PincodeId == pincode.Id)))
+            where activeProviderCount > 0
+            orderby pincode.Code, service.Name
+            select new MappedPincodeWithActiveProviderCoverageResponse(
+                mapping.Id, service.Id, service.Name, pincode.Id, pincode.Code, activeProviderCount)
+        ).ToListAsync();
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<MappingCoveringProviderResponse>> ListActiveProvidersForMappingAsync(Guid mappingId)
+    {
+        var mapping = await _context.Set<ServicePincodeMapping>()
+            .Where(m => m.Id == mappingId && m.IsActive)
+            .Select(m => new { m.ServiceId, m.PincodeId })
+            .FirstOrDefaultAsync();
+        if (mapping is null)
+        {
+            return Array.Empty<MappingCoveringProviderResponse>();
+        }
+
+        var service = await _context.Set<Service>()
+            .Where(s => s.Id == mapping.ServiceId)
+            .Select(s => new { s.CategoryId })
+            .FirstOrDefaultAsync();
+        var pincode = await _context.Set<Pincode>()
+            .Where(p => p.Id == mapping.PincodeId)
+            .Select(p => new { p.CityId })
+            .FirstOrDefaultAsync();
+        if (service is null || pincode is null)
+        {
+            return Array.Empty<MappingCoveringProviderResponse>();
+        }
+
+        // Same skill + area eligibility as ListMappedPincodesWithActiveProviderCoverageAsync, scoped to one known pair.
+        return await (
+            from p in _context.Set<Provider>()
+            where p.Status == ProviderStatus.Active &&
+                _context.Set<ProviderSkillMapping>().Any(s =>
+                    s.ProviderId == p.Id && s.IsActive && s.CategoryId == service.CategoryId &&
+                    (s.ServiceId == null || s.ServiceId == mapping.ServiceId)) &&
+                _context.Set<ProviderServiceArea>().Any(a =>
+                    a.ProviderId == p.Id && a.IsActive && a.CityId == pincode.CityId &&
+                    (a.PincodeId == null || a.PincodeId == mapping.PincodeId))
+            orderby p.DisplayName
+            select new MappingCoveringProviderResponse(p.Id, p.DisplayName, p.Phone)
+        ).ToListAsync();
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<ServicePincodeMapping>> ListPendingAutoDisableDueByAsync(DateTime cutoffUtc) =>
         await _context.Set<ServicePincodeMapping>()
             .Where(m => m.PendingAutoDisableSince != null && m.PendingAutoDisableSince <= cutoffUtc)

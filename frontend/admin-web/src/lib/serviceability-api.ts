@@ -16,7 +16,9 @@ import type {
   LocalityAdminResponse,
   LocalityCreateRequest,
   LocalityUpdateRequest,
+  MappedPincodeWithActiveProviderCoverageResponse,
   MappedPincodeWithoutProviderCoverageResponse,
+  MappingCoveringProviderResponse,
   PincodeAdminResponse,
   PincodeCreateRequest,
   ServiceLookupResponse,
@@ -227,5 +229,17 @@ export const listServiceabilityCoverageGaps = () =>
 /** Active mappings with no active provider able to fulfil them. */
 export const listMappedPincodesWithoutProviderCoverage = () =>
   apiFetch<MappedPincodeWithoutProviderCoverageResponse[]>(`${MAPPINGS_BASE}/mapped-without-coverage`, {
+    authenticated: true,
+  });
+
+/** Active mappings that DO have active provider coverage, with how many providers cover each. */
+export const listMappedPincodesWithActiveProviderCoverage = () =>
+  apiFetch<MappedPincodeWithActiveProviderCoverageResponse[]>(`${MAPPINGS_BASE}/mapped-with-coverage`, {
+    authenticated: true,
+  });
+
+/** Drill-down: which active providers cover one mapping - fetched on demand when a row is opened. */
+export const listActiveProvidersForMapping = (mappingId: string) =>
+  apiFetch<MappingCoveringProviderResponse[]>(`${MAPPINGS_BASE}/service-pincode/${mappingId}/providers`, {
     authenticated: true,
   });

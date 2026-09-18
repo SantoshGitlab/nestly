@@ -156,27 +156,29 @@ public class ProviderRepository : IProviderRepository
     }
 
     /// <inheritdoc/>
-    public async Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly date, CancellationToken cancellationToken = default)
+    public async Task<ProviderOnboardingOverviewCounts> GetOnboardingOverviewCountsAsync(DateOnly asOfDate, CancellationToken cancellationToken = default)
     {
         // The bare ToDateTime(TimeOnly) overload produces Kind=Unspecified;
         // Npgsql refuses that against a timestamptz column ("only UTC is
         // supported") even though every CreatedAt value it's compared against
         // already is UTC - same fix as DashboardQueryService/
         // ProviderEarningLedgerRepository's own date-range queries.
-        var startOfDayUtc = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var startOfNextDayUtc = startOfDayUtc.AddDays(1);
+        var startOfNextDayUtc = asOfDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).AddDays(1);
 
-        // One round trip: project just the two status columns for the day's
-        // cohort, then compute all six counts in memory - see this method's
-        // interface doc comment for why that stays cheap at this scale.
+        // One round trip: project just the two status columns for every
+        // provider created on or before asOfDate (cumulative, not a single
+        // day's cohort - docs/OPEN-FIXES-FEATURES.csv "Provider Onboarding
+        // Overview"), then compute all six counts in memory - see this
+        // method's interface doc comment for why that stays cheap at this
+        // scale.
         var cohort = await _context.Set<Provider>()
             .AsNoTracking()
-            .Where(p => p.CreatedAt >= startOfDayUtc && p.CreatedAt < startOfNextDayUtc)
+            .Where(p => p.CreatedAt < startOfNextDayUtc)
             .Select(p => new { p.OnboardingStatus, p.Status })
             .ToListAsync(cancellationToken);
 
         return new ProviderOnboardingOverviewCounts(
-            TodayOnboardingCount: cohort.Count,
+            TotalOnboardingCount: cohort.Count,
             DocumentVerificationCount: cohort.Count(p => p.OnboardingStatus == ProviderOnboardingStatus.KycSubmitted),
             VerifiedCount: cohort.Count(p => p.OnboardingStatus == ProviderOnboardingStatus.KycVerified),
             PendingCount: cohort.Count(p => p.Status == ProviderStatus.PendingVerification),

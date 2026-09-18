@@ -243,16 +243,17 @@ public sealed class ProviderManagementServiceTests : IDisposable
     }
 
     /// <summary>
-    /// Provider Onboarding Overview dashboard: the six funnel counts must
-    /// read only today's cohort (task's "of everyone who registered on the
-    /// selected date, how many are now at each stage"), each dimension
-    /// independently - not a mutually-exclusive partition. Seeds one provider
-    /// per bucket plus a same-day Registered provider (counts only toward the
-    /// cohort total) and a provider created yesterday (must not count at
-    /// all), then asserts every count in one pass.
+    /// Provider Onboarding Overview dashboard: the six funnel counts are
+    /// cumulative as of the selected date (everyone registered on or before
+    /// it, not just that single day - docs/OPEN-FIXES-FEATURES.csv "Provider
+    /// Onboarding Overview"), each dimension independently - not a
+    /// mutually-exclusive partition. Seeds one provider per bucket plus a
+    /// same-day Registered provider and a provider created yesterday (must
+    /// still count, unlike the old single-day behaviour), then asserts every
+    /// count in one pass.
     /// </summary>
     [Fact]
-    public async Task GetOnboardingOverviewAsync_counts_only_todays_cohort_per_stage()
+    public async Task GetOnboardingOverviewAsync_counts_are_cumulative_as_of_date_per_stage()
     {
         await using var context = _database.CreateContext();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -261,23 +262,23 @@ public sealed class ProviderManagementServiceTests : IDisposable
         var kycSubmittedToday = NewProvider(ProviderOnboardingStatus.KycSubmitted, ProviderStatus.PendingVerification);
         var kycVerifiedToday = NewProvider(ProviderOnboardingStatus.KycVerified, ProviderStatus.PendingVerification);
         var liveAndActiveToday = NewProvider(ProviderOnboardingStatus.Completed, ProviderStatus.Active);
-        var suspendedYesterday = NewProvider(ProviderOnboardingStatus.Completed, ProviderStatus.Active);
+        var liveAndActiveYesterday = NewProvider(ProviderOnboardingStatus.Completed, ProviderStatus.Active);
 
-        context.AddRange(registeredToday, kycSubmittedToday, kycVerifiedToday, liveAndActiveToday, suspendedYesterday);
+        context.AddRange(registeredToday, kycSubmittedToday, kycVerifiedToday, liveAndActiveToday, liveAndActiveYesterday);
         await context.SaveChangesAsync();
-        await BackdateCreatedAtAsync(suspendedYesterday.Id, DateTime.UtcNow.AddDays(-1));
+        await BackdateCreatedAtAsync(liveAndActiveYesterday.Id, DateTime.UtcNow.AddDays(-1));
 
         var result = await CreateService(context).GetOnboardingOverviewAsync(new AdminProviderOnboardingOverviewRequest(today));
 
         result.IsSuccess.Should().BeTrue();
         var overview = result.Value;
         overview.Date.Should().Be(today);
-        overview.TodayOnboardingCount.Should().Be(4, "the cohort is everyone created today, regardless of stage - yesterday's provider is excluded");
+        overview.TotalOnboardingCount.Should().Be(5, "cumulative as of today includes yesterday's provider too");
         overview.DocumentVerificationCount.Should().Be(1);
         overview.VerifiedCount.Should().Be(1);
         overview.PendingCount.Should().Be(3, "Registered/KycSubmitted/KycVerified all leave ProviderStatus at PendingVerification");
-        overview.LiveCount.Should().Be(1);
-        overview.ActiveCount.Should().Be(1, "LiveCount and ActiveCount both come from the same provider here - the two dimensions are independent, not partitions");
+        overview.LiveCount.Should().Be(2, "both the today and yesterday providers reached Completed");
+        overview.ActiveCount.Should().Be(2, "both the today and yesterday providers are Active");
     }
 
     /// <summary>Defaults to today when no date is supplied (mirrors <c>GetFulfilmentBoardAsync</c>'s own default).</summary>

@@ -144,7 +144,7 @@ export default function CustomerDetailPage() {
   });
 
   const breadcrumbs = [
-    { label: "Customers", href: "/customers" },
+    { label: "Customers", href: "/customers/directory" },
     { label: detailQuery.data?.name ?? "Customer" },
   ];
 

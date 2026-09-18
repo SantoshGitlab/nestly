@@ -72,9 +72,14 @@ const SUB_PAGE_ENTRIES: readonly { label: string; href: string; moduleKey: NavMo
   { label: "Site FAQs", href: "/cms/faqs", moduleKey: "cms" },
   // CouponsTabs
   { label: "Coupon redemption report", href: "/coupons/redemptions", moduleKey: "coupons" },
+  // CustomersTabs - "Customer directory" is the list; Analytics is the
+  // module's root ("/customers"), already covered by its NAV_MODULES entry.
+  { label: "Customer directory", href: "/customers/directory", moduleKey: "customers" },
   // PaymentsTabs
   { label: "Payment reconciliation", href: "/payments/reconciliation", moduleKey: "payments" },
-  // ProvidersTabs
+  // ProvidersTabs - "Provider directory" is the list; Onboarding Overview is
+  // the module's root ("/providers"), already covered by its NAV_MODULES entry.
+  { label: "Provider directory", href: "/providers/directory", moduleKey: "provider" },
   { label: "Provider performance", href: "/providers/performance", moduleKey: "provider" },
   // ProviderReferralTabs
   { label: "Provider referral program config", href: "/provider-referral/config", moduleKey: "provider-referral" },
