@@ -83,5 +83,8 @@ export async function createPaidBooking(
     );
   }
 
-  return { bookingId: booking.id, slotDate, customerName: confirmed.customerName, reference: confirmed.reference };
+  // AdminBookingDetailResponse nests the customer under `customer.name`
+  // (AdminBookingCustomerSnapshot) - unlike AdminBookingListItemResponse,
+  // which has a flat `customerName`. There is no flat customerName here.
+  return { bookingId: booking.id, slotDate, customerName: confirmed.customer.name, reference: confirmed.reference };
 }
