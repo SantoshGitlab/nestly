@@ -3,10 +3,12 @@ import { authenticateAsSeededAdmin, loadFixture } from "./setup/auth";
 
 /**
  * Task 317: bookings list/search -> detail (SRS 12.11.1-3, task 116). Filters
- * on the exact seeded booking id (dev database already carries bookings from
- * prior customer-web E2E runs / manual QA - see e2e/setup/seed-admin.ts) so
- * the search narrows to exactly one row regardless of what else is in the
- * table, then follows it into the detail page.
+ * on the exact seeded booking id (an existing booking if this database
+ * already has one from prior customer-web E2E runs / manual QA, or a fresh
+ * one this suite pays for itself when it doesn't - see
+ * e2e/setup/seed-admin.ts) so the search narrows to exactly one row
+ * regardless of what else is in the table, then follows it into the detail
+ * page.
  */
 test.describe("Bookings list and detail", () => {
   test("searches by booking ID and opens the matching booking's detail page", async ({ page }) => {

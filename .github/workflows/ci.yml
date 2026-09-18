@@ -392,16 +392,16 @@ jobs:
           dotnet tool restore
           bash database/scripts/apply-migrations.sh
 
-      - name: Seed accounts, geography and provider capacity
+      - name: Seed admin, customer and provider accounts
         env:
           PGURL: postgresql://nestly:nestly_dev@localhost:5432/nestly
         run: |
           set -e
-          # Order matters: providers must exist before the capacity seed gives
-          # them service areas and skills, and the category-city mapping is
-          # what makes the seeded catalog visible in E2E City at all.
-          for f in dev-admin-seed dev-customer-seed dev-provider-seed \
-                   dev-category-city-mapping-seed dev-provider-e2e-capacity-seed; do
+          # These three don't touch E2E City - dev-provider-seed only
+          # bootstraps the provider row itself (no capacity yet). Kept ahead
+          # of the API start below since they're plain inserts with no
+          # dependency on anything the APIs would create.
+          for f in dev-admin-seed dev-customer-seed dev-provider-seed; do
             echo "--- $f"
             psql "$PGURL" -v ON_ERROR_STOP=1 -f "database/seed/$f.sql"
           done
@@ -426,6 +426,35 @@ jobs:
               fi
               sleep 2
             done
+          done
+
+      - name: Seed catalog fixture (creates E2E City)
+        # Reuses seed-catalog.ts's seedCatalog() through customer-web's own
+        # `seed:ci` entrypoint - the same call the lighthouse-mobile job above
+        # already makes, not a second/divergent seeding path. Needed here,
+        # ahead of the two SQL seeds below: both are keyed off a city literally
+        # named 'E2E City' (`WHERE name = 'E2E City'`), which only this call
+        # creates - a fresh database has no such row, so running them any
+        # earlier makes both silently match zero rows.
+        working-directory: frontend/customer-web
+        env:
+          ADMIN_API_URL: http://localhost:5177
+          CONSUMER_API_URL: http://localhost:5257
+        run: |
+          set -e
+          npm ci
+          npm run seed:ci
+
+      - name: Seed E2E City geography and provider capacity
+        env:
+          PGURL: postgresql://nestly:nestly_dev@localhost:5432/nestly
+        run: |
+          set -e
+          # Now safe: E2E City exists (previous step) and providers exist
+          # (Seed admin, customer and provider accounts, above).
+          for f in dev-category-city-mapping-seed dev-provider-e2e-capacity-seed; do
+            echo "--- $f"
+            psql "$PGURL" -v ON_ERROR_STOP=1 -f "database/seed/$f.sql"
           done
 
       - name: Install ${{ matrix.app }} dependencies
