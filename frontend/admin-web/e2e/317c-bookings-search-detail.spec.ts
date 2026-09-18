@@ -23,8 +23,14 @@ test.describe("Bookings list and detail", () => {
     // "Booking #" filters by the human-facing reference (e.g.
     // "GLX-260825-K7F3M"), not the GUID id - see seed-booking.ts's
     // PaidBookingFixture.reference and bookings/page.tsx's "Booking #" field.
+    // Live filtering (no Search button on this page either - see
+    // bookings/page.tsx): typing alone triggers the debounced query. The
+    // only element anywhere in the DOM whose accessible name contains
+    // "Search" is the header's GlobalSearch trigger ("Search pages and
+    // settings") - a stray click here used to open that palette, whose
+    // modal backdrop then blocked the row-link click below for the rest of
+    // the test (same bug already fixed in 317d-admin-user-lifecycle.spec.ts).
     await page.getByLabel("Booking #").fill(fixture.sampleBookingReference);
-    await page.getByRole("button", { name: "Search" }).click();
 
     // Matched by href rather than by customer name: the results table keeps
     // showing the previous (unfiltered) page via react-query's
