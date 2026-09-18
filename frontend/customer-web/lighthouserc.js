@@ -73,15 +73,23 @@ module.exports = {
           deviceScaleFactor: 3,
           disabled: false,
         },
-        // GitHub's ubuntu-latest runners have disabled unprivileged user
-        // namespaces (AppArmor), which Chrome's own sandbox needs - without
-        // this, chrome-launcher's spawned process dies immediately with
-        // "FATAL:zygote_host_impl_linux.cc No usable sandbox!" before
-        // Lighthouse ever gets a page to audit. The CI job's own container
-        // is already the isolation boundary here, same reasoning every other
-        // CI-run Chrome (Playwright's `--with-deps chromium` included) relies
-        // on.
-        chromeFlags: ["--no-sandbox", "--disable-gpu"],
+      },
+      // GitHub's ubuntu-latest runners have disabled unprivileged user
+      // namespaces (AppArmor), which Chrome's own sandbox needs - without
+      // this, the browser process dies immediately with
+      // "FATAL:zygote_host_impl_linux.cc No usable sandbox!" before
+      // Lighthouse ever gets a page to audit. The CI job's own container is
+      // already the isolation boundary here, same reasoning every other
+      // CI-run Chrome (Playwright's `--with-deps chromium` included) relies
+      // on. `settings.chromeFlags` (the usual place for this) is silently
+      // ignored whenever `puppeteerScript` is set - LHCI logs "WARNING:
+      // collect.settings.chromeFlags option will be ignored" and launches
+      // through Puppeteer directly instead of chrome-launcher - so this has
+      // to go through `puppeteerLaunchOptions.args`, Puppeteer's own launch
+      // option, to actually reach the browser process auth-setup.js's `page`
+      // comes from.
+      puppeteerLaunchOptions: {
+        args: ["--no-sandbox", "--disable-gpu"],
       },
       puppeteerScript: require.resolve("./lighthouse/auth-setup.js"),
     },
