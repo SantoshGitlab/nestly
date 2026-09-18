@@ -337,10 +337,23 @@ jobs:
           # shape, fix what it finds, then add the leg back here. The
           # lighthouse-mobile job below already drives customer-web against a
           # fresh CI database, so the shape is expected to work.
+          # apiUrl: each app's own backend, not a shared default - admin-web
+          # talks to admin-api and provider-web talks to provider-api, never
+          # consumer-api. NEXT_PUBLIC_API_URL is baked in at build time
+          # (`npm run build` below), so getting this wrong per-app silently
+          # points the built app at the wrong service for its entire run -
+          # every API call 404s against a real, live, but unrelated backend,
+          # which is indistinguishable from "the page never got its data" in
+          # the Playwright failures this produces (task: E2E jobs pointed at
+          # the wrong backend, found via a passing "database is bookable"
+          # health check alongside failing UI assertions - the seed data was
+          # never the problem here).
           - app: admin-web
             port: 3001
+            apiUrl: http://localhost:5177
           - app: provider-web
             port: 3002
+            apiUrl: http://localhost:5337
 
     services:
       postgres:
@@ -468,7 +481,7 @@ jobs:
       - name: Build and start ${{ matrix.app }}
         working-directory: frontend/${{ matrix.app }}
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:5257
+          NEXT_PUBLIC_API_URL: ${{ matrix.apiUrl }}
         run: |
           set -e
           npm run build
