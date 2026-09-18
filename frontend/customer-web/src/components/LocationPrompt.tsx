@@ -96,7 +96,7 @@ export function LocationPrompt() {
 
     let position: GeolocationPosition;
     try {
-      position = await getPositionWithFallback();
+      position = await getPositionWithRetry();
     } catch (error) {
       // Permission denied, or both the high-accuracy and coarse fixes timed
       // out - a real technical failure, not "you're outside our service
@@ -251,6 +251,41 @@ function getPositionWithFallback(): Promise<GeolocationPosition> {
       { enableHighAccuracy: true, timeout: 8000 },
     );
   });
+}
+
+/** `GeolocationPositionError.code` for an explicit "no" - the one failure a retry can never turn into a yes. */
+const GEOLOCATION_PERMISSION_DENIED = 1;
+
+function isPermissionDenied(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code: unknown }).code === GEOLOCATION_PERMISSION_DENIED;
+}
+
+/**
+ * Reported: on a customer's very first "Allow location" tap this session,
+ * nothing comes back - tapping the same button again immediately succeeds.
+ * Cause: that first `getCurrentPosition` call is also what triggers the
+ * browser's native OS-level permission dialog, and neither of
+ * `getPositionWithFallback`'s two budgets above pause while that dialog is
+ * up - the clock runs from the moment the call is made, not from when the
+ * customer actually taps Allow on it. Add the time a real person takes to
+ * read and tap that dialog to the device's own location-services cold start
+ * (freshly enabled by that same grant), and both the 8s high-accuracy and
+ * 10s coarse attempts can be spent before any fix arrives - a real timeout,
+ * not a sign anything is actually wrong. A second attempt moments later, with
+ * permission already settled and location services already warm, reliably
+ * succeeds - this makes that second attempt automatic instead of relying on
+ * the customer noticing the failure message and tapping "Allow location"
+ * again themselves. Skipped entirely for an explicit PERMISSION_DENIED: that
+ * is the customer's real answer, and retrying would either fail identically
+ * or, worse, look like this app is nagging past a "no".
+ */
+async function getPositionWithRetry(): Promise<GeolocationPosition> {
+  try {
+    return await getPositionWithFallback();
+  } catch (error) {
+    if (isPermissionDenied(error)) throw error;
+    return await getPositionWithFallback();
+  }
 }
 
 interface NominatimAddress {
