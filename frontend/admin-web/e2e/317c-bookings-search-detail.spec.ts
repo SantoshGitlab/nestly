@@ -54,6 +54,10 @@ test.describe("Bookings list and detail", () => {
     await expect(page.getByRole("heading", { name: fixture.sampleBookingCustomerName })).toBeVisible();
     // The detail page's subtitle shows the human-facing reference, not the id.
     await expect(page.getByText(`Booking ${fixture.sampleBookingReference}`)).toBeVisible();
+
+    // "Status timeline" lives on the Timeline tab, not the Overview tab this
+    // page opens on by default.
+    await page.getByRole("tab", { name: "Timeline" }).click();
     await expect(page.getByText("Status timeline")).toBeVisible();
   });
 });
