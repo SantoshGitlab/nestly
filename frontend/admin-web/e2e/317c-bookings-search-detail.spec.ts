@@ -38,7 +38,10 @@ test.describe("Bookings list and detail", () => {
     // hides one with CSS, so the bare href matches two elements.
     const customerLink = page.locator(`a[href="/bookings/${fixture.sampleBookingId}"]:visible`);
     await expect(customerLink).toBeVisible({ timeout: 15_000 });
-    await expect(customerLink).toHaveText(fixture.sampleBookingCustomerName);
+    // The row's link is the "Booking #" cell (bookings/page.tsx), whose text
+    // is the reference - the customer name renders in a separate, unlinked
+    // cell next to it, not inside this link.
+    await expect(customerLink).toHaveText(fixture.sampleBookingReference);
     await customerLink.click();
 
     await page.waitForURL(new RegExp(`/bookings/${fixture.sampleBookingId}`));
