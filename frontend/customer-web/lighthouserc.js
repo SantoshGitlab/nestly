@@ -73,6 +73,15 @@ module.exports = {
           deviceScaleFactor: 3,
           disabled: false,
         },
+        // GitHub's ubuntu-latest runners have disabled unprivileged user
+        // namespaces (AppArmor), which Chrome's own sandbox needs - without
+        // this, chrome-launcher's spawned process dies immediately with
+        // "FATAL:zygote_host_impl_linux.cc No usable sandbox!" before
+        // Lighthouse ever gets a page to audit. The CI job's own container
+        // is already the isolation boundary here, same reasoning every other
+        // CI-run Chrome (Playwright's `--with-deps chromium` included) relies
+        // on.
+        chromeFlags: ["--no-sandbox", "--disable-gpu"],
       },
       puppeteerScript: require.resolve("./lighthouse/auth-setup.js"),
     },
