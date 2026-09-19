@@ -3,9 +3,12 @@ using Nestly.Application;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
+using Nestly.Application.Coupons;
+using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
 using Nestly.Application.Slots;
+using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Options;
@@ -25,7 +28,10 @@ namespace Nestly.Infrastructure.Services;
 /// Fee/refund computation reuses <see cref="CancellationFeeCalculator"/> for
 /// the pure math and <see cref="IRefundService"/> (Phase 4) for actually
 /// raising the refund - this service never talks to the payment gateway or
-/// wallet directly.
+/// wallet directly. <see cref="IEscrowService"/> is the one exception: it is
+/// purely an internal bookkeeping ledger, not a real money movement, and
+/// this is the only place that knows how much of a cancellation's refund
+/// was withheld as a fee - see <see cref="EscrowSourceType.CancellationFeeRetained"/>.
 /// </summary>
 public class CancellationService : ICancellationService
 {
@@ -36,6 +42,9 @@ public class CancellationService : ICancellationService
     private readonly ICancellationRepository _cancellationRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly ISlotAvailabilityService _slotAvailabilityService;
+    private readonly ICouponService _couponService;
+    private readonly ICustomerSubscriptionRepository _customerSubscriptionRepository;
+    private readonly IEscrowService _escrowService;
     private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
     private readonly CancellationPolicyOptions _policy;
@@ -48,6 +57,9 @@ public class CancellationService : ICancellationService
         ICancellationRepository cancellationRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         ISlotAvailabilityService slotAvailabilityService,
+        ICouponService couponService,
+        ICustomerSubscriptionRepository customerSubscriptionRepository,
+        IEscrowService escrowService,
         IBusinessClock businessClock,
         TimeProvider timeProvider,
         IOptions<CancellationPolicyOptions> policy)
@@ -59,6 +71,9 @@ public class CancellationService : ICancellationService
         _cancellationRepository = cancellationRepository;
         _assignmentRepository = assignmentRepository;
         _slotAvailabilityService = slotAvailabilityService;
+        _couponService = couponService;
+        _customerSubscriptionRepository = customerSubscriptionRepository;
+        _escrowService = escrowService;
         _businessClock = businessClock;
         _timeProvider = timeProvider;
         _policy = policy.Value;
@@ -200,6 +215,36 @@ public class CancellationService : ICancellationService
         // could not legally be cancelled never frees a seat it still holds.
         await _slotAvailabilityService.ReleaseSlotAsync(booking.SlotWindowId, booking.SlotDate);
 
+        // A booking cancelled before it was ever actually paid for (still
+        // PaymentPending - BookingLifecycle allows cancelling straight from
+        // there) never reaches IRefundService below, since there is no real
+        // settled payment to refund. Without this, a coupon reserved and
+        // redeemed at checkout (BookingService.CreateAsync) stayed permanently
+        // burned even though the order it was "used" on never happened -
+        // the same leak BookingExpirySweepJob had for the timeout case.
+        // Gated on "never settled" specifically, not "refund amount is zero":
+        // a genuinely paid-then-fully-refunded booking's coupon usage is a
+        // separate policy question, not this leak, and is left untouched.
+        var settledPayment = await _paymentRepository.GetByBookingIdAsync(booking.Id);
+        if (settledPayment is not { Status: PaymentTransactionStatus.Success })
+        {
+            await _couponService.ReleaseAsync(booking.Id);
+        }
+
+        // A subscription-funded free visit (SubscriptionFreeVisitApplied)
+        // is never gated on payment status the way a coupon is above - a
+        // free-visit booking always has FinalPayable forced to zero
+        // (SubscriptionBenefitService.PreviewAsync), so it goes straight to
+        // Confirmed and never has a settled payment to check either way.
+        // Without this, cancelling such a booking - an everyday action, not
+        // an edge case - permanently lost that period's free-visit credit
+        // for a service that was never rendered, the same leak class the
+        // coupon release above fixes.
+        if (booking.SubscriptionId is { } subscriptionId && booking.SubscriptionFreeVisitApplied)
+        {
+            await _customerSubscriptionRepository.ReleaseFreeVisitAsync(subscriptionId);
+        }
+
         // Task 208: a provider still Assigned/Accepted on this booking has no
         // way of hearing about the cancellation otherwise - ProviderJobService
         // derives their job status from this assignment row, not from the
@@ -238,6 +283,21 @@ public class CancellationService : ICancellationService
 
             cancellation.AttachRefund(refundTransactionId.Value, refundMethod.Value);
             await _cancellationRepository.UpdateAsync(cancellation);
+        }
+
+        // A late-cancellation fee is platform revenue, not a refund -
+        // ReleaseForRefundAsync above only ever releases outcome.RefundAmount
+        // (or never runs at all, when the fee consumes the entire payable
+        // amount and RefundAmount is zero), so the fee's own share stays
+        // "held" in escrow with nothing else that will ever claim it: this
+        // booking is now terminal (Cancelled, never Completed), so
+        // EscrowReleaseOnCompletionHandler can never run for it either.
+        // Independent of the refund branch above on purpose - it must still
+        // run when the fee consumes the whole amount and there is no refund
+        // to raise at all.
+        if (outcome.FeeAmount > 0)
+        {
+            await _escrowService.ReleaseRetainedFeeAsync(booking.Id, cancellation.Id, outcome.FeeAmount);
         }
 
         // Re-fetch to report the booking's true post-refund status: a full
@@ -301,8 +361,23 @@ public class CancellationService : ICancellationService
         DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         TimeSpan timeUntilSlot = slotStartUtc - now;
 
-        return CancellationFeeCalculator.Compute(
+        var outcome = CancellationFeeCalculator.Compute(
             payableAmount, timeUntilSlot, _policy.FreeCancellationWindowHours, _policy.LateCancellationFeePercentage);
+
+        // Floor at whatever a prior reschedule already locked in (see
+        // Booking.LockedCancellationFeeSnapshot) - the live computation above
+        // is only against the *current* slot, which a reschedule can move
+        // arbitrarily far out. Without this floor, rescheduling a booking
+        // that already owed a late-cancellation fee to a distant slot and
+        // then immediately cancelling would compute a full refund, erasing a
+        // fee that was already earned on the slot given up.
+        if (booking.LockedCancellationFeeSnapshot > outcome.FeeAmount)
+        {
+            decimal fee = Math.Min(booking.LockedCancellationFeeSnapshot, payableAmount);
+            outcome = new CancellationFeeCalculator.Outcome(false, fee, payableAmount - fee);
+        }
+
+        return outcome;
     }
 
     /// <summary>

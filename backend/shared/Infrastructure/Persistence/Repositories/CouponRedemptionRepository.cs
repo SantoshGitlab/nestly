@@ -27,4 +27,10 @@ public class CouponRedemptionRepository : ICouponRedemptionRepository
             .Where(r => r.CustomerId == customerId)
             .OrderByDescending(r => r.RedeemedAtUtc)
             .ToListAsync();
+
+    public Task<CouponRedemption?> GetByBookingIdAsync(Guid bookingId) =>
+        _context.CouponRedemptions.FirstOrDefaultAsync(r => r.BookingId == bookingId);
+
+    public Task DeleteByBookingIdAsync(Guid bookingId) =>
+        _context.CouponRedemptions.Where(r => r.BookingId == bookingId).ExecuteDeleteAsync();
 }

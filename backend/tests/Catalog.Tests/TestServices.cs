@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Time;
+using Nestly.Application.Payments;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Settings;
 using Nestly.Infrastructure.Auditing;
@@ -59,6 +60,61 @@ internal static class TestServices
             new BookingProviderAssignmentRepository(context),
             TravelFeasibilityFactory.Sandbox(context),
             NullLogger<OverrunReassignmentService>.Instance);
+
+    /// <summary>Real <see cref="IProviderEarningLedgerService"/> over the test database, for suites (e.g. <c>RefundService</c>'s clawback) that need one only as a collaborator, not under test.</summary>
+    public static IProviderEarningLedgerService ProviderEarningLedgerService(NestlyDbContext context) =>
+        new ProviderEarningLedgerService(
+            new ProviderRepository(context),
+            new ProviderEarningLedgerRepository(context),
+            new BookingRepository(context),
+            new PaymentTransactionRepository(context),
+            new ProviderPayoutRepository(context));
+
+    /// <summary>
+    /// The full <see cref="RefundService"/> builder, extracted here once it
+    /// grew a fifth and sixth collaborator (<see cref="ProviderEarningLedgerService"/>
+    /// for the job-completion clawback) - every suite that only needs a
+    /// working refund path, not the clawback itself under test, should call
+    /// this rather than repeat the wiring.
+    /// </summary>
+    public static RefundService RefundService(NestlyDbContext context, IPaymentGateway gateway) =>
+        new(
+            new BookingRepository(context),
+            new PaymentTransactionRepository(context),
+            new RefundTransactionRepository(context),
+            new WalletService(new WalletLedgerRepository(context), context),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            new ProviderEarningLedgerRepository(context),
+            ProviderEarningLedgerService(context),
+            gateway,
+            context,
+            NullLogger<RefundService>.Instance);
+
+    /// <summary>
+    /// The full <see cref="CancellationService"/> builder, extracted here
+    /// once it grew enough collaborators (coupon release, subscription
+    /// free-visit release, the cancellation-fee escrow release) that
+    /// repeating the wiring per suite became the main source of test-file
+    /// churn whenever a new one was added. Every suite that only needs a
+    /// working cancellation path, not one of those releases itself under
+    /// test, should call this rather than repeat the wiring.
+    /// </summary>
+    public static CancellationService CancellationService(
+        NestlyDbContext context, IPaymentGateway gateway, TimeProvider timeProvider, CancellationPolicyOptions? policy = null) =>
+        new(
+            new BookingRepository(context),
+            new PaymentTransactionRepository(context),
+            new RefundTransactionRepository(context),
+            RefundService(context, gateway),
+            new BookingCancellationRepository(context),
+            new BookingProviderAssignmentRepository(context),
+            SlotAvailability(context, timeProvider),
+            new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            new CustomerSubscriptionRepository(context),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            Clock(timeProvider),
+            timeProvider,
+            Options.Create(policy ?? new CancellationPolicyOptions()));
 
     public static SlotAvailabilityService SlotAvailability(NestlyDbContext context, TimeProvider? timeProvider = null) =>
         new(

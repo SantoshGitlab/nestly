@@ -83,8 +83,11 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
             new RefundTransactionRepository(context),
             new WalletService(new WalletLedgerRepository(context), context),
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            new ProviderEarningLedgerRepository(context),
+            TestServices.ProviderEarningLedgerService(context),
             gateway,
-            context);
+            context,
+            NullLogger<RefundService>.Instance);
 
     private static PaymentWebhookService BuildWebhookService(
         IPaymentTransactionRepository paymentRepository, IBookingRepository bookingRepository,

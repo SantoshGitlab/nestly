@@ -111,6 +111,18 @@ public class CouponService : ICouponService
     public Task CreateRedemptionRecordAsync(Guid couponId, Guid customerId, Guid bookingId, decimal discountAmount) =>
         _redemptionRepository.AddAsync(new CouponRedemption(Guid.NewGuid(), couponId, customerId, bookingId, discountAmount));
 
+    public async Task ReleaseAsync(Guid bookingId)
+    {
+        var redemption = await _redemptionRepository.GetByBookingIdAsync(bookingId);
+        if (redemption is null)
+        {
+            return;
+        }
+
+        await _couponRepository.ReleaseRedemptionAsync(redemption.CouponId, redemption.CustomerId);
+        await _redemptionRepository.DeleteByBookingIdAsync(bookingId);
+    }
+
     /// <summary>
     /// "First booking" (SRS 11.10.2) is defined as: no prior booking ever
     /// progressed past Initiated (an abandoned, never-paid-for cart doesn't

@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging;
+using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
+using Nestly.Application.ProviderManagement;
 using Nestly.Application.Refunds;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
@@ -44,8 +47,11 @@ public class RefundService : IRefundService
     private readonly IRefundTransactionRepository _refundRepository;
     private readonly IWalletService _walletService;
     private readonly IEscrowService _escrowService;
+    private readonly IProviderEarningLedgerRepository _providerEarningLedgerRepository;
+    private readonly IProviderEarningLedgerService _providerEarningLedgerService;
     private readonly IPaymentGateway _gateway;
     private readonly NestlyDbContext _context;
+    private readonly ILogger<RefundService> _logger;
 
     public RefundService(
         IBookingRepository bookingRepository,
@@ -53,16 +59,22 @@ public class RefundService : IRefundService
         IRefundTransactionRepository refundRepository,
         IWalletService walletService,
         IEscrowService escrowService,
+        IProviderEarningLedgerRepository providerEarningLedgerRepository,
+        IProviderEarningLedgerService providerEarningLedgerService,
         IPaymentGateway gateway,
-        NestlyDbContext context)
+        NestlyDbContext context,
+        ILogger<RefundService> logger)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
         _refundRepository = refundRepository;
         _walletService = walletService;
         _escrowService = escrowService;
+        _providerEarningLedgerRepository = providerEarningLedgerRepository;
+        _providerEarningLedgerService = providerEarningLedgerService;
         _gateway = gateway;
         _context = context;
+        _logger = logger;
     }
 
     public Task<Result<RefundOutcomeResponse>> InitiateFullRefundAsync(Guid bookingId, string reason, RefundMethod method = RefundMethod.Gateway) =>
@@ -198,6 +210,7 @@ public class RefundService : IRefundService
             if (paymentSettlement is not null)
             {
                 await _escrowService.ReleaseForRefundAsync(bookingId, paymentSettlement.Id, paymentSettlement.Amount);
+                await ClawBackProviderEarningAsync(bookingId, payment, paymentSettlement.Amount);
             }
 
             await dbTransaction.CommitAsync();
@@ -209,6 +222,70 @@ public class RefundService : IRefundService
         }
 
         return Result.Success(new RefundOutcomeResponse(bookingId, amount, settlements.Select(ToResponse).ToList()));
+    }
+
+    /// <summary>
+    /// Claws back part or all of a provider's job-completion earning when a
+    /// booking is refunded after escrow already paid it out (task 158's
+    /// counterpart to <see cref="EscrowReleaseOnCompletionHandler"/>) - a
+    /// no-op if the booking never reached Completed with a provider credited
+    /// in the first place, per <see cref="ProviderEarningSourceType.JobCompletion"/>'s
+    /// own scope. Without this, <see cref="IEscrowService.ReleaseForRefundAsync"/>
+    /// correctly finds nothing left held (it was already released to the
+    /// provider) and silently no-ops, so the customer would be refunded
+    /// while the provider keeps the full payout for a job the platform is
+    /// now treating as (partly) unpaid for.
+    ///
+    /// <paramref name="paymentFundedRefundAmount"/> is this refund's own
+    /// gateway-funded settlement, not the full requested amount - the same
+    /// scoping <see cref="IEscrowService.ReleaseForRefundAsync"/> uses,
+    /// since the provider was never paid anything against the wallet-funded
+    /// half to begin with. A booking refunded across several instalments
+    /// therefore claws back its matching proportional slice each time,
+    /// never more than once against the same money.
+    ///
+    /// Mirrors <c>NestlyCoinsService.ClawbackProviderCreditAsync</c>'s
+    /// lookup-then-debit shape; unlike that one, this runs synchronously
+    /// inside the refund's own transaction (like the escrow release right
+    /// above it) rather than as a fire-and-forget event handler, since a
+    /// partial refund that never drains the booking to fully Refunded would
+    /// otherwise never fire the clawback at all.
+    /// </summary>
+    private async Task ClawBackProviderEarningAsync(Guid bookingId, PaymentTransaction? payment, decimal paymentFundedRefundAmount)
+    {
+        var credit = await _providerEarningLedgerRepository.FindBySourceAsync(ProviderEarningSourceType.JobCompletion, bookingId);
+        if (credit is null || payment is null)
+        {
+            return;
+        }
+
+        decimal clawback = ProviderEarningClawbackCalculator.Compute(payment.Amount, credit.Amount, paymentFundedRefundAmount);
+        if (clawback <= 0)
+        {
+            return;
+        }
+
+        var debitResult = await _providerEarningLedgerService.RecordAdjustmentAsync(
+            credit.ProviderId,
+            new RecordProviderEarningAdjustmentRequest(
+                ProviderEarningEntryType.Debit,
+                clawback,
+                ProviderEarningSourceType.JobCompletionClawback,
+                bookingId,
+                $"Job-completion earning clawed back - booking {bookingId} refunded {paymentFundedRefundAmount:F2} after payout."));
+
+        if (debitResult.IsFailure)
+        {
+            // Same reasoning as EscrowReleaseOnCompletionHandler's own
+            // failed-credit branch: the refund itself is already legitimate
+            // and must not be blocked by a provider-ledger bookkeeping
+            // problem (most likely the provider's balance was already too
+            // low, e.g. from an earlier penalty) - logged for an admin to
+            // reconcile manually, not thrown.
+            _logger.LogWarning(
+                "Booking {BookingId} refunded {RefundAmount} but clawing back {ClawbackAmount} from provider {ProviderId}'s earning ledger failed: {ErrorCode} {ErrorMessage}.",
+                bookingId, paymentFundedRefundAmount, clawback, credit.ProviderId, debitResult.Error.Code, debitResult.Error.Message);
+        }
     }
 
     /// <summary>

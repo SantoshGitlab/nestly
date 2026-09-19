@@ -91,12 +91,13 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new BookingRepository(context),
             new PaymentTransactionRepository(context),
             new RefundTransactionRepository(context),
-            new RefundService(
-                new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-                new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context),
+            TestServices.RefundService(context, gateway),
             new BookingCancellationRepository(context),
             new BookingProviderAssignmentRepository(context),
             TestServices.SlotAvailability(context, timeProvider),
+            new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            new CustomerSubscriptionRepository(context),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
             TestServices.Clock(timeProvider),
             timeProvider,
             Options.Create(policy ?? new CancellationPolicyOptions()));
@@ -201,6 +202,182 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         var slotStartUtc = futureDate.ToDateTime(TimeOnly.MinValue).Add(slotStart);
         var fakeNow = slotStartUtc.AddHours(-hoursFromNow);
         return new Fixture(customer, bookingId, total, fakeNow);
+    }
+
+    /// <summary>
+    /// Regression coverage for the wallet/coupon leak: a booking cancelled
+    /// while still PaymentPending (BookingLifecycle allows this directly -
+    /// see the class doc comment on CancellationService) never reaches
+    /// IRefundService, since there was never a settled payment to refund.
+    /// Before this fix, the coupon redemption + usage counters reserved at
+    /// booking creation (BookingService.CreateAsync) stayed permanently
+    /// burned even though the order they were "used" on never happened.
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_on_a_never_paid_PaymentPending_booking_releases_its_reserved_coupon()
+    {
+        var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
+        var pincodeCode = Guid.NewGuid().ToString("N")[..6];
+        string couponCode = "PART" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        Customer customer;
+        Guid bookingId;
+        Guid couponId;
+
+        using (var context = _db.CreateContext())
+        {
+            customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active);
+            var address = new CustomerAddress(
+                Guid.NewGuid(), customer.Id, "Home", "221B Baker Street", null, null,
+                pincodeCode, "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Asha Rao", "9876543210", true);
+            var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
+            var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
+            var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
+            var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
+            var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+            address.LinkToGeography(pincode.Id, locality.Id);
+            var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+            var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 1000m);
+            var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+            var rule = new SlotWindowRule(Guid.NewGuid(), window.Id, futureDate.DayOfWeek);
+            var coupon = new Coupon(
+                Guid.NewGuid(), couponCode, "Ten percent off", CouponDiscountType.Percentage, 10m,
+                maxDiscountAmount: null, minOrderAmount: 0m,
+                DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(30),
+                usageLimitTotal: null, usageLimitPerCustomer: null,
+                applicableCategoryId: null, CouponCustomerSegment.All);
+            couponId = coupon.Id;
+
+            context.Add(customer);
+            context.Add(address);
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.Zones.Add(zone);
+            context.Pincodes.Add(pincode);
+            context.Localities.Add(locality);
+            context.Add(category);
+            context.Add(service);
+            context.ServicePincodeMappings.Add(new ServicePincodeMapping(Guid.NewGuid(), service.Id, pincode.Id));
+            context.SlotWindows.Add(window);
+            context.SlotWindowRules.Add(rule);
+            context.Add(coupon);
+            context.SaveChanges();
+
+            var request = new BookingSummaryRequest(
+                service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, [], CouponCode: couponCode);
+            var created = await BuildBookingService(context).CreateAsync(customer.Id, request);
+            created.IsSuccess.Should().BeTrue();
+            created.Value.Status.Should().Be(BookingStatus.PaymentPending, "a 10% discount on a 1000 service still leaves something payable");
+            bookingId = created.Value.Id;
+        }
+
+        using (var readBeforeContext = _db.CreateContext())
+        {
+            var coupon = await new CouponRepository(readBeforeContext).GetByIdAsync(couponId);
+            coupon!.RedemptionCount.Should().Be(1, "ReserveAsync ran at booking creation");
+            (await new CouponRedemptionRepository(readBeforeContext).CountByCouponAndCustomerAsync(couponId, customer.Id))
+                .Should().Be(1, "CreateRedemptionRecordAsync ran once the booking was persisted");
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildCancellationService(context, BuildGateway(), TimeProvider.System)
+                .CancelAsync(customer.Id, bookingId, new CancelBookingRequest("Changed my mind before paying"));
+            result.IsSuccess.Should().BeTrue();
+        }
+
+        using (var readAfterContext = _db.CreateContext())
+        {
+            var coupon = await new CouponRepository(readAfterContext).GetByIdAsync(couponId);
+            coupon!.RedemptionCount.Should().Be(0, "the booking that reserved this redemption never actually paid, so its usage must be given back");
+            (await new CouponRedemptionRepository(readAfterContext).CountByCouponAndCustomerAsync(couponId, customer.Id))
+                .Should().Be(0, "the redemption record for a booking that never happened should not remain");
+        }
+    }
+
+    /// <summary>
+    /// Regression coverage for the subscription free-visit leak: unlike a
+    /// coupon, a free-visit-funded booking always has FinalPayable forced to
+    /// zero (SubscriptionBenefitService.PreviewAsync), so it confirms
+    /// immediately with no PaymentPending step at all (task 331) - meaning
+    /// this fires on an everyday cancellation of a Confirmed booking, not
+    /// just the narrower "never paid" case the coupon release above covers.
+    /// Before this fix, CancellationService never referenced subscriptions
+    /// at all, so cancelling such a booking permanently lost that period's
+    /// free-visit credit for a service that was never rendered.
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_on_a_subscription_funded_booking_releases_the_free_visit_credit()
+    {
+        var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
+        var pincodeCode = Guid.NewGuid().ToString("N")[..6];
+        Customer customer;
+        Guid bookingId;
+        Guid subscriptionId;
+
+        using (var context = _db.CreateContext())
+        {
+            customer = new Customer(Guid.NewGuid(), "9" + Guid.NewGuid().ToString("N")[..9], "Asha Rao", CustomerStatus.Active);
+            var address = new CustomerAddress(
+                Guid.NewGuid(), customer.Id, "Home", "221B Baker Street", null, null,
+                pincodeCode, "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Asha Rao", "9876543210", true);
+            var state = new State(Guid.NewGuid(), "Karnataka", "KA" + Guid.NewGuid().ToString("N")[..6]);
+            var city = new City(Guid.NewGuid(), state.Id, "Bengaluru");
+            var zone = new Zone(Guid.NewGuid(), city.Id, "Central");
+            var pincode = new Pincode(Guid.NewGuid(), city.Id, pincodeCode);
+            var locality = new Locality(Guid.NewGuid(), zone.Id, pincode.Id, "Koramangala");
+            address.LinkToGeography(pincode.Id, locality.Id);
+            var category = new Category(Guid.NewGuid(), "Cleaning", "cleaning-" + Guid.NewGuid(), "desc");
+            var service = new Service(Guid.NewGuid(), category.Id, "Deep Clean", "deep-clean-" + Guid.NewGuid(), "desc", 1000m);
+            var window = new SlotWindow(Guid.NewGuid(), city.Id, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+            var rule = new SlotWindowRule(Guid.NewGuid(), window.Id, futureDate.DayOfWeek);
+            var plan = new SubscriptionPlan(Guid.NewGuid(), "Nestly Plus " + Guid.NewGuid(), "desc", 199m, SubscriptionBillingCycle.Monthly, 2, 10m, false);
+            var subscription = new CustomerSubscription(Guid.NewGuid(), customer.Id, plan, DateTime.UtcNow);
+            subscriptionId = subscription.Id;
+
+            context.Add(customer);
+            context.Add(address);
+            context.States.Add(state);
+            context.Cities.Add(city);
+            context.Zones.Add(zone);
+            context.Pincodes.Add(pincode);
+            context.Localities.Add(locality);
+            context.Add(category);
+            context.Add(service);
+            context.ServicePincodeMappings.Add(new ServicePincodeMapping(Guid.NewGuid(), service.Id, pincode.Id));
+            context.SlotWindows.Add(window);
+            context.SlotWindowRules.Add(rule);
+            context.Add(plan);
+            context.Add(subscription);
+            context.SaveChanges();
+
+            var request = new BookingSummaryRequest(service.Id, city.Id, address.Id, locality.Id, window.Id, futureDate, Quantity: 1, []);
+            var created = await BuildBookingService(context).CreateAsync(customer.Id, request);
+            created.IsSuccess.Should().BeTrue();
+            created.Value.Status.Should().Be(BookingStatus.Confirmed, "a free-visit-funded booking has nothing payable and confirms immediately (task 331)");
+            bookingId = created.Value.Id;
+        }
+
+        using (var readBeforeContext = _db.CreateContext())
+        {
+            var subscription = await new CustomerSubscriptionRepository(readBeforeContext).GetByIdAsync(subscriptionId);
+            subscription!.FreeVisitsRemaining.Should().Be(1, "the free visit was consumed at booking creation");
+
+            var booking = await new BookingRepository(readBeforeContext).GetByIdAsync(bookingId);
+            booking!.SubscriptionFreeVisitApplied.Should().BeTrue();
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var result = await BuildCancellationService(context, BuildGateway(), TimeProvider.System)
+                .CancelAsync(customer.Id, bookingId, new CancelBookingRequest("Changed my mind"));
+            result.IsSuccess.Should().BeTrue();
+        }
+
+        using (var readAfterContext = _db.CreateContext())
+        {
+            var subscription = await new CustomerSubscriptionRepository(readAfterContext).GetByIdAsync(subscriptionId);
+            subscription!.FreeVisitsRemaining.Should().Be(2, "the credit must be given back - the booking that consumed it was cancelled before the service ever happened");
+        }
     }
 
     [Fact]

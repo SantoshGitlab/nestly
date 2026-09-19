@@ -237,22 +237,20 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
         new RefundTransactionRepository(context),
         new CancellationService(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new RefundService(
-                new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-                new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-                BuildGateway(), context),
-            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TestServices.SlotAvailability(context), TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions())),
+            TestServices.RefundService(context, BuildGateway()),
+            new BookingCancellationRepository(context), new BookingProviderAssignmentRepository(context), TestServices.SlotAvailability(context),
+            new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            new CustomerSubscriptionRepository(context),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions())),
         new RescheduleService(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
             new SlotAvailabilityService(
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                 new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
-            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions())),
-        new RefundService(
-            new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            BuildGateway(), context),
+            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()), Options.Create(new CancellationPolicyOptions())),
+        TestServices.RefundService(context, BuildGateway()),
         new PaymentWebhookService(
             new PaymentTransactionRepository(context), new BookingRepository(context), new ServiceRepository(context), BuildGateway(),
             new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),

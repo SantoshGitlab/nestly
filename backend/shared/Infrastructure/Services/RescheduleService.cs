@@ -52,6 +52,7 @@ public class RescheduleService : IRescheduleService
     private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
     private readonly ReschedulePolicyOptions _policy;
+    private readonly CancellationPolicyOptions _cancellationPolicy;
 
     public RescheduleService(
         IBookingRepository bookingRepository,
@@ -64,7 +65,8 @@ public class RescheduleService : IRescheduleService
         NestlyDbContext context,
         IBusinessClock businessClock,
         TimeProvider timeProvider,
-        IOptions<ReschedulePolicyOptions> policy)
+        IOptions<ReschedulePolicyOptions> policy,
+        IOptions<CancellationPolicyOptions> cancellationPolicy)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
@@ -77,6 +79,7 @@ public class RescheduleService : IRescheduleService
         _businessClock = businessClock;
         _timeProvider = timeProvider;
         _policy = policy.Value;
+        _cancellationPolicy = cancellationPolicy.Value;
     }
 
     public async Task<Result<RescheduleEligibilityResponse>> GetEligibilityAsync(Guid customerId, Guid bookingId)
@@ -206,8 +209,39 @@ public class RescheduleService : IRescheduleService
         var feeOutcome = RescheduleFeeCalculator.Compute(
             payableAmount, currentSlotStartUtc - now, _policy.LateFeeThresholdHours, _policy.LateRescheduleFeePercentage);
 
-        booking.Reschedule(chosenSlot.SlotWindowId, request.SlotDate, chosenSlot.Name, chosenSlot.StartTime, chosenSlot.EndTime, request.Reason);
-        await _bookingRepository.UpdateAsync(booking);
+        // What cancelling the slot being given up would cost right now, per
+        // the cancellation policy CancellationService itself enforces - not
+        // the separate reschedule-fee policy above. Booking.Reschedule locks
+        // this in as a floor under any future cancellation's fee (see
+        // Booking.LockedCancellationFeeSnapshot's doc comment) so moving the
+        // slot can never be used to erase a cancellation fee already owed.
+        var cancellationOutcomeOnSlotGivenUp = CancellationFeeCalculator.Compute(
+            payableAmount, currentSlotStartUtc - now, _cancellationPolicy.FreeCancellationWindowHours, _cancellationPolicy.LateCancellationFeePercentage);
+
+        try
+        {
+            booking.Reschedule(
+                chosenSlot.SlotWindowId, request.SlotDate, chosenSlot.Name, chosenSlot.StartTime, chosenSlot.EndTime, request.Reason,
+                cancellationOutcomeOnSlotGivenUp.FeeAmount);
+            await _bookingRepository.UpdateAsync(booking);
+        }
+        catch
+        {
+            // The reservation above already committed independently of this
+            // write (it is its own atomic conditional UPDATE, not part of
+            // any transaction wrapping this method) - if the booking write
+            // itself now fails for any reason (a DB error, a timeout), that
+            // reservation is not rolled back with it and nothing else will
+            // ever give it up. Compensate immediately rather than leaving
+            // the new slot's capacity counter permanently decremented for a
+            // reschedule that never actually happened.
+            if (movingSlot)
+            {
+                await _slotAvailabilityService.ReleaseSlotAsync(chosenSlot.SlotWindowId, request.SlotDate);
+            }
+
+            throw;
+        }
 
         // Task 290: the slot move above always persists regardless of what
         // happens to the assignment - only "keep the same professional" can

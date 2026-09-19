@@ -2,6 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.Cancellations;
 using Nestly.Application.Payments;
 using Nestly.Application.Pricing;
 using Nestly.Application.ProviderManagement;
@@ -98,7 +99,8 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
             TestServices.Clock());
 
     private static RescheduleService BuildRescheduleService(
-        Nestly.Infrastructure.Persistence.NestlyDbContext context, TimeProvider timeProvider, ReschedulePolicyOptions? policy = null) =>
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, TimeProvider timeProvider, ReschedulePolicyOptions? policy = null,
+        CancellationPolicyOptions? cancellationPolicy = null) =>
         new(
             new BookingRepository(context),
             new PaymentTransactionRepository(context),
@@ -110,7 +112,25 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
             context,
             TestServices.Clock(timeProvider),
             timeProvider,
-            Options.Create(policy ?? new ReschedulePolicyOptions()));
+            Options.Create(policy ?? new ReschedulePolicyOptions()),
+            Options.Create(cancellationPolicy ?? new CancellationPolicyOptions()));
+
+    private static CancellationService BuildCancellationService(
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway, TimeProvider timeProvider, CancellationPolicyOptions? policy = null) =>
+        new(
+            new BookingRepository(context),
+            new PaymentTransactionRepository(context),
+            new RefundTransactionRepository(context),
+            TestServices.RefundService(context, gateway),
+            new BookingCancellationRepository(context),
+            new BookingProviderAssignmentRepository(context),
+            BuildSlotAvailabilityService(context),
+            new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            new CustomerSubscriptionRepository(context),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            TestServices.Clock(timeProvider),
+            timeProvider,
+            Options.Create(policy ?? new CancellationPolicyOptions()));
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total, Guid LocalityId, Guid NewSlotWindowId, DateOnly NewSlotDate, DateTime SlotStartUtc);
 
@@ -280,6 +300,87 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
         var history = await new BookingRescheduleRepository(readContext).ListByBookingAsync(fixture.BookingId);
         history.Should().HaveCount(1);
         history[0].Reason.Should().Be("Need a different day");
+    }
+
+    /// <summary>
+    /// Regression coverage for the reschedule fee-bypass exploit: a customer
+    /// inside the late-cancellation-fee window reschedules to a slot far
+    /// enough out to look free, then immediately cancels. Before this fix,
+    /// CancellationService.ComputeOutcomeAsync judged "time until slot"
+    /// against the booking's CURRENT slot only - which Reschedule had just
+    /// overwritten - so the fee genuinely owed on the slot given up vanished
+    /// and the cancellation came back fully refunded.
+    ///
+    /// FALSIFIABILITY: without Booking.LockedCancellationFeeSnapshot flooring
+    /// the fee, this cancellation computes against the new slot (2 days away,
+    /// far outside the 4-hour free-cancellation window), returning
+    /// WithinFreeWindow=true, fee=0, refund=1000 - not the 200/800 asserted
+    /// below.
+    /// </summary>
+    [Fact]
+    public async Task Reschedule_then_immediate_cancel_still_charges_the_cancellation_fee_the_original_slot_owed()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, servicePrice: 1000m);
+
+        // 3 hours before the original slot: inside the 4-hour cancellation
+        // free window (a fee would apply right now) and inside the 6-hour
+        // reschedule late-fee threshold, but past the 2-hour reschedule hard
+        // block - so the reschedule itself is allowed to go through.
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddHours(-3));
+
+        using (var rescheduleContext = _db.CreateContext())
+        {
+            var rescheduleResult = await BuildRescheduleService(rescheduleContext, timeProvider).ConfirmRescheduleAsync(
+                fixture.Customer.Id, fixture.BookingId,
+                new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Need a different day"));
+            rescheduleResult.IsSuccess.Should().BeTrue();
+        }
+
+        using (var cancelContext = _db.CreateContext())
+        {
+            var cancelResult = await BuildCancellationService(cancelContext, gateway, timeProvider).CancelAsync(
+                fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Changed my mind"));
+
+            cancelResult.IsSuccess.Should().BeTrue();
+            cancelResult.Value.WithinFreeCancellationWindow.Should().BeFalse(
+                "the reschedule moved the slot far away, but the fee already owed on the slot given up must survive the move");
+            cancelResult.Value.CancellationFeeAmount.Should().Be(200m, "20% of the 1000 the booking was funded by - the fee the original, near slot already owed");
+            cancelResult.Value.RefundAmount.Should().Be(800m);
+        }
+    }
+
+    /// <summary>
+    /// The other side of the same fix: a reschedule made from well outside
+    /// any fee window locks in nothing, so a legitimate customer rescheduling
+    /// far in advance is never penalized for a fee that was never actually
+    /// owed in the first place.
+    /// </summary>
+    [Fact]
+    public async Task Reschedule_made_well_before_the_slot_locks_in_no_cancellation_fee_floor()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, servicePrice: 1000m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddDays(-5));
+
+        using (var rescheduleContext = _db.CreateContext())
+        {
+            var rescheduleResult = await BuildRescheduleService(rescheduleContext, timeProvider).ConfirmRescheduleAsync(
+                fixture.Customer.Id, fixture.BookingId,
+                new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Need a different day"));
+            rescheduleResult.IsSuccess.Should().BeTrue();
+        }
+
+        using (var cancelContext = _db.CreateContext())
+        {
+            var cancelResult = await BuildCancellationService(cancelContext, gateway, timeProvider).CancelAsync(
+                fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Changed my mind"));
+
+            cancelResult.IsSuccess.Should().BeTrue();
+            cancelResult.Value.WithinFreeCancellationWindow.Should().BeTrue("no fee was ever owed on the slot given up, so none should be locked in");
+            cancelResult.Value.CancellationFeeAmount.Should().Be(0m);
+            cancelResult.Value.RefundAmount.Should().Be(1000m);
+        }
     }
 
     /// <summary>
@@ -633,10 +734,109 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
         activeAssignment.Should().BeNull("the original assignment was withdrawn, not left live alongside a cleared display field");
     }
 
+    /// <summary>
+    /// Regression coverage for the orphaned-slot-capacity gap: the new
+    /// slot's reservation (ISlotAvailabilityService.ReserveSlotAsync) is its
+    /// own atomic conditional UPDATE, committed independently of the
+    /// ambient DbContext - it is not rolled back just because the booking
+    /// write that was meant to follow it never lands. Before this fix, a
+    /// booking write failure here (a DB error, a timeout) left that
+    /// reservation permanently in place with no booking to justify it - the
+    /// new slot's capacity counter would eventually make it look full when
+    /// it was not.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmRescheduleAsync_releases_the_new_slots_reservation_if_the_booking_write_fails()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, servicePrice: 1000m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddDays(-5));
+
+        using (var capacityContext = _db.CreateContext())
+        {
+            // ReserveSlotAsync is a genuine no-op (Result.Success with no
+            // write at all) for a window with no configured cap
+            // (SlotWindow.MaxBookingsPerSlot null) - SeedPaidBookingAsync's
+            // target window has none by default, so this test needs a real
+            // cap to actually exercise SlotCapacityRepository's counter at
+            // all, orphaned or not.
+            var windowRepository = new SlotWindowRepository(capacityContext);
+            var window = await windowRepository.GetByIdAsync(fixture.NewSlotWindowId);
+            window!.SetCapacity(5);
+            await windowRepository.UpdateAsync(window);
+        }
+
+        using var context = _db.CreateContext();
+
+        var countsBefore = await new SlotCapacityRepository(context).GetBookedCountsAsync([fixture.NewSlotWindowId], fixture.NewSlotDate);
+        countsBefore.GetValueOrDefault(fixture.NewSlotWindowId, 0).Should().Be(0, "nobody has booked the target slot yet");
+
+        var throwingRepository = new ThrowingBookingRepository(new BookingRepository(context), fixture.BookingId);
+        var service = new RescheduleService(
+            throwingRepository,
+            new PaymentTransactionRepository(context),
+            new RefundTransactionRepository(context),
+            BuildSlotAvailabilityService(context),
+            new BookingRescheduleRepository(context),
+            new BookingProviderAssignmentRepository(context),
+            new ProviderScheduleConflictService(context, TestServices.Occupancy()),
+            context,
+            TestServices.Clock(timeProvider),
+            timeProvider,
+            Options.Create(new ReschedulePolicyOptions()),
+            Options.Create(new CancellationPolicyOptions()));
+
+        var act = async () => await service.ConfirmRescheduleAsync(
+            fixture.Customer.Id, fixture.BookingId,
+            new RescheduleBookingRequest(fixture.LocalityId, fixture.NewSlotWindowId, fixture.NewSlotDate, "Need a different day"));
+
+        await act.Should().ThrowAsync<InvalidOperationException>("the simulated write failure must propagate, not be silently swallowed");
+
+        var countsAfter = await new SlotCapacityRepository(context).GetBookedCountsAsync([fixture.NewSlotWindowId], fixture.NewSlotDate);
+        countsAfter.GetValueOrDefault(fixture.NewSlotWindowId, 0).Should().Be(0, "the reservation taken before the failed write must be released, not left orphaned");
+    }
+
     private sealed class FakeTimeProvider : TimeProvider
     {
         private readonly DateTimeOffset _now;
         public FakeTimeProvider(DateTime now) => _now = new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc));
         public override DateTimeOffset GetUtcNow() => _now;
+    }
+
+    /// <summary>
+    /// A real <see cref="BookingRepository"/> with one booking rigged to fail
+    /// on write, so the test exercises the service's own compensating logic
+    /// against real persistence rather than an entirely fake repository -
+    /// mirrors BookingFulfilmentPromotionJobTests' identical-purpose double.
+    /// </summary>
+    private sealed class ThrowingBookingRepository(IBookingRepository inner, Guid failingBookingId) : IBookingRepository
+    {
+        public Task UpdateAsync(Booking booking) =>
+            booking.Id == failingBookingId
+                ? throw new InvalidOperationException("Simulated write failure.")
+                : inner.UpdateAsync(booking);
+
+        public void DiscardChanges(Booking booking) => inner.DiscardChanges(booking);
+
+        public Task AddAsync(Booking booking) => inner.AddAsync(booking);
+        public Task<bool> TryAddAsync(Booking booking) => inner.TryAddAsync(booking);
+        public Task<Booking?> GetByIdempotencyKeyAsync(Guid customerId, string idempotencyKey) => inner.GetByIdempotencyKeyAsync(customerId, idempotencyKey);
+        public Task<Booking?> GetByIdAsync(Guid id) => inner.GetByIdAsync(id);
+        public Task<IReadOnlyList<Booking>> ListByCustomerAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses) => inner.ListByCustomerAsync(customerId, statuses);
+        public Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListByCustomerPagedAsync(Guid customerId, IReadOnlyList<BookingStatus> statuses, int page, int pageSize) => inner.ListByCustomerPagedAsync(customerId, statuses, page, pageSize);
+        public Task<BookingSearchResult> SearchAsync(BookingSearchFilter filter) => inner.SearchAsync(filter);
+        public Task<IReadOnlyList<Booking>> ListByAssignedProviderAsync(Guid providerId) => inner.ListByAssignedProviderAsync(providerId);
+        public Task<IReadOnlyList<Booking>> ListByRecurringPlanAsync(Guid recurringBookingPlanId) => inner.ListByRecurringPlanAsync(recurringBookingPlanId);
+        public Task<int> CountCompletedByCustomerAsync(Guid customerId, Guid excludingBookingId) => inner.CountCompletedByCustomerAsync(customerId, excludingBookingId);
+        public Task<int> CountCompletedByAssignedProviderAsync(Guid providerId, Guid excludingBookingId) => inner.CountCompletedByAssignedProviderAsync(providerId, excludingBookingId);
+        public Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc, DateTime recurringOlderThanUtc) => inner.ListStalePaymentPendingAsync(olderThanUtc, recurringOlderThanUtc);
+        public Task<IReadOnlyList<Booking>> ListRecurringPaymentPendingAsync() => inner.ListRecurringPaymentPendingAsync();
+        public Task<IReadOnlyList<Booking>> ListConfirmedDueForFulfilmentAsync(DateOnly onOrAfterSlotDate, DateOnly onOrBeforeSlotDate, int skip, int take) => inner.ListConfirmedDueForFulfilmentAsync(onOrAfterSlotDate, onOrBeforeSlotDate, skip, take);
+        public Task<IReadOnlyList<Booking>> ListSummariesByIdsAsync(IReadOnlyCollection<Guid> ids) => inner.ListSummariesByIdsAsync(ids);
+        public Task<IReadOnlyList<Guid>> ListServiceIdsEverBookedAsync() => inner.ListServiceIdsEverBookedAsync();
+        public Task<IReadOnlyDictionary<Guid, string>> ListServiceNamesByIdsAsync(IReadOnlyCollection<Guid> bookingIds) => inner.ListServiceNamesByIdsAsync(bookingIds);
+        public Task<(IReadOnlyList<Booking> Rows, int TotalCount)> ListUnassignedAtRiskAsync(int page, int pageSize) => inner.ListUnassignedAtRiskAsync(page, pageSize);
+        public Task<IReadOnlyList<Booking>> ListAwaitingPaymentAsync() => inner.ListAwaitingPaymentAsync();
+        public Task<IReadOnlyList<Booking>> ListForFulfilmentBoardAsync(DateOnly date) => inner.ListForFulfilmentBoardAsync(date);
     }
 }

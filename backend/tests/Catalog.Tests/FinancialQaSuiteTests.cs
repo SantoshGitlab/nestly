@@ -307,7 +307,9 @@ public sealed class FinancialQaSuiteTests : IClassFixture<TestDatabase>
 
         RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
             new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context), context), BuildEscrowService(context), gateway, context);
+            new WalletService(new WalletLedgerRepository(context), context), BuildEscrowService(context),
+            new ProviderEarningLedgerRepository(context), TestServices.ProviderEarningLedgerService(context),
+            gateway, context, NullLogger<RefundService>.Instance);
 
         // 600 via gateway, then an over-ask of 500 (only 400 remains) must be rejected...
         using (var partialGatewayContext = _db.CreateContext())

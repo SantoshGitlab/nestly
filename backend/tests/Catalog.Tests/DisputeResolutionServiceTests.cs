@@ -88,9 +88,7 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
             context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
 
     private static DisputeResolutionService BuildDisputeService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
-        BuildDisputeService(context, new RefundService(
-            new BookingRepository(context), new PaymentTransactionRepository(context), new RefundTransactionRepository(context),
-            new WalletService(new WalletLedgerRepository(context), context), new EscrowService(new PlatformEscrowLedgerRepository(context)), gateway, context));
+        BuildDisputeService(context, TestServices.RefundService(context, gateway));
 
     private static DisputeResolutionService BuildDisputeService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IRefundService refundService) =>
         new(
