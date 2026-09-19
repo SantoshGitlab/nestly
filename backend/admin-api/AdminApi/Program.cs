@@ -200,6 +200,16 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         "assignment-response-expiry-sweep",
         job => job.SweepAsync(CancellationToken.None),
         "*/5 * * * *");
+
+    // Recurring-booking payment-timing fix: attempts off-session auto-charge
+    // for recurring occurrences whose plan opted in. Every 15 minutes rather
+    // than the 5-minute sweeps above - attempts are gated by
+    // RecurringBookingOptions.AutoChargeInitialDelayHours/RetryBackoffHours
+    // (hours, not minutes), so a tighter cadence would only add empty ticks.
+    RecurringJob.AddOrUpdate<IRecurringOccurrenceAutoChargeJob>(
+        "recurring-occurrence-auto-charge",
+        job => job.ProcessDueAttemptsAsync(CancellationToken.None),
+        "*/15 * * * *");
 }
 
 // Task 333: promotes Confirmed bookings to AwaitingFulfilment as their slot

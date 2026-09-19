@@ -173,7 +173,13 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
         if (result.IsSuccess)
         {
             var (outcome, providerNote) = await ResolveProviderPlacementAsync(plan, result.Value.Id, occurrenceDate, cancellationToken);
-            await RecordOccurrenceAsync(plan, occurrenceDate, outcome, result.Value.Id, providerNote, cancellationToken);
+            // Task (recurring payment-timing fix): whether this occurrence
+            // still needs payment travels with the outcome, not just the
+            // booking id - see NotifyAsync's doc comment on why a recurring
+            // occurrence cannot reuse the one-off flow's "PaymentPending is
+            // silent" rule.
+            var requiresPayment = result.Value.Status == BookingStatus.PaymentPending;
+            await RecordOccurrenceAsync(plan, occurrenceDate, outcome, result.Value.Id, providerNote, requiresPayment, result.Value.FinalPayable, cancellationToken);
             plan.RecordOccurrenceBooked(occurrenceDate);
         }
         else
@@ -186,7 +192,7 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
                 "Recurring plan {PlanId} occurrence for {ScheduledDate} skipped ({ErrorCode}): {ErrorMessage}",
                 plan.Id, occurrenceDate, result.Error.Code, result.Error.Message);
 
-            await RecordOccurrenceAsync(plan, occurrenceDate, outcome, null, result.Error.Message, cancellationToken);
+            await RecordOccurrenceAsync(plan, occurrenceDate, outcome, null, result.Error.Message, requiresPayment: false, payableAmount: 0m, cancellationToken: cancellationToken);
             plan.RecordOccurrenceSkipped(occurrenceDate);
         }
 
@@ -260,12 +266,14 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
         RecurringBookingOccurrenceOutcome outcome,
         Guid? bookingId,
         string? skipReason,
+        bool requiresPayment,
+        decimal payableAmount,
         CancellationToken cancellationToken)
     {
         var occurrence = new RecurringBookingOccurrence(Guid.NewGuid(), plan.Id, occurrenceDate, outcome, bookingId, skipReason);
         await _occurrenceRepository.AddAsync(occurrence);
 
-        await NotifyAsync(plan, occurrenceDate, outcome, bookingId, cancellationToken);
+        await NotifyAsync(plan, occurrenceDate, outcome, bookingId, requiresPayment, payableAmount, cancellationToken);
     }
 
     private async Task NotifyAsync(
@@ -273,6 +281,8 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
         DateOnly occurrenceDate,
         RecurringBookingOccurrenceOutcome outcome,
         Guid? bookingId,
+        bool requiresPayment,
+        decimal payableAmount,
         CancellationToken cancellationToken)
     {
         var customer = await _customerRepository.GetByIdAsync(plan.CustomerId);
@@ -292,7 +302,9 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
             ["CustomerName"] = customer.Name,
             ["ServiceName"] = service?.Name ?? string.Empty,
             ["SlotDate"] = occurrenceDate.ToString("yyyy-MM-dd"),
-            ["SlotWindow"] = slotWindow?.Name ?? string.Empty
+            ["SlotWindow"] = slotWindow?.Name ?? string.Empty,
+            ["Amount"] = payableAmount.ToString("0.00"),
+            ["PaymentWindowHours"] = _options.PaymentWindowHours.ToString()
         };
 
         // Task 297: driven by "did a booking happen", not by a single enum
@@ -304,9 +316,26 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
         // reassignment flow itself (task 295's ProviderChanged) at the moment
         // it actually happens, rather than from a forecast days earlier that
         // supply may yet make untrue.
-        var eventType = outcome.CreatedBooking()
-            ? NotificationEventType.RecurringBookingUpcoming
-            : NotificationEventType.RecurringBookingSkipped;
+        //
+        // Recurring payment-timing fix: a booked occurrence with something
+        // still payable is NOT "confirmed" - it is sitting in PaymentPending,
+        // created unattended with nobody on a checkout screen to see it. Only
+        // a booking with nothing left to pay (wallet/subscription covered, or
+        // AMC-redeemed) is genuinely confirmed and gets the original message.
+        // Of the two payable cases: a plan with auto-charge on gets the
+        // advance notice that a charge is coming (never a silent deduction -
+        // see NotificationEventType.RecurringBookingAutoChargeScheduled's doc
+        // comment), everyone else gets the manual "pay before this expires"
+        // message, with the amount and the deadline before
+        // BookingExpirySweepJob releases the slot (see
+        // RecurringBookingOptions.PaymentWindowHours).
+        var eventType = !outcome.CreatedBooking()
+            ? NotificationEventType.RecurringBookingSkipped
+            : !requiresPayment
+                ? NotificationEventType.RecurringBookingUpcoming
+                : plan.AutoChargeEnabled
+                    ? NotificationEventType.RecurringBookingAutoChargeScheduled
+                    : NotificationEventType.RecurringBookingPaymentDue;
 
         await _notificationDispatchService.DispatchAsync(
             plan.CustomerId, eventType, recipient, variables, bookingId: bookingId, cancellationToken: cancellationToken);

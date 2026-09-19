@@ -33,7 +33,10 @@ public record CreateRecurringBookingPlanRequest(
     DateOnly? EndDate,
     int? OccurrenceCount,
     IReadOnlyList<AddOnSelection> AddOns,
-    bool ApplyWalletCredit = false);
+    bool ApplyWalletCredit = false,
+    // Recurring-booking payment-timing fix: explicit opt-in only, never
+    // inferred - see RecurringBookingPlan.AutoChargeEnabled's doc comment.
+    bool AutoChargeEnabled = false);
 
 public record RecurringBookingPlanResponse(
     Guid Id,
@@ -43,6 +46,7 @@ public record RecurringBookingPlanResponse(
     Guid SlotWindowId,
     int Quantity,
     bool ApplyWalletCredit,
+    bool AutoChargeEnabled,
     RecurringBookingRecurrenceFrequency Frequency,
     DayOfWeek? RecurrenceDayOfWeek,
     int? RecurrenceDayOfMonth,
@@ -55,6 +59,12 @@ public record RecurringBookingPlanResponse(
     DateTime CreatedAtUtc);
 
 /// <summary>A projected future date (not yet a real booking) or a past outcome the scheduler already recorded - see <see cref="RecurringBookingOccurrence"/>'s doc comment on why the two are computed differently.</summary>
+/// <summary>Recurring-booking payment-timing fix: request body for toggling <see cref="RecurringBookingPlanResponse.AutoChargeEnabled"/> post-creation.</summary>
+public record SetAutoChargeRequest(bool Enabled);
+
+/// <summary>Occurrence-count integrity fix: request body for <see cref="IRecurringBookingPlanService.SetOccurrenceBoundsAsync"/> - see <see cref="Domain.RecurringBookingPlan.SetOccurrenceBounds"/>'s doc comment for the validation rules.</summary>
+public record SetOccurrenceBoundsRequest(DateOnly? EndDate, int? OccurrenceCount);
+
 public record UpcomingOccurrenceResponse(DateOnly ScheduledDate, bool IsProjected);
 
 public record OccurrenceHistoryResponse(

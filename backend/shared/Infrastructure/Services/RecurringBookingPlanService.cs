@@ -54,7 +54,7 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
                 request.RecurrenceDayOfWeek, request.RecurrenceDayOfMonth, request.StartDate,
                 request.EndDate, request.OccurrenceCount,
                 request.AddOns.Select(a => (a.AddOnId, a.Quantity)).ToList(),
-                request.ApplyWalletCredit);
+                request.ApplyWalletCredit, request.AutoChargeEnabled);
         }
         catch (ArgumentException ex)
         {
@@ -98,6 +98,32 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
 
     public async Task<Result<RecurringBookingPlanResponse>> CancelAsync(Guid customerId, Guid planId) =>
         await TransitionAsync(customerId, planId, plan => plan.Cancel(), "RecurringBookingPlan.InvalidCancel");
+
+    public async Task<Result<RecurringBookingPlanResponse>> SetAutoChargeAsync(Guid customerId, Guid planId, bool enabled) =>
+        await TransitionAsync(customerId, planId, plan => plan.SetAutoCharge(enabled), "RecurringBookingPlan.InvalidAutoChargeChange");
+
+    public async Task<Result<RecurringBookingPlanResponse>> SetOccurrenceBoundsAsync(Guid customerId, Guid planId, DateOnly? endDate, int? occurrenceCount)
+    {
+        var planResult = await ResolveOwnedPlanAsync(customerId, planId);
+        if (planResult.IsFailure)
+        {
+            return planResult.Error;
+        }
+
+        var plan = planResult.Value;
+        try
+        {
+            plan.SetOccurrenceBounds(endDate, occurrenceCount);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return Error.Validation("RecurringBookingPlan.InvalidOccurrenceBounds", ex.Message);
+        }
+
+        await _planRepository.UpdateAsync(plan);
+
+        return ToResponse(plan, await ResolveServiceNameAsync(plan.ServiceId));
+    }
 
     public async Task<Result<IReadOnlyList<UpcomingOccurrenceResponse>>> ListUpcomingOccurrencesAsync(Guid customerId, Guid planId, int count = 5)
     {
@@ -172,6 +198,6 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
 
     private static RecurringBookingPlanResponse ToResponse(RecurringBookingPlan plan, string serviceName) => new(
         plan.Id, plan.ServiceId, serviceName, plan.AddressId, plan.SlotWindowId, plan.Quantity, plan.ApplyWalletCredit,
-        plan.Frequency, plan.RecurrenceDayOfWeek, plan.RecurrenceDayOfMonth, plan.StartDate, plan.EndDate,
+        plan.AutoChargeEnabled, plan.Frequency, plan.RecurrenceDayOfWeek, plan.RecurrenceDayOfMonth, plan.StartDate, plan.EndDate,
         plan.OccurrenceCount, plan.CompletedOccurrenceCount, plan.NextOccurrenceDate, plan.Status, plan.CreatedAtUtc);
 }

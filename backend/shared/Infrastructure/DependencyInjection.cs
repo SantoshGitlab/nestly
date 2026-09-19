@@ -704,6 +704,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletService, WalletService>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
+        services.AddScoped<IRecurringOccurrenceAutoChargeJob, RecurringOccurrenceAutoChargeJob>();
         services.AddScoped<IAssignmentResponseExpirySweepJob, AssignmentResponseExpirySweepJob>();
         services.AddScoped<IBookingFulfilmentPromotionJob, BookingFulfilmentPromotionJob>();
         services.AddScoped<IServiceabilityAutoDisableSweepJob, ServiceabilityAutoDisableSweepJob>();

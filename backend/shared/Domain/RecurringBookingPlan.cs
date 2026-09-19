@@ -62,6 +62,25 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     /// </summary>
     public bool ApplyWalletCredit { get; private set; }
 
+    /// <summary>
+    /// Recurring-booking payment-timing fix: whether the customer has opted
+    /// in to letting <c>RecurringOccurrenceAutoChargeJob</c> attempt payment
+    /// on their behalf, off-session, through the same sandbox gateway seam
+    /// <c>SubscriptionBillingJob</c> already uses (<c>IPaymentGateway</c>/
+    /// <c>ISandboxPaymentSimulator</c>) - not a second, invented payment
+    /// integration.
+    ///
+    /// <para>
+    /// Defaults to false and is never inferred: consent to auto-deduction is
+    /// an explicit customer choice, set at creation or toggled later via
+    /// <see cref="SetAutoCharge"/>, never turned on implicitly by this
+    /// aggregate itself. A plan with this off simply keeps getting the
+    /// existing "payment due, please pay manually" notification for every
+    /// occurrence.
+    /// </para>
+    /// </summary>
+    public bool AutoChargeEnabled { get; private set; }
+
     public RecurringBookingRecurrenceFrequency Frequency { get; private set; }
 
     /// <summary>Required for <see cref="RecurringBookingRecurrenceFrequency.Weekly"/>/<see cref="RecurringBookingRecurrenceFrequency.Biweekly"/>; null for <see cref="RecurringBookingRecurrenceFrequency.Monthly"/>.</summary>
@@ -107,7 +126,8 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         DateOnly? endDate,
         int? occurrenceCount,
         IReadOnlyList<(Guid AddOnId, int Quantity)>? addOns = null,
-        bool applyWalletCredit = false)
+        bool applyWalletCredit = false,
+        bool autoChargeEnabled = false)
         : base(id)
     {
         if (quantity <= 0)
@@ -140,6 +160,7 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         SlotWindowId = slotWindowId;
         Quantity = quantity;
         ApplyWalletCredit = applyWalletCredit;
+        AutoChargeEnabled = autoChargeEnabled;
         Frequency = frequency;
         RecurrenceDayOfWeek = recurrenceDayOfWeek;
         RecurrenceDayOfMonth = recurrenceDayOfMonth;
@@ -223,6 +244,95 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         Status = RecurringBookingPlanStatus.Active;
     }
 
+    /// <summary>
+    /// Toggles the customer's consent to off-session auto-charge. Callable in
+    /// any non-terminal status (unlike <see cref="Pause"/>/<see cref="Resume"/>,
+    /// this is a standing preference, not a scheduling state) - a customer can
+    /// turn it off the moment they change their mind, including while paused,
+    /// and a currently-in-flight auto-charge attempt for an occurrence already
+    /// created is unaffected (see <c>RecurringOccurrenceAutoChargeJob</c>,
+    /// which reads the plan fresh on each attempt rather than caching this
+    /// flag).
+    /// </summary>
+    public void SetAutoCharge(bool enabled)
+    {
+        if (Status is RecurringBookingPlanStatus.Cancelled or RecurringBookingPlanStatus.Completed)
+        {
+            throw new InvalidOperationException($"Cannot change auto-charge on a {Status} plan.");
+        }
+
+        AutoChargeEnabled = enabled;
+    }
+
+    /// <summary>
+    /// Occurrence-count integrity fix (the "no way to edit a plan" half):
+    /// lets the customer tighten or loosen how many more occurrences this
+    /// plan will generate - <see cref="EndDate"/> and/or
+    /// <see cref="OccurrenceCount"/> only. Everything else about the plan
+    /// (service, address, slot window, frequency, add-ons) is deliberately
+    /// out of scope here: changing what gets booked each time is a
+    /// materially different, re-validation-requiring operation (mirroring
+    /// why plan creation dry-runs pricing through the booking-summary
+    /// orchestration before persisting anything), while the occurrence
+    /// budget is pure bookkeeping this aggregate can safely own on its own.
+    ///
+    /// <para>
+    /// Same boundedness rule the constructor enforces (at least one of the
+    /// two, <see cref="EndDate"/> not before <see cref="StartDate"/>,
+    /// <see cref="OccurrenceCount"/> positive), plus one more specific to
+    /// editing: <see cref="OccurrenceCount"/> can never drop below
+    /// <see cref="CompletedOccurrenceCount"/> - a customer who already
+    /// received 5 visits cannot have their plan's promise cut to 3. Applies
+    /// the new bounds and immediately re-evaluates completion against the
+    /// unchanged <see cref="NextOccurrenceDate"/>, exactly like
+    /// <see cref="AdvanceOrComplete"/> does after every occurrence - without
+    /// this, a plan edited to a bound it already exceeds would sit Active
+    /// until the scheduler's next tick tried to book past it.
+    /// </para>
+    /// </summary>
+    public void SetOccurrenceBounds(DateOnly? endDate, int? occurrenceCount)
+    {
+        if (Status is RecurringBookingPlanStatus.Cancelled or RecurringBookingPlanStatus.Completed)
+        {
+            throw new InvalidOperationException($"Cannot edit a {Status} plan's occurrence bounds.");
+        }
+
+        if (endDate is null && occurrenceCount is null)
+        {
+            throw new ArgumentException("A recurring plan must be bounded by an end date, an occurrence count, or both.");
+        }
+
+        if (endDate is { } end && end < StartDate)
+        {
+            throw new ArgumentOutOfRangeException(nameof(endDate), "End date cannot be before the start date.");
+        }
+
+        if (occurrenceCount is { } count)
+        {
+            if (count <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(occurrenceCount), "Occurrence count must be positive.");
+            }
+
+            if (count < CompletedOccurrenceCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(occurrenceCount),
+                    $"Occurrence count cannot be reduced below the {CompletedOccurrenceCount} occurrence(s) already booked.");
+            }
+        }
+
+        EndDate = endDate;
+        OccurrenceCount = occurrenceCount;
+
+        bool occurrenceBudgetExhausted = OccurrenceCount is { } target && CompletedOccurrenceCount >= target;
+        bool pastEndDate = EndDate is { } newEnd && NextOccurrenceDate > newEnd;
+        if (occurrenceBudgetExhausted || pastEndDate)
+        {
+            Status = RecurringBookingPlanStatus.Completed;
+        }
+    }
+
     /// <summary>Active or Paused -> Cancelled. Terminal - a cancelled plan can never be resumed (create a new one instead), same one-way-door convention <c>BookingLifecycle</c> uses for its own terminal states.</summary>
     public void Cancel()
     {
@@ -262,6 +372,53 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         EnsureIsDueDate(occurrenceDate);
 
         AdvanceOrComplete();
+    }
+
+    /// <summary>
+    /// Occurrence-count integrity fix: reverses one occurrence's contribution
+    /// to <see cref="CompletedOccurrenceCount"/> once its booking is
+    /// confirmed to have never been delivered (cancelled before the visit,
+    /// expired unpaid, or refunded from a pre-visit cancellation - see
+    /// <c>RecurringPlanOccurrenceReleaseHandler</c>'s doc comment for the
+    /// exact trigger set and why a post-visit refund must NOT reach this
+    /// method). Without this, a customer bound by <see cref="OccurrenceCount"/>
+    /// could receive fewer real visits than the plan promised: the counter
+    /// was incremented at booking-<i>creation</i> time by
+    /// <see cref="RecordOccurrenceBooked"/> and, before this method existed,
+    /// nothing ever gave it back.
+    ///
+    /// <para>
+    /// If reaching <see cref="OccurrenceCount"/> is what completed this plan,
+    /// reopens it to <see cref="RecurringBookingPlanStatus.Active"/> so the
+    /// scheduler picks up one more occurrence at the already-advanced
+    /// <see cref="NextOccurrenceDate"/> - the plan simply runs one cycle
+    /// longer than originally projected, exactly making up the one that
+    /// never happened. Left untouched if <see cref="EndDate"/> is what
+    /// completed it instead (a hard calendar boundary, not a budget) or if
+    /// the plan is <see cref="RecurringBookingPlanStatus.Cancelled"/> (a
+    /// deliberate one-way door - see <see cref="Cancel"/> - that a
+    /// booking-level event must never reverse).
+    /// </para>
+    /// </summary>
+    public void ReleaseOccurrence()
+    {
+        if (CompletedOccurrenceCount > 0)
+        {
+            CompletedOccurrenceCount--;
+        }
+
+        if (Status != RecurringBookingPlanStatus.Completed)
+        {
+            return;
+        }
+
+        bool occurrenceBudgetExhausted = OccurrenceCount is { } target && CompletedOccurrenceCount >= target;
+        bool pastEndDate = EndDate is { } end && NextOccurrenceDate > end;
+
+        if (!occurrenceBudgetExhausted && !pastEndDate)
+        {
+            Status = RecurringBookingPlanStatus.Active;
+        }
     }
 
     private void EnsureIsDueDate(DateOnly occurrenceDate)

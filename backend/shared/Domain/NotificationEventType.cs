@@ -103,5 +103,35 @@ public enum NotificationEventType
     AmcContractExpiringSoon,
 
     /// <summary>Every entitled visit on an AMC contract has been redeemed while the term still has time left.</summary>
-    AmcContractExhausted
+    AmcContractExhausted,
+
+    // Recurring-booking payment-timing fix. APPENDED, NEVER INSERTED - see the
+    // comment above ProviderAssigned.
+
+    /// <summary>
+    /// A recurring plan's occurrence was created but still needs payment
+    /// (<see cref="BookingStatus.PaymentPending"/>) - fires instead of
+    /// <see cref="RecurringBookingUpcoming"/> when the occurrence has
+    /// something payable, so the customer is told the truth: the visit is
+    /// booked, not confirmed, and needs action before it is auto-expired.
+    /// Unlike a one-off checkout's silent PaymentPending (nobody needs telling
+    /// what they are already looking at), a recurring occurrence is created
+    /// unattended, days ahead of the visit, so this is the only signal the
+    /// customer gets that payment is due at all.
+    /// </summary>
+    RecurringBookingPaymentDue,
+
+    /// <summary>
+    /// A recurring plan's occurrence was created with
+    /// <see cref="Nestly.Application.RecurringBookings.CreateRecurringBookingPlanRequest.AutoChargeEnabled"/>
+    /// on - fires instead of <see cref="RecurringBookingPaymentDue"/>, at the
+    /// same "just created" moment, so the customer is told their card will be
+    /// charged automatically (with the amount and roughly when) before
+    /// <c>RecurringOccurrenceAutoChargeJob</c> makes its first attempt -
+    /// never a silent auto-deduction. A successful charge is announced by the
+    /// booking's own Confirmed transition (<see cref="PaymentSuccess"/>/
+    /// <see cref="BookingConfirmed"/>) exactly like any other payment; this
+    /// event only ever covers the advance notice.
+    /// </summary>
+    RecurringBookingAutoChargeScheduled
 }

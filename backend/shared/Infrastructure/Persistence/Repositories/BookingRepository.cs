@@ -256,10 +256,17 @@ public class BookingRepository : IBookingRepository
         _context.Bookings.CountAsync(b =>
             b.AssignedProviderId == providerId && b.Status == BookingStatus.Completed && b.Id != excludingBookingId);
 
-    /// <summary>Task 240: BookingExpirySweepJob's candidate set - not AsNoTracking, since the job transitions and saves each row it loads here.</summary>
-    public async Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc) =>
+    /// <summary>Task 240 (extended for recurring occurrences): BookingExpirySweepJob's candidate set - not AsNoTracking, since the job transitions and saves each row it loads here. A recurring-originated row is matched against its own, longer, cutoff (see the interface doc comment).</summary>
+    public async Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc, DateTime recurringOlderThanUtc) =>
         await FullyLoaded()
-            .Where(b => b.Status == BookingStatus.PaymentPending && b.CreatedAtUtc < olderThanUtc)
+            .Where(b => b.Status == BookingStatus.PaymentPending &&
+                (b.RecurringBookingPlanId == null ? b.CreatedAtUtc < olderThanUtc : b.CreatedAtUtc < recurringOlderThanUtc))
+            .ToListAsync();
+
+    /// <summary>Task (recurring auto-charge): RecurringOccurrenceAutoChargeJob's candidate set - see the interface doc comment for why PaymentFailed is included alongside PaymentPending.</summary>
+    public async Task<IReadOnlyList<Booking>> ListRecurringPaymentPendingAsync() =>
+        await FullyLoaded()
+            .Where(b => (b.Status == BookingStatus.PaymentPending || b.Status == BookingStatus.PaymentFailed) && b.RecurringBookingPlanId != null)
             .ToListAsync();
 
     /// <inheritdoc/>

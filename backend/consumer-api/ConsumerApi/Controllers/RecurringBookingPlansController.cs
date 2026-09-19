@@ -99,6 +99,28 @@ public class RecurringBookingPlansController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>Toggles off-session auto-charge consent on the plan (recurring-booking payment-timing fix). Callable regardless of pause state.</summary>
+    [HttpPost("{id:guid}/auto-charge")]
+    [ProducesResponseType(typeof(RecurringBookingPlanResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SetAutoCharge(Guid id, [FromBody] SetAutoChargeRequest request)
+    {
+        var result = await _planService.SetAutoChargeAsync(CurrentCustomerId(), id, request.Enabled);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Edits how many more occurrences this plan will generate - end date and/or occurrence count only (occurrence-count integrity fix). Cannot reduce below what has already been booked.</summary>
+    [HttpPost("{id:guid}/bounds")]
+    [ProducesResponseType(typeof(RecurringBookingPlanResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SetOccurrenceBounds(Guid id, [FromBody] SetOccurrenceBoundsRequest request)
+    {
+        var result = await _planService.SetOccurrenceBoundsAsync(CurrentCustomerId(), id, request.EndDate, request.OccurrenceCount);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Upcoming (projected, not yet real) occurrence dates for the manage screen.</summary>
     [HttpGet("{id:guid}/occurrences/upcoming")]
     [ProducesResponseType(typeof(IReadOnlyList<UpcomingOccurrenceResponse>), StatusCodes.Status200OK)]

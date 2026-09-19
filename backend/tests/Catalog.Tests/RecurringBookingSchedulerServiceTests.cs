@@ -292,6 +292,49 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
         bookings.Should().ContainSingle(b => b.Id == history[0].BookingId);
     }
 
+    /// <summary>
+    /// Task (recurring payment-timing fix): the occurrence booked above has
+    /// something payable (the fixture's service is not free, and nothing here
+    /// applies a wallet/subscription/AMC credit), so it lands in
+    /// PaymentPending, not Confirmed. Before this fix the customer was told
+    /// "your visit is confirmed" regardless - a lie for exactly this, the most
+    /// common, case. The notification owed is
+    /// <see cref="NotificationEventType.RecurringBookingPaymentDue"/>, never
+    /// the "confirmed" <see cref="NotificationEventType.RecurringBookingUpcoming"/>.
+    /// </summary>
+    [Fact]
+    public async Task ProcessDueOccurrencesAsync_notifies_payment_due_when_the_booked_occurrence_still_needs_payment()
+    {
+        Fixture fixture;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = Seed(seedContext);
+        }
+
+        RecurringBookingPlan plan;
+        using (var planContext = _db.CreateContext())
+        {
+            plan = new RecurringBookingPlan(
+                Guid.NewGuid(), fixture.Customer.Id, fixture.Service.Id, fixture.City.Id, fixture.Locality.Id,
+                fixture.Address.Id, fixture.Window.Id, quantity: 1, RecurringBookingRecurrenceFrequency.Weekly,
+                DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)).DayOfWeek, recurrenceDayOfMonth: null,
+                startDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)), endDate: null, occurrenceCount: 4);
+            await new RecurringBookingPlanRepository(planContext).AddAsync(plan);
+        }
+
+        using var runContext = _db.CreateContext();
+        await BuildScheduler(runContext).ProcessDueOccurrencesAsync(CancellationToken.None);
+
+        using var assertContext = _db.CreateContext();
+        var history = await new RecurringBookingOccurrenceRepository(assertContext).ListByPlanAsync(plan.Id);
+        var booking = await new BookingRepository(assertContext).GetByIdAsync(history[0].BookingId!.Value);
+        booking!.Status.Should().Be(BookingStatus.PaymentPending, "the fixture's service is paid and nothing here funds it for free");
+
+        var notifications = await new NotificationEventRepository(assertContext).ListByCustomerAsync(fixture.Customer.Id);
+        notifications.Should().Contain(n => n.EventType == NotificationEventType.RecurringBookingPaymentDue);
+        notifications.Should().NotContain(n => n.EventType == NotificationEventType.RecurringBookingUpcoming);
+    }
+
     [Fact]
     public async Task ProcessDueOccurrencesAsync_records_a_skip_and_does_not_charge_the_occurrence_budget_when_the_slot_is_full()
     {

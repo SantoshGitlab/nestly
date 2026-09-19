@@ -41,6 +41,7 @@ public class RecurringBookingPlanConfiguration : IEntityTypeConfiguration<Recurr
 
         builder.Property(x => x.Quantity).IsRequired();
         builder.Property(x => x.ApplyWalletCredit).IsRequired().HasDefaultValue(false);
+        builder.Property(x => x.AutoChargeEnabled).IsRequired().HasDefaultValue(false);
 
         builder.Property(x => x.Frequency).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.RecurrenceDayOfWeek).HasConversion<string>().HasMaxLength(20);

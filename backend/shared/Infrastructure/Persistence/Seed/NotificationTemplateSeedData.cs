@@ -116,6 +116,20 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.RecurringBookingSkipped, NotificationChannel.Push, "recurring_booking_slot_unavailable_push", "Recurring visit could not be booked",
             "Your {{ServiceName}} visit for {{SlotDate}} couldn't be booked - the slot's no longer available."),
 
+        Row(NotificationEventType.RecurringBookingPaymentDue, NotificationChannel.Sms, "recurring_booking_payment_due_sms", null,
+            "Your recurring {{ServiceName}} visit for {{SlotDate}} is booked - pay {{Amount}} within {{PaymentWindowHours}} hours to confirm it. Open the app to pay. - Glavyx"),
+        Row(NotificationEventType.RecurringBookingPaymentDue, NotificationChannel.Email, "recurring_booking_payment_due_email", "Payment needed for your upcoming recurring visit",
+            "Hi {{CustomerName}},\n\nYour recurring {{ServiceName}} plan's visit for {{SlotDate}} ({{SlotWindow}}) is booked and waiting on payment of {{Amount}}. Please pay within {{PaymentWindowHours}} hours - if payment isn't completed in time, this occurrence will be released and your plan will continue with its next scheduled date."),
+        Row(NotificationEventType.RecurringBookingPaymentDue, NotificationChannel.Push, "recurring_booking_payment_due_push", "Payment needed for your recurring visit",
+            "Pay {{Amount}} to confirm your {{ServiceName}} visit for {{SlotDate}}."),
+
+        Row(NotificationEventType.RecurringBookingAutoChargeScheduled, NotificationChannel.Sms, "recurring_booking_auto_charge_scheduled_sms", null,
+            "Your recurring {{ServiceName}} visit for {{SlotDate}} is booked. {{Amount}} will be auto-charged to your saved payment method shortly. Manage this anytime in the app. - Glavyx"),
+        Row(NotificationEventType.RecurringBookingAutoChargeScheduled, NotificationChannel.Email, "recurring_booking_auto_charge_scheduled_email", "Your card will be charged for your upcoming recurring visit",
+            "Hi {{CustomerName}},\n\nYour recurring {{ServiceName}} plan's visit for {{SlotDate}} ({{SlotWindow}}) is booked. As per your auto-charge setting, {{Amount}} will be charged to your saved payment method automatically - no action needed. If you'd rather pay manually or turn auto-charge off, you can do that anytime from the plan's settings in the app."),
+        Row(NotificationEventType.RecurringBookingAutoChargeScheduled, NotificationChannel.Push, "recurring_booking_auto_charge_scheduled_push", "Auto-charge scheduled for your recurring visit",
+            "{{Amount}} will be auto-charged for your {{ServiceName}} visit on {{SlotDate}}."),
+
         Row(NotificationEventType.ReferralRegistered, NotificationChannel.Sms, "referral_registered_sms", null,
             "{{RefereeName}} just signed up with your referral code! You'll be rewarded once they complete a qualifying booking. - Glavyx"),
         Row(NotificationEventType.ReferralRegistered, NotificationChannel.Email, "referral_registered_email", "Your referral just signed up",

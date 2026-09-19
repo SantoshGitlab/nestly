@@ -103,6 +103,146 @@ public sealed class RecurringBookingPlanTests
     }
 
     [Fact]
+    public void ReleaseOccurrence_decrements_the_completed_count_and_reopens_a_plan_the_budget_had_completed()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 2);
+        var firstDue = plan.NextOccurrenceDate;
+        plan.RecordOccurrenceBooked(firstDue);
+        var secondDue = plan.NextOccurrenceDate;
+        plan.RecordOccurrenceBooked(secondDue);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed, "both promised occurrences were booked");
+
+        // The first occurrence's booking is later cancelled before the visit.
+        plan.ReleaseOccurrence();
+
+        plan.CompletedOccurrenceCount.Should().Be(1, "one of the two booked occurrences never actually happened");
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active, "the budget is no longer exhausted, so the plan owes one more visit");
+        plan.NextOccurrenceDate.Should().Be(secondDue.AddDays(7), "the make-up occurrence continues the existing cadence rather than picking a new date");
+    }
+
+    [Fact]
+    public void ReleaseOccurrence_never_goes_negative()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 4);
+
+        plan.ReleaseOccurrence();
+
+        plan.CompletedOccurrenceCount.Should().Be(0);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active);
+    }
+
+    [Fact]
+    public void ReleaseOccurrence_does_not_reopen_a_plan_that_completed_by_reaching_its_end_date()
+    {
+        // Bounded by EndDate only (occurrenceCount null) - see WeeklyPlanEndingOn's doc comment.
+        var start = new DateOnly(2026, 8, 4); // Tuesday
+        var plan = WeeklyPlanEndingOn(start, DayOfWeek.Tuesday, endDate: start);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed, "the very next date after the only occurrence is already past EndDate");
+
+        plan.ReleaseOccurrence();
+
+        plan.CompletedOccurrenceCount.Should().Be(0);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed, "EndDate is a hard calendar boundary, not a budget - releasing an occurrence cannot move it");
+    }
+
+    [Fact]
+    public void ReleaseOccurrence_never_reopens_a_cancelled_plan()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 2);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.Cancel();
+
+        plan.ReleaseOccurrence();
+
+        plan.CompletedOccurrenceCount.Should().Be(0);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Cancelled, "Cancel is a deliberate one-way door - a booking-level event must never reverse it");
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_lowers_the_occurrence_count_while_leaving_the_plan_active()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+
+        plan.SetOccurrenceBounds(endDate: null, occurrenceCount: 3);
+
+        plan.OccurrenceCount.Should().Be(3);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active, "1 of the new 3 is booked - two more are still owed");
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_completes_the_plan_immediately_when_the_new_count_is_already_met()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+
+        plan.SetOccurrenceBounds(endDate: null, occurrenceCount: 2);
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed, "both of the new 2 occurrences are already booked - nothing left to schedule");
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_throws_when_reducing_below_what_is_already_booked()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+
+        var act = () => plan.SetOccurrenceBounds(endDate: null, occurrenceCount: 1);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+        plan.OccurrenceCount.Should().Be(10, "the rejected edit must not partially apply");
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_throws_when_neither_bound_is_supplied()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
+
+        var act = () => plan.SetOccurrenceBounds(endDate: null, occurrenceCount: null);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_completes_the_plan_when_the_new_end_date_is_already_past_the_next_occurrence()
+    {
+        // 2026-08-01 is a Saturday, so NextOccurrenceDate rolls forward to
+        // 2026-08-04 (Tuesday) - an end date between the two (08-03) is
+        // still on/after StartDate but already before what's next due.
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 1), DayOfWeek.Tuesday, occurrenceCount: 10);
+
+        plan.SetOccurrenceBounds(endDate: new DateOnly(2026, 8, 3), occurrenceCount: null);
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed);
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_is_callable_while_paused()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
+        plan.Pause();
+
+        plan.SetOccurrenceBounds(endDate: null, occurrenceCount: 5);
+
+        plan.OccurrenceCount.Should().Be(5);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Paused, "editing bounds is not itself a resume");
+    }
+
+    [Fact]
+    public void SetOccurrenceBounds_throws_once_the_plan_is_terminal()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
+        plan.Cancel();
+
+        var act = () => plan.SetOccurrenceBounds(endDate: null, occurrenceCount: 5);
+
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
     public void RecordOccurrence_throws_when_the_date_does_not_match_the_plans_next_due_date()
     {
         var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday);
@@ -149,6 +289,31 @@ public sealed class RecurringBookingPlanTests
 
         var cancelAgain = () => plan.Cancel();
         cancelAgain.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void SetAutoCharge_toggles_the_flag_regardless_of_pause_state()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday);
+        plan.AutoChargeEnabled.Should().BeFalse("consent is opt-in, never on by default");
+
+        plan.SetAutoCharge(true);
+        plan.AutoChargeEnabled.Should().BeTrue();
+
+        plan.Pause();
+        plan.SetAutoCharge(false);
+        plan.AutoChargeEnabled.Should().BeFalse("a standing preference, not a scheduling state - callable while paused");
+    }
+
+    [Fact]
+    public void SetAutoCharge_throws_once_the_plan_is_terminal()
+    {
+        var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday);
+        plan.Cancel();
+
+        var act = () => plan.SetAutoCharge(true);
+
+        act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]

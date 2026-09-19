@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nestly.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nestly.Infrastructure.Migrations
 {
     [DbContext(typeof(NestlyDbContext))]
-    partial class NestlyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919120000_SeedRecurringBookingPaymentTimingNotificationTemplates")]
+    partial class SeedRecurringBookingPaymentTimingNotificationTemplates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -588,12 +591,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("assigned_provider_id");
 
-                    b.Property<int>("AutoChargeAttemptCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0)
-                        .HasColumnName("auto_charge_attempt_count");
-
                     b.Property<decimal>("BasePriceSnapshot")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
@@ -650,10 +647,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("is_duration_based_snapshot");
-
-                    b.Property<DateTime?>("LastAutoChargeAttemptAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_auto_charge_attempt_at_utc");
 
                     b.Property<decimal>("LockedCancellationFeeSnapshot")
                         .ValueGeneratedOnAdd()
@@ -4346,12 +4339,6 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("apply_wallet_credit");
-
-                    b.Property<bool>("AutoChargeEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("auto_charge_enabled");
 
                     b.Property<Guid>("CityId")
                         .HasColumnType("uuid")
