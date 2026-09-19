@@ -112,7 +112,7 @@ public sealed class NotificationTriggerWiringTests : IClassFixture<TestDatabase>
 
     private static NotificationDispatchService BuildDispatchService(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
         new(
-            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
+            new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())), new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance, new FakeHostEnvironment()),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance), new NotificationEventRepository(context),
             new DeviceTokenRepository(context), new CustomerRepository(context), new ProviderRepository(context),
             new NoOpMetricsService(), NullLogger<NotificationDispatchService>.Instance);

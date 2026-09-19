@@ -50,7 +50,7 @@ public sealed class NotificationIntentDurabilityTests : IClassFixture<TestDataba
     private static NotificationDispatchService BuildDispatchService(NestlyDbContext context) =>
         new(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),
-            new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance),
+            new SandboxNotificationProvider(NullLogger<SandboxNotificationProvider>.Instance, new FakeHostEnvironment()),
             new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance),
             new NotificationEventRepository(context),
             new DeviceTokenRepository(context), new CustomerRepository(context), new ProviderRepository(context),
