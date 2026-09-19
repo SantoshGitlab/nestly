@@ -123,11 +123,11 @@ public static class NotificationTemplateSeedData
         Row(NotificationEventType.RecurringBookingPaymentDue, NotificationChannel.Push, "recurring_booking_payment_due_push", "Payment needed for your recurring visit",
             "Pay {{Amount}} to confirm your {{ServiceName}} visit for {{SlotDate}}."),
 
-        Row(NotificationEventType.RecurringBookingAutoChargeScheduled, NotificationChannel.Sms, "recurring_booking_auto_charge_scheduled_sms", null,
+        Row(NotificationEventType.RecurringAutoChargeScheduled, NotificationChannel.Sms, "recurring_booking_auto_charge_scheduled_sms", null,
             "Your recurring {{ServiceName}} visit for {{SlotDate}} is booked. {{Amount}} will be auto-charged to your saved payment method shortly. Manage this anytime in the app. - Glavyx"),
-        Row(NotificationEventType.RecurringBookingAutoChargeScheduled, NotificationChannel.Email, "recurring_booking_auto_charge_scheduled_email", "Your card will be charged for your upcoming recurring visit",
+        Row(NotificationEventType.RecurringAutoChargeScheduled, NotificationChannel.Email, "recurring_booking_auto_charge_scheduled_email", "Your card will be charged for your upcoming recurring visit",
             "Hi {{CustomerName}},\n\nYour recurring {{ServiceName}} plan's visit for {{SlotDate}} ({{SlotWindow}}) is booked. As per your auto-charge setting, {{Amount}} will be charged to your saved payment method automatically - no action needed. If you'd rather pay manually or turn auto-charge off, you can do that anytime from the plan's settings in the app."),
-        Row(NotificationEventType.RecurringBookingAutoChargeScheduled, NotificationChannel.Push, "recurring_booking_auto_charge_scheduled_push", "Auto-charge scheduled for your recurring visit",
+        Row(NotificationEventType.RecurringAutoChargeScheduled, NotificationChannel.Push, "recurring_booking_auto_charge_scheduled_push", "Auto-charge scheduled for your recurring visit",
             "{{Amount}} will be auto-charged for your {{ServiceName}} visit on {{SlotDate}}."),
 
         Row(NotificationEventType.ReferralRegistered, NotificationChannel.Sms, "referral_registered_sms", null,

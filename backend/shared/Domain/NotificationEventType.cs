@@ -132,6 +132,11 @@ public enum NotificationEventType
     /// booking's own Confirmed transition (<see cref="PaymentSuccess"/>/
     /// <see cref="BookingConfirmed"/>) exactly like any other payment; this
     /// event only ever covers the advance notice.
+    ///
+    /// Named "Recurring...", not "RecurringBooking...", to stay inside the
+    /// 30-character column cap this enum's own header comment documents -
+    /// the more obvious name overran it by 5 characters and only surfaced
+    /// when the seed migration actually ran against Postgres.
     /// </summary>
-    RecurringBookingAutoChargeScheduled
+    RecurringAutoChargeScheduled
 }

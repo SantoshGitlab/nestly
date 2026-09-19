@@ -56,7 +56,7 @@ public class RecurringBookingOptions
     /// How long <c>RecurringOccurrenceAutoChargeJob</c> waits after an
     /// auto-charge-enabled occurrence is created before making its first
     /// charge attempt. Not zero: the customer is sent
-    /// <see cref="Nestly.Domain.NotificationEventType.RecurringBookingAutoChargeScheduled"/>
+    /// <see cref="Nestly.Domain.NotificationEventType.RecurringAutoChargeScheduled"/>
     /// at creation time precisely so they have a real window to see it and
     /// react (turn auto-charge off, cancel the occurrence's plan) before any
     /// money moves - charging immediately would make that notice a receipt,

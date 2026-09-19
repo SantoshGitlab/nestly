@@ -324,7 +324,7 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
         // AMC-redeemed) is genuinely confirmed and gets the original message.
         // Of the two payable cases: a plan with auto-charge on gets the
         // advance notice that a charge is coming (never a silent deduction -
-        // see NotificationEventType.RecurringBookingAutoChargeScheduled's doc
+        // see NotificationEventType.RecurringAutoChargeScheduled's doc
         // comment), everyone else gets the manual "pay before this expires"
         // message, with the amount and the deadline before
         // BookingExpirySweepJob releases the slot (see
@@ -334,7 +334,7 @@ public class RecurringBookingSchedulerService : IRecurringBookingSchedulerServic
             : !requiresPayment
                 ? NotificationEventType.RecurringBookingUpcoming
                 : plan.AutoChargeEnabled
-                    ? NotificationEventType.RecurringBookingAutoChargeScheduled
+                    ? NotificationEventType.RecurringAutoChargeScheduled
                     : NotificationEventType.RecurringBookingPaymentDue;
 
         await _notificationDispatchService.DispatchAsync(

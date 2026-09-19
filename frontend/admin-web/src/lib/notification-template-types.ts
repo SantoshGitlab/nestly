@@ -56,7 +56,7 @@ export enum NotificationEventType {
   AmcContractExpiringSoon = 25,
   AmcContractExhausted = 26,
   RecurringBookingPaymentDue = 27,
-  RecurringBookingAutoChargeScheduled = 28,
+  RecurringAutoChargeScheduled = 28,
 }
 
 /** Mirrors Nestly.Domain.NotificationChannel's declaration order exactly. */
@@ -95,7 +95,7 @@ export const NOTIFICATION_EVENT_TYPE_LABELS: Record<NotificationEventType, strin
   [NotificationEventType.AmcContractExpiringSoon]: "AMC contract expiring soon",
   [NotificationEventType.AmcContractExhausted]: "AMC contract exhausted",
   [NotificationEventType.RecurringBookingPaymentDue]: "Recurring booking payment due",
-  [NotificationEventType.RecurringBookingAutoChargeScheduled]: "Recurring booking auto-charge scheduled",
+  [NotificationEventType.RecurringAutoChargeScheduled]: "Recurring booking auto-charge scheduled",
 };
 
 export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {
