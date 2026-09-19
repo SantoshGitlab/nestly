@@ -189,6 +189,17 @@ export interface ProviderKycDocument {
   submittedAt: string;
 }
 
+/** One row of the admin KYC verification queue (Provider Management UX pass) - a pending document plus enough provider identity to tell one queue row from another. */
+export interface ProviderKycQueueItem {
+  id: string;
+  providerId: string;
+  providerDisplayName: string;
+  docType: ProviderKycDocumentType;
+  docNumber: string | null;
+  fileRef: string;
+  submittedAt: string;
+}
+
 export interface ProviderBackgroundCheck {
   id: string;
   status: ProviderBackgroundCheckStatus;

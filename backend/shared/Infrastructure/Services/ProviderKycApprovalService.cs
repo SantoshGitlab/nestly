@@ -26,6 +26,29 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
         _serviceabilityMappingManagementService = serviceabilityMappingManagementService;
     }
 
+    public async Task<IReadOnlyList<ProviderKycDocumentQueueItemResponse>> ListPendingDocumentsAsync(CancellationToken cancellationToken = default)
+    {
+        var documents = await _kycDocumentRepository.ListPendingAsync(cancellationToken);
+        if (documents.Count == 0)
+        {
+            return [];
+        }
+
+        var providerIds = documents.Select(d => d.ProviderId).Distinct().ToList();
+        var namesById = await _providerRepository.GetDisplayNamesByIdsAsync(providerIds);
+
+        return documents
+            .Select(d => new ProviderKycDocumentQueueItemResponse(
+                d.Id,
+                d.ProviderId,
+                namesById.TryGetValue(d.ProviderId, out var name) ? name : "(deleted provider)",
+                d.DocType,
+                d.DocNumber,
+                d.FileRef,
+                d.SubmittedAt))
+            .ToList();
+    }
+
     public async Task<Result<ProviderKycDocumentResponse>> ApproveDocumentAsync(Guid documentId, Guid adminUserId)
     {
         var document = await _kycDocumentRepository.GetByIdAsync(documentId);

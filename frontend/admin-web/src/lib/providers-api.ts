@@ -18,6 +18,7 @@ import type {
   ProviderDetail,
   ProviderEarningsSummary,
   ProviderKycDocument,
+  ProviderKycQueueItem,
   ProviderPayout,
   ProviderPhoto,
   ProviderPayoutSearchResponse,
@@ -90,6 +91,10 @@ export const reactivateProvider = (providerId: string) =>
   apiFetch<ProviderDetail>(`${PROVIDERS_BASE}/${providerId}/reactivate`, { method: "POST", authenticated: true });
 
 // ---- KYC approval, background check, activation (task 150b, 160) ----
+
+/** The KYC verification queue: every document across every provider still awaiting a verdict, oldest first. */
+export const listPendingKycDocuments = () =>
+  apiFetch<ProviderKycQueueItem[]>(`${PROVIDERS_BASE}/kyc-documents/pending`, { authenticated: true });
 
 export const approveKycDocument = (documentId: string) =>
   apiFetch<ProviderKycDocument>(`${PROVIDERS_BASE}/kyc-documents/${documentId}/approve`, {

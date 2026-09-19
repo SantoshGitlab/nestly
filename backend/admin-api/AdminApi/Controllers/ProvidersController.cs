@@ -271,6 +271,22 @@ public class ProvidersController : ControllerBase
 
     // ---- KYC approval and background check / activation (task 150b, 160) ----
 
+    /// <summary>
+    /// The KYC verification queue (Provider Management UX pass): every
+    /// document across every provider still awaiting a verdict, oldest
+    /// submission first. Before this, finding a pending document required
+    /// searching for a specific provider and opening their Verification tab -
+    /// this is the cross-provider worklist an admin actually works from.
+    /// Static route declared ahead of <see cref="ApproveKycDocument"/>'s
+    /// <c>{documentId:guid}</c> route, same non-clash reasoning as
+    /// <see cref="ListPerformance"/> above.
+    /// </summary>
+    [HttpGet("kyc-documents/pending")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<ProviderKycDocumentQueueItemResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListPendingKycDocuments(CancellationToken cancellationToken) =>
+        Ok(await _kycApprovalService.ListPendingDocumentsAsync(cancellationToken));
+
     /// <summary>Approves a submitted KYC document (task 150b, the admin-side counterpart to task 146c's submission flow).</summary>
     [HttpPost("kyc-documents/{documentId:guid}/approve")]
     [Authorize(Policy = WritePolicy)]

@@ -78,6 +78,22 @@ public sealed record ProviderKycDocumentResponse(
     DateTime? VerifiedAt,
     DateTime SubmittedAt);
 
+/// <summary>
+/// One row of the admin KYC verification queue (Provider Management UX
+/// pass): a pending document plus the provider identity an admin needs to
+/// tell one queue row from another, since <see cref="ProviderKycDocumentResponse"/>
+/// alone (as returned nested under a single provider's own detail page) has
+/// no name/phone to render across a cross-provider list.
+/// </summary>
+public sealed record ProviderKycDocumentQueueItemResponse(
+    Guid Id,
+    Guid ProviderId,
+    string ProviderDisplayName,
+    ProviderKycDocumentType DocType,
+    string? DocNumber,
+    string FileRef,
+    DateTime SubmittedAt);
+
 public sealed record ProviderBackgroundCheckResponse(
     Guid Id,
     ProviderBackgroundCheckStatus Status,
