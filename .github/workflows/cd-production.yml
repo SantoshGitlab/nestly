@@ -95,7 +95,16 @@ jobs:
       - name: Test
         env:
           ConnectionStrings__Database: Host=localhost;Port=5432;Database=nestly_test;Username=nestly;Password=nestly_test
-        run: dotnet test Nestly.sln --no-build --configuration Release --verbosity normal
+        # ConcurrentSlotBookingLoadTests needs its own dedicated Postgres
+        # service (nestly_loadtest/nestly_loadtest - see ci.yml's `load-test`
+        # job), not this job's nestly_test one, so PostgresPerfTestDatabase's
+        # connection fails authentication here every time. ci.yml's `backend`
+        # job already excludes it for exactly this reason; this job was
+        # missing the same filter, which is what has been failing this gate
+        # on every run regardless of what changed in the pushed commit.
+        run: |
+          dotnet test Nestly.sln --no-build --configuration Release --verbosity normal \
+            --filter "FullyQualifiedName!~ConcurrentSlotBookingLoadTests"
 
   migrate:
     name: Apply database migrations (production)
