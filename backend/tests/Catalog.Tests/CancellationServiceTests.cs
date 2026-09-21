@@ -113,7 +113,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
     /// such a booking without a payment.
     /// </summary>
     private async Task<Fixture> SeedPaidBookingAsync(
-        IPaymentGateway gateway, double hoursFromNow, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
+        SandboxPaymentGateway gateway, double hoursFromNow, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];

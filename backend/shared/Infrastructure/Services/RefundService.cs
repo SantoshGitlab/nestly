@@ -187,7 +187,17 @@ public class RefundService : IRefundService
                 await SettleAsync(settlement, booking, payment, reason);
             }
 
-            if (amount >= remaining.Total)
+            // A real gateway's refund can fail (the sandbox's never does -
+            // see SettleAsync's own comment): only treat this refund as
+            // complete, and only release escrow/claw back the provider's
+            // earning, for a settlement that actually reached Refunded. A
+            // failed settlement is still persisted below - RefundTransactionLifecycle
+            // allows Failed -> Processing, so it stays visible and retryable
+            // rather than silently disappearing - but leaves the booking at
+            // RefundPending rather than falsely advancing it to Refunded.
+            bool anyFailed = settlements.Any(s => s.Status == RefundStatus.Failed);
+
+            if (!anyFailed && amount >= remaining.Total)
             {
                 booking.TransitionTo(BookingStatus.Refunded, "Refund completed.");
             }
@@ -206,7 +216,8 @@ public class RefundService : IRefundService
             // held the gateway payment (see EscrowService.HoldAsync), so
             // counting the wallet-funded half here would release a hold that
             // still belongs to money nobody has refunded yet.
-            var paymentSettlement = settlements.SingleOrDefault(r => r.FundingSource == RefundFundingSource.Payment);
+            var paymentSettlement = settlements.SingleOrDefault(
+                r => r.FundingSource == RefundFundingSource.Payment && r.Status == RefundStatus.Refunded);
             if (paymentSettlement is not null)
             {
                 await _escrowService.ReleaseForRefundAsync(bookingId, paymentSettlement.Id, paymentSettlement.Amount);
@@ -214,6 +225,14 @@ public class RefundService : IRefundService
             }
 
             await dbTransaction.CommitAsync();
+
+            if (anyFailed)
+            {
+                var failedSettlement = settlements.First(s => s.Status == RefundStatus.Failed);
+                return Error.Business(
+                    "Refund.GatewayDeclined",
+                    $"The payment gateway declined this refund: {failedSettlement.Reason}. It has been recorded and can be retried.");
+            }
         }
         catch
         {
@@ -321,7 +340,21 @@ public class RefundService : IRefundService
         var successfulAttempt = payment!.Attempts.First(a => a.Status == PaymentAttemptStatus.Success);
         var gatewayResult = await _gateway.RefundAsync(
             new GatewayRefundRequest(successfulAttempt.GatewayPaymentRef!, settlement.Amount, payment.Currency, booking.Id.ToString("N")));
-        settlement.MarkRefunded(gatewayResult.GatewayRefundId);
+
+        // The sandbox never fails a refund (see SandboxPaymentGateway's own
+        // doc comment), so this branch was unreachable until a real gateway
+        // existed - a real one genuinely can reject a refund (insufficient
+        // balance, already refunded, bank-side rejection), and blindly
+        // calling MarkRefunded regardless would record money as returned to
+        // the customer when it was not.
+        if (string.Equals(gatewayResult.Status, "failed", StringComparison.OrdinalIgnoreCase))
+        {
+            settlement.MarkFailed(gatewayResult.FailureReason ?? "The payment gateway declined the refund.");
+        }
+        else
+        {
+            settlement.MarkRefunded(gatewayResult.GatewayRefundId);
+        }
     }
 
     private static RefundTransactionResponse ToResponse(RefundTransaction refund) => new(

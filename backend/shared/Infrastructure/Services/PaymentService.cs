@@ -103,7 +103,9 @@ public class PaymentService : IPaymentService
         }
 
         var gatewayResult = await _gateway.CreateOrderAsync(
-            new GatewayCreateOrderRequest(booking.Id, booking.TotalPayableSnapshot, Currency, booking.Id.ToString("N")));
+            new GatewayCreateOrderRequest(
+                booking.Id, booking.TotalPayableSnapshot, Currency, booking.Id.ToString("N"),
+                CustomerName: booking.CustomerNameSnapshot, CustomerMobile: booking.CustomerMobileSnapshot));
 
         PaymentTransaction transaction;
         if (existing is null)
@@ -197,7 +199,7 @@ public class PaymentService : IPaymentService
         string gatewayPaymentRef = outcome.Succeeded ? outcome.GatewayPaymentRef : $"sandbox_declined_{Guid.NewGuid():N}";
 
         string canonicalPayload = PaymentWebhookPayload.Build(request.GatewayOrderId, gatewayPaymentRef, status);
-        string signature = _gateway.SignPayload(canonicalPayload);
+        string signature = _simulator.SignPayload(canonicalPayload);
 
         return await _webhookService.HandleCallbackAsync(new PaymentWebhookRequest(request.GatewayOrderId, gatewayPaymentRef, status, signature));
     }

@@ -660,12 +660,9 @@ public static class DependencyInjection
         services.AddScoped<IExportJobRepository, ExportJobRepository>();
         services.AddScoped<IExportJobService, ExportJobService>();
 
-        // Stateless - depends only on bound Options - so one shared instance
-        // safely serves both interfaces (SandboxPaymentGateway implements
-        // IPaymentGateway and the sandbox-only ISandboxPaymentSimulator).
-        services.AddSingleton<SandboxPaymentGateway>();
-        services.AddSingleton<IPaymentGateway>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
-        services.AddSingleton<ISandboxPaymentSimulator>(sp => sp.GetRequiredService<SandboxPaymentGateway>());
+        // Real PayU Hosted Checkout when PayUOptions is configured, the
+        // sandbox otherwise - see PaymentGatewayRegistration.
+        services.AddPaymentGateway(configuration);
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
         services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         services.AddScoped<IPaymentService, PaymentService>();

@@ -143,7 +143,7 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
     /// task 331 confirms such a booking without a payment.
     /// </summary>
     private async Task<Fixture> SeedPaidBookingAsync(
-        IPaymentGateway gateway, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
+        SandboxPaymentGateway gateway, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(10));
         var newDate = futureDate.AddDays(2);

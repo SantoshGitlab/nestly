@@ -136,7 +136,7 @@ public sealed class DisputeResolutionServiceTests : IClassFixture<TestDatabase>
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total);
 
-    private async Task<Fixture> SeedPaidBookingAsync(IPaymentGateway gateway, decimal servicePrice)
+    private async Task<Fixture> SeedPaidBookingAsync(SandboxPaymentGateway gateway, decimal servicePrice)
     {
         var futureDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
         var pincodeCode = Guid.NewGuid().ToString("N")[..6];

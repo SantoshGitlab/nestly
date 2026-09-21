@@ -58,6 +58,9 @@ public class SandboxPaymentGateway : IPaymentGateway, ISandboxPaymentSimulator
         return new SandboxPaymentOutcome(true, GatewayPaymentRef: $"sandbox_pay_{Guid.NewGuid():N}", FailureReason: null);
     }
 
+    public string BuildCanonicalPayload(PaymentWebhookRequest request) =>
+        PaymentWebhookPayload.Build(request.GatewayOrderId, request.GatewayPaymentRef, request.Status);
+
     public bool VerifyWebhookSignature(string canonicalPayload, string signature)
     {
         if (string.IsNullOrEmpty(signature))

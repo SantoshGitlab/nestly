@@ -25,21 +25,49 @@ public interface IPaymentGateway
     bool VerifyWebhookSignature(string canonicalPayload, string signature);
 
     /// <summary>
-    /// Signs a payload the same way a real gateway would sign its outbound
-    /// callback. Only meaningful for the sandbox: since there is no real
-    /// gateway to call our webhook, the sandbox "simulate" endpoint uses this
-    /// to construct a callback payload with a valid signature, so the actual
-    /// webhook handler - <see cref="VerifyWebhookSignature"/> and everything
-    /// downstream of it - is exercised for real rather than bypassed.
+    /// Builds the exact string a callback's signature is computed over, from
+    /// the fields a caller (a webhook controller action) extracted out of the
+    /// gateway's raw callback. This is vendor-specific - the sandbox's
+    /// canonical string is 3 fields joined by "|"; PayU's is a 12-field
+    /// reverse-hash sequence - so it lives behind the gateway abstraction
+    /// rather than hardcoded in <c>PaymentWebhookService</c>, which only
+    /// needs to call <see cref="VerifyWebhookSignature"/> with whatever this
+    /// returns.
     /// </summary>
-    string SignPayload(string canonicalPayload);
+    string BuildCanonicalPayload(PaymentWebhookRequest request);
 }
 
-/// <summary><paramref name="Receipt"/> is an opaque merchant reference (the booking id) the gateway echoes back, not used for lookups.</summary>
-public sealed record GatewayCreateOrderRequest(Guid BookingId, decimal Amount, string Currency, string Receipt);
+/// <summary>
+/// <paramref name="Receipt"/> is an opaque merchant reference (the booking
+/// id) the gateway echoes back, not used for lookups. The <c>Customer*</c>
+/// fields are optional (default null): the sandbox ignores them entirely,
+/// and an off-session caller with no customer contact on hand (e.g.
+/// <c>SubscriptionBillingJob</c>) can simply omit them - a real hosted-
+/// checkout gateway that needs them (PayU requires firstname/email in its
+/// signed hash) falls back to a synthetic placeholder rather than failing.
+/// </summary>
+public sealed record GatewayCreateOrderRequest(
+    Guid BookingId,
+    decimal Amount,
+    string Currency,
+    string Receipt,
+    string? CustomerName = null,
+    string? CustomerMobile = null,
+    string? CustomerEmail = null);
 
-public sealed record GatewayOrderResult(string GatewayOrderId, string Status);
+/// <summary>
+/// <paramref name="CheckoutRedirectUrl"/>/<paramref name="CheckoutFormFields"/>
+/// are populated only by a hosted-checkout-style gateway (the browser must
+/// be redirected there to actually pay) - null for the sandbox, which has no
+/// real checkout page to redirect to.
+/// </summary>
+public sealed record GatewayOrderResult(
+    string GatewayOrderId,
+    string Status,
+    string? CheckoutRedirectUrl = null,
+    IReadOnlyDictionary<string, string>? CheckoutFormFields = null);
 
 public sealed record GatewayRefundRequest(string GatewayPaymentRef, decimal Amount, string Currency, string Receipt);
 
-public sealed record GatewayRefundResult(string GatewayRefundId, string Status);
+/// <summary><paramref name="FailureReason"/> is populated only when <paramref name="Status"/> indicates the refund did not go through - a real gateway's refund can genuinely fail (insufficient balance, already refunded, bank rejection), unlike the sandbox's unconditional success.</summary>
+public sealed record GatewayRefundResult(string GatewayRefundId, string Status, string? FailureReason = null);

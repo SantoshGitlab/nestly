@@ -52,13 +52,25 @@ public record PaymentTransactionResponse(
     decimal? CommissionAmount);
 
 /// <summary>
-/// The sandbox's webhook callback shape (task 69a). <paramref name="Signature"/>
-/// is an HMAC-SHA256 of the other fields joined canonically (see
-/// <c>SandboxPaymentGateway.BuildCanonicalPayload</c>), computed against a
-/// shared secret - mirrors how a real gateway signs its callback so the
-/// verification code path is genuine, not a sandbox-only shortcut.
+/// The webhook callback shape both the sandbox and PayU are normalized into
+/// (task 69a). <paramref name="Signature"/> is verified against whatever
+/// <see cref="IPaymentGateway.BuildCanonicalPayload"/> the active gateway
+/// computes from these fields - HMAC-SHA256 over just the first four for the
+/// sandbox, PayU's SHA-512 reverse-hash over all eight for PayU. The last
+/// four are optional and null for the sandbox (its canonical payload never
+/// needs them); PayU's webhook controller action always populates them,
+/// since PayU's hash formula requires the transaction amount/productinfo/
+/// customer name/email exactly as PayU itself hashed them.
 /// </summary>
-public record PaymentWebhookRequest(string GatewayOrderId, string GatewayPaymentRef, string Status, string Signature);
+public record PaymentWebhookRequest(
+    string GatewayOrderId,
+    string GatewayPaymentRef,
+    string Status,
+    string Signature,
+    decimal? Amount = null,
+    string? ProductInfo = null,
+    string? FirstName = null,
+    string? Email = null);
 
 /// <summary>
 /// Sandbox-only convenience: since no real gateway exists to complete a
@@ -68,6 +80,27 @@ public record PaymentWebhookRequest(string GatewayOrderId, string GatewayPayment
 /// webhook handler - nothing about verification or idempotency is skipped.
 /// </summary>
 public record SimulatePaymentRequest(string GatewayOrderId);
+
+/// <summary>
+/// PayU's callback shape, posted as <c>application/x-www-form-urlencoded</c>
+/// (PayU never posts JSON) to a dedicated webhook route rather than the
+/// sandbox's JSON one - the two gateways' callbacks have nothing in common
+/// on the wire, only once normalized into <see cref="PaymentWebhookRequest"/>.
+/// Property names mirror PayU's own field names exactly (verified against
+/// PayU's real test environment); ASP.NET's form binder matches them
+/// case-insensitively.
+/// </summary>
+public sealed class PayUWebhookFormPayload
+{
+    public string? Txnid { get; set; }
+    public string? Mihpayid { get; set; }
+    public string? Status { get; set; }
+    public string? Hash { get; set; }
+    public string? Amount { get; set; }
+    public string? Productinfo { get; set; }
+    public string? Firstname { get; set; }
+    public string? Email { get; set; }
+}
 
 /// <summary>
 /// The canonical string a webhook signature is computed over (task 69a),

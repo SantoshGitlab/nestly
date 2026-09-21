@@ -1,3 +1,4 @@
+using System.Globalization;
 using Asp.Versioning;
 using FluentValidation;
 using FluentValidation.Results;
@@ -21,19 +22,22 @@ public class PaymentsController : ControllerBase
     private readonly IValidator<CreatePaymentOrderRequest> _createOrderValidator;
     private readonly IValidator<PaymentWebhookRequest> _webhookValidator;
     private readonly IValidator<SimulatePaymentRequest> _simulateValidator;
+    private readonly IValidator<PayUWebhookFormPayload> _payUWebhookValidator;
 
     public PaymentsController(
         IPaymentService paymentService,
         IPaymentWebhookService webhookService,
         IValidator<CreatePaymentOrderRequest> createOrderValidator,
         IValidator<PaymentWebhookRequest> webhookValidator,
-        IValidator<SimulatePaymentRequest> simulateValidator)
+        IValidator<SimulatePaymentRequest> simulateValidator,
+        IValidator<PayUWebhookFormPayload> payUWebhookValidator)
     {
         _paymentService = paymentService;
         _webhookService = webhookService;
         _createOrderValidator = createOrderValidator;
         _webhookValidator = webhookValidator;
         _simulateValidator = simulateValidator;
+        _payUWebhookValidator = payUWebhookValidator;
     }
 
     /// <summary>
@@ -95,6 +99,57 @@ public class PaymentsController : ControllerBase
         {
             return ValidationProblem(ToModelState(validation));
         }
+
+        var result = await _webhookService.HandleCallbackAsync(request);
+        return result.IsSuccess ? Ok() : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// PayU's own callback shape (SRS 30.1, 11.11.3, tasks 69a-c) - separate
+    /// from <see cref="Webhook"/> because PayU posts
+    /// <c>application/x-www-form-urlencoded</c> fields with PayU-specific
+    /// names, not this project's generic JSON <see cref="PaymentWebhookRequest"/>.
+    /// Normalizes into that same request and runs it through the identical
+    /// verify/idempotent-apply path <see cref="Webhook"/> does - PayU's
+    /// signature is checked by <c>IPaymentGateway.BuildCanonicalPayload</c>/
+    /// <c>VerifyWebhookSignature</c>, exactly like the sandbox's. Not
+    /// [Authorize], same reasoning as <see cref="Webhook"/>.
+    /// </summary>
+    [HttpPost("webhook/payu")]
+    [AllowAnonymous]
+    [EnableRateLimiting("payment-webhook")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PayUWebhook([FromForm] PayUWebhookFormPayload payload)
+    {
+        var validation = await _payUWebhookValidator.ValidateAsync(payload);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        // PayU can report "pending" for a mode with delayed settlement
+        // (mainly netbanking). This project's webhook model is binary
+        // (success/anything-else-is-failed, see PaymentWebhookService) - a
+        // pending callback is acknowledged without being applied, so it
+        // never prematurely flips the booking to PaymentFailed while PayU is
+        // still going to deliver a final success/failure callback later.
+        if (string.Equals(payload.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            return Ok();
+        }
+
+        var request = new PaymentWebhookRequest(
+            GatewayOrderId: payload.Txnid!,
+            GatewayPaymentRef: payload.Mihpayid ?? string.Empty,
+            Status: payload.Status!,
+            Signature: payload.Hash!,
+            Amount: decimal.TryParse(payload.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) ? amount : null,
+            ProductInfo: payload.Productinfo,
+            FirstName: payload.Firstname,
+            Email: payload.Email);
 
         var result = await _webhookService.HandleCallbackAsync(request);
         return result.IsSuccess ? Ok() : result.ToProblemResult();

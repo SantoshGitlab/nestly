@@ -73,7 +73,7 @@ public class PaymentWebhookService : IPaymentWebhookService
         // not a new payment outcome, so neither should skew the metric.
         var stopwatch = Stopwatch.StartNew();
 
-        string canonicalPayload = PaymentWebhookPayload.Build(request.GatewayOrderId, request.GatewayPaymentRef, request.Status);
+        string canonicalPayload = _gateway.BuildCanonicalPayload(request);
         if (!_gateway.VerifyWebhookSignature(canonicalPayload, request.Signature))
         {
             // SRS 28.3 "payment callback abuse" - an unsigned/mis-signed

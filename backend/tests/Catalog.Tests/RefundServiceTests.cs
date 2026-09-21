@@ -164,7 +164,7 @@ public sealed class RefundServiceTests : IClassFixture<TestDatabase>
     }
 
     /// <summary>Drives a fresh booking through payment success and cancellation, leaving it eligible for refund (Confirmed -> CancelledByCustomer).</summary>
-    private async Task<Fixture> SeedCancelledPaidBookingAsync(IPaymentGateway gateway, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
+    private async Task<Fixture> SeedCancelledPaidBookingAsync(SandboxPaymentGateway gateway, decimal servicePrice = 1000m, decimal walletCreditToApply = 0m)
     {
         Fixture fixture;
         using (var seedContext = _db.CreateContext())

@@ -163,7 +163,7 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
 
     /// <summary>Drives a fresh booking through a successful payment, leaving it Confirmed with commission recorded and escrow held.</summary>
     private async Task<Fixture> SeedConfirmedPaidBookingAsync(
-        IPaymentGateway gateway, decimal servicePrice, CommissionService? commissionService = null, decimal walletCreditToApply = 0m)
+        SandboxPaymentGateway gateway, decimal servicePrice, CommissionService? commissionService = null, decimal walletCreditToApply = 0m)
     {
         Fixture fixture;
         using (var seedContext = _db.CreateContext())
