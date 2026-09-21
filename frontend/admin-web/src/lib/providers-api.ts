@@ -172,8 +172,21 @@ export const recordEarningAdjustment = (providerId: string, request: RecordProvi
 
 // ---- Payouts (task 148) ----
 
-export const searchPayouts = (providerId: string, status?: ProviderPayoutStatus) =>
-  apiFetch<ProviderPayoutSearchResponse>(`${PAYOUTS_BASE}${query({ providerId, status })}`, { authenticated: true });
+/**
+ * `providerId` is optional - omit it for the cross-provider payout queue
+ * (Payment Management UX pass: the backend already supported this, only no
+ * admin-web caller ever invoked it that way). Pass it to scope to one
+ * provider, as the provider detail page's Earnings tab does.
+ */
+export interface PayoutSearchParams {
+  providerId?: string;
+  status?: ProviderPayoutStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export const searchPayouts = (params: PayoutSearchParams = {}) =>
+  apiFetch<ProviderPayoutSearchResponse>(`${PAYOUTS_BASE}${query(params)}`, { authenticated: true });
 
 export const createPayoutBatch = (providerId: string, request: CreateProviderPayoutRequest) =>
   apiFetch<ProviderPayout>(`${PAYOUTS_BASE}/providers/${providerId}`, {

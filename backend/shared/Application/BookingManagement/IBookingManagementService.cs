@@ -62,4 +62,18 @@ public interface IBookingManagementService
     /// board. See <see cref="Bookings.IBookingRepository.ListForFulfilmentBoardAsync"/>.
     /// </summary>
     Task<Result<AdminFulfilmentBoardResponse>> GetFulfilmentBoardAsync(AdminFulfilmentBoardRequest request);
+
+    /// <summary>
+    /// Payment Management UX pass: every recurring occurrence still awaiting
+    /// its off-session auto-charge, oldest-created first - previously zero
+    /// admin visibility into <c>RecurringOccurrenceAutoChargeJob</c>'s
+    /// attempts/backoff existed anywhere.
+    /// </summary>
+    Task<Result<IReadOnlyList<AdminAutoChargeCandidateResponse>>> ListAutoChargeCandidatesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Admin-forced immediate charge attempt for one occurrence, bypassing the backoff-timing gate - see <see cref="Bookings.IRecurringOccurrenceAutoChargeJob.ForceAttemptAsync"/>.</summary>
+    Task<Result<AdminBookingDetailResponse>> ForceAutoChargeRetryAsync(Guid bookingId, Guid adminUserId);
+
+    /// <summary>Stops the automatic sweep from ever attempting this occurrence again - see <see cref="Domain.Booking.CancelAutoChargeRetries"/>.</summary>
+    Task<Result<AdminBookingDetailResponse>> CancelAutoChargeRetriesAsync(Guid bookingId, Guid adminUserId);
 }

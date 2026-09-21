@@ -225,3 +225,25 @@ public sealed record AdminFulfilmentBoardBookingResponse(
     DateTime CreatedAtUtc);
 
 public sealed record AdminFulfilmentBoardResponse(DateOnly Date, IReadOnlyList<AdminFulfilmentBoardBookingResponse> Items);
+
+/// <summary>
+/// One row of the admin auto-charge queue (Payment Management UX pass gap:
+/// previously zero visibility into <c>RecurringOccurrenceAutoChargeJob</c>).
+/// <see cref="NextAttemptDueAtUtc"/> is null when there is no next attempt -
+/// retries were cancelled, or <see cref="AttemptCount"/> already reached
+/// <see cref="RetryLimit"/> - matching
+/// <c>RecurringOccurrenceAutoChargeJob.NextAttemptDueAtUtc</c>'s own doc
+/// comment on that same distinction.
+/// </summary>
+public sealed record AdminAutoChargeCandidateResponse(
+    Guid BookingId,
+    string BookingReference,
+    string CustomerName,
+    decimal AmountDue,
+    BookingStatus Status,
+    bool PlanAutoChargeEnabled,
+    bool CancelledByAdmin,
+    int AttemptCount,
+    int RetryLimit,
+    DateTime? LastAttemptAtUtc,
+    DateTime? NextAttemptDueAtUtc);

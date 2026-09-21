@@ -354,6 +354,26 @@ export interface RejectCompletionProofRequest {
   reason: string;
 }
 
+/**
+ * One row of the admin auto-charge queue (Payment Management UX pass gap:
+ * previously zero visibility into `RecurringOccurrenceAutoChargeJob`).
+ * `nextAttemptDueAtUtc` is null when there is no next attempt - retries were
+ * cancelled, or `attemptCount` already reached `retryLimit`.
+ */
+export interface AdminAutoChargeCandidate {
+  bookingId: string;
+  bookingReference: string;
+  customerName: string;
+  amountDue: number;
+  status: BookingStatus;
+  planAutoChargeEnabled: boolean;
+  cancelledByAdmin: boolean;
+  attemptCount: number;
+  retryLimit: number;
+  lastAttemptAtUtc: string | null;
+  nextAttemptDueAtUtc: string | null;
+}
+
 /** One row of the admin completion-proof review queue (Order/Booking Management UX pass) - the full submitted evidence plus enough booking/provider identity to review and act on it without opening the booking. */
 export interface BookingCompletionProofQueueItem {
   bookingId: string;

@@ -324,6 +324,150 @@ public sealed class RecurringOccurrenceAutoChargeJobTests : IClassFixture<TestDa
     }
 
     [Fact]
+    public async Task ForceAttemptAsync_charges_a_freshly_created_occurrence_before_its_initial_delay_has_passed()
+    {
+        Fixture fixture;
+        Guid planId;
+        Booking occurrence;
+        var now = DateTime.UtcNow;
+
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            AddEligibleProvider(context, fixture, now.AddDays(3).DayOfWeek);
+            planId = await SeedAutoChargePlanAsync(context, fixture);
+            // Created moments ago - ProcessDueAttemptsAsync would leave this untouched (see the sibling test above).
+            occurrence = await SeedOccurrenceAsync(context, fixture, planId, totalPayable: 659.00m, createdAtUtc: now);
+        }
+
+        var options = new RecurringBookingOptions { AutoChargeInitialDelayHours = 2, AutoChargeRetryBackoffHours = 4, AutoChargeRetryLimit = 3 };
+
+        using (var context = _db.CreateContext())
+        {
+            var job = BuildJob(context, BuildGateway(), options, new FakeTimeProvider(now));
+            var result = await job.ForceAttemptAsync(occurrence.Id);
+            result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "an admin-forced attempt must bypass the initial-delay gate");
+            result.Value.Should().Be(AutoChargeAttemptOutcome.Succeeded);
+        }
+
+        using var readContext = _db.CreateContext();
+        var reloaded = await new BookingRepository(readContext).GetByIdAsync(occurrence.Id);
+        reloaded!.Status.Should().Be(BookingStatus.Confirmed);
+        reloaded.AutoChargeAttemptCount.Should().Be(1, "a forced attempt is still a real attempt for the retry-limit calculation");
+    }
+
+    [Fact]
+    public async Task ForceAttemptAsync_bypasses_a_plan_with_auto_charge_turned_off_and_a_booking_with_retries_cancelled()
+    {
+        Fixture fixture;
+        Guid planId;
+        Booking occurrence;
+        var now = DateTime.UtcNow;
+
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            AddEligibleProvider(context, fixture, now.AddDays(3).DayOfWeek);
+            planId = await SeedAutoChargePlanAsync(context, fixture);
+            occurrence = await SeedOccurrenceAsync(context, fixture, planId, totalPayable: 659.00m, createdAtUtc: now.AddHours(-3));
+
+            var planRepository = new RecurringBookingPlanRepository(context);
+            var plan = await planRepository.GetByIdAsync(planId);
+            plan!.SetAutoCharge(false);
+            await planRepository.UpdateAsync(plan);
+
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(occurrence.Id);
+            booking!.CancelAutoChargeRetries();
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        var options = new RecurringBookingOptions { AutoChargeInitialDelayHours = 2, AutoChargeRetryBackoffHours = 4, AutoChargeRetryLimit = 3 };
+
+        using (var context = _db.CreateContext())
+        {
+            var job = BuildJob(context, BuildGateway(), options, new FakeTimeProvider(now));
+            var result = await job.ForceAttemptAsync(occurrence.Id);
+            result.IsSuccess.Should().BeTrue(because: result.IsFailure ? result.Error.Code : "an explicit admin force overrides both the plan toggle and a prior cancellation");
+            result.Value.Should().Be(AutoChargeAttemptOutcome.Succeeded);
+        }
+    }
+
+    [Fact]
+    public async Task ForceAttemptAsync_refuses_a_booking_that_is_not_a_recurring_occurrence()
+    {
+        Fixture fixture;
+        using var context = _db.CreateContext();
+        fixture = Seed(context);
+        var address = new AddressSnapshot("Home", "12 MG Road", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Priya Nair", "9876543210");
+        var slot = new SlotSnapshot(fixture.Window.Id, DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13));
+        var price = new PriceSnapshot(500m, 1, 500m, 0m, 50m, 550m, 18m, 99m, 10m, 659.00m);
+        var oneOff = new Booking(Guid.NewGuid(), fixture.Customer.Id, new CustomerSnapshot(fixture.Customer.Name, fixture.Customer.Mobile), fixture.Address.Id, address, slot, price);
+        oneOff.AddItem(Guid.NewGuid(), fixture.Service.Id, fixture.Service.Name, fixture.Service.Slug, 500m, 1);
+        oneOff.TransitionTo(BookingStatus.PaymentPending);
+        await new BookingRepository(context).AddAsync(oneOff);
+
+        var job = BuildJob(context, BuildGateway(), new RecurringBookingOptions(), TimeProvider.System);
+        var result = await job.ForceAttemptAsync(oneOff.Id);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RecurringAutoCharge.NotARecurringOccurrence");
+    }
+
+    [Fact]
+    public async Task ForceAttemptAsync_refuses_a_booking_that_is_already_Confirmed()
+    {
+        Fixture fixture;
+        Guid planId;
+        Booking occurrence;
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            planId = await SeedAutoChargePlanAsync(context, fixture);
+            occurrence = await SeedOccurrenceAsync(context, fixture, planId, totalPayable: 659.00m, createdAtUtc: DateTime.UtcNow);
+
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(occurrence.Id);
+            booking!.TransitionTo(BookingStatus.Confirmed);
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        using var readContext = _db.CreateContext();
+        var job = BuildJob(readContext, BuildGateway(), new RecurringBookingOptions(), TimeProvider.System);
+        var result = await job.ForceAttemptAsync(occurrence.Id);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("RecurringAutoCharge.NothingToCharge");
+    }
+
+    [Fact]
+    public void NextAttemptDueAtUtc_is_null_once_cancelled_by_admin_or_the_retry_limit_is_reached()
+    {
+        var options = new RecurringBookingOptions { AutoChargeInitialDelayHours = 2, AutoChargeRetryBackoffHours = 4, AutoChargeRetryLimit = 2 };
+        var neverAttempted = new Booking(
+            Guid.NewGuid(), Guid.NewGuid(), new CustomerSnapshot("Priya Nair", "9876543210"), null,
+            new AddressSnapshot("Home", "12 MG Road", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Priya Nair", "9876543210"),
+            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+            new PriceSnapshot(500m, 1, 500m, 0m, 50m, 550m, 18m, 99m, 10m, 659.00m),
+            recurringBookingPlanId: Guid.NewGuid());
+
+        RecurringOccurrenceAutoChargeJob.NextAttemptDueAtUtc(neverAttempted, options).Should().NotBeNull("a fresh occurrence still has attempts available");
+
+        neverAttempted.CancelAutoChargeRetries();
+        RecurringOccurrenceAutoChargeJob.NextAttemptDueAtUtc(neverAttempted, options).Should().BeNull("cancelled - there is no next attempt to wait for");
+
+        var atLimit = new Booking(
+            Guid.NewGuid(), Guid.NewGuid(), new CustomerSnapshot("Priya Nair", "9876543210"), null,
+            new AddressSnapshot("Home", "12 MG Road", null, null, "560001", "Bengaluru", "Karnataka", 12.9716m, 77.5946m, "Priya Nair", "9876543210"),
+            new SlotSnapshot(Guid.NewGuid(), DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3)), "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13)),
+            new PriceSnapshot(500m, 1, 500m, 0m, 50m, 550m, 18m, 99m, 10m, 659.00m),
+            recurringBookingPlanId: Guid.NewGuid());
+        atLimit.RecordAutoChargeAttempt(DateTime.UtcNow);
+        atLimit.RecordAutoChargeAttempt(DateTime.UtcNow);
+        RecurringOccurrenceAutoChargeJob.NextAttemptDueAtUtc(atLimit, options).Should().BeNull("AttemptCount (2) already reached RetryLimit (2)");
+    }
+
+    [Fact]
     public async Task ProcessDueAttemptsAsync_skips_a_booking_whose_plan_has_since_turned_auto_charge_off()
     {
         Fixture fixture;
@@ -361,5 +505,40 @@ public sealed class RecurringOccurrenceAutoChargeJobTests : IClassFixture<TestDa
             reloaded!.Status.Should().Be(BookingStatus.PaymentPending);
             reloaded.AutoChargeAttemptCount.Should().Be(0, "the customer turned auto-charge off after this occurrence was created - the job must not charge them anyway");
         }
+    }
+
+    [Fact]
+    public async Task ProcessDueAttemptsAsync_skips_a_booking_an_admin_already_cancelled_retries_on()
+    {
+        Fixture fixture;
+        Guid planId;
+        Booking occurrence;
+        var now = DateTime.UtcNow;
+
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            AddEligibleProvider(context, fixture, now.AddDays(3).DayOfWeek);
+            planId = await SeedAutoChargePlanAsync(context, fixture);
+            occurrence = await SeedOccurrenceAsync(context, fixture, planId, totalPayable: 659.00m, createdAtUtc: now.AddHours(-3));
+
+            var bookingRepository = new BookingRepository(context);
+            var booking = await bookingRepository.GetByIdAsync(occurrence.Id);
+            booking!.CancelAutoChargeRetries();
+            await bookingRepository.UpdateAsync(booking);
+        }
+
+        var options = new RecurringBookingOptions { AutoChargeInitialDelayHours = 2, AutoChargeRetryBackoffHours = 4, AutoChargeRetryLimit = 3 };
+
+        using (var context = _db.CreateContext())
+        {
+            var job = BuildJob(context, BuildGateway(), options, new FakeTimeProvider(now));
+            await job.ProcessDueAttemptsAsync();
+        }
+
+        using var readContext = _db.CreateContext();
+        var reloaded = await new BookingRepository(readContext).GetByIdAsync(occurrence.Id);
+        reloaded!.Status.Should().Be(BookingStatus.PaymentPending);
+        reloaded.AutoChargeAttemptCount.Should().Be(0, "an admin cancelled retries on this booking - the automatic sweep must never attempt it");
     }
 }

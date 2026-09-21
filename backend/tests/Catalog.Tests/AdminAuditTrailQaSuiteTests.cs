@@ -247,7 +247,10 @@ public sealed class AdminAuditTrailQaSuiteTests : IClassFixture<TestDatabase>
         new AuditLogWriter(context, new StubAuditContextProvider(actorId)),
         context,
         new BookingCompletionProofRepository(context),
-        new ProviderRepository(context));
+        new ProviderRepository(context),
+        new NotUnderTestAutoChargeJobStub(),
+        new RecurringBookingPlanRepository(context),
+        Options.Create(new RecurringBookingOptions()));
 
     [Fact]
     public async Task Admin_cancelling_a_booking_is_audited()

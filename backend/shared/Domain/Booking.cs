@@ -548,6 +548,36 @@ public class Booking : AggregateRoot<Guid>
         LastAutoChargeAttemptAtUtc = attemptedAtUtc;
     }
 
+    /// <summary>
+    /// Payment Management UX pass: an admin can stop
+    /// <c>RecurringOccurrenceAutoChargeJob</c> from ever attempting this
+    /// occurrence again, before its own retry limit would naturally do so -
+    /// e.g. the admin already knows the saved payment method is dead and
+    /// wants the customer moved to manual payment immediately rather than
+    /// waiting out however many backoff hours remain. Distinct from
+    /// <see cref="AutoChargeAttemptCount"/> reaching
+    /// <see cref="Nestly.Infrastructure.Options.RecurringBookingOptions.AutoChargeRetryLimit"/>
+    /// naturally - that counter must keep reflecting how many real gateway
+    /// attempts were actually made, not be inflated as a side effect of
+    /// stopping future ones.
+    /// </summary>
+    public bool AutoChargeCancelledByAdmin { get; private set; }
+
+    public void CancelAutoChargeRetries()
+    {
+        if (RecurringBookingPlanId is null)
+        {
+            throw new InvalidOperationException("Only a recurring occurrence has auto-charge retries to cancel.");
+        }
+
+        if (AutoChargeCancelledByAdmin)
+        {
+            throw new InvalidOperationException("Auto-charge retries were already cancelled for this booking.");
+        }
+
+        AutoChargeCancelledByAdmin = true;
+    }
+
     private void EnsureStillMutable()
     {
         if (Status != BookingStatus.Initiated)

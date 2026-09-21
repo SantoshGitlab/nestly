@@ -186,7 +186,7 @@ export default function ProviderDetailPage() {
   });
   const payoutsQuery = useQuery({
     queryKey: ["admin-provider-payouts", providerId],
-    queryFn: () => searchPayouts(providerId),
+    queryFn: () => searchPayouts({ providerId }),
   });
   const capacityQuery = useQuery({
     queryKey: ["admin-provider-capacity", providerId],

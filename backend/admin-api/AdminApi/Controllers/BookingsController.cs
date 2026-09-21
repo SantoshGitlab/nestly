@@ -195,6 +195,46 @@ public class BookingsController : ControllerBase
     public async Task<IActionResult> ListPendingCompletionProofs(CancellationToken cancellationToken) =>
         Ok(await _bookingManagementService.ListPendingCompletionProofsAsync(cancellationToken));
 
+    /// <summary>
+    /// The admin auto-charge queue: every recurring occurrence still awaiting
+    /// its off-session charge (Payment Management UX pass gap - previously
+    /// zero admin visibility into RecurringOccurrenceAutoChargeJob at all). A
+    /// static route ahead of <see cref="GetDetail"/>'s <c>{bookingId:guid}</c>
+    /// route, same non-clash reasoning as <see cref="ListUnassignedAtRisk"/>.
+    /// </summary>
+    [HttpGet("auto-charge/pending")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<AdminAutoChargeCandidateResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListAutoChargeCandidates(CancellationToken cancellationToken)
+    {
+        var result = await _bookingManagementService.ListAutoChargeCandidatesAsync(cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Forces an immediate off-session charge attempt for one recurring occurrence, bypassing the backoff-timing gate - see <see cref="IRecurringOccurrenceAutoChargeJob.ForceAttemptAsync"/>.</summary>
+    [HttpPost("{bookingId:guid}/auto-charge/retry")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminBookingDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ForceAutoChargeRetry(Guid bookingId)
+    {
+        var result = await _bookingManagementService.ForceAutoChargeRetryAsync(bookingId, CurrentAdminUserId());
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Stops the automatic sweep from ever attempting this occurrence again and notifies the customer to pay manually - see <see cref="Domain.Booking.CancelAutoChargeRetries"/>.</summary>
+    [HttpPost("{bookingId:guid}/auto-charge/cancel")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminBookingDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> CancelAutoChargeRetries(Guid bookingId)
+    {
+        var result = await _bookingManagementService.CancelAutoChargeRetriesAsync(bookingId, CurrentAdminUserId());
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
     /// <summary>Full detail: snapshots, status timeline, payment, cancellation/reschedule/refund history (SRS 12.11.2, tasks 115b-115c).</summary>
     [HttpGet("{bookingId:guid}")]
     [Authorize(Policy = ReadPolicy)]

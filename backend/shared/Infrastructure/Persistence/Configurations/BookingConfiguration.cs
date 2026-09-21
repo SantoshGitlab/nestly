@@ -111,6 +111,7 @@ public class BookingConfiguration : IEntityTypeConfiguration<Booking>
 
         builder.Property(x => x.AutoChargeAttemptCount).IsRequired().HasDefaultValue(0);
         builder.Property(x => x.LastAutoChargeAttemptAtUtc);
+        builder.Property(x => x.AutoChargeCancelledByAdmin).IsRequired().HasDefaultValue(false);
 
         // docs/AMC.md: same reasoning as RecurringBookingPlanId above - a
         // real FK, since a CustomerAmcContract is never hard-deleted.

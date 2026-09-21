@@ -1,14 +1,17 @@
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.BookingManagement;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Payments;
+using Nestly.Application.RecurringBookings;
 using Nestly.Application.Refunds;
 using Nestly.Application.Reschedules;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
@@ -98,6 +101,9 @@ public class BookingManagementService : IBookingManagementService
     private readonly NestlyDbContext _dbContext;
     private readonly IBookingCompletionProofRepository _completionProofRepository;
     private readonly IProviderRepository _providerRepository;
+    private readonly IRecurringOccurrenceAutoChargeJob _autoChargeJob;
+    private readonly IRecurringBookingPlanRepository _recurringPlanRepository;
+    private readonly RecurringBookingOptions _recurringBookingOptions;
 
     public BookingManagementService(
         IBookingRepository bookingRepository,
@@ -112,7 +118,10 @@ public class BookingManagementService : IBookingManagementService
         IAuditLogWriter auditLogWriter,
         NestlyDbContext dbContext,
         IBookingCompletionProofRepository completionProofRepository,
-        IProviderRepository providerRepository)
+        IProviderRepository providerRepository,
+        IRecurringOccurrenceAutoChargeJob autoChargeJob,
+        IRecurringBookingPlanRepository recurringPlanRepository,
+        IOptions<RecurringBookingOptions> recurringBookingOptions)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
@@ -125,6 +134,9 @@ public class BookingManagementService : IBookingManagementService
         _paymentWebhookService = paymentWebhookService;
         _auditLogWriter = auditLogWriter;
         _dbContext = dbContext;
+        _autoChargeJob = autoChargeJob;
+        _recurringPlanRepository = recurringPlanRepository;
+        _recurringBookingOptions = recurringBookingOptions.Value;
         _completionProofRepository = completionProofRepository;
         _providerRepository = providerRepository;
     }
@@ -526,6 +538,89 @@ public class BookingManagementService : IBookingManagementService
 
         var items = rows.Select(booking => ToFulfilmentBoardItem(booking, providerNames)).ToList();
         return new AdminFulfilmentBoardResponse(date, items);
+    }
+
+    public async Task<Result<IReadOnlyList<AdminAutoChargeCandidateResponse>>> ListAutoChargeCandidatesAsync(CancellationToken cancellationToken = default)
+    {
+        var candidates = await _bookingRepository.ListRecurringPaymentPendingAsync();
+        if (candidates.Count == 0)
+        {
+            return Result.Success<IReadOnlyList<AdminAutoChargeCandidateResponse>>([]);
+        }
+
+        var planIds = candidates.Select(b => b.RecurringBookingPlanId!.Value).Distinct().ToList();
+        var plansById = new Dictionary<Guid, bool>();
+        foreach (var planId in planIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var plan = await _recurringPlanRepository.GetByIdAsync(planId);
+            plansById[planId] = plan?.AutoChargeEnabled ?? false;
+        }
+
+        var items = candidates
+            .OrderBy(b => b.CreatedAtUtc)
+            .Select(booking => new AdminAutoChargeCandidateResponse(
+                booking.Id,
+                booking.BookingReference,
+                booking.CustomerNameSnapshot,
+                booking.TotalPayableSnapshot,
+                booking.Status,
+                plansById.GetValueOrDefault(booking.RecurringBookingPlanId!.Value),
+                booking.AutoChargeCancelledByAdmin,
+                booking.AutoChargeAttemptCount,
+                _recurringBookingOptions.AutoChargeRetryLimit,
+                booking.LastAutoChargeAttemptAtUtc,
+                RecurringOccurrenceAutoChargeJob.NextAttemptDueAtUtc(booking, _recurringBookingOptions)))
+            .ToList();
+
+        return Result.Success<IReadOnlyList<AdminAutoChargeCandidateResponse>>(items);
+    }
+
+    public async Task<Result<AdminBookingDetailResponse>> ForceAutoChargeRetryAsync(Guid bookingId, Guid adminUserId)
+    {
+        var outcome = await _autoChargeJob.ForceAttemptAsync(bookingId);
+        if (outcome.IsFailure)
+        {
+            return outcome.Error;
+        }
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "Booking", bookingId.ToString(), "AdminForceAutoChargeRetry",
+            null,
+            JsonSerializer.Serialize(new { Outcome = outcome.Value.ToString() })));
+        await _dbContext.SaveChangesAsync();
+
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        return booking is null
+            ? Error.NotFound("Booking.NotFound", "The specified booking does not exist.")
+            : await BuildDetailAsync(booking);
+    }
+
+    public async Task<Result<AdminBookingDetailResponse>> CancelAutoChargeRetriesAsync(Guid bookingId, Guid adminUserId)
+    {
+        var booking = await _bookingRepository.GetByIdAsync(bookingId);
+        if (booking is null)
+        {
+            return Error.NotFound("Booking.NotFound", "The specified booking does not exist.");
+        }
+
+        try
+        {
+            booking.CancelAutoChargeRetries();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error.Business("RecurringAutoCharge.CannotCancel", ex.Message);
+        }
+
+        await _bookingRepository.UpdateAsync(booking);
+        await _autoChargeJob.NotifyRetriesCancelledAsync(bookingId);
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "Booking", bookingId.ToString(), "AdminCancelAutoChargeRetries", null, null));
+        await _dbContext.SaveChangesAsync();
+
+        return await BuildDetailAsync(booking);
     }
 
     private static AdminFulfilmentBoardBookingResponse ToFulfilmentBoardItem(
