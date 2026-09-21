@@ -76,8 +76,13 @@ public class PaymentService : IPaymentService
             case PaymentTransactionStatus.Pending:
                 // Idempotency/dedup (task 68d): an attempt is already in
                 // flight for this booking - hand back that same order rather
-                // than creating a second one from a duplicate request.
-                return Result.Success(ToOrderResponse(existing, existing.LatestAttempt!));
+                // than creating a second one from a duplicate request. A
+                // hosted-checkout gateway's redirect form still needs
+                // rebuilding here (e.g. a customer who navigated away and
+                // came back): RebuildCheckoutAsync reuses the attempt's own
+                // GatewayOrderId rather than minting a new one, so the
+                // webhook's eventual lookup by that id still resolves.
+                return Result.Success(await ToOrderResponseAsync(booking, existing, existing.LatestAttempt!));
 
             case PaymentTransactionStatus.Cancelled:
                 return Error.Business("Payment.TransactionCancelled", "This booking's payment was cancelled and can no longer be retried.");
@@ -138,7 +143,12 @@ public class PaymentService : IPaymentService
                         "Could not create or locate a payment order for this booking. Please retry.");
                 }
 
-                return Result.Success(ToOrderResponse(winner, winner.LatestAttempt!));
+                // This request lost the race, so gatewayResult above belongs
+                // to an order nobody persisted - rebuild the checkout form
+                // against the winner's actual attempt instead of handing
+                // back a redirect for an order id no PaymentAttempt row
+                // references.
+                return Result.Success(await ToOrderResponseAsync(booking, winner, winner.LatestAttempt!));
             }
         }
         else
@@ -162,7 +172,11 @@ public class PaymentService : IPaymentService
             }
         }
 
-        return Result.Success(ToOrderResponse(transaction, transaction.LatestAttempt!));
+        // Both the fresh-transaction and retry branches above already
+        // computed gatewayResult against the attempt they just started, so
+        // its redirect fields (if any) are used directly rather than
+        // rebuilding via another gateway call.
+        return Result.Success(ToOrderResponse(transaction, transaction.LatestAttempt!, gatewayResult));
     }
 
     /// <summary>
@@ -215,8 +229,27 @@ public class PaymentService : IPaymentService
         return Result.Success(ToTransactionResponse(transaction));
     }
 
-    private static PaymentOrderResponse ToOrderResponse(PaymentTransaction transaction, PaymentAttempt attempt) => new(
-        transaction.Id, attempt.Id, attempt.GatewayOrderId, transaction.Amount, transaction.Currency, attempt.AttemptNumber, attempt.CreatedAtUtc);
+    /// <summary>
+    /// Rebuilds a hosted-checkout gateway's redirect form for an
+    /// already-existing attempt, reusing its persisted <see cref="PaymentAttempt.GatewayOrderId"/>
+    /// rather than minting a new one - used by every branch of
+    /// <see cref="CreateOrderAsync"/> that hands back an attempt it did not
+    /// just start itself (the idempotent-Pending path, and the losing side
+    /// of the concurrent-create race).
+    /// </summary>
+    private async Task<PaymentOrderResponse> ToOrderResponseAsync(Booking booking, PaymentTransaction transaction, PaymentAttempt attempt)
+    {
+        var gatewayResult = await _gateway.CreateOrderAsync(new GatewayCreateOrderRequest(
+            booking.Id, transaction.Amount, transaction.Currency, booking.Id.ToString("N"),
+            CustomerName: booking.CustomerNameSnapshot, CustomerMobile: booking.CustomerMobileSnapshot,
+            ExistingGatewayOrderId: attempt.GatewayOrderId));
+
+        return ToOrderResponse(transaction, attempt, gatewayResult);
+    }
+
+    private static PaymentOrderResponse ToOrderResponse(PaymentTransaction transaction, PaymentAttempt attempt, GatewayOrderResult? gatewayResult = null) => new(
+        transaction.Id, attempt.Id, attempt.GatewayOrderId, transaction.Amount, transaction.Currency, attempt.AttemptNumber, attempt.CreatedAtUtc,
+        gatewayResult?.CheckoutRedirectUrl, gatewayResult?.CheckoutFormFields);
 
     private static PaymentTransactionResponse ToTransactionResponse(PaymentTransaction transaction) => new(
         transaction.Id,

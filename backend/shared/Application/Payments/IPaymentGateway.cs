@@ -45,6 +45,13 @@ public interface IPaymentGateway
 /// <c>SubscriptionBillingJob</c>) can simply omit them - a real hosted-
 /// checkout gateway that needs them (PayU requires firstname/email in its
 /// signed hash) falls back to a synthetic placeholder rather than failing.
+/// <paramref name="ExistingGatewayOrderId"/> is set when the caller wants a
+/// checkout form regenerated for an <i>already-minted</i> order rather than
+/// a brand new one - e.g. a customer navigating back to a still-pending
+/// payment: <see cref="PaymentAttempt.GatewayOrderId"/> must stay stable
+/// (the webhook looks attempts up by it), so re-running
+/// <see cref="IPaymentGateway.CreateOrderAsync"/> from scratch would mint a
+/// second, orphaned order id. Null (the default) means "mint a fresh one."
 /// </summary>
 public sealed record GatewayCreateOrderRequest(
     Guid BookingId,
@@ -53,7 +60,8 @@ public sealed record GatewayCreateOrderRequest(
     string Receipt,
     string? CustomerName = null,
     string? CustomerMobile = null,
-    string? CustomerEmail = null);
+    string? CustomerEmail = null,
+    string? ExistingGatewayOrderId = null);
 
 /// <summary>
 /// <paramref name="CheckoutRedirectUrl"/>/<paramref name="CheckoutFormFields"/>

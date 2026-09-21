@@ -757,6 +757,12 @@ export enum PaymentAttemptStatus {
   Failed = 2,
 }
 
+/**
+ * checkoutRedirectUrl/checkoutFormFields are populated only when the active
+ * gateway is a hosted-checkout style one (PayU) that needs the browser
+ * redirected there to actually pay - both null for the sandbox, whose flow
+ * is the separate /payments/orders/simulate endpoint instead.
+ */
 export interface PaymentOrderResponse {
   paymentTransactionId: string;
   attemptId: string;
@@ -765,6 +771,8 @@ export interface PaymentOrderResponse {
   currency: string;
   attemptNumber: number;
   createdAtUtc: string;
+  checkoutRedirectUrl: string | null;
+  checkoutFormFields: Record<string, string> | null;
 }
 
 export interface PaymentAttemptResponse {

@@ -60,7 +60,7 @@ public sealed class PayUPaymentGateway : IPaymentGateway
 
     public Task<GatewayOrderResult> CreateOrderAsync(GatewayCreateOrderRequest request, CancellationToken cancellationToken = default)
     {
-        string txnid = $"NST{Guid.NewGuid():N}";
+        string txnid = request.ExistingGatewayOrderId ?? $"NST{Guid.NewGuid():N}";
         string amount = request.Amount.ToString("F2", CultureInfo.InvariantCulture);
         string productinfo = $"Nestly booking {request.BookingId:N}";
         string firstname = string.IsNullOrWhiteSpace(request.CustomerName) ? "Nestly Customer" : request.CustomerName;
@@ -87,7 +87,19 @@ public sealed class PayUPaymentGateway : IPaymentGateway
             _options.MerchantSalt ?? string.Empty,
         }));
 
+        // One return URL for both outcomes: the source of truth for what
+        // actually happened is our own webhook-updated booking/payment
+        // state, not the URL PayU happened to redirect to (PayU's redirect
+        // can race the webhook either way) - so the return page's job is
+        // always "go re-check the real status," identical regardless of
+        // which of surl/furl PayU chose. Matches customer-web's existing
+        // booking/payment/[id] page, which already re-fetches and branches
+        // on status rather than trusting anything client-side.
         string baseUrl = _options.CheckoutReturnBaseUrl?.TrimEnd('/') ?? string.Empty;
+        // Standard (dashed) GUID formatting - matches every other booking id
+        // in a customer-web URL (e.g. /booking/payment/{id}), which is what
+        // this page's own [id] route param parses.
+        string returnUrl = $"{baseUrl}/booking/payment/{request.BookingId}/return";
         var formFields = new Dictionary<string, string>
         {
             ["key"] = _options.MerchantKey ?? string.Empty,
@@ -97,8 +109,8 @@ public sealed class PayUPaymentGateway : IPaymentGateway
             ["firstname"] = firstname,
             ["email"] = email,
             ["phone"] = phone,
-            ["surl"] = $"{baseUrl}/checkout/payu/success?bookingId={request.BookingId:N}",
-            ["furl"] = $"{baseUrl}/checkout/payu/failure?bookingId={request.BookingId:N}",
+            ["surl"] = returnUrl,
+            ["furl"] = returnUrl,
             ["hash"] = hash,
         };
 

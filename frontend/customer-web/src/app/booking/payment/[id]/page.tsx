@@ -27,11 +27,44 @@ import { BookingStatus } from "@/lib/types";
 import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } from "@/lib/types";
 
 /**
- * Sandbox payment page (tasks 76a-c): initiates a gateway order for a
- * PaymentPending/PaymentFailed booking, lets the customer simulate completing
- * payment (there is no real gateway - see SandboxPaymentGateway on the
- * backend), and handles the outcome (success redirects to the confirmation
- * page, failure surfaces a retry affordance).
+ * Builds a hidden form and submits it - the only way to POST a full-page,
+ * top-level navigation to PayU's Hosted Checkout (`fields` includes PayU's
+ * signed hash; see PayUPaymentGateway.CreateOrderAsync on the backend for
+ * where they come from). This never resolves - the browser navigates away
+ * to PayU before any code after the call would run.
+ */
+function submitToPayU(actionUrl: string, fields: Record<string, string>): void {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = actionUrl;
+  form.style.display = "none";
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
+
+/**
+ * Payment page (tasks 76a-c, PayU integration): initiates a gateway order
+ * for a PaymentPending/PaymentFailed booking, then either redirects to PayU
+ * Hosted Checkout (production - see submitToPayU) or lets the customer
+ * simulate completing payment (local/dev - there is no real gateway
+ * configured, see SandboxPaymentGateway on the backend), and handles the
+ * sandbox outcome inline (success redirects to the confirmation page,
+ * failure surfaces a retry affordance). Which path applies is decided
+ * entirely by whether the order response carries `checkoutRedirectUrl` -
+ * the backend's active gateway is itself environment/config-driven (see
+ * PaymentGatewayRegistration), so this page needs no environment check of
+ * its own.
+ *
+ * A real PayU checkout leaves this app entirely; the customer lands back on
+ * `/booking/payment/[id]/return` afterwards (both PayU's success and
+ * failure redirect to the same URL - see that page).
  *
  * Wrapped in Suspense for useSearchParams (see booking/summary/page.tsx for
  * the same pattern).
@@ -115,6 +148,18 @@ function BookingPaymentScreen() {
       }),
     enabled: !!booking && !isConfirmed,
   });
+
+  // Real gateway (PayU): a full-page redirect, not an API call - nothing
+  // here to await, the browser leaves this app until PayU sends it back to
+  // /booking/payment/[id]/return.
+  const handlePayViaGateway = () => {
+    if (!orderQuery.data?.checkoutRedirectUrl || !orderQuery.data.checkoutFormFields) return;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    navigated.current = true;
+    setIsPaying(true);
+    submitToPayU(orderQuery.data.checkoutRedirectUrl, orderQuery.data.checkoutFormFields);
+  };
 
   const handlePay = async () => {
     if (!orderQuery.data) return;
@@ -355,7 +400,11 @@ function BookingPaymentScreen() {
         ) : orderQuery.data ? (
           <Card
             title="Payment"
-            description="Sandbox simulation of the payment gateway — no real payment is processed."
+            description={
+              orderQuery.data.checkoutRedirectUrl
+                ? "You'll be taken to PayU to complete your payment securely."
+                : "Sandbox simulation of the payment gateway — no real payment is processed."
+            }
           >
             <div className="flex flex-col gap-4">
               <div className="rounded-xl border border-line bg-surface-2 px-4 py-3">
@@ -396,13 +445,20 @@ function BookingPaymentScreen() {
               <span className="nums text-lg font-semibold text-fg">{inr(amount)}</span>
             </div>
 
-            {/* The accessible name is load-bearing for the E2E suite
-                (/Pay ₹.*\(Sandbox\)/), so it stays constant while the request
-                is in flight - the busy state is carried by the spinner and
-                aria-busy that `loading` adds, not by relabelling the button. */}
-            <Button type="button" size="lg" fullWidth loading={isPaying} onClick={handlePay}>
-              {`Pay ${inr(orderQuery.data.amount)} (Sandbox)`}
-            </Button>
+            {orderQuery.data.checkoutRedirectUrl ? (
+              <Button type="button" size="lg" fullWidth loading={isPaying} onClick={handlePayViaGateway}>
+                {`Pay ${inr(orderQuery.data.amount)}`}
+              </Button>
+            ) : (
+              // The accessible name is load-bearing for the E2E suite
+              // (/Pay ₹.*\(Sandbox\)/), so it stays constant while the
+              // request is in flight - the busy state is carried by the
+              // spinner and aria-busy that `loading` adds, not by
+              // relabelling the button.
+              <Button type="button" size="lg" fullWidth loading={isPaying} onClick={handlePay}>
+                {`Pay ${inr(orderQuery.data.amount)} (Sandbox)`}
+              </Button>
+            )}
 
             <p role="status" aria-live="polite" className="sr-only">
               {isPaying ? "Processing your payment, please wait." : ""}

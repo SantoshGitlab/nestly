@@ -76,8 +76,10 @@ public sealed class PayUPaymentGatewayTests
         fields["firstname"].Should().Be("Asha Rao");
         fields["email"].Should().Be("asha@example.com");
         fields["phone"].Should().Be("9876543210");
-        fields["surl"].Should().Be($"https://app.nestly.test/checkout/payu/success?bookingId={bookingId:N}");
-        fields["furl"].Should().Be($"https://app.nestly.test/checkout/payu/failure?bookingId={bookingId:N}");
+        // Same return URL for both outcomes - the return page re-checks the
+        // real booking status rather than trusting which of surl/furl fired.
+        fields["surl"].Should().Be($"https://app.nestly.test/booking/payment/{bookingId}/return");
+        fields["furl"].Should().Be($"https://app.nestly.test/booking/payment/{bookingId}/return");
 
         // Recomputed independently of PayUPaymentGateway's own implementation
         // (PayU's documented request-hash formula, sha512, 16 pipes) using
@@ -124,6 +126,24 @@ public sealed class PayUPaymentGatewayTests
         var second = await gateway.CreateOrderAsync(request);
 
         first.GatewayOrderId.Should().NotBe(second.GatewayOrderId);
+    }
+
+    [Fact]
+    public async Task CreateOrderAsync_reuses_the_given_ExistingGatewayOrderId_instead_of_minting_a_new_one()
+    {
+        // A customer resuming a still-pending payment (PaymentService's
+        // idempotent branch) must get back a checkout form for the SAME
+        // txnid the original attempt already persisted - PaymentAttempt.GatewayOrderId
+        // is looked up by the webhook, so silently minting a second one here
+        // would leave that attempt permanently unresolvable.
+        var gateway = BuildGateway();
+        const string existingOrderId = "NSTexisting123";
+
+        var result = await gateway.CreateOrderAsync(new GatewayCreateOrderRequest(
+            Guid.NewGuid(), 100m, "INR", "receipt", ExistingGatewayOrderId: existingOrderId));
+
+        result.GatewayOrderId.Should().Be(existingOrderId);
+        result.CheckoutFormFields!["txnid"].Should().Be(existingOrderId);
     }
 
     [Fact]

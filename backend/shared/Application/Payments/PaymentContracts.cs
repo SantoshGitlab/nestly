@@ -12,7 +12,13 @@ namespace Nestly.Application.Payments;
 /// </summary>
 public record CreatePaymentOrderRequest(Guid BookingId, string? IdempotencyKey);
 
-/// <summary>The order to hand to the client-side checkout (sandbox or real gateway SDK).</summary>
+/// <summary>
+/// The order to hand to the client-side checkout. <paramref name="CheckoutRedirectUrl"/>/
+/// <paramref name="CheckoutFormFields"/> are populated only for a hosted-
+/// checkout-style gateway the client must redirect the browser to (PayU) -
+/// both null for the sandbox, whose client-side flow is the separate
+/// <c>/payments/orders/simulate</c> endpoint instead.
+/// </summary>
 public record PaymentOrderResponse(
     Guid PaymentTransactionId,
     Guid AttemptId,
@@ -20,7 +26,9 @@ public record PaymentOrderResponse(
     decimal Amount,
     string Currency,
     int AttemptNumber,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string? CheckoutRedirectUrl = null,
+    IReadOnlyDictionary<string, string>? CheckoutFormFields = null);
 
 public record PaymentAttemptResponse(
     Guid Id,
