@@ -113,6 +113,33 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
             return;
         }
 
+        // Row 81, docs/OPEN-FIXES-FEATURES.csv: DomainEventDispatchInterceptor
+        // publishes this notification as soon as the SaveChangesAsync that
+        // raised it completes, which - despite that interceptor's own doc
+        // comment - is not the same moment as "the transaction that raised
+        // it has committed" when the caller is itself running inside an
+        // explicit, still-open BeginTransactionAsync (as
+        // BookingProviderAssignmentService.AssignInternalAsync's manual-
+        // admin-on-a-Confirmed-booking path is: it walks Confirmed ->
+        // AwaitingFulfilment -> Assigned in one call, and both transitions'
+        // events are dispatched together the moment its own UpdateAsync
+        // saves, before its own dbTransaction.CommitAsync() is ever reached).
+        // Without this guard, this handler would react to the intermediate
+        // AwaitingFulfilment hop and call AssignBySystemAsync, which tries to
+        // open a second Serializable transaction on that same still-open
+        // connection - forbidden, and surfaced to the admin as a generic 500
+        // rather than the DbUpdateException catch further down the call
+        // chain is written to expect. Re-reading the booking's live status
+        // (the same tracked instance the caller already mutated, thanks to
+        // EF's identity map - no second round trip) is what tells this
+        // handler someone already moved the booking on within this same unit
+        // of work, so there is nothing left for auto-assignment to do.
+        var currentBooking = await _bookingRepository.GetByIdAsync(domainEvent.BookingId);
+        if (currentBooking is null || currentBooking.Status != BookingStatus.AwaitingFulfilment)
+        {
+            return;
+        }
+
         var history = await _assignmentRepository.ListByBookingAsync(domainEvent.BookingId);
 
         // Expired counts the same as Rejected here (task: assignment-response

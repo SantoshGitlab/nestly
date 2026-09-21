@@ -326,6 +326,60 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         _ = stillEligible; // never assigned - proven by the assertions above.
     }
 
+    /// <summary>
+    /// Row 81, docs/OPEN-FIXES-FEATURES.csv: an admin manually assigning a
+    /// provider to a Confirmed booking walks Confirmed -> AwaitingFulfilment
+    /// -> Assigned and saves once
+    /// (BookingProviderAssignmentService.AssignInternalAsync), which means
+    /// this handler can receive an AwaitingFulfilment notification for a
+    /// booking whose real, persisted status has already moved on to Assigned
+    /// by the time it runs (DomainEventDispatchInterceptor publishes as soon
+    /// as that single SaveChangesAsync completes, not once the caller's own
+    /// still-open explicit transaction commits). Handling it anyway used to
+    /// call AssignBySystemAsync, which tries to open a second Serializable
+    /// transaction on that same connection - forbidden, and what actually
+    /// produced row 81's generic 500 (reproduced locally and confirmed via
+    /// this exact stack trace before this guard was added). A real eligible
+    /// candidate is seeded so there would be something to (wrongly) assign
+    /// if the guard were missing or ever regresses.
+    /// </summary>
+    [Fact]
+    public async Task Handle_does_nothing_when_the_booking_has_already_moved_past_AwaitingFulfilment()
+    {
+        Fixture f;
+        Provider eligibleProvider, alreadyAssignedProvider;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            eligibleProvider = AddActiveEligibleProvider(context, f, 12.9352m, 77.6146m);
+            alreadyAssignedProvider = AddActiveEligibleProvider(context, f, 13.0827m, 80.2707m);
+            context.SaveChanges();
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(context).GetByIdAsync(f.BookingId);
+            booking!.TransitionTo(BookingStatus.Assigned, "Provider assigned by admin.");
+            booking.AssignProvider(alreadyAssignedProvider.Id);
+            await new BookingRepository(context).UpdateAsync(booking);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            await BuildHandler(context).Handle(AwaitingFulfilmentEvent(f.BookingId), CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        var finalBooking = await new BookingRepository(readContext).GetByIdAsync(f.BookingId);
+        finalBooking!.Status.Should().Be(BookingStatus.Assigned);
+        finalBooking.AssignedProviderId.Should().Be(
+            alreadyAssignedProvider.Id, "the handler must not touch a booking that already moved past AwaitingFulfilment");
+
+        var history = await new BookingProviderAssignmentRepository(readContext).ListByBookingAsync(f.BookingId);
+        history.Should().BeEmpty("no system assignment attempt should have been made at all, not even one that would have lost a race");
+        _ = eligibleProvider; // present only to prove a real candidate existed and was still correctly ignored
+    }
+
     /// <summary>Task 248: the kill switch must produce zero behaviour change from before this whole phase existed - not a new error path, just untouched.</summary>
     [Fact]
     public async Task Handle_does_nothing_when_AutoAssignmentOptions_Enabled_is_false()
