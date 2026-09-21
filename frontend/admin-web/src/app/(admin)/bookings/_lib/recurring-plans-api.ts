@@ -170,3 +170,18 @@ export function getRecurringPlanReport(
 
   return apiFetch<RecurringPlanReport>(`${BASE}/report${suffix}`, { authenticated: true });
 }
+
+/**
+ * Cancels the whole standing instruction - no further occurrences are ever
+ * generated (Order/Booking Management UX pass: previously an admin could
+ * only stop recurring work by cancelling the individual bookings it had
+ * already produced, one at a time, via BookingsController). A reason is
+ * required for the audit trail.
+ */
+export function cancelRecurringPlan(planId: string, reason: string): Promise<RecurringPlanListItem> {
+  return apiFetch<RecurringPlanListItem>(`${BASE}/${planId}/cancel`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify({ reason }),
+  });
+}

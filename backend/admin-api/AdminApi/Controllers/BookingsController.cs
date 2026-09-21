@@ -181,6 +181,20 @@ public class BookingsController : ControllerBase
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
+    /// <summary>
+    /// The admin completion-proof review queue: every proof still awaiting a
+    /// verdict, across every booking, oldest submission first (Order/Booking
+    /// Management UX pass gap - previously reachable only by opening one
+    /// InProgress booking at a time). A static route ahead of
+    /// <see cref="GetDetail"/>'s <c>{bookingId:guid}</c> route, same
+    /// non-clash reasoning as <see cref="ListUnassignedAtRisk"/>.
+    /// </summary>
+    [HttpGet("completion-proofs/pending")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(IReadOnlyList<BookingCompletionProofQueueItemResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListPendingCompletionProofs(CancellationToken cancellationToken) =>
+        Ok(await _bookingManagementService.ListPendingCompletionProofsAsync(cancellationToken));
+
     /// <summary>Full detail: snapshots, status timeline, payment, cancellation/reschedule/refund history (SRS 12.11.2, tasks 115b-115c).</summary>
     [HttpGet("{bookingId:guid}")]
     [Authorize(Policy = ReadPolicy)]

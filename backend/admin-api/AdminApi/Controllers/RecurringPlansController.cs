@@ -13,12 +13,13 @@ namespace Nestly.AdminApi.Controllers;
 
 /// <summary>
 /// Admin visibility into recurring booking plans (task 299,
-/// PRODUCT-ENHANCEMENTS.md section 2): the full plan list and the
-/// status/cadence/upcoming-volume report behind it. Read-only - see
-/// <see cref="IRecurringBookingPlanAdminService"/> on why no admin
-/// pause/resume/cancel is offered here.
+/// PRODUCT-ENHANCEMENTS.md section 2): the full plan list, the
+/// status/cadence/upcoming-volume report behind it, and (Order/Booking
+/// Management UX pass) plan-level cancellation - see
+/// <see cref="IRecurringBookingPlanAdminService"/> for what cancellation does
+/// and does not affect.
 ///
-/// RBAC: gated behind the EXISTING "bookings.read", with no new
+/// RBAC: read actions are gated behind the EXISTING "bookings.read", with no new
 /// <c>AdminModules</c> entry and no "RecurringPlans.View" code. The task brief
 /// left that open ("no new RBAC module needed if admin's existing Booking view
 /// permission already covers occurrence rows"); it does, for three reasons:
@@ -61,19 +62,23 @@ namespace Nestly.AdminApi.Controllers;
 public class RecurringPlansController : ControllerBase
 {
     private const string ReadPolicy = AdminModules.Bookings + ".read";
+    private const string WritePolicy = AdminModules.Bookings + ".write";
 
     private readonly IRecurringBookingPlanAdminService _adminService;
     private readonly IValidator<AdminRecurringPlanSearchRequest> _searchValidator;
     private readonly IValidator<AdminRecurringPlanReportRequest> _reportValidator;
+    private readonly IValidator<AdminCancelRecurringPlanRequest> _cancelValidator;
 
     public RecurringPlansController(
         IRecurringBookingPlanAdminService adminService,
         IValidator<AdminRecurringPlanSearchRequest> searchValidator,
-        IValidator<AdminRecurringPlanReportRequest> reportValidator)
+        IValidator<AdminRecurringPlanReportRequest> reportValidator,
+        IValidator<AdminCancelRecurringPlanRequest> cancelValidator)
     {
         _adminService = adminService;
         _searchValidator = searchValidator;
         _reportValidator = reportValidator;
+        _cancelValidator = cancelValidator;
     }
 
     /// <summary>Every recurring plan on the platform, newest first, filterable by lifecycle status, cadence, customer or service.</summary>
@@ -118,6 +123,25 @@ public class RecurringPlansController : ControllerBase
         }
 
         var result = await _adminService.GetReportAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Cancels the whole standing instruction - no further occurrences are ever generated. Distinct from cancelling the individual bookings it has already produced, which is unaffected and still goes through <c>BookingsController</c>.</summary>
+    [HttpPost("{planId:guid}/cancel")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminRecurringPlanSummaryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Cancel(Guid planId, [FromBody] AdminCancelRecurringPlanRequest request)
+    {
+        var validation = await _cancelValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _adminService.CancelAsync(planId, User.GetSubjectId(), request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

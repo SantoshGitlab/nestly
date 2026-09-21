@@ -354,6 +354,18 @@ export interface RejectCompletionProofRequest {
   reason: string;
 }
 
+/** One row of the admin completion-proof review queue (Order/Booking Management UX pass) - the full submitted evidence plus enough booking/provider identity to review and act on it without opening the booking. */
+export interface BookingCompletionProofQueueItem {
+  bookingId: string;
+  bookingReference: string;
+  customerName: string;
+  providerId: string;
+  providerDisplayName: string;
+  photoRefs: string[];
+  checklistAnswers: CompletionChecklistAnswerResponse[];
+  submittedAtUtc: string;
+}
+
 /**
  * Live tracking snapshot for the ops view (task 284) - mirrors
  * Nestly.Application.Tracking.BookingTrackingContracts.cs field for field,

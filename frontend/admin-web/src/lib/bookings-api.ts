@@ -18,6 +18,7 @@ import type {
   AdminRefundRequest,
   AdminRescheduleBookingRequest,
   AdminUnassignedAtRiskBookingSearchResponse,
+  BookingCompletionProofQueueItem,
   BookingCompletionProofResponse,
   RejectCompletionProofRequest,
   RescheduleCity,
@@ -132,6 +133,10 @@ export const rejectCompletionProof = (bookingId: string, request: RejectCompleti
     authenticated: true,
     body: JSON.stringify(request),
   });
+
+/** The completion-proof review queue: every proof still awaiting a verdict, across every booking, oldest submission first. */
+export const listPendingCompletionProofs = () =>
+  apiFetch<BookingCompletionProofQueueItem[]>(`${BOOKINGS_BASE}/completion-proofs/pending`, { authenticated: true });
 
 /** Live tracking snapshot for the ops view (task 284). Rejects with a 404 ApiError - see AdminBookingTrackingResponse's doc comment - when there is no live data to show; the caller renders that as a plain state, not an error. */
 export const getBookingTracking = (bookingId: string) =>

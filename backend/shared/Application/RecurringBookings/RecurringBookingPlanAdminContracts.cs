@@ -46,6 +46,16 @@ public sealed record AdminRecurringPlanSearchResponse(
     int PageSize);
 
 /// <summary>
+/// Admin-initiated plan cancellation (Order/Booking Management UX pass): stops
+/// the whole standing instruction in one action - no further occurrences are
+/// ever generated - as opposed to cancelling the individual bookings it has
+/// already produced one at a time via <c>IBookingManagementService</c>. A
+/// reason is required for the audit trail, same convention as
+/// <c>AdminCancelBookingRequest</c>.
+/// </summary>
+public sealed record AdminCancelRecurringPlanRequest(string Reason);
+
+/// <summary>
 /// The report's horizon. Both ends optional: omitting them reports the next
 /// <see cref="IRecurringBookingPlanAdminService.DefaultHorizonDays"/> days
 /// from today, which is the view an ops admin opening the screen wants.

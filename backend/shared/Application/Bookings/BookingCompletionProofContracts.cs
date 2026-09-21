@@ -46,3 +46,20 @@ public sealed record BookingCompletionProofResponse(
 
 /// <summary>Admin rejects a submitted completion proof (the counterpart to <see cref="Nestly.Application.ProviderManagement.RejectProviderKycDocumentRequest"/> for this different kind of provider-submitted evidence) - reason is required so the provider knows what to fix before resubmitting.</summary>
 public sealed record RejectCompletionProofRequest(string Reason);
+
+/// <summary>
+/// One row of the admin completion-proof review queue (Order/Booking
+/// Management UX pass gap: previously reachable only by opening one
+/// InProgress booking at a time) - mirrors
+/// <see cref="Nestly.Application.ProviderManagement.ProviderKycDocumentQueueItemResponse"/>'s
+/// shape for the same "unpaginated work queue, not a directory" convention.
+/// </summary>
+public sealed record BookingCompletionProofQueueItemResponse(
+    Guid BookingId,
+    string BookingReference,
+    string CustomerName,
+    Guid ProviderId,
+    string ProviderDisplayName,
+    IReadOnlyList<string> PhotoRefs,
+    IReadOnlyList<CompletionChecklistAnswerResponse> ChecklistAnswers,
+    DateTime SubmittedAtUtc);

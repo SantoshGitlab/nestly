@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Nestly.Application;
+using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.RecurringBookings;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -39,10 +41,15 @@ public sealed class RecurringBookingPlanAdminService : IRecurringBookingPlanAdmi
         [BookingStatus.CancelledByCustomer, BookingStatus.CancelledByAdmin, BookingStatus.Expired];
 
     private readonly NestlyDbContext _context;
+    private readonly IRecurringBookingPlanRepository _planRepository;
+    private readonly IAuditLogWriter _auditLogWriter;
 
-    public RecurringBookingPlanAdminService(NestlyDbContext context)
+    public RecurringBookingPlanAdminService(
+        NestlyDbContext context, IRecurringBookingPlanRepository planRepository, IAuditLogWriter auditLogWriter)
     {
         _context = context;
+        _planRepository = planRepository;
+        _auditLogWriter = auditLogWriter;
     }
 
     public async Task<Result<AdminRecurringPlanSearchResponse>> SearchAsync(AdminRecurringPlanSearchRequest request)
@@ -167,6 +174,41 @@ public sealed class RecurringBookingPlanAdminService : IRecurringBookingPlanAdmi
             plansDueInHorizon,
             volumeByDate.Sum(r => r.BookingCount),
             volumeByDate);
+    }
+
+    public async Task<Result<AdminRecurringPlanSummaryResponse>> CancelAsync(Guid planId, Guid adminUserId, AdminCancelRecurringPlanRequest request)
+    {
+        var plan = await _planRepository.GetByIdAsync(planId);
+        if (plan is null)
+        {
+            return Error.NotFound("RecurringBookingPlan.NotFound", "The specified recurring booking plan does not exist.");
+        }
+
+        var previousStatus = plan.Status;
+        try
+        {
+            plan.Cancel();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error.Business("RecurringBookingPlan.InvalidCancel", ex.Message);
+        }
+
+        await _planRepository.UpdateAsync(plan);
+
+        await _auditLogWriter.WriteAsync(new AuditEntry(
+            "RecurringBookingPlan", planId.ToString(), "AdminCancel",
+            JsonSerializer.Serialize(new { Status = previousStatus }),
+            JsonSerializer.Serialize(new { Status = plan.Status, request.Reason })));
+        await _context.SaveChangesAsync();
+
+        var customerName = (await _context.Set<Customer>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == plan.CustomerId))?.Name ?? string.Empty;
+        var serviceName = (await _context.Set<Service>().AsNoTracking().FirstOrDefaultAsync(s => s.Id == plan.ServiceId))?.Name ?? string.Empty;
+
+        return new AdminRecurringPlanSummaryResponse(
+            plan.Id, plan.CustomerId, customerName, plan.ServiceId, serviceName,
+            plan.Frequency, plan.RecurrenceDayOfWeek, plan.RecurrenceDayOfMonth, plan.StartDate, plan.EndDate,
+            plan.OccurrenceCount, plan.CompletedOccurrenceCount, plan.NextOccurrenceDate, plan.Status, plan.CreatedAtUtc);
     }
 
     /// <summary>

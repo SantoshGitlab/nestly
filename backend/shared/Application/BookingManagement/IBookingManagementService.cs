@@ -33,6 +33,9 @@ public interface IBookingManagementService
     /// <summary>Full or partial refund (SRS 12.11.3, 12.13.2-3, task 117c) via <c>IRefundService</c>.</summary>
     Task<Result<AdminBookingDetailResponse>> RefundAsync(Guid bookingId, Guid adminUserId, AdminRefundRequest request);
 
+    /// <summary>The admin completion-proof review queue: every proof still awaiting a verdict, across every booking, oldest submission first (Order/Booking Management UX pass gap - previously reachable only by opening one InProgress booking at a time).</summary>
+    Task<IReadOnlyList<BookingCompletionProofQueueItemResponse>> ListPendingCompletionProofsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Approves the provider's submitted completion proof and transitions the booking to Completed - the only path Completed is reachable by (task: admin completion verification).</summary>
     Task<Result<AdminBookingDetailResponse>> ApproveCompletionProofAsync(Guid bookingId, Guid adminUserId);
 

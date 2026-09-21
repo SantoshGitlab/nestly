@@ -47,6 +47,9 @@ import {
   rescheduleBooking,
   updateBookingStatus,
 } from "@/lib/bookings-api";
+import { searchSupportTickets } from "@/lib/support-api";
+import { statusLabel as supportStatusLabel } from "@/lib/support";
+import { TicketStatusBadge } from "@/components/status-badges";
 import {
   CancellationActor,
   CompletionProofReviewStatus,
@@ -185,6 +188,14 @@ export default function BookingDetailPage() {
   const assignmentHistoryQuery = useQuery({
     queryKey: ["admin-booking-assignment-history", bookingId],
     queryFn: () => getBookingAssignmentHistory(bookingId),
+  });
+
+  // Linked support tickets (SRS 12.11.2 gap: a ticket links to its booking,
+  // but the booking never linked back) - reuses the same search endpoint the
+  // support list's own "Booking ID" filter already calls.
+  const linkedTicketsQuery = useQuery({
+    queryKey: ["admin-booking-linked-tickets", bookingId],
+    queryFn: () => searchSupportTickets(`bookingId=${bookingId}`),
   });
 
   // Candidates for the assignment picker below - matched server-side by
@@ -549,7 +560,40 @@ export default function BookingDetailPage() {
             </Card>
           </div>
 
-          {booking.status === BookingStatus.Completed ? (
+          <Card title="Linked support tickets" description="SRS 12.11.2">
+            {linkedTicketsQuery.isPending ? (
+              <SkeletonText lines={2} />
+            ) : linkedTicketsQuery.isError ? (
+              <Alert
+                tone="error"
+                action={
+                  <Button size="sm" variant="secondary" onClick={() => linkedTicketsQuery.refetch()}>
+                    Retry
+                  </Button>
+                }
+              >
+                {describeError(linkedTicketsQuery.error)}
+              </Alert>
+            ) : linkedTicketsQuery.data.items.length === 0 ? (
+              <EmptyState title="No support tickets" description="No ticket has been raised against this booking." />
+            ) : (
+              <ul className="flex flex-col gap-2 text-sm">
+                {linkedTicketsQuery.data.items.map((ticket) => (
+                  <li key={ticket.id}>
+                    <Link
+                      href={`/support/${ticket.id}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3 hover:border-line-strong hover:bg-surface-2"
+                    >
+                      <span className="min-w-0 flex-1 text-fg">{ticket.subject}</span>
+                      <TicketStatusBadge status={ticket.status} label={supportStatusLabel(ticket.status)} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          {booking.status === BookingStatus.InProgress || booking.status === BookingStatus.Completed ? (
             <CompletionProofCard bookingId={booking.id} canWrite={canWrite} />
           ) : null}
 

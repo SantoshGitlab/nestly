@@ -444,6 +444,47 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
         result.Value.Status.Should().Be(BookingStatus.InProgress);
     }
 
+    [Fact]
+    public async Task ListPendingCompletionProofsAsync_returns_only_pending_proofs_oldest_first_with_booking_and_provider_details()
+    {
+        var (_, pendingBookingId, _, _) = await SeedConfirmedBookingAsync();
+        var (_, reviewedBookingId, _, _) = await SeedConfirmedBookingAsync();
+        var provider = new Provider(Guid.NewGuid(), "Ravi Kumar", "Ravi's Repairs", ProviderType.Individual, "+9198" + Guid.NewGuid().ToString("N")[..8]);
+
+        using (var context = _db.CreateContext())
+        {
+            context.Add(provider);
+            context.SaveChanges();
+
+            var bookingRepository = new BookingRepository(context);
+            foreach (var bookingId in new[] { pendingBookingId, reviewedBookingId })
+            {
+                var booking = await bookingRepository.GetByIdAsync(bookingId);
+                booking!.TransitionTo(BookingStatus.AwaitingFulfilment);
+                booking.TransitionTo(BookingStatus.Assigned);
+                booking.TransitionTo(BookingStatus.InProgress);
+                await bookingRepository.UpdateAsync(booking);
+            }
+
+            var proofRepository = new BookingCompletionProofRepository(context);
+            await proofRepository.AddAsync(new BookingCompletionProof(Guid.NewGuid(), pendingBookingId, provider.Id, ["s3://proofs/pending.jpg"], []));
+
+            var reviewedProof = new BookingCompletionProof(Guid.NewGuid(), reviewedBookingId, provider.Id, ["s3://proofs/reviewed.jpg"], []);
+            reviewedProof.Approve(Guid.NewGuid());
+            await proofRepository.AddAsync(reviewedProof);
+        }
+
+        using var queryContext = _db.CreateContext();
+        var queue = await BuildBookingManagementService(queryContext).ListPendingCompletionProofsAsync();
+
+        queue.Should().ContainSingle();
+        var item = queue.Single();
+        item.BookingId.Should().Be(pendingBookingId);
+        item.ProviderId.Should().Be(provider.Id);
+        item.ProviderDisplayName.Should().Be(provider.DisplayName);
+        item.PhotoRefs.Should().ContainSingle().Which.Should().Be("s3://proofs/pending.jpg");
+    }
+
     /// <summary>
     /// The gap the generic status endpoint used to have: nothing stopped an
     /// admin moving a booking straight to "Professional Assigned" with no

@@ -1,19 +1,22 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Reveal, revealItem } from "@/components/motion";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
-import { Badge, Button, Card, Field, PageHeading, Select, Skeleton, StatTile } from "@/components/ui";
-import { DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
+import { Alert, Badge, Button, Card, Field, PageHeading, Select, Skeleton, StatTile } from "@/components/ui";
+import { ConfirmDialog, DataTable, FilterBar, Pagination, countActiveFilters, formatDate } from "@/components/data-table";
 import type { DataTableColumn } from "@/components/data-table";
 import { BookingsTabs } from "@/components/BookingsTabs";
+import { describeError } from "@/lib/api";
+import { useAdminClaims } from "@/lib/use-admin-claims";
 import {
   FREQUENCY_LABELS,
   PLAN_STATUS_LABELS,
   RecurrenceFrequency,
   RecurringPlanStatus,
+  cancelRecurringPlan,
   describeCadence,
   getRecurringPlanReport,
   searchRecurringPlans,
@@ -57,20 +60,42 @@ const EMPTY_FILTERS: FilterFormState = { status: "", frequency: "" };
  * Coupon and Nestly Coins screens already use: aggregate tiles on top, the
  * per-record list underneath.
  *
- * Read-only. There is deliberately no admin pause/cancel here - a plan is the
- * customer's standing instruction, and an admin who needs to stop the work it
- * generates acts on the individual bookings on the "All bookings" tab, which
- * already audits every such action.
+ * Mostly read-only, plus one write (Order/Booking Management UX pass): an
+ * admin can cancel a whole plan outright, stopping every future occurrence in
+ * one action. This is distinct from - and does not touch - cancelling the
+ * individual bookings a plan has already produced, which still happens one
+ * at a time on the "All bookings" tab and is unaffected by a plan
+ * cancellation either way.
  *
  * The two volume tiles are separate on purpose and the wording says why: one
  * counts bookings that exist, the other counts plans the scheduler has not
  * reached yet. Adding them together would present a projection as a fact.
  */
 export default function RecurringPlansPage() {
+  const claims = useAdminClaims();
+  const canWrite = claims?.permissions.includes("bookings.write") ?? false;
+  const queryClient = useQueryClient();
+
   const [filters, setFilters] = useState<FilterFormState>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
+  const [pendingCancel, setPendingCancel] = useState<RecurringPlanListItem | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const cancelMutation = useMutation({
+    mutationFn: ({ planId, reason }: { planId: string; reason: string }) => cancelRecurringPlan(planId, reason),
+    onSuccess: () => {
+      setPendingCancel(null);
+      setCancelReason("");
+      setActionError(null);
+      setActionNotice("Plan cancelled - no further occurrences will be generated.");
+      queryClient.invalidateQueries({ queryKey: ["recurring-plans"] });
+    },
+    onError: (err) => setActionError(describeError(err)),
+  });
 
   const reportQuery = useQuery({
     queryKey: ["recurring-plans", "report", fromDate, toDate] as const,
@@ -162,6 +187,21 @@ export default function RecurringPlansPage() {
     },
   ];
 
+  if (canWrite) {
+    columns.push({
+      key: "actions",
+      header: "Actions",
+      cell: (plan) =>
+        plan.status === RecurringPlanStatus.Active || plan.status === RecurringPlanStatus.Paused ? (
+          <Button size="sm" variant="danger" onClick={() => setPendingCancel(plan)}>
+            Cancel plan
+          </Button>
+        ) : (
+          <span className="text-fg-subtle">—</span>
+        ),
+    });
+  }
+
   return (
     <div className="w-full max-w-7xl">
       <PageHeading
@@ -170,6 +210,9 @@ export default function RecurringPlansPage() {
       />
 
       <BookingsTabs />
+
+      {actionError ? <Alert tone="error">{actionError}</Alert> : null}
+      {actionNotice ? <Alert tone="success">{actionNotice}</Alert> : null}
 
       <div className="flex flex-col gap-6">
         {report ? (
@@ -343,6 +386,38 @@ export default function RecurringPlansPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingCancel !== null}
+        title="Cancel this recurring plan?"
+        description="No further occurrences will ever be generated. Bookings already created from this plan are unaffected - cancel those individually from All bookings if needed."
+        confirmLabel="Cancel plan"
+        cancelLabel="Keep plan"
+        loading={cancelMutation.isPending}
+        error={cancelMutation.isError ? describeError(cancelMutation.error) : null}
+        onCancel={() => setPendingCancel(null)}
+        onConfirm={() => {
+          if (pendingCancel && cancelReason.trim()) {
+            cancelMutation.mutate({ planId: pendingCancel.id, reason: cancelReason.trim() });
+          }
+        }}
+      >
+        {pendingCancel ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-fg-muted">
+              {pendingCancel.customerName} — {pendingCancel.serviceName}
+            </p>
+            <Field
+              label="Cancellation reason"
+              required
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Why this plan is being cancelled"
+              hint="Recorded to the audit trail."
+            />
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

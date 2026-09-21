@@ -324,6 +324,37 @@ public class BookingManagementService : IBookingManagementService
             : await BuildDetailAsync(booking);
     }
 
+    public async Task<IReadOnlyList<BookingCompletionProofQueueItemResponse>> ListPendingCompletionProofsAsync(CancellationToken cancellationToken = default)
+    {
+        var proofs = await _completionProofRepository.ListPendingAsync(cancellationToken);
+        if (proofs.Count == 0)
+        {
+            return [];
+        }
+
+        var bookings = await _bookingRepository.ListSummariesByIdsAsync(proofs.Select(p => p.BookingId).Distinct().ToList());
+        var bookingsById = bookings.ToDictionary(b => b.Id);
+        var providerNames = await _providerRepository.GetDisplayNamesByIdsAsync(
+            proofs.Select(p => p.SubmittedByProviderId).Distinct().ToList());
+
+        return proofs
+            .Where(p => bookingsById.ContainsKey(p.BookingId))
+            .Select(p =>
+            {
+                var booking = bookingsById[p.BookingId];
+                return new BookingCompletionProofQueueItemResponse(
+                    p.BookingId,
+                    booking.BookingReference,
+                    booking.CustomerNameSnapshot,
+                    p.SubmittedByProviderId,
+                    providerNames.TryGetValue(p.SubmittedByProviderId, out var name) ? name : "(deleted provider)",
+                    p.PhotoRefs,
+                    p.ChecklistAnswers.Select(a => new CompletionChecklistAnswerResponse(a.Item, a.Completed, a.Notes)).ToList(),
+                    p.SubmittedAtUtc);
+            })
+            .ToList();
+    }
+
     /// <summary>Approves the provider's submitted completion proof and, as the direct consequence, transitions the booking to Completed - the one path Completed is now reachable by, see <see cref="DisallowedGenericTransitionTargets"/>.</summary>
     public async Task<Result<AdminBookingDetailResponse>> ApproveCompletionProofAsync(Guid bookingId, Guid adminUserId)
     {

@@ -32,3 +32,12 @@ public class AdminRecurringPlanReportRequestValidator : AbstractValidator<AdminR
             .OverridePropertyName(nameof(AdminRecurringPlanReportRequest.ToDate));
     }
 }
+
+/// <summary>A cancellation reason is required for the audit trail, same convention as <c>AdminCancelBookingRequestValidator</c>.</summary>
+public class AdminCancelRecurringPlanRequestValidator : AbstractValidator<AdminCancelRecurringPlanRequest>
+{
+    public AdminCancelRecurringPlanRequestValidator()
+    {
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+    }
+}
