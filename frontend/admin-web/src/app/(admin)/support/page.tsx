@@ -152,7 +152,18 @@ export default function SupportTicketsPage() {
         </div>
       ),
     },
-    { key: "customer", header: "Customer", cell: (ticket) => ticket.customerName },
+    {
+      key: "customer",
+      header: "Customer",
+      cell: (ticket) => (
+        <Link
+          href={`/customers/${ticket.customerId}`}
+          className="font-medium text-fg underline-offset-4 hover:text-brand-600 hover:underline dark:hover:text-brand-400"
+        >
+          {ticket.customerName}
+        </Link>
+      ),
+    },
     { key: "category", header: "Category", cell: (ticket) => categoryLabel(ticket.category) },
     {
       key: "priority",

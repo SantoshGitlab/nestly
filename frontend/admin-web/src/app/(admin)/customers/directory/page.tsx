@@ -7,15 +7,18 @@ import { Suspense, useEffect, useState } from "react";
 import { Button, Field, PageHeading, Select } from "@/components/ui";
 import {
   DataTable,
+  ExportCsvButton,
   FilterBar,
   Pagination,
   countActiveFilters,
+  exportRowsToCsv,
   formatDate,
 } from "@/components/data-table";
-import type { DataTableColumn } from "@/components/data-table";
+import type { CsvColumn, DataTableColumn } from "@/components/data-table";
 import { CustomerStatusBadge } from "@/components/status-badges";
 import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { API_V1, apiFetch } from "@/lib/api";
+import { todayIsoDate } from "@/lib/date";
 import { listCities } from "@/lib/serviceability-api";
 import { CustomerStatus } from "@/lib/types";
 import type { CustomerSearchParams, CustomerSearchResponse, CustomerSummary } from "@/lib/types";
@@ -29,6 +32,21 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: String(CustomerStatus.Blocked), label: "Blocked" },
   { value: String(CustomerStatus.Unverified), label: "Unverified" },
   { value: String(CustomerStatus.SoftDeleted), label: "Deleted" },
+];
+
+function statusLabel(status: CustomerStatus): string {
+  return STATUS_OPTIONS.find((o) => o.value === String(status))?.label ?? "Unknown";
+}
+
+/** Row-select plus "Export selected" (Customer Management UX pass) - same restrained bulk-action scope as providers/directory's own bulk export. */
+const CUSTOMER_CSV_COLUMNS: readonly CsvColumn<CustomerSummary>[] = [
+  { header: "Name", value: (customer) => customer.name },
+  { header: "Mobile", value: (customer) => customer.mobile },
+  { header: "Email", value: (customer) => customer.email ?? "" },
+  { header: "City", value: (customer) => customer.city ?? "" },
+  { header: "Status", value: (customer) => statusLabel(customer.status) },
+  { header: "Bookings", value: (customer) => customer.bookingCount },
+  { header: "Registered", value: (customer) => customer.createdAtUtc },
 ];
 
 interface FilterFormState {
@@ -136,6 +154,11 @@ function CustomersPageContent() {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<FilterFormState>(() => filtersFromSearchParams(searchParams));
   const [page, setPage] = useState(1);
+  // Row-select plus "Export selected" - mirrors providers/directory's own
+  // bulk-action doc comment: export is unambiguously safe, a bulk status
+  // change (block/delete) would touch live accounts and stays gated behind
+  // the per-customer reason/confirmation the detail page already requires.
+  const [selectedCustomers, setSelectedCustomers] = useState<Map<string, CustomerSummary>>(new Map());
 
   // Real city list to suggest against the City field, which stays a plain
   // text input (never a dropdown) - the search endpoint matches city with a
@@ -190,7 +213,10 @@ function CustomersPageContent() {
       filters.maxBookingCount,
       filters.registeredFromUtc,
     ],
-    () => setPage(1),
+    () => {
+      setPage(1);
+      setSelectedCustomers(new Map());
+    },
   );
 
   // Live typeahead for Name - reuses the same customer search this page
@@ -250,6 +276,27 @@ function CustomersPageContent() {
     setDebouncedEmail("");
     setDebouncedCity("");
     setPage(1);
+    setSelectedCustomers(new Map());
+  };
+
+  const toggleSelection = (keys: Set<string>) => {
+    const rows = query.data?.items ?? [];
+    setSelectedCustomers((current) => {
+      const next = new Map(current);
+      keys.forEach((key) => {
+        if (next.has(key)) return;
+        const row = rows.find((customer) => customer.id === key);
+        if (row) next.set(key, row);
+      });
+      Array.from(next.keys()).forEach((key) => {
+        if (!keys.has(key)) next.delete(key);
+      });
+      return next;
+    });
+  };
+
+  const onExportSelected = () => {
+    exportRowsToCsv(Array.from(selectedCustomers.values()), CUSTOMER_CSV_COLUMNS, `customers-export-${todayIsoDate()}.csv`);
   };
 
   const columns: DataTableColumn<CustomerSummary>[] = [
@@ -357,6 +404,25 @@ function CustomersPageContent() {
       <div className="mt-6">
         <DataTable
           title="Results"
+          actions={
+            selectedCustomers.size > 0 ? (
+              <>
+                <span className="text-xs text-fg-subtle">{selectedCustomers.size} selected</span>
+                <Button size="sm" variant="secondary" onClick={onExportSelected}>
+                  Export selected
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSelectedCustomers(new Map())}>
+                  Clear selection
+                </Button>
+              </>
+            ) : (
+              <ExportCsvButton
+                rows={query.data?.items}
+                columns={CUSTOMER_CSV_COLUMNS}
+                fileName={`customers-export-${todayIsoDate()}.csv`}
+              />
+            )
+          }
           columns={columns}
           rows={query.data?.items}
           rowKey={(customer) => customer.id}
@@ -374,6 +440,10 @@ function CustomersPageContent() {
               Clear filters
             </Button>
           }
+          selection={{
+            selectedKeys: new Set(selectedCustomers.keys()),
+            onSelectionChange: toggleSelection,
+          }}
           footer={
             query.data ? (
               <Pagination
