@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -70,12 +70,39 @@ function BookingPaymentReturnScreen() {
   const status = booking?.status;
   const isConfirmed = status === BookingStatus.Confirmed;
   const stillPending = status === BookingStatus.PaymentPending && timedOut;
+  // BookingLifecycle.cs: Expired has no outgoing transitions - the slot was
+  // already released back to the pool (BookingExpirySweepJob), so unlike
+  // PaymentFailed this booking can never be retried. Without this branch the
+  // page fell through to the generic "Confirming your payment" spinner
+  // forever once the 20-minute expiry sweep ran - a dead end worse than the
+  // "still confirming" message it followed.
+  const isExpired = status === BookingStatus.Expired;
 
   const transactionQuery = useQuery({
     queryKey: ["payment-transaction", id],
     queryFn: () => apiFetch<PaymentTransactionResponse>(`${API_V1}/payments/bookings/${id}`, { authenticated: true }),
     enabled: status === BookingStatus.PaymentFailed,
   });
+
+  // A checkout the customer abandoned or cancelled before submitting payment
+  // details may never trigger the gateway's webhook at all (unlike a real
+  // completed attempt, success or decline, which reliably does) - without
+  // this, "still confirming" above is where such a booking would sit for the
+  // full 20-minute PaymentPending expiry sweep. Firing only once stillPending
+  // itself first becomes true - not on every render it stays true - gives a
+  // real webhook the full 20s head start this page already grants it before
+  // actively asking the gateway instead.
+  const verifyMutation = useMutation({
+    mutationFn: () => apiFetch(`${API_V1}/payments/bookings/${id}/verify`, { method: "POST", authenticated: true }),
+    onSettled: () => bookingQuery.refetch(),
+  });
+
+  useEffect(() => {
+    if (stillPending) {
+      verifyMutation.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stillPending]);
 
   useEffect(() => {
     if (!isConfirmed || !booking) return;
@@ -149,6 +176,26 @@ function BookingPaymentReturnScreen() {
               <LinkButton href={`/booking/payment/${id}`} fullWidth>
                 Retry payment
               </LinkButton>
+            </div>
+          </Card>
+        ) : isExpired ? (
+          <Card title="Payment window expired">
+            <div className="flex flex-col gap-3">
+              <Alert tone="error" title="This booking's slot was released">
+                We didn&apos;t receive payment confirmation in time, so the slot was released back for
+                other customers. No amount was deducted for this attempt.
+              </Alert>
+              <p className="text-sm leading-relaxed text-fg-muted">
+                You&apos;ll need to book again to pick a slot.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <LinkButton href={`/service/${booking.service.slug}`} fullWidth>
+                  Book again
+                </LinkButton>
+                <LinkButton href={`/bookings/${id}`} size="sm" variant="ghost">
+                  View booking
+                </LinkButton>
+              </div>
             </div>
           </Card>
         ) : stillPending ? (

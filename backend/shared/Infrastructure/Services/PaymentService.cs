@@ -229,6 +229,23 @@ public class PaymentService : IPaymentService
         return Result.Success(ToTransactionResponse(transaction));
     }
 
+    public async Task<Result<PaymentTransactionResponse>> VerifyPendingAsync(Guid customerId, Guid bookingId)
+    {
+        // Ownership check first, against the repository directly - calling
+        // IPaymentWebhookService.VerifyPendingAttemptAsync before confirming
+        // the caller owns this booking would let any authenticated customer
+        // trigger a gateway lookup (and a real state resolution) for anyone
+        // else's payment.
+        var existing = await _paymentRepository.GetByBookingIdAsync(bookingId);
+        if (existing is null || existing.CustomerId != customerId)
+        {
+            return Error.NotFound("Payment.NotFound", "No payment transaction exists for this booking.");
+        }
+
+        var result = await _webhookService.VerifyPendingAttemptAsync(bookingId);
+        return result.IsSuccess ? Result.Success(ToTransactionResponse(result.Value)) : result.Error;
+    }
+
     /// <summary>
     /// Rebuilds a hosted-checkout gateway's redirect form for an
     /// already-existing attempt, reusing its persisted <see cref="PaymentAttempt.GatewayOrderId"/>

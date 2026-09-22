@@ -178,6 +178,95 @@ public sealed class PayUPaymentGateway : IPaymentGateway
         return new GatewayRefundResult(parsed.RequestId ?? refundToken, "processed");
     }
 
+    /// <summary>
+    /// PayU's <c>verify_payment</c> postservice command - same endpoint and
+    /// 4-field hash formula (<c>sha512(key|command|var1|salt)</c>) as
+    /// <see cref="RefundAsync"/>'s <c>cancel_refund_transaction</c> above,
+    /// with <c>var1</c> being the txnid instead of a gateway payment ref.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="CreateOrderAsync"/> and <see cref="RefundAsync"/> -
+    /// whose own doc comments note they were checked against a real request
+    /// to PayU's test environment - this method has NOT been exercised
+    /// against a live PayU account (no transaction existed to verify against
+    /// while writing it). The command name, hash formula, and top-level
+    /// <c>status</c>/<c>transaction_details</c> response shape are PayU's
+    /// standard, documented postservice contract, but the exact field PayU
+    /// returns a human-readable failure reason under is not something this
+    /// comment claims certainty on - both a likely name and a safe fallback
+    /// are tried below. Test this against a real PayU sandbox transaction
+    /// (cancel a checkout, then confirm this call reports it as failed)
+    /// before relying on it to resolve real customer payments.
+    /// </remarks>
+    public async Task<GatewayVerifyResult> VerifyOrderStatusAsync(string gatewayOrderId, CancellationToken cancellationToken = default)
+    {
+        const string command = "verify_payment";
+        string hash = ComputeSha512Hex(string.Join('|', new[]
+        {
+            _options.MerchantKey ?? string.Empty,
+            command,
+            gatewayOrderId,
+            _options.MerchantSalt ?? string.Empty,
+        }));
+
+        var client = _httpClientFactory.CreateClient(HttpClientName);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, PostserviceUrl)
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["key"] = _options.MerchantKey ?? string.Empty,
+                ["command"] = command,
+                ["var1"] = gatewayOrderId,
+                ["hash"] = hash,
+            }),
+        };
+
+        using var response = await client.SendAsync(httpRequest, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError("PayU verify_payment request failed with status {StatusCode}.", (int)response.StatusCode);
+            // A transport/HTTP failure tells us nothing about the payment
+            // itself - "pending" leaves the attempt untouched so a transient
+            // network error here can never wrongly fail a payment that may
+            // still be fine; the customer's next poll or check-again retries.
+            return new GatewayVerifyResult("pending");
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        PayUVerifyApiResponse? parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<PayUVerifyApiResponse>(body, RefundResponseJsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "PayU verify_payment response could not be parsed.");
+            return new GatewayVerifyResult("pending");
+        }
+
+        var detail = parsed?.TransactionDetails?.GetValueOrDefault(gatewayOrderId);
+        if (parsed is null || parsed.Status != 1 || detail is null)
+        {
+            // PayU has no record of this txnid ever reaching it at all - the
+            // real "customer cancelled before submitting anything" case this
+            // method exists to detect.
+            return new GatewayVerifyResult("failure", FailureReason: "No amount was deducted. The checkout was not completed.");
+        }
+
+        if (string.Equals(detail.Status, "pending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(detail.Status, "inprogress", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GatewayVerifyResult("pending");
+        }
+
+        if (string.Equals(detail.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return new GatewayVerifyResult(PaymentWebhookPayload.SuccessStatus, GatewayPaymentRef: detail.Mihpayid);
+        }
+
+        return new GatewayVerifyResult("failure", FailureReason: detail.ErrorMessage ?? detail.Field9 ?? "The payment did not go through.");
+    }
+
     public bool VerifyWebhookSignature(string canonicalPayload, string signature)
     {
         if (string.IsNullOrEmpty(signature))
@@ -231,5 +320,24 @@ public sealed class PayUPaymentGateway : IPaymentGateway
 
         [JsonPropertyName("request_id")]
         public string? RequestId { get; set; }
+    }
+
+    private sealed class PayUVerifyApiResponse
+    {
+        public int Status { get; set; }
+
+        [JsonPropertyName("transaction_details")]
+        public Dictionary<string, PayUVerifyTransactionDetail>? TransactionDetails { get; set; }
+    }
+
+    private sealed class PayUVerifyTransactionDetail
+    {
+        public string? Status { get; set; }
+        public string? Mihpayid { get; set; }
+
+        [JsonPropertyName("error_Message")]
+        public string? ErrorMessage { get; set; }
+
+        public string? Field9 { get; set; }
     }
 }

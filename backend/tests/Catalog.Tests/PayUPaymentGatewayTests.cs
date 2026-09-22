@@ -249,6 +249,84 @@ public sealed class PayUPaymentGatewayTests
         result.Status.Should().Be("failed");
     }
 
+    [Fact]
+    public async Task VerifyOrderStatusAsync_posts_the_documented_command_shape_and_hash()
+    {
+        var handler = StubHttpMessageHandler.RespondingWithJson(
+            """{"status":1,"transaction_details":{"NST123":{"status":"success","mihpayid":"mihpay789"}}}""");
+        var gateway = BuildGateway(handler);
+
+        var result = await gateway.VerifyOrderStatusAsync("NST123");
+
+        result.Status.Should().Be(PaymentWebhookPayload.SuccessStatus);
+        result.GatewayPaymentRef.Should().Be("mihpay789");
+
+        var sent = handler.Requests.Single();
+        sent.RequestUri!.ToString().Should().Be("https://test.payu.in/merchant/postservice.php?form=2");
+        var form = HttpUtility.ParseQueryString(sent.Body);
+        form["key"].Should().Be(MerchantKey);
+        form["command"].Should().Be("verify_payment");
+        form["var1"].Should().Be("NST123");
+
+        string expectedHash = Sha512Hex(string.Join('|', new[] { MerchantKey, "verify_payment", "NST123", MerchantSalt }));
+        form["hash"].Should().Be(expectedHash);
+    }
+
+    [Fact]
+    public async Task VerifyOrderStatusAsync_reports_failure_when_PayU_has_no_record_of_the_txnid()
+    {
+        // The real case this method exists for: a checkout the customer
+        // abandoned or cancelled before submitting a payment method never
+        // reached PayU as a real attempt, so transaction_details has no
+        // entry for it at all.
+        var handler = StubHttpMessageHandler.RespondingWithJson("""{"status":0,"msg":"Transaction not found"}""");
+        var gateway = BuildGateway(handler);
+
+        var result = await gateway.VerifyOrderStatusAsync("NST_never_submitted");
+
+        result.Status.Should().Be("failure");
+        result.FailureReason.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task VerifyOrderStatusAsync_reports_pending_for_a_still_processing_transaction()
+    {
+        var handler = StubHttpMessageHandler.RespondingWithJson(
+            """{"status":1,"transaction_details":{"NST123":{"status":"pending"}}}""");
+        var gateway = BuildGateway(handler);
+
+        var result = await gateway.VerifyOrderStatusAsync("NST123");
+
+        result.Status.Should().Be("pending");
+    }
+
+    [Fact]
+    public async Task VerifyOrderStatusAsync_reports_pending_rather_than_a_false_failure_on_a_transport_error()
+    {
+        // A network/HTTP failure here says nothing about the payment itself -
+        // reporting "pending" (not "failure") means a transient error can
+        // never wrongly fail a payment that may still be perfectly fine.
+        var handler = StubHttpMessageHandler.Responding(HttpStatusCode.InternalServerError);
+        var gateway = BuildGateway(handler);
+
+        var result = await gateway.VerifyOrderStatusAsync("NST123");
+
+        result.Status.Should().Be("pending");
+    }
+
+    [Fact]
+    public async Task VerifyOrderStatusAsync_reports_failure_for_an_explicit_PayU_failure_status()
+    {
+        var handler = StubHttpMessageHandler.RespondingWithJson(
+            """{"status":1,"transaction_details":{"NST123":{"status":"failure","error_Message":"Card declined by issuing bank"}}}""");
+        var gateway = BuildGateway(handler);
+
+        var result = await gateway.VerifyOrderStatusAsync("NST123");
+
+        result.Status.Should().Be("failure");
+        result.FailureReason.Should().Be("Card declined by issuing bank");
+    }
+
     private static string Sha512Hex(string input) =>
         Convert.ToHexString(System.Security.Cryptography.SHA512.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
 }

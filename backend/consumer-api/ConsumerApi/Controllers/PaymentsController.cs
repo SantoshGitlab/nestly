@@ -78,6 +78,29 @@ public class PaymentsController : ControllerBase
     }
 
     /// <summary>
+    /// Actively re-checks a still-pending attempt against the gateway
+    /// directly, rather than only waiting on its webhook - for a hosted-
+    /// checkout gateway, a checkout the customer abandoned or cancelled
+    /// before submitting payment details may never trigger a webhook at all,
+    /// which otherwise leaves the booking stuck "confirming" until the
+    /// unrelated 20-minute PaymentPending expiry sweep. Called by
+    /// customer-web's payment return page once its own short client-side
+    /// wait for a webhook elapses. A safe no-op (200 with the transaction
+    /// unchanged) if the attempt is already resolved or the gateway itself
+    /// still reports it as pending.
+    /// </summary>
+    [HttpPost("bookings/{bookingId:guid}/verify")]
+    [Authorize]
+    [EnableRateLimiting("payment")]
+    [ProducesResponseType(typeof(PaymentTransactionResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> VerifyPending(Guid bookingId)
+    {
+        var result = await _paymentService.VerifyPendingAsync(CurrentCustomerId(), bookingId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
     /// The gateway's payment callback (SRS 30.1, 11.11.3, tasks 69a-c).
     /// Deliberately not [Authorize] - the caller is the payment gateway, not
     /// a logged-in customer, and is authenticated by its signature instead

@@ -64,15 +64,6 @@ public class PaymentWebhookService : IPaymentWebhookService
 
     public async Task<Result> HandleCallbackAsync(PaymentWebhookRequest request)
     {
-        // Task 137a: measures the whole callback-processing path below,
-        // including the DB transaction commit - the latency a real payment
-        // failure/success takes to become durable, not just gateway/signature
-        // checks. Only recorded on the two branches that produce a genuine
-        // payment outcome (succeeded/failed inside the try block) - an
-        // invalid signature or an already-resolved duplicate redelivery is
-        // not a new payment outcome, so neither should skew the metric.
-        var stopwatch = Stopwatch.StartNew();
-
         string canonicalPayload = _gateway.BuildCanonicalPayload(request);
         if (!_gateway.VerifyWebhookSignature(canonicalPayload, request.Signature))
         {
@@ -101,15 +92,13 @@ public class PaymentWebhookService : IPaymentWebhookService
             // This is only a fast-path short-circuit against the snapshot we
             // just read, not the actual guard - two concurrent redeliveries
             // can both load Created before either commits. The real,
-            // race-proof guard is the conditional ExecuteUpdateAsync below
-            // (NESTLY-006).
+            // race-proof guard is the conditional ExecuteUpdateAsync inside
+            // ResolveAttemptAsync (NESTLY-006).
             _logger.LogInformation(
                 "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (attempt already {Status}).",
                 request.GatewayOrderId, attempt.Status);
             return Result.Success();
         }
-
-        bool succeeded = string.Equals(request.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase);
 
         var booking = await _bookingRepository.GetByIdAsync(transaction.BookingId);
         if (booking is null)
@@ -120,17 +109,92 @@ public class PaymentWebhookService : IPaymentWebhookService
             throw new InvalidOperationException($"Booking {transaction.BookingId} referenced by payment transaction {transaction.Id} was not found.");
         }
 
+        bool succeeded = string.Equals(request.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase);
+        await ResolveAttemptAsync(transaction, attempt, booking, succeeded, request.Status, request.GatewayPaymentRef);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// The customer-triggered counterpart to <see cref="HandleCallbackAsync"/>
+    /// (SRS 30.1's webhook path is not the only way an outcome can reach
+    /// this system - see <see cref="IPaymentWebhookService.VerifyPendingAttemptAsync"/>'s
+    /// own doc comment for why). Asks the gateway directly rather than
+    /// waiting on a callback that, for an abandoned/cancelled checkout, may
+    /// never come.
+    /// </summary>
+    public async Task<Result<PaymentTransaction>> VerifyPendingAttemptAsync(Guid bookingId)
+    {
+        var transaction = await _paymentRepository.GetByBookingIdAsync(bookingId);
+        if (transaction is null)
+        {
+            return Error.NotFound("Payment.NotFound", "No payment transaction exists for this booking.");
+        }
+
+        var attempt = transaction.LatestAttempt;
+        if (attempt is null || attempt.Status != PaymentAttemptStatus.Created)
+        {
+            // Already resolved (by a webhook that arrived in the meantime,
+            // or a prior call to this same method) or never started -
+            // nothing new to verify. Same idempotent-no-op shape as
+            // HandleCallbackAsync's duplicate-delivery branch.
+            return Result.Success(transaction);
+        }
+
+        var verifyResult = await _gateway.VerifyOrderStatusAsync(attempt.GatewayOrderId);
+        if (string.Equals(verifyResult.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            // The gateway itself hasn't reached an outcome yet (e.g. a
+            // netbanking mode with delayed settlement) - leave it alone
+            // rather than force a premature failure. The customer's polling
+            // (or a later webhook) will pick up the eventual real outcome.
+            return Result.Success(transaction);
+        }
+
+        var booking = await _bookingRepository.GetByIdAsync(transaction.BookingId);
+        if (booking is null)
+        {
+            throw new InvalidOperationException($"Booking {transaction.BookingId} referenced by payment transaction {transaction.Id} was not found.");
+        }
+
+        bool succeeded = string.Equals(verifyResult.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase);
+        string status = succeeded ? PaymentWebhookPayload.SuccessStatus : (verifyResult.FailureReason ?? "Payment was not completed.");
+        await ResolveAttemptAsync(transaction, attempt, booking, succeeded, status, verifyResult.GatewayPaymentRef);
+        return Result.Success(transaction);
+    }
+
+    /// <summary>
+    /// The actual, race-proof resolution shared by every way a payment
+    /// outcome can reach this system (a real webhook, a redelivered one, and
+    /// now an active gateway verify) - applying the outcome to the
+    /// transaction/attempt and, on success, the booking/commission/escrow.
+    /// The caller has already confirmed <paramref name="attempt"/> still
+    /// looks unresolved; this method's own conditional update is what makes
+    /// that safe against a second, concurrent caller observing the same
+    /// stale snapshot.
+    /// </summary>
+    private async Task ResolveAttemptAsync(
+        PaymentTransaction transaction, PaymentAttempt attempt, Booking booking,
+        bool succeeded, string status, string? gatewayPaymentRef)
+    {
+        // Task 137a: measures the whole resolution path, including the DB
+        // transaction commit - the latency a real payment failure/success
+        // takes to become durable. Not started until this point (an invalid
+        // signature or an already-resolved duplicate is not a new payment
+        // outcome, so neither should skew the metric).
+        var stopwatch = Stopwatch.StartNew();
+
         await using var dbTransaction = await _context.Database.BeginTransactionAsync();
         try
         {
             // NESTLY-006: the actual idempotency guard. A single conditional
             // UPDATE that only ever affects a row still in Created - the same
             // pattern SlotCapacityRepository.TryReserveAsync uses to close a
-            // capacity race. Of two concurrent/duplicate webhook deliveries
-            // for the same gateway order, only one can ever flip this
-            // attempt; the loser affects zero rows and must bail out here,
-            // before doing anything else, so it never re-applies the booking
-            // transition or the escrow hold a second time.
+            // capacity race. Of two concurrent resolutions for the same
+            // attempt (a redelivered webhook racing this same active-verify
+            // path, or two of either), only one can ever flip it; the loser
+            // affects zero rows and must bail out here, before doing
+            // anything else, so it never re-applies the booking transition or
+            // the escrow hold a second time.
             bool wonRace = await _paymentRepository.TryMarkAttemptResolvedAsync(
                 attempt.Id, succeeded ? PaymentAttemptStatus.Success : PaymentAttemptStatus.Failed);
 
@@ -138,19 +202,19 @@ public class PaymentWebhookService : IPaymentWebhookService
             {
                 await dbTransaction.CommitAsync();
                 _logger.LogInformation(
-                    "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (attempt was resolved by a concurrent delivery).",
-                    request.GatewayOrderId);
-                return Result.Success();
+                    "Ignored a payment resolution for gateway order {GatewayOrderId} (attempt was already resolved by a concurrent delivery).",
+                    attempt.GatewayOrderId);
+                return;
             }
 
             if (succeeded)
             {
-                transaction.MarkAttemptSucceeded(attempt.Id, request.GatewayPaymentRef);
+                transaction.MarkAttemptSucceeded(attempt.Id, gatewayPaymentRef ?? string.Empty);
                 await ApplySuccessfulPaymentAsync(transaction, booking, "Payment succeeded.");
             }
             else
             {
-                transaction.MarkAttemptFailed(attempt.Id, request.Status);
+                transaction.MarkAttemptFailed(attempt.Id, status);
                 booking.TransitionTo(BookingStatus.PaymentFailed, "Payment failed.");
 
                 await _paymentRepository.UpdateAsync(transaction);
@@ -166,9 +230,7 @@ public class PaymentWebhookService : IPaymentWebhookService
         }
 
         stopwatch.Stop();
-        _metricsService.RecordPaymentOutcome(succeeded, stopwatch.Elapsed, succeeded ? null : request.Status);
-
-        return Result.Success();
+        _metricsService.RecordPaymentOutcome(succeeded, stopwatch.Elapsed, succeeded ? null : status);
     }
 
     /// <summary>

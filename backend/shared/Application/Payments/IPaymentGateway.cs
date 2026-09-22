@@ -17,6 +17,20 @@ public interface IPaymentGateway
     Task<GatewayRefundResult> RefundAsync(GatewayRefundRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Actively asks the gateway for an order's real current status, instead
+    /// of passively waiting for its webhook callback. Needed because a
+    /// hosted-checkout gateway does not necessarily call back at all for a
+    /// checkout the customer abandoned or explicitly cancelled before
+    /// submitting a payment method - there was no completed attempt for it to
+    /// report, so the webhook this project otherwise relies on exclusively
+    /// never arrives, and the attempt is left stuck "Created" indefinitely. Used by
+    /// <see cref="IPaymentWebhookService"/>'s equivalent verify method to give
+    /// a customer sitting on the return page a real resolution within
+    /// seconds, rather than the 20-minute PaymentPending expiry sweep.
+    /// </summary>
+    Task<GatewayVerifyResult> VerifyOrderStatusAsync(string gatewayOrderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Verifies that <paramref name="signature"/> is a valid signature of
     /// <paramref name="canonicalPayload"/> (SRS 30.1 "webhook/callback
     /// support"; SRS 28.3 "payment callback abuse") - HMAC-style, computed
@@ -79,3 +93,16 @@ public sealed record GatewayRefundRequest(string GatewayPaymentRef, decimal Amou
 
 /// <summary><paramref name="FailureReason"/> is populated only when <paramref name="Status"/> indicates the refund did not go through - a real gateway's refund can genuinely fail (insufficient balance, already refunded, bank rejection), unlike the sandbox's unconditional success.</summary>
 public sealed record GatewayRefundResult(string GatewayRefundId, string Status, string? FailureReason = null);
+
+/// <summary>
+/// <paramref name="Status"/> is one of three normalized outcomes a caller
+/// must branch on: <c>"success"</c> (matches <see cref="PaymentWebhookPayload.SuccessStatus"/>,
+/// resolve the attempt as succeeded), <c>"pending"</c> (the gateway is still
+/// processing - do not resolve anything yet, the customer's own polling or a
+/// later webhook will eventually settle it), or anything else, which is
+/// treated as a definitive failure - including the case where the gateway
+/// has no record of this order ever being attempted at all (the real
+/// abandoned-checkout case this method exists for). <paramref name="FailureReason"/>
+/// is populated only in that last case.
+/// </summary>
+public sealed record GatewayVerifyResult(string Status, string? GatewayPaymentRef = null, string? FailureReason = null);
