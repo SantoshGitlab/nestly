@@ -1,9 +1,11 @@
+using Microsoft.Extensions.Logging;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Notifications;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Reviews;
 using Nestly.Application.Serviceability;
+using Nestly.Application.Storage;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -27,6 +29,8 @@ public class ProviderManagementService : IProviderManagementService
     private readonly IReviewRepository _reviewRepository;
     private readonly IProviderStatusHistoryRepository _statusHistoryRepository;
     private readonly IProviderNotificationPublisher _notificationPublisher;
+    private readonly IFileStorageService _fileStorageService;
+    private readonly ILogger<ProviderManagementService> _logger;
 
     public ProviderManagementService(
         IProviderRepository providerRepository,
@@ -42,7 +46,9 @@ public class ProviderManagementService : IProviderManagementService
         IProviderAvailabilityWindowRepository availabilityWindowRepository,
         IReviewRepository reviewRepository,
         IProviderStatusHistoryRepository statusHistoryRepository,
-        IProviderNotificationPublisher notificationPublisher)
+        IProviderNotificationPublisher notificationPublisher,
+        IFileStorageService fileStorageService,
+        ILogger<ProviderManagementService> logger)
     {
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
@@ -58,6 +64,8 @@ public class ProviderManagementService : IProviderManagementService
         _reviewRepository = reviewRepository;
         _statusHistoryRepository = statusHistoryRepository;
         _notificationPublisher = notificationPublisher;
+        _fileStorageService = fileStorageService;
+        _logger = logger;
     }
 
     public async Task<Result<ProviderSearchResponse>> SearchAsync(ProviderSearchRequest request)
@@ -210,15 +218,53 @@ public class ProviderManagementService : IProviderManagementService
             return Error.Business("Provider.AlreadyDeleted", "This provider's account has already been deleted.");
         }
 
+        // Captured before SoftDelete, which nulls PhotoUrl as part of its own
+        // anonymization (Provider.RemovePhoto) - by then the reference to purge
+        // from storage would already be gone from this in-memory instance.
+        var photoToPurge = provider.PhotoUrl;
+        var kycDocuments = await _kycDocumentRepository.GetByProviderAsync(providerId);
+
         provider.SoftDelete(request.Reason);
         await _providerRepository.UpdateAsync(provider);
         await _sessionRepository.RevokeAllForProviderAsync(providerId);
+
+        // Right-to-erasure (see Provider.SoftDelete's own doc comment): the DB
+        // fields are already anonymized above, but an uploaded photo or KYC
+        // document is a real file still sitting in storage - leaving it there
+        // after "deleting" the account is a name change, not an erasure. Runs
+        // after the DB changes are already persisted, and every failure here
+        // is caught and logged rather than thrown: a storage hiccup is
+        // supplementary cleanup, and must never roll back or fail an erasure
+        // that has already correctly happened in the database.
+        if (photoToPurge is not null)
+        {
+            await TryPurgeFileAsync(photoToPurge);
+        }
+
+        foreach (var document in kycDocuments)
+        {
+            await TryPurgeFileAsync(document.FileRef);
+            document.PurgeFile();
+            await _kycDocumentRepository.UpdateAsync(document);
+        }
 
         // Bug 3 auto-disable: same as SuspendAsync - a deleted provider's
         // coverage no longer counts.
         await _serviceabilityMappingManagementService.AutoDisableUnservedMappingsAsync(providerId);
 
         return await BuildDetailAsync(provider);
+    }
+
+    private async Task TryPurgeFileAsync(string fileReference)
+    {
+        try
+        {
+            await _fileStorageService.DeleteAsync(fileReference);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to purge a storage file during provider right-to-erasure deletion.");
+        }
     }
 
     public async Task<Result<ProviderPerformanceResponse>> GetPerformanceAsync(Guid providerId)

@@ -122,4 +122,20 @@ public class ProviderKycDocument : Entity<Guid>
 
         VerificationStatus = ProviderKycVerificationStatus.Superseded;
     }
+
+    /// <summary>
+    /// Called by the provider's own right-to-erasure deletion
+    /// (<c>ProviderManagementService.DeleteAsync</c>) once the underlying
+    /// file has been removed from storage. The row itself is kept - same
+    /// "financial/job history is retained" reasoning as <c>Provider.SoftDelete</c>,
+    /// since this document's review outcome and timestamps remain part of
+    /// that provider's onboarding history - but <see cref="FileRef"/> is
+    /// non-nullable and constructor-validated as non-empty, so it cannot
+    /// simply be cleared; it is overwritten with a placeholder instead so it
+    /// stops pointing at content that no longer exists.
+    /// </summary>
+    public void PurgeFile()
+    {
+        FileRef = "[erased]";
+    }
 }

@@ -32,4 +32,25 @@ public class LocalDiskFileStorageService : IFileStorageService
 
         return $"{_requestPath}/{fileName}";
     }
+
+    public Task DeleteAsync(string fileReference, CancellationToken cancellationToken = default)
+    {
+        // Inverse of SaveAsync's return value - see SupabaseFileStorageService.DeleteAsync
+        // for why an unrecognized shape (a Supabase public URL) is a silent no-op here.
+        var prefix = $"{_requestPath}/";
+        if (!fileReference.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return Task.CompletedTask;
+        }
+
+        var fileName = fileReference[prefix.Length..];
+        var fullPath = Path.Combine(_uploadsDirectory, fileName);
+
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+        }
+
+        return Task.CompletedTask;
+    }
 }

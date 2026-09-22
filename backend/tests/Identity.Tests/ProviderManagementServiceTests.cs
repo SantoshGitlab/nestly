@@ -1,8 +1,10 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Storage;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
 using Nestly.Infrastructure.Persistence.Repositories;
@@ -24,7 +26,7 @@ public sealed class ProviderManagementServiceTests : IDisposable
 {
     private readonly TestDatabase _database = new();
 
-    private static ProviderManagementService CreateService(NestlyDbContext context) => new(
+    private static ProviderManagementService CreateService(NestlyDbContext context, IFileStorageService? fileStorageService = null) => new(
         new ProviderRepository(context),
         new ProviderKycDocumentRepository(context),
         new ProviderBackgroundCheckRepository(context),
@@ -41,7 +43,9 @@ public sealed class ProviderManagementServiceTests : IDisposable
         new ProviderAvailabilityWindowRepository(context),
         new ReviewRepository(context),
         new ProviderStatusHistoryRepository(context),
-        TestServices.ProviderNotificationPublisher(context));
+        TestServices.ProviderNotificationPublisher(context),
+        fileStorageService ?? new NoOpFileStorageService(),
+        NullLogger<ProviderManagementService>.Instance);
 
     private static ServiceabilityMappingManagementService CreateMappingService(NestlyDbContext context) => new(
         new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
@@ -144,6 +148,50 @@ public sealed class ProviderManagementServiceTests : IDisposable
 
         var mapping = await freshContext.Set<ServicePincodeMapping>().SingleAsync(m => m.ServiceId == serviceId && m.PincodeId == pincodeId);
         mapping.IsActive.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The right-to-erasure gap this covers: <c>Provider.SoftDelete</c>
+    /// already anonymizes the DB row, but until this test's behaviour was
+    /// added, the provider's profile photo and every KYC document they'd
+    /// uploaded stayed live in storage forever - "deleted" in name only.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAsync_purges_the_providers_photo_and_kyc_document_files_from_storage()
+    {
+        await using var context = _database.CreateContext();
+        var (providerId, _, _) = await SeedSoleCoverageAsync(context);
+
+        var provider = await context.Set<Provider>().SingleAsync(p => p.Id == providerId);
+        provider.SubmitPhoto("https://example.test/storage/photo.jpg");
+        var kycDocument = new ProviderKycDocument(Guid.NewGuid(), providerId, ProviderKycDocumentType.IdentityProof, "https://example.test/storage/id-proof.jpg");
+        context.Add(kycDocument);
+        await context.SaveChangesAsync();
+
+        var recordingStorage = new RecordingFileStorageService();
+        var result = await CreateService(context, recordingStorage).DeleteAsync(providerId, new DeleteProviderRequest("Test deletion."));
+
+        result.IsSuccess.Should().BeTrue();
+        recordingStorage.DeletedReferences.Should().BeEquivalentTo(
+            "https://example.test/storage/photo.jpg",
+            "https://example.test/storage/id-proof.jpg");
+
+        var persistedDocument = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == kycDocument.Id);
+        persistedDocument.FileRef.Should().Be("[erased]", "the row is kept for audit history, but must stop pointing at a file that no longer exists");
+    }
+
+    private sealed class RecordingFileStorageService : IFileStorageService
+    {
+        public List<string> DeletedReferences { get; } = new();
+
+        public Task<string> SaveAsync(Stream content, string fileNameHint, string contentType, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This spy is for DeleteAsync assertions only.");
+
+        public Task DeleteAsync(string fileReference, CancellationToken cancellationToken = default)
+        {
+            DeletedReferences.Add(fileReference);
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]

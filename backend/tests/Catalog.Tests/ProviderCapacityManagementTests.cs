@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nestly.Application.ProviderManagement;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence.Repositories;
@@ -36,7 +37,9 @@ public sealed class ProviderCapacityManagementTests : IClassFixture<TestDatabase
         new ProviderAvailabilityWindowRepository(context),
         new ReviewRepository(context),
         new ProviderStatusHistoryRepository(context),
-        TestServices.ProviderNotificationPublisher(context));
+        TestServices.ProviderNotificationPublisher(context),
+        new NoOpFileStorageService(),
+        NullLogger<ProviderManagementService>.Instance);
 
     private async Task<Guid> SeedProviderAsync()
     {
