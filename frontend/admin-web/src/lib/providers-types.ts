@@ -178,6 +178,10 @@ export interface SuspendProviderRequest {
   reason: string;
 }
 
+export interface DeleteProviderRequest {
+  reason: string;
+}
+
 export interface ProviderKycDocument {
   id: string;
   docType: ProviderKycDocumentType;
@@ -187,6 +191,8 @@ export interface ProviderKycDocument {
   verifiedBy: string | null;
   verifiedAt: string | null;
   submittedAt: string;
+  /** Why an admin rejected this document - null except when verificationStatus is Rejected. Shown back to the provider, so it must be shown here too. */
+  rejectionReason: string | null;
 }
 
 /** One row of the admin KYC verification queue (Provider Management UX pass) - a pending document plus enough provider identity to tell one queue row from another. */
@@ -247,6 +253,17 @@ export interface ProviderDetail {
   backgroundChecks: ProviderBackgroundCheck[];
   /** Task 293. Appended last, matching the C# positional record's own append-only rule. */
   photo: ProviderPhoto;
+  /** Append-only status change log (Provider Management UX pass), most recent first. */
+  statusHistory: ProviderStatusHistoryEntry[];
+}
+
+/** One entry of a provider's append-only status change log (mirrors the booking status timeline). */
+export interface ProviderStatusHistoryEntry {
+  id: string;
+  fromStatus: ProviderStatus | null;
+  toStatus: ProviderStatus;
+  reason: string | null;
+  changedAtUtc: string;
 }
 
 // ---- Capacity limits (task 245 built enforcement; task 308 adds this write path) ----

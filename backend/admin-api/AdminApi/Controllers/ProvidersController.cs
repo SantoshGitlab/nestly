@@ -38,6 +38,7 @@ public class ProvidersController : ControllerBase
     private readonly IValidator<CreateProviderRequest> _createValidator;
     private readonly IValidator<UpdateProviderRequest> _updateValidator;
     private readonly IValidator<SuspendProviderRequest> _suspendValidator;
+    private readonly IValidator<DeleteProviderRequest> _deleteValidator;
     private readonly IValidator<RejectProviderKycDocumentRequest> _rejectKycValidator;
     private readonly IValidator<RejectProviderPhotoRequest> _rejectPhotoValidator;
     private readonly IValidator<RecordBackgroundCheckRequest> _backgroundCheckValidator;
@@ -54,6 +55,7 @@ public class ProvidersController : ControllerBase
         IValidator<CreateProviderRequest> createValidator,
         IValidator<UpdateProviderRequest> updateValidator,
         IValidator<SuspendProviderRequest> suspendValidator,
+        IValidator<DeleteProviderRequest> deleteValidator,
         IValidator<RejectProviderKycDocumentRequest> rejectKycValidator,
         IValidator<RejectProviderPhotoRequest> rejectPhotoValidator,
         IValidator<RecordBackgroundCheckRequest> backgroundCheckValidator,
@@ -69,6 +71,7 @@ public class ProvidersController : ControllerBase
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _suspendValidator = suspendValidator;
+        _deleteValidator = deleteValidator;
         _rejectKycValidator = rejectKycValidator;
         _rejectPhotoValidator = rejectPhotoValidator;
         _backgroundCheckValidator = backgroundCheckValidator;
@@ -215,11 +218,18 @@ public class ProvidersController : ControllerBase
     [HttpPost("{providerId:guid}/delete")]
     [Authorize(Policy = WritePolicy)]
     [ProducesResponseType(typeof(ProviderDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
-    public async Task<IActionResult> Delete(Guid providerId)
+    public async Task<IActionResult> Delete(Guid providerId, [FromBody] DeleteProviderRequest request)
     {
-        var result = await _providerManagementService.DeleteAsync(providerId);
+        var validation = await _deleteValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _providerManagementService.DeleteAsync(providerId, request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 

@@ -1,5 +1,6 @@
 using Nestly.Application;
 using Nestly.Application.Bookings;
+using Nestly.Application.Notifications;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Reviews;
 using Nestly.Application.Serviceability;
@@ -24,6 +25,8 @@ public class ProviderManagementService : IProviderManagementService
     private readonly IServiceabilityMappingManagementService _serviceabilityMappingManagementService;
     private readonly IProviderAvailabilityWindowRepository _availabilityWindowRepository;
     private readonly IReviewRepository _reviewRepository;
+    private readonly IProviderStatusHistoryRepository _statusHistoryRepository;
+    private readonly IProviderNotificationPublisher _notificationPublisher;
 
     public ProviderManagementService(
         IProviderRepository providerRepository,
@@ -37,7 +40,9 @@ public class ProviderManagementService : IProviderManagementService
         IProviderSessionRepository sessionRepository,
         IServiceabilityMappingManagementService serviceabilityMappingManagementService,
         IProviderAvailabilityWindowRepository availabilityWindowRepository,
-        IReviewRepository reviewRepository)
+        IReviewRepository reviewRepository,
+        IProviderStatusHistoryRepository statusHistoryRepository,
+        IProviderNotificationPublisher notificationPublisher)
     {
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
@@ -51,6 +56,8 @@ public class ProviderManagementService : IProviderManagementService
         _serviceabilityMappingManagementService = serviceabilityMappingManagementService;
         _availabilityWindowRepository = availabilityWindowRepository;
         _reviewRepository = reviewRepository;
+        _statusHistoryRepository = statusHistoryRepository;
+        _notificationPublisher = notificationPublisher;
     }
 
     public async Task<Result<ProviderSearchResponse>> SearchAsync(ProviderSearchRequest request)
@@ -146,7 +153,7 @@ public class ProviderManagementService : IProviderManagementService
             return Error.Business("Provider.AlreadySuspended", "This provider is already suspended.");
         }
 
-        provider.ChangeStatus(ProviderStatus.Suspended);
+        provider.ChangeStatus(ProviderStatus.Suspended, request.Reason);
         await _providerRepository.UpdateAsync(provider);
 
         // Bug 3 auto-disable: mirror of ReactivateAsync's auto-enable below -
@@ -155,6 +162,13 @@ public class ProviderManagementService : IProviderManagementService
         // is needed - AutoDisableUnservedMappingsAsync reads current
         // coverage itself.
         await _serviceabilityMappingManagementService.AutoDisableUnservedMappingsAsync(providerId);
+
+        await _notificationPublisher.NotifyAsync(
+            providerId,
+            ProviderNotificationType.Suspended,
+            "Account suspended",
+            $"Your account has been suspended: {request.Reason}",
+            deepLinkPath: "/profile");
 
         return await BuildDetailAsync(provider);
     }
@@ -183,7 +197,7 @@ public class ProviderManagementService : IProviderManagementService
         return await BuildDetailAsync(provider);
     }
 
-    public async Task<Result<ProviderDetailResponse>> DeleteAsync(Guid providerId)
+    public async Task<Result<ProviderDetailResponse>> DeleteAsync(Guid providerId, DeleteProviderRequest request)
     {
         var provider = await _providerRepository.GetByIdAsync(providerId);
         if (provider is null)
@@ -196,7 +210,7 @@ public class ProviderManagementService : IProviderManagementService
             return Error.Business("Provider.AlreadyDeleted", "This provider's account has already been deleted.");
         }
 
-        provider.SoftDelete();
+        provider.SoftDelete(request.Reason);
         await _providerRepository.UpdateAsync(provider);
         await _sessionRepository.RevokeAllForProviderAsync(providerId);
 
@@ -413,8 +427,9 @@ public class ProviderManagementService : IProviderManagementService
     {
         var documents = await _kycDocumentRepository.GetByProviderAsync(provider.Id);
         var backgroundChecks = await _backgroundCheckRepository.ListByProviderAsync(provider.Id);
+        var statusHistory = await _statusHistoryRepository.ListByProviderAsync(provider.Id);
 
-        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks);
+        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks, statusHistory);
     }
 
     /// <inheritdoc/>

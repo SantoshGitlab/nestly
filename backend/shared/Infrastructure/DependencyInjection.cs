@@ -40,6 +40,7 @@ using Nestly.Application.ProviderIdentity;
 using Nestly.Application.ProviderJobs;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.ProviderProfile;
+using Nestly.Application.ProviderSupport;
 using Nestly.Application.NestlyCoins;
 using Nestly.Application.Referral;
 using Nestly.Application.ProviderReferral;
@@ -497,6 +498,10 @@ public static class DependencyInjection
         services.AddScoped<IProviderSessionRepository, ProviderSessionRepository>();
         services.AddScoped<IProviderLoginAttemptRepository, ProviderLoginAttemptRepository>();
         services.AddScoped<IProviderKycDocumentRepository, ProviderKycDocumentRepository>();
+        services.AddScoped<IProviderStatusHistoryRepository, ProviderStatusHistoryRepository>();
+        services.AddScoped<IProviderNotificationRepository, ProviderNotificationRepository>();
+        services.AddScoped<IProviderNotificationService, ProviderNotificationService>();
+        services.AddScoped<IProviderNotificationPublisher, ProviderNotificationPublisher>();
         services.AddScoped<IProviderOtpService, ProviderOtpService>();
         services.AddScoped<IProviderTokenService, ProviderTokenService>();
         services.AddScoped<IProviderRegistrationService, ProviderRegistrationService>();
@@ -833,6 +838,14 @@ public static class DependencyInjection
         // assign/unassign, respond, escalate, resolve/close, link booking) -
         // gated behind "support.read"/"support.write" in SupportTicketsController.
         services.AddScoped<IAdminSupportTicketService, AdminSupportTicketService>();
+
+        // Provider Management UX pass: provider-web had no way for a
+        // provider to reach Glavyx support - a separate, smaller ticket
+        // module from the customer one above (see ProviderSupportTicket's
+        // doc comment for why it is not a retrofit of SupportTicket).
+        services.AddScoped<IProviderSupportTicketRepository, ProviderSupportTicketRepository>();
+        services.AddScoped<IProviderSupportTicketService, ProviderSupportTicketService>();
+        services.AddScoped<IAdminProviderSupportTicketService, AdminProviderSupportTicketService>();
 
         // Task 99: admin dashboard KPI widgets (SRS 12.3). Reads across the
         // Booking/Payment/Refund/Support aggregates directly - see

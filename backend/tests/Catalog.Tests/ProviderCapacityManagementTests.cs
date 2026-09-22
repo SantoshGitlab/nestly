@@ -34,7 +34,9 @@ public sealed class ProviderCapacityManagementTests : IClassFixture<TestDatabase
             new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
             TestServices.AuditLogWriter(context), TestServices.SystemSettings(context)),
         new ProviderAvailabilityWindowRepository(context),
-        new ReviewRepository(context));
+        new ReviewRepository(context),
+        new ProviderStatusHistoryRepository(context),
+        TestServices.ProviderNotificationPublisher(context));
 
     private async Task<Guid> SeedProviderAsync()
     {

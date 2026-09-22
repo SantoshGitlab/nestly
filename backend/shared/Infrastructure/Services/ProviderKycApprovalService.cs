@@ -1,4 +1,5 @@
 using Nestly.Application;
+using Nestly.Application.Notifications;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Serviceability;
 using Nestly.BuildingBlocks.Results;
@@ -13,17 +14,23 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
     private readonly IProviderKycDocumentRepository _kycDocumentRepository;
     private readonly IProviderBackgroundCheckRepository _backgroundCheckRepository;
     private readonly IServiceabilityMappingManagementService _serviceabilityMappingManagementService;
+    private readonly IProviderStatusHistoryRepository _statusHistoryRepository;
+    private readonly IProviderNotificationPublisher _notificationPublisher;
 
     public ProviderKycApprovalService(
         IProviderRepository providerRepository,
         IProviderKycDocumentRepository kycDocumentRepository,
         IProviderBackgroundCheckRepository backgroundCheckRepository,
-        IServiceabilityMappingManagementService serviceabilityMappingManagementService)
+        IServiceabilityMappingManagementService serviceabilityMappingManagementService,
+        IProviderStatusHistoryRepository statusHistoryRepository,
+        IProviderNotificationPublisher notificationPublisher)
     {
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
         _backgroundCheckRepository = backgroundCheckRepository;
         _serviceabilityMappingManagementService = serviceabilityMappingManagementService;
+        _statusHistoryRepository = statusHistoryRepository;
+        _notificationPublisher = notificationPublisher;
     }
 
     public async Task<IReadOnlyList<ProviderKycDocumentQueueItemResponse>> ListPendingDocumentsAsync(CancellationToken cancellationToken = default)
@@ -90,8 +97,15 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
             return Error.Business("ProviderKycApproval.AlreadyReviewed", $"This document was already {document.VerificationStatus}.");
         }
 
-        document.Reject(adminUserId);
+        document.Reject(adminUserId, request.Reason);
         await _kycDocumentRepository.UpdateAsync(document);
+
+        await _notificationPublisher.NotifyAsync(
+            document.ProviderId,
+            ProviderNotificationType.KycRejected,
+            "Document rejected",
+            $"Your {document.DocType} document was rejected: {request.Reason}",
+            deepLinkPath: "/profile");
 
         return ToResponse(document);
     }
@@ -159,11 +173,13 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
 
         var documents = await _kycDocumentRepository.GetByProviderAsync(providerId);
         var backgroundChecks = await _backgroundCheckRepository.ListByProviderAsync(providerId);
+        var statusHistory = await _statusHistoryRepository.ListByProviderAsync(providerId);
 
-        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks);
+        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks, statusHistory);
     }
 
     private static ProviderKycDocumentResponse ToResponse(ProviderKycDocument document) => new(
         document.Id, document.DocType, document.DocNumber, document.FileRef,
-        document.VerificationStatus, document.VerifiedBy, document.VerifiedAt, document.SubmittedAt);
+        document.VerificationStatus, document.VerifiedBy, document.VerifiedAt, document.SubmittedAt,
+        document.RejectionReason);
 }

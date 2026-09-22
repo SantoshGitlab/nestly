@@ -39,7 +39,9 @@ public sealed class ProviderManagementServiceTests : IDisposable
             new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
             TestServices.AuditLogWriter(context), TestServices.SystemSettings(context)),
         new ProviderAvailabilityWindowRepository(context),
-        new ReviewRepository(context));
+        new ReviewRepository(context),
+        new ProviderStatusHistoryRepository(context),
+        TestServices.ProviderNotificationPublisher(context));
 
     private static ServiceabilityMappingManagementService CreateMappingService(NestlyDbContext context) => new(
         new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
@@ -133,7 +135,7 @@ public sealed class ProviderManagementServiceTests : IDisposable
         await using var context = _database.CreateContext();
         var (providerId, serviceId, pincodeId) = await SeedSoleCoverageAsync(context);
 
-        var result = await CreateService(context).DeleteAsync(providerId);
+        var result = await CreateService(context).DeleteAsync(providerId, new DeleteProviderRequest("Test deletion."));
         result.IsSuccess.Should().BeTrue();
 
         await BackdatePendingAutoDisableAsync(serviceId, pincodeId);

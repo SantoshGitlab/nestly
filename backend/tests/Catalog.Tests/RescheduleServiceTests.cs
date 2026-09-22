@@ -498,7 +498,7 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
     private static BookingProviderAssignmentService BuildAssignmentService(Nestly.Infrastructure.Persistence.NestlyDbContext context) => new(
         new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context),
         new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()),
-        Options.Create(new AutoAssignmentOptions()), context);
+        Options.Create(new AutoAssignmentOptions()), TestServices.ProviderNotificationPublisher(context), context);
 
     private static Provider SeedProvider(Nestly.Infrastructure.Persistence.NestlyDbContext context)
     {

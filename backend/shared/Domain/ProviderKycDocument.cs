@@ -65,6 +65,9 @@ public class ProviderKycDocument : Entity<Guid>
     public DateTime? VerifiedAt { get; private set; }
     public DateTime SubmittedAt { get; private set; }
 
+    /// <summary>Why an admin rejected this document - null except after <see cref="Reject"/>. Shown back to the provider so a rejection is actionable, not a silent dead end (mirrors <c>Provider.PhotoModerationNote</c>).</summary>
+    public string? RejectionReason { get; private set; }
+
     protected ProviderKycDocument() { }
 
     public ProviderKycDocument(Guid id, Guid providerId, ProviderKycDocumentType docType, string fileRef, string? docNumber = null)
@@ -88,12 +91,18 @@ public class ProviderKycDocument : Entity<Guid>
         VerifiedAt = DateTime.UtcNow;
     }
 
-    /// <summary>Admin rejection (task 150b). Not called by anything in this pass - built for that future workflow.</summary>
-    public void Reject(Guid verifiedByAdminUserId)
+    /// <summary>Admin rejection (task 150b). <paramref name="reason"/> is required - a rejected provider must be told why, not left to guess.</summary>
+    public void Reject(Guid verifiedByAdminUserId, string reason)
     {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A rejection reason is required.", nameof(reason));
+        }
+
         VerificationStatus = ProviderKycVerificationStatus.Rejected;
         VerifiedBy = verifiedByAdminUserId;
         VerifiedAt = DateTime.UtcNow;
+        RejectionReason = reason.Trim();
     }
 
     /// <summary>

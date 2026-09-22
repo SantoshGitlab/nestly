@@ -68,6 +68,9 @@ public sealed record UpdateProviderRequest(string LegalName, string DisplayName,
 
 public sealed record SuspendProviderRequest(string Reason);
 
+/// <summary>Admin-supplied reason for a right-to-erasure deletion, recorded to <see cref="Domain.ProviderStatusHistory"/> - mirrors <see cref="SuspendProviderRequest"/>.</summary>
+public sealed record DeleteProviderRequest(string Reason);
+
 public sealed record ProviderKycDocumentResponse(
     Guid Id,
     ProviderKycDocumentType DocType,
@@ -76,7 +79,8 @@ public sealed record ProviderKycDocumentResponse(
     ProviderKycVerificationStatus VerificationStatus,
     Guid? VerifiedBy,
     DateTime? VerifiedAt,
-    DateTime SubmittedAt);
+    DateTime SubmittedAt,
+    string? RejectionReason);
 
 /// <summary>
 /// One row of the admin KYC verification queue (Provider Management UX
@@ -93,6 +97,14 @@ public sealed record ProviderKycDocumentQueueItemResponse(
     string? DocNumber,
     string FileRef,
     DateTime SubmittedAt);
+
+/// <summary>One entry of a provider's append-only status change log (mirrors <c>BookingStatusHistoryEntryResponse</c>).</summary>
+public sealed record ProviderStatusHistoryEntryResponse(
+    Guid Id,
+    ProviderStatus? FromStatus,
+    ProviderStatus ToStatus,
+    string? Reason,
+    DateTime ChangedAtUtc);
 
 public sealed record ProviderBackgroundCheckResponse(
     Guid Id,
@@ -126,7 +138,8 @@ public sealed record ProviderDetailResponse(
     decimal? Longitude,
     IReadOnlyList<ProviderKycDocumentResponse> KycDocuments,
     IReadOnlyList<ProviderBackgroundCheckResponse> BackgroundChecks,
-    ProviderPhotoResponse Photo);
+    ProviderPhotoResponse Photo,
+    IReadOnlyList<ProviderStatusHistoryEntryResponse> StatusHistory);
 
 // ---- Photo moderation (task 293) ----
 

@@ -10,6 +10,7 @@ import { RatingsPromoSection } from "./_components/RatingsPromoSection";
 import { ReferralPromoSection } from "./_components/ReferralPromoSection";
 import { ServiceAreasSection } from "./_components/ServiceAreasSection";
 import { SkillsSection } from "./_components/SkillsSection";
+import { SupportPromoSection } from "./_components/SupportPromoSection";
 
 type ProfileTab = "details" | "verification" | "coverage";
 
@@ -109,6 +110,7 @@ export default function ProfilePage() {
 
       <RatingsPromoSection />
       <ReferralPromoSection />
+      <SupportPromoSection />
     </div>
   );
 }

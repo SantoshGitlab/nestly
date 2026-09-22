@@ -18,7 +18,8 @@ internal static class ProviderDetailMapper
     public static ProviderDetailResponse ToDetailResponse(
         Provider provider,
         IReadOnlyList<ProviderKycDocument> documents,
-        IReadOnlyList<ProviderBackgroundCheck> backgroundChecks) => new(
+        IReadOnlyList<ProviderBackgroundCheck> backgroundChecks,
+        IReadOnlyList<ProviderStatusHistory> statusHistory) => new(
         provider.Id,
         provider.LegalName,
         provider.DisplayName,
@@ -32,9 +33,12 @@ internal static class ProviderDetailMapper
         provider.Latitude,
         provider.Longitude,
         documents.Select(d => new ProviderKycDocumentResponse(
-            d.Id, d.DocType, d.DocNumber, d.FileRef, d.VerificationStatus, d.VerifiedBy, d.VerifiedAt, d.SubmittedAt)).ToList(),
+            d.Id, d.DocType, d.DocNumber, d.FileRef, d.VerificationStatus, d.VerifiedBy, d.VerifiedAt, d.SubmittedAt, d.RejectionReason)).ToList(),
         backgroundChecks.Select(c => new ProviderBackgroundCheckResponse(c.Id, c.Status, c.CheckedBy, c.CheckedAt, c.Notes)).ToList(),
-        ToPhotoResponse(provider));
+        ToPhotoResponse(provider),
+        statusHistory
+            .Select(h => new ProviderStatusHistoryEntryResponse(h.Id, h.FromStatus, h.ToStatus, h.Reason, h.ChangedAtUtc))
+            .ToList());
 
     public static ProviderPhotoResponse ToPhotoResponse(Provider provider) => new(
         provider.Id,

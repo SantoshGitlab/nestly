@@ -28,7 +28,9 @@ public sealed class ProviderKycApprovalServiceTests : IDisposable
         new ServiceabilityMappingManagementService(
             new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
             new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),
-            TestServices.AuditLogWriter(context), TestServices.SystemSettings(context)));
+            TestServices.AuditLogWriter(context), TestServices.SystemSettings(context)),
+        new ProviderStatusHistoryRepository(context),
+        TestServices.ProviderNotificationPublisher(context));
 
     private static ProviderKycService CreateKycService(NestlyDbContext context) =>
         new(new ProviderRepository(context), new ProviderKycDocumentRepository(context));

@@ -85,7 +85,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
                 Options.Create(new AutoAssignmentOptions())),
             BuildEligibilityService(context)),
         BuildEligibilityService(context),
-        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions { RetryAttempts = retryAttempts, Enabled = enabled }), context),
+        new BookingProviderAssignmentService(new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions { RetryAttempts = retryAttempts, Enabled = enabled }), TestServices.ProviderNotificationPublisher(context), context),
         new BookingProviderAssignmentRepository(context),
         new BookingRepository(context),
         new RecurringPlanProviderContinuityService(new BookingRepository(context)),
@@ -219,7 +219,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         using (var context = _db.CreateContext())
         {
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions()), context);
+                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions()), TestServices.ProviderNotificationPublisher(context), context);
 
             var firstAssign = await assignmentService.AssignBySystemAsync(f.BookingId, rejecter.Id);
             firstAssign.IsSuccess.Should().BeTrue();
@@ -264,7 +264,7 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         using (var context = _db.CreateContext())
         {
             var assignmentService = new BookingProviderAssignmentService(
-                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions()), context);
+                new BookingRepository(context), new ProviderRepository(context), new ServiceRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), Options.Create(new AutoAssignmentOptions()), TestServices.ProviderNotificationPublisher(context), context);
 
             var firstAssign = await assignmentService.AssignBySystemAsync(f.BookingId, unresponsive.Id);
             firstAssign.IsSuccess.Should().BeTrue();

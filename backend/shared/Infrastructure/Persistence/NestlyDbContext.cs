@@ -55,6 +55,10 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<NotificationTemplate> NotificationTemplates { get; set; }
     public DbSet<ExportJob> ExportJobs { get; set; }
     public DbSet<Provider> Providers { get; set; }
+    public DbSet<ProviderStatusHistory> ProviderStatusHistories { get; set; }
+    public DbSet<ProviderNotification> ProviderNotifications { get; set; }
+    public DbSet<ProviderSupportTicket> ProviderSupportTickets { get; set; }
+    public DbSet<ProviderSupportTicketComment> ProviderSupportTicketComments { get; set; }
     public DbSet<ProviderAuthIdentity> ProviderAuthIdentities { get; set; }
     public DbSet<ProviderOtp> ProviderOtps { get; set; }
     public DbSet<ProviderSession> ProviderSessions { get; set; }

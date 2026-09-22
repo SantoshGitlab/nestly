@@ -612,7 +612,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             var assignmentService = new BookingProviderAssignmentService(
                 new BookingRepository(setupContext), new ProviderRepository(setupContext), new ServiceRepository(setupContext),
                 new BookingProviderAssignmentRepository(setupContext), new ProviderScheduleConflictService(setupContext, TestServices.Occupancy()),
-                Options.Create(new AutoAssignmentOptions()), setupContext);
+                Options.Create(new AutoAssignmentOptions()), TestServices.ProviderNotificationPublisher(setupContext), setupContext);
             (await assignmentService.AssignAsync(fixture.BookingId, adminUserId, new AssignProviderRequest(providerId, ResponseDeadline: null)))
                 .IsSuccess.Should().BeTrue();
             (await assignmentService.AcceptAsync(fixture.BookingId, providerId)).IsSuccess.Should().BeTrue();
@@ -637,7 +637,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new BookingProviderAssignmentService(
                 new BookingRepository(readContext), new ProviderRepository(readContext), new ServiceRepository(readContext),
                 assignmentRepository, new ProviderScheduleConflictService(readContext, TestServices.Occupancy()),
-                Options.Create(new AutoAssignmentOptions()), readContext),
+                Options.Create(new AutoAssignmentOptions()), TestServices.ProviderNotificationPublisher(readContext), readContext),
             new BookingCompletionProofRepository(readContext),
             new NoOpBookingEtaService(),
             new RecurringBookingPlanRepository(readContext),

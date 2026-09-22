@@ -1,5 +1,6 @@
 using Nestly.Application;
 using Nestly.Application.Abstractions.Auditing;
+using Nestly.Application.Notifications;
 using Nestly.Application.ProviderManagement;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
@@ -35,17 +36,20 @@ public class ProviderPayoutService : IProviderPayoutService
     private readonly IProviderPayoutRepository _payoutRepository;
     private readonly IProviderEarningLedgerRepository _ledgerRepository;
     private readonly IAuditLogWriter _auditLogWriter;
+    private readonly IProviderNotificationPublisher _notificationPublisher;
 
     public ProviderPayoutService(
         IProviderRepository providerRepository,
         IProviderPayoutRepository payoutRepository,
         IProviderEarningLedgerRepository ledgerRepository,
-        IAuditLogWriter auditLogWriter)
+        IAuditLogWriter auditLogWriter,
+        IProviderNotificationPublisher notificationPublisher)
     {
         _providerRepository = providerRepository;
         _payoutRepository = payoutRepository;
         _ledgerRepository = ledgerRepository;
         _auditLogWriter = auditLogWriter;
+        _notificationPublisher = notificationPublisher;
     }
 
     public async Task<Result<ProviderPayoutResponse>> CreateBatchAsync(Guid providerId, CreateProviderPayoutRequest request)
@@ -162,6 +166,16 @@ public class ProviderPayoutService : IProviderPayoutService
             NewValues: $"ProviderId={payout.ProviderId}; Status={previousStatus}->{payout.Status}; PayoutReference={payout.PayoutReference ?? "null"}"));
 
         await _payoutRepository.UpdateAsync(payout);
+
+        if (payout.Status == ProviderPayoutStatus.Paid)
+        {
+            await _notificationPublisher.NotifyAsync(
+                payout.ProviderId,
+                ProviderNotificationType.PayoutProcessed,
+                "Payout processed",
+                $"Your payout of ₹{payout.TotalAmount:N2} for {payout.PeriodStart:d MMM} - {payout.PeriodEnd:d MMM} has been paid.",
+                deepLinkPath: $"/earnings/payouts/{payout.Id}");
+        }
 
         var provider = await _providerRepository.GetByIdAsync(payout.ProviderId);
         return ToResponse(payout, provider?.DisplayName ?? "(unknown provider)");

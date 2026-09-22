@@ -49,7 +49,8 @@ public class ProviderEarningsServiceTests : IDisposable
         new ProviderRepository(context),
         new ProviderPayoutRepository(context),
         new ProviderEarningLedgerRepository(context),
-        new AuditLogWriter(context, new StubAuditContextProvider()));
+        new AuditLogWriter(context, new StubAuditContextProvider()),
+        TestServices.ProviderNotificationPublisher(context));
 
     private sealed class StubAuditContextProvider : IAuditContextProvider
     {

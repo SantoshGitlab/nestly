@@ -3766,6 +3766,11 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("provider_id");
 
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("rejection_reason");
+
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("submitted_at");
@@ -3877,6 +3882,64 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_provider_login_attempt_identifier_occurred_at_utc");
 
                     b.ToTable("provider_login_attempt", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DeepLinkPath")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("deep_link_path");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_read");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at_utc");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_notification");
+
+                    b.HasIndex("ProviderId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_provider_notification_provider_id_created_at_utc");
+
+                    b.HasIndex("ProviderId", "IsRead")
+                        .HasDatabaseName("ix_provider_notification_provider_id_is_read");
+
+                    b.ToTable("provider_notification", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.ProviderOtp", b =>
@@ -4286,6 +4349,142 @@ namespace Nestly.Infrastructure.Migrations
                         .HasDatabaseName("ix_provider_skill_mapping_provider_id_category_id_service_id");
 
                     b.ToTable("provider_skill_mapping", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("changed_at_utc");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("from_status");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_status_history");
+
+                    b.HasIndex("ProviderId", "ChangedAtUtc")
+                        .HasDatabaseName("ix_provider_status_history_provider_id_changed_at_utc");
+
+                    b.ToTable("provider_status_history", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderSupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_id");
+
+                    b.Property<string>("ResolutionSummary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("resolution_summary");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("subject");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_support_ticket");
+
+                    b.HasIndex("ProviderId")
+                        .HasDatabaseName("ix_provider_support_ticket_provider_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_provider_support_ticket_status");
+
+                    b.ToTable("provider_support_ticket", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderSupportTicketComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthorType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("author_type");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ProviderSupportTicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("provider_support_ticket_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_provider_support_ticket_comment");
+
+                    b.HasIndex("ProviderSupportTicketId")
+                        .HasDatabaseName("ix_provider_support_ticket_comment_provider_support_ticket_id");
+
+                    b.ToTable("provider_support_ticket_comment", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.RecurringBookingOccurrence", b =>
@@ -6642,6 +6841,36 @@ namespace Nestly.Infrastructure.Migrations
                         .HasConstraintName("fk_provider_skill_mapping_service_service_id");
                 });
 
+            modelBuilder.Entity("Nestly.Domain.ProviderStatusHistory", b =>
+                {
+                    b.HasOne("Nestly.Domain.Provider", null)
+                        .WithMany("StatusHistory")
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_provider_status_history_provider_provider_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderSupportTicket", b =>
+                {
+                    b.HasOne("Nestly.Domain.Provider", null)
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_provider_support_ticket_provider_provider_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderSupportTicketComment", b =>
+                {
+                    b.HasOne("Nestly.Domain.ProviderSupportTicket", null)
+                        .WithMany("Comments")
+                        .HasForeignKey("ProviderSupportTicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_provider_support_ticket_comment_provider_support_tickets_pr");
+                });
+
             modelBuilder.Entity("Nestly.Domain.RecurringBookingOccurrence", b =>
                 {
                     b.HasOne("Nestly.Domain.Booking", null)
@@ -6987,6 +7216,16 @@ namespace Nestly.Infrastructure.Migrations
             modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
                 {
                     b.Navigation("Attempts");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.Provider", b =>
+                {
+                    b.Navigation("StatusHistory");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.ProviderSupportTicket", b =>
+                {
+                    b.Navigation("Comments");
                 });
 
             modelBuilder.Entity("Nestly.Domain.RecurringBookingPlan", b =>

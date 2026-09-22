@@ -86,6 +86,14 @@ public class SuspendProviderRequestValidator : AbstractValidator<SuspendProvider
     }
 }
 
+public class DeleteProviderRequestValidator : AbstractValidator<DeleteProviderRequest>
+{
+    public DeleteProviderRequestValidator()
+    {
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+    }
+}
+
 public class RejectProviderKycDocumentRequestValidator : AbstractValidator<RejectProviderKycDocumentRequest>
 {
     public RejectProviderKycDocumentRequestValidator()

@@ -13,6 +13,7 @@ import type {
   BookingProviderAssignment,
   CreateProviderPayoutRequest,
   CreateProviderRequest,
+  DeleteProviderRequest,
   EligibleProvider,
   ProviderCapacity,
   ProviderDetail,
@@ -89,6 +90,14 @@ export const suspendProvider = (providerId: string, request: SuspendProviderRequ
 
 export const reactivateProvider = (providerId: string) =>
   apiFetch<ProviderDetail>(`${PROVIDERS_BASE}/${providerId}/reactivate`, { method: "POST", authenticated: true });
+
+/** Right-to-erasure account deletion (mirrors the Customer directory's "Delete customer" action) - terminal, no undelete. */
+export const deleteProvider = (providerId: string, request: DeleteProviderRequest) =>
+  apiFetch<ProviderDetail>(`${PROVIDERS_BASE}/${providerId}/delete`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
 
 // ---- KYC approval, background check, activation (task 150b, 160) ----
 

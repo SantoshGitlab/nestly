@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Time;
+using Nestly.Application.Notifications;
 using Nestly.Application.Payments;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Settings;
@@ -156,6 +157,21 @@ internal static class TestServices
     /// <summary>Real <see cref="ISystemSettingsService"/> over the test database, for suites that need one only as a collaborator (not under test).</summary>
     public static ISystemSettingsService SystemSettings(NestlyDbContext context) =>
         new SystemSettingsService(new SystemSettingRepository(context), AuditLogWriter(context), SystemAuditContextProvider.Instance);
+
+    /// <summary>
+    /// Real <see cref="IProviderNotificationPublisher"/> over the test
+    /// database with the sandbox push provider (no network, no key) - for
+    /// suites that construct <see cref="BookingProviderAssignmentService"/>/
+    /// <see cref="ProviderKycApprovalService"/>/<see cref="ProviderManagementService"/>/
+    /// <see cref="ProviderPayoutService"/> directly and are not themselves
+    /// testing the provider notification feed.
+    /// </summary>
+    public static IProviderNotificationPublisher ProviderNotificationPublisher(NestlyDbContext context) =>
+        new ProviderNotificationPublisher(
+            new ProviderNotificationRepository(context),
+            new DeviceTokenRepository(context),
+            new SandboxPushNotificationProvider(NullLogger<SandboxPushNotificationProvider>.Instance),
+            NullLogger<Nestly.Infrastructure.Services.ProviderNotificationPublisher>.Instance);
 
     private sealed class SystemAuditContextProvider : IAuditContextProvider
     {
