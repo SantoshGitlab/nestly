@@ -378,7 +378,16 @@ public class Provider : Entity<Guid>
         LegalName = "Deleted Provider";
         DisplayName = "Deleted Provider";
         Email = $"deleted+{Id:N}@deleted.glavyx.invalid";
-        Phone = $"deleted-{Id:N}";
+        // Phone is varchar(20) (ProviderConfiguration) - the full "deleted-{32 hex chars}"
+        // form is 40 characters and was silently never enforced by the test
+        // database, but a real Postgres column rejects it outright (22001:
+        // value too long), so every call to this method has been failing in
+        // any environment with the real schema. Truncated to exactly 20:
+        // "deleted-" (8) plus 12 hex characters retains far more entropy than
+        // this app's realistic provider count could ever collide on, and a
+        // collision would only ever be caught (safely) by the phone column's
+        // own unique index, never silently overwrite another row.
+        Phone = $"deleted-{Id:N}"[..20];
         Latitude = null;
         Longitude = null;
         LocationUpdatedAtUtc = null;

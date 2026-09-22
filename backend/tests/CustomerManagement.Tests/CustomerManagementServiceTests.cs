@@ -297,6 +297,15 @@ public class CustomerManagementServiceTests : IDisposable
         var persisted = await context2.Set<Customer>().FindAsync(customer.Id);
         persisted!.Status.Should().Be(CustomerStatus.SoftDeleted);
         persisted.Email.Should().NotBe("todelete@example.com");
+
+        // Regression: "mobile" is varchar(20) (CustomerConfiguration), but the
+        // anonymized placeholder used to be "deleted-{32 hex chars}" - 40
+        // characters. This test's SQLite-backed TestDatabase doesn't enforce
+        // VARCHAR length, so it kept passing even though the same call threw
+        // 22001 ("value too long") against a real Postgres column - found by
+        // an end-to-end run of the equivalent admin Delete Provider endpoint,
+        // which shares this exact bug pattern.
+        persisted.Mobile.Length.Should().BeLessOrEqualTo(20);
     }
 
     [Fact]
