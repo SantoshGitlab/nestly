@@ -199,6 +199,25 @@ public class PaymentService : IPaymentService
 
     public async Task<Result> SimulateAsync(Guid customerId, SimulatePaymentRequest request)
     {
+        // The one real enforcement of this method's own "sandbox-only"
+        // contract (see its XML doc comment) - until this existed, nothing
+        // stopped an authenticated customer from calling this endpoint
+        // directly against their own real PayU order and having it marked
+        // paid via ISandboxPaymentSimulator's fake deterministic outcome,
+        // with no card ever actually charged. ISandboxPaymentSimulator is
+        // always bound to the concrete sandbox regardless of which
+        // IPaymentGateway is active (PaymentGatewayRegistration's own doc
+        // comment), so a type check against the real gateway instance is
+        // what actually closes this - checking configuration again here
+        // would just re-derive the same fact _gateway's concrete type
+        // already encodes.
+        if (_gateway is not SandboxPaymentGateway)
+        {
+            return Result.Failure(Error.Business(
+                "Payment.SimulateNotAvailable",
+                "Payment simulation is not available: a real payment gateway is configured."));
+        }
+
         var transaction = await _paymentRepository.GetByGatewayOrderIdAsync(request.GatewayOrderId);
         if (transaction is null || transaction.CustomerId != customerId)
         {

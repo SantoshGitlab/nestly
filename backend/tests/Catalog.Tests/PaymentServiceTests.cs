@@ -484,4 +484,37 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
         var transaction = await new PaymentTransactionRepository(readContext).GetByBookingIdAsync(fixture.BookingId);
         transaction.Should().BeNull("no gateway order - and so no payment transaction - should ever be created for an unfulfillable booking");
     }
+
+    /// <summary>
+    /// Regression: SimulateAsync's own doc comment has always called it
+    /// "sandbox-only," but nothing enforced that - before this gate existed,
+    /// an authenticated customer could call this endpoint directly against
+    /// their own real PayU order and have it marked paid via
+    /// ISandboxPaymentSimulator's fake deterministic outcome, with no card
+    /// ever actually charged. Every dependency past the gate is left null:
+    /// the point of this test is that none of them are ever reached.
+    /// </summary>
+    [Fact]
+    public async Task SimulateAsync_refuses_when_a_real_gateway_is_configured()
+    {
+        var realGateway = new PayUPaymentGateway(
+            new StubHttpClientFactory(StubHttpMessageHandler.Responding(System.Net.HttpStatusCode.OK)),
+            Options.Create(new PayUOptions
+            {
+                MerchantKey = "test-key",
+                MerchantSalt = "test-salt",
+                CheckoutReturnBaseUrl = "https://app.nestly.test",
+            }),
+            NullLogger<PayUPaymentGateway>.Instance);
+        var sandboxSimulator = BuildGateway();
+
+        var service = new PaymentService(
+            paymentRepository: null!, bookingRepository: null!, realGateway, sandboxSimulator,
+            webhookService: null!, eligibleProviderSearchService: null!);
+
+        var result = await service.SimulateAsync(Guid.NewGuid(), new SimulatePaymentRequest("any-gateway-order-id"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Payment.SimulateNotAvailable");
+    }
 }
