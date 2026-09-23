@@ -18,7 +18,7 @@ namespace Nestly.Infrastructure.Services;
 ///
 /// <para>
 /// In Development only, the full message (which is how an OTP code actually
-/// reaches a developer who has not configured a real Gmail/Brevo/Twilio
+/// reaches a developer who has not configured a real Gmail/Brevo/MSG91
 /// account) is also logged - there is no other way to complete OTP-gated
 /// flows locally without one, and unlike Staging/Production this environment
 /// never holds a real customer's data. Never enabled by an app setting or

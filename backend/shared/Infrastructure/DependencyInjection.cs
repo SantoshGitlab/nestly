@@ -914,7 +914,7 @@ public static class DependencyInjection
         services.AddScoped<IEscrowService, EscrowService>();
 
         // SRS 30.2: email switches to real Gmail SMTP once Email:AppPassword
-        // is set, and SMS switches to real Twilio delivery once Twilio's
+        // is set, and SMS switches to real MSG91 delivery once MSG91's
         // credentials are set - independently of each other. See
         // NotificationRegistration for the swap conditions.
         services.AddNotifications(configuration);

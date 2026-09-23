@@ -11,11 +11,9 @@ using Nestly.Infrastructure.Options;
 namespace Nestly.Infrastructure.Services;
 
 /// <summary>
-/// Real outbound SMS via MSG91's REST API, an India-focused alternative to
-/// <see cref="TwilioNotificationProvider"/> - swapped in for it (and for
-/// sandbox-simulated SMS) once <see cref="Msg91Options"/> is fully
-/// configured, see <see cref="NotificationRegistration"/> for the swap
-/// condition/precedence.
+/// Real outbound SMS via MSG91's REST API - swapped in for sandbox-simulated
+/// SMS once <see cref="Msg91Options"/> is fully configured, see
+/// <see cref="NotificationRegistration"/> for the swap condition.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -64,10 +62,8 @@ public sealed class Msg91NotificationProvider : INotificationProvider
     /// This class exists solely for SMS - <see cref="NotificationRegistration"/>
     /// always wraps it in a <see cref="CompositeNotificationProvider"/> that
     /// routes email elsewhere, so this is never actually reached in practice.
-    /// Simulates rather than throwing regardless, matching
-    /// <see cref="TwilioNotificationProvider.SendEmailAsync"/>'s identical
-    /// "never crash on a vendor gap" posture in case this type is ever
-    /// resolved standalone.
+    /// Simulates rather than throwing regardless - a "never crash on a
+    /// vendor gap" posture in case this type is ever resolved standalone.
     /// </summary>
     public Task<Result> SendEmailAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
     {
@@ -126,7 +122,7 @@ public sealed class Msg91NotificationProvider : INotificationProvider
             if (!response.IsSuccessStatusCode)
             {
                 // Status code only, never the response body - same discipline
-                // as TwilioNotificationProvider: a vendor's error body can
+                // as BrevoNotificationProvider: a vendor's error body can
                 // echo request details (including the message text, which
                 // carries an OTP code) that don't belong in logs.
                 _logger.LogError("MSG91 SMS send failed with status {StatusCode}.", (int)response.StatusCode);
@@ -152,7 +148,7 @@ public sealed class Msg91NotificationProvider : INotificationProvider
         }
 
         // Never logs the message body - an OTP code lives in it, same
-        // no-secrets-in-logs rule TwilioNotificationProvider follows.
+        // no-secrets-in-logs rule BrevoNotificationProvider follows.
         _logger.LogInformation("SMS sent to {MaskedMobile} via MSG91.", ContactMasking.Mask(toMobile));
         return Result.Success();
     }

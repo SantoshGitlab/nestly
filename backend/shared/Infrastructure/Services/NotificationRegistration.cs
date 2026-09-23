@@ -19,10 +19,10 @@ internal static class NotificationRegistration
     /// <summary>
     /// Registers real email delivery - Brevo when <see cref="BrevoOptions"/>
     /// is configured, else Gmail SMTP once <c>Email:AppPassword</c> is set -
-    /// and real Twilio SMS once every <see cref="TwilioOptions"/> credential
-    /// is set. Email and SMS are chosen independently of each other, since
-    /// one channel being real says nothing about the other. Any or all fall
-    /// back to the sandbox provider's simulated behaviour when unconfigured.
+    /// and real MSG91 SMS once every <see cref="Msg91Options"/> credential is
+    /// set. Email and SMS are chosen independently of each other, since one
+    /// channel being real says nothing about the other. Any or all fall back
+    /// to the sandbox provider's simulated behaviour when unconfigured.
     /// </summary>
     internal static IServiceCollection AddNotifications(this IServiceCollection services, IConfiguration configuration)
     {
@@ -43,22 +43,12 @@ internal static class NotificationRegistration
             .Bind(configuration.GetSection(BrevoOptions.SectionName));
 
         services
-            .AddOptions<TwilioOptions>()
-            .Bind(configuration.GetSection(TwilioOptions.SectionName));
-
-        services
             .AddOptions<Msg91Options>()
             .Bind(configuration.GetSection(Msg91Options.SectionName));
 
         services.AddHttpClient(BrevoNotificationProvider.HttpClientName, client =>
         {
             client.BaseAddress = new Uri("https://api.brevo.com/");
-            client.Timeout = TimeSpan.FromSeconds(15);
-        });
-
-        services.AddHttpClient(TwilioNotificationProvider.HttpClientName, client =>
-        {
-            client.BaseAddress = new Uri("https://api.twilio.com/2010-04-01/");
             client.Timeout = TimeSpan.FromSeconds(15);
         });
 
@@ -73,7 +63,6 @@ internal static class NotificationRegistration
         services.AddScoped<SandboxNotificationProvider>();
         services.AddScoped<SmtpNotificationProvider>();
         services.AddScoped<BrevoNotificationProvider>();
-        services.AddScoped<TwilioNotificationProvider>();
         services.AddScoped<Msg91NotificationProvider>();
 
         services.AddScoped<INotificationProvider>(serviceProvider =>
@@ -108,28 +97,18 @@ internal static class NotificationRegistration
                 emailProvider = serviceProvider.GetRequiredService<SandboxNotificationProvider>();
             }
 
-            // MSG91 takes precedence over Twilio when both are configured -
-            // it is the India-focused choice (see Msg91Options' own doc
-            // comment), and this project's customer/provider base is
-            // India-only, same reasoning PayU is preferred there over a
-            // generic international gateway.
             var msg91Options = serviceProvider.GetRequiredService<IOptions<Msg91Options>>().Value;
-            var twilioOptions = serviceProvider.GetRequiredService<IOptions<TwilioOptions>>().Value;
             INotificationProvider smsProvider;
             if (msg91Options.IsConfigured)
             {
                 logger.LogInformation("SMS notifications will use MSG91.");
                 smsProvider = serviceProvider.GetRequiredService<Msg91NotificationProvider>();
             }
-            else if (twilioOptions.IsConfigured)
-            {
-                logger.LogInformation("SMS notifications will use Twilio.");
-                smsProvider = serviceProvider.GetRequiredService<TwilioNotificationProvider>();
-            }
             else
             {
                 logger.LogInformation(
-                    "SMS notifications will use the sandbox provider: neither MSG91 nor Twilio is configured.");
+                    "SMS notifications will use the sandbox provider: MSG91 is {State}.",
+                    msg91Options.Enabled ? "missing an auth key or sender id" : "disabled by configuration");
                 smsProvider = serviceProvider.GetRequiredService<SandboxNotificationProvider>();
             }
 

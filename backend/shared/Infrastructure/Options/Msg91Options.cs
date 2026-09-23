@@ -1,12 +1,11 @@
 namespace Nestly.Infrastructure.Options;
 
 /// <summary>
-/// Strongly typed binding of the "Msg91" configuration section - an
-/// India-focused SMS vendor alternative to <see cref="TwilioOptions"/> (SRS
-/// 30.2), chosen over it in <c>NotificationRegistration</c> when both are
-/// configured. Same optional-with-fallback shape as
-/// <see cref="TwilioOptions"/>: absent credentials mean SMS keeps simulating
-/// rather than failing the process at startup.
+/// Strongly typed binding of the "Msg91" configuration section - the real
+/// SMS vendor for OTP and account notifications (SRS 30.2), chosen for its
+/// India-focused pricing and DLT compliance support. Same optional-with-
+/// fallback shape as <see cref="SupabaseStorageOptions"/>: absent credentials
+/// mean SMS keeps simulating rather than failing the process at startup.
 /// </summary>
 /// <remarks>
 /// <see cref="AuthKey"/> is a secret and must come from an environment
@@ -46,13 +45,13 @@ public class Msg91Options
 
     /// <summary>
     /// Kill switch. Default true, same convention as
-    /// <see cref="TwilioOptions.Enabled"/>: forces the sandbox fallback even
-    /// when credentials are present, without deleting them from the secret
-    /// store.
+    /// <see cref="SupabaseStorageOptions.Enabled"/>: forces the sandbox
+    /// fallback even when credentials are present, without deleting them
+    /// from the secret store.
     /// </summary>
     public bool Enabled { get; set; } = true;
 
-    /// <summary>True when SMS should go through MSG91: enabled and every credential is present. Mirrors <see cref="TwilioOptions.IsConfigured"/>.</summary>
+    /// <summary>True when SMS should go through MSG91: enabled and every credential is present. Mirrors <see cref="SupabaseStorageOptions.IsConfigured"/>.</summary>
     public bool IsConfigured =>
         Enabled
         && !string.IsNullOrWhiteSpace(AuthKey)
