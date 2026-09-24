@@ -630,6 +630,7 @@ public static class DependencyInjection
         // from the customer identity services above - see AdminLoginService's
         // doc comment for why this is its own type rather than shared code.
         services.AddScoped<IAdminUserRepository, AdminUserRepository>();
+        services.AddScoped<IAdminSessionRepository, AdminSessionRepository>();
         services.AddScoped<IAdminTokenService, AdminTokenService>();
         services.AddScoped<IAdminMfaChallengeProvider, NoOpAdminMfaChallengeProvider>();
         services.AddScoped<IAdminLoginService, AdminLoginService>();

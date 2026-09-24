@@ -70,12 +70,14 @@ public sealed class AdminWorkflowsQaSuiteTests : IClassFixture<TestDatabase>
     private static AdminLoginService BuildLoginService(NestlyDbContext context) =>
         new(
             new AdminUserRepository(context),
+            new AdminSessionRepository(context),
             new AdminTokenService(Options.Create(new AdminJwtOptions
             {
                 SigningKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
                 Issuer = "Nestly",
                 Audience = "Nestly.AdminUsers",
-                AccessTokenMinutes = 10
+                AccessTokenMinutes = 10,
+                RefreshTokenHours = 12
             })),
             new NoOpMfaChallengeProvider(),
             new AdminRolePermissionQueryService(context),
