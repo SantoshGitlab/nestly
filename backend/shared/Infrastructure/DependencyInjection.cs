@@ -235,6 +235,14 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(RecurringBookingOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // docs/AMC.md's scheduled expiry sweep: not a secret, has a safe
+        // production-sensible default - same reasoning as
+        // SubscriptionBillingOptions above.
+        services
+            .AddOptions<AmcExpiryOptions>()
+            .Bind(configuration.GetSection(AmcExpiryOptions.SectionName))
+            .ValidateDataAnnotations();
+
         // Task 240: not a secret, has a safe production-sensible default -
         // same reasoning as CommissionOptions/ReferralOptions above.
         services
@@ -745,6 +753,12 @@ public static class DependencyInjection
         services.AddScoped<IAmcServiceVisitRepository, AmcServiceVisitRepository>();
         services.AddScoped<IAmcCustomerService, AmcCustomerService>();
         services.AddScoped<IAmcAdminService, AmcAdminService>();
+
+        // Scheduled expiry sweep (docs/AMC.md): moves overdue Active
+        // contracts to Expired and raises the expiring-soon reminder -
+        // registered as a Hangfire recurring job in admin-api Program.cs,
+        // the same pattern as ISubscriptionBillingJob.
+        services.AddScoped<IAmcContractExpirySweepJob, AmcContractExpirySweepJob>();
 
         // Tasks 184-186: recurring booking plans. IRecurringBookingPlanService
         // depends on the existing IBookingSummaryService/IBookingService

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.ProviderManagement;
+using Nestly.Application.Amc;
 using Nestly.Application.Subscriptions;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Middleware;
@@ -174,6 +175,16 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
     RecurringJob.AddOrUpdate<ISubscriptionBillingJob>(
         "subscription-billing-sweep",
         job => job.ProcessDueBillingAsync(CancellationToken.None),
+        Cron.Daily);
+
+    // docs/AMC.md's scheduled expiry sweep: moves overdue Active contracts to
+    // Expired and raises the expiring-soon reminder. Daily, same cadence as
+    // subscription-billing-sweep - an AMC term runs on a months-long scale,
+    // so there is nothing to gain from a tighter cron. Same
+    // ServerEnabled-guarded, idempotent-by-design registration pattern.
+    RecurringJob.AddOrUpdate<IAmcContractExpirySweepJob>(
+        "amc-contract-expiry-sweep",
+        job => job.SweepAsync(CancellationToken.None),
         Cron.Daily);
 }
 
