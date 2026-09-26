@@ -19,7 +19,8 @@ internal static class ProviderDetailMapper
         Provider provider,
         IReadOnlyList<ProviderKycDocument> documents,
         IReadOnlyList<ProviderBackgroundCheck> backgroundChecks,
-        IReadOnlyList<ProviderStatusHistory> statusHistory) => new(
+        IReadOnlyList<ProviderStatusHistory> statusHistory,
+        ProviderBankAccount? bankAccount = null) => new(
         provider.Id,
         provider.LegalName,
         provider.DisplayName,
@@ -38,7 +39,16 @@ internal static class ProviderDetailMapper
         ToPhotoResponse(provider),
         statusHistory
             .Select(h => new ProviderStatusHistoryEntryResponse(h.Id, h.FromStatus, h.ToStatus, h.Reason, h.ChangedAtUtc))
-            .ToList());
+            .ToList(),
+        ToBankAccountResponse(bankAccount));
+
+    public static ProviderBankAccountResponse? ToBankAccountResponse(ProviderBankAccount? bankAccount) =>
+        bankAccount is null
+            ? null
+            : new ProviderBankAccountResponse(
+                bankAccount.Id, bankAccount.ProviderId, bankAccount.AccountHolderName, bankAccount.AccountNumber,
+                bankAccount.IfscCode, bankAccount.BankName, bankAccount.VerificationStatus, bankAccount.VerifiedBy,
+                bankAccount.VerifiedAt, bankAccount.RejectionReason, bankAccount.UpdatedAt);
 
     public static ProviderPhotoResponse ToPhotoResponse(Provider provider) => new(
         provider.Id,

@@ -72,6 +72,7 @@ public sealed class NestlyDbContext : DbContext
     public DbSet<BookingProviderAssignment> BookingProviderAssignments { get; set; }
     public DbSet<ProviderEarningLedgerEntry> ProviderEarningLedgerEntries { get; set; }
     public DbSet<ProviderPayout> ProviderPayouts { get; set; }
+    public DbSet<ProviderBankAccount> ProviderBankAccounts { get; set; }
     public DbSet<ProviderBackgroundCheck> ProviderBackgroundChecks { get; set; }
     public DbSet<ProviderLocationPing> ProviderLocationPings { get; set; }
     public DbSet<Referral> Referrals { get; set; }

@@ -164,3 +164,44 @@ public class UpdateProviderPayoutStatusRequestValidator : AbstractValidator<Upda
         RuleFor(x => x.Notes).MaximumLength(500);
     }
 }
+
+// ---- Bank account (structured payout details, OPEN DECISIONS #3) ----
+
+/// <summary>
+/// <see cref="SubmitProviderBankAccountRequest.IfscCode"/> must match the
+/// standard 11-character Indian IFSC format: 4 letters (bank code), a literal
+/// '0' (reserved for future use), then 6 alphanumeric characters (branch
+/// code). Account number is digits-only, 6-20 characters - the common
+/// practical range across Indian banks (no single universal length).
+/// </summary>
+public class SubmitProviderBankAccountRequestValidator : AbstractValidator<SubmitProviderBankAccountRequest>
+{
+    private const string IfscPattern = "^[A-Z]{4}0[A-Z0-9]{6}$";
+    private const string AccountNumberPattern = "^[0-9]{6,20}$";
+
+    public SubmitProviderBankAccountRequestValidator()
+    {
+        RuleFor(x => x.ProviderId).NotEmpty();
+
+        RuleFor(x => x.AccountHolderName).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.BankName).NotEmpty().MaximumLength(200);
+
+        RuleFor(x => x.AccountNumber)
+            .NotEmpty()
+            .Matches(AccountNumberPattern)
+            .WithMessage("Account number must be 6 to 20 digits.");
+
+        RuleFor(x => x.IfscCode)
+            .NotEmpty()
+            .Matches(IfscPattern)
+            .WithMessage("IFSC code must be 11 characters in the standard format (e.g. HDFC0001234).");
+    }
+}
+
+public class RejectProviderBankAccountRequestValidator : AbstractValidator<RejectProviderBankAccountRequest>
+{
+    public RejectProviderBankAccountRequestValidator()
+    {
+        RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+    }
+}

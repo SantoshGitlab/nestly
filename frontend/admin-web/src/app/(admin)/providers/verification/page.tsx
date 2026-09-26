@@ -8,10 +8,13 @@ import { Breadcrumbs, ConfirmDialog, formatDateTime } from "@/components/data-ta
 import { SectionError } from "@/components/screen-states";
 import { describeError } from "@/lib/api";
 import {
+  approveBankAccount,
   approveKycDocument,
   approveProviderPhoto,
+  listPendingBankAccounts,
   listPendingKycDocuments,
   listPendingProviderPhotos,
+  rejectBankAccount,
   rejectKycDocument,
   rejectProviderPhoto,
 } from "@/lib/providers-api";
@@ -52,7 +55,7 @@ export default function VerificationQueuePage() {
   const canWriteProvider = claims?.permissions.includes("provider.write") ?? false;
   const queryClient = useQueryClient();
 
-  const [queueTab, setQueueTab] = useState<"documents" | "photos">("documents");
+  const [queueTab, setQueueTab] = useState<"documents" | "photos" | "bankAccounts">("documents");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
@@ -64,6 +67,10 @@ export default function VerificationQueuePage() {
     queryKey: ["admin-provider-photo-queue"],
     queryFn: () => listPendingProviderPhotos(),
   });
+  const bankAccountsQuery = useQuery({
+    queryKey: ["admin-provider-bank-account-queue"],
+    queryFn: () => listPendingBankAccounts(),
+  });
 
   const [rejectReasonByDoc, setRejectReasonByDoc] = useState<Record<string, string>>({});
   const [pendingKycRejection, setPendingKycRejection] = useState<{ id: string; label: string } | null>(null);
@@ -71,12 +78,16 @@ export default function VerificationQueuePage() {
   const [photoRejectReasonByProvider, setPhotoRejectReasonByProvider] = useState<Record<string, string>>({});
   const [pendingPhotoRejection, setPendingPhotoRejection] = useState<{ providerId: string; label: string } | null>(null);
 
+  const [bankAccountRejectReasonById, setBankAccountRejectReasonById] = useState<Record<string, string>>({});
+  const [pendingBankAccountRejection, setPendingBankAccountRejection] = useState<{ id: string; label: string } | null>(null);
+
   const onError = (err: unknown) => setActionError(describeError(err));
   const onSuccess = (notice: string) => {
     setActionError(null);
     setActionNotice(notice);
     queryClient.invalidateQueries({ queryKey: ["admin-provider-kyc-queue"] });
     queryClient.invalidateQueries({ queryKey: ["admin-provider-photo-queue"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-provider-bank-account-queue"] });
   };
 
   const approveKycMutation = useMutation({
@@ -109,8 +120,25 @@ export default function VerificationQueuePage() {
     onError,
   });
 
+  const approveBankAccountMutation = useMutation({
+    mutationFn: (bankAccountId: string) => approveBankAccount(bankAccountId),
+    onSuccess: () => onSuccess("Bank account details verified."),
+    onError,
+  });
+
+  const rejectBankAccountMutation = useMutation({
+    mutationFn: ({ bankAccountId, reason }: { bankAccountId: string; reason: string }) =>
+      rejectBankAccount(bankAccountId, { reason }),
+    onSuccess: () => {
+      setPendingBankAccountRejection(null);
+      onSuccess("Bank account details rejected.");
+    },
+    onError,
+  });
+
   const documentCount = documentsQuery.data?.length ?? 0;
   const photoCount = photosQuery.data?.length ?? 0;
+  const bankAccountCount = bankAccountsQuery.data?.length ?? 0;
 
   return (
     <div className="flex w-full max-w-5xl flex-col gap-6">
@@ -131,6 +159,7 @@ export default function VerificationQueuePage() {
         tabs={[
           { value: "documents", label: `Documents${documentCount > 0 ? ` (${documentCount})` : ""}` },
           { value: "photos", label: `Photos${photoCount > 0 ? ` (${photoCount})` : ""}` },
+          { value: "bankAccounts", label: `Bank accounts${bankAccountCount > 0 ? ` (${bankAccountCount})` : ""}` },
         ]}
       />
 
@@ -220,7 +249,9 @@ export default function VerificationQueuePage() {
             </ul>
           )}
         </Card>
-      ) : (
+      ) : null}
+
+      {queueTab === "photos" ? (
         <Card title="Pending profile photos" description="Approving is the only thing that makes a photo visible to customers.">
           {photosQuery.isPending ? (
             <SkeletonText lines={4} />
@@ -284,7 +315,72 @@ export default function VerificationQueuePage() {
             </ul>
           )}
         </Card>
-      )}
+      ) : null}
+
+      {queueTab === "bankAccounts" ? (
+        <Card
+          title="Pending bank account details"
+          description="Structured payout details (docs/PROVIDER.md OPEN DECISIONS #3) - not a payout gate, but an admin should verify these before trusting them for a transfer."
+        >
+          {bankAccountsQuery.isPending ? (
+            <SkeletonText lines={4} />
+          ) : bankAccountsQuery.isError ? (
+            <SectionError error={bankAccountsQuery.error} onRetry={() => bankAccountsQuery.refetch()} />
+          ) : bankAccountsQuery.data.length === 0 ? (
+            <EmptyState title="Nothing pending" description="Every submitted bank account has been reviewed." />
+          ) : (
+            <ul className="flex flex-col gap-3 text-sm">
+              {bankAccountsQuery.data.map((bankAccount) => (
+                <li key={bankAccount.id} className="rounded-xl border border-line p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Link
+                      href={`/providers/${bankAccount.providerId}`}
+                      className="font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                    >
+                      {bankAccount.providerDisplayName}
+                    </Link>
+                    <Badge tone="warning">{bankAccount.bankName}</Badge>
+                  </div>
+                  <p className="nums mt-1 text-xs text-fg-subtle">
+                    {bankAccount.accountHolderName} · {bankAccount.maskedAccountNumber} · {bankAccount.ifscCode}
+                  </p>
+                  <p className="mt-1 text-xs text-fg-subtle">Updated {formatDateTime(bankAccount.updatedAt)}</p>
+
+                  {canWriteProvider ? (
+                    <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-end">
+                      <Button
+                        variant="secondary"
+                        loading={approveBankAccountMutation.isPending && approveBankAccountMutation.variables === bankAccount.id}
+                        onClick={() => approveBankAccountMutation.mutate(bankAccount.id)}
+                      >
+                        Approve
+                      </Button>
+                      <div className="flex-1">
+                        <Field
+                          label="Rejection reason"
+                          value={bankAccountRejectReasonById[bankAccount.id] ?? ""}
+                          onChange={(e) =>
+                            setBankAccountRejectReasonById((m) => ({ ...m, [bankAccount.id]: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <Button
+                        variant="danger"
+                        disabled={!(bankAccountRejectReasonById[bankAccount.id] ?? "").trim()}
+                        onClick={() =>
+                          setPendingBankAccountRejection({ id: bankAccount.id, label: bankAccount.providerDisplayName })
+                        }
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      ) : null}
 
       <ConfirmDialog
         open={pendingKycRejection !== null}
@@ -332,6 +428,31 @@ export default function VerificationQueuePage() {
           <p className="text-sm text-fg-muted">
             {pendingPhotoRejection.label} —{" "}
             <span className="font-medium text-fg">{photoRejectReasonByProvider[pendingPhotoRejection.providerId] ?? ""}</span>
+          </p>
+        ) : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingBankAccountRejection !== null}
+        title="Reject these bank account details?"
+        description="The provider must resubmit before these details can be trusted for a payout."
+        confirmLabel="Reject details"
+        cancelLabel="Keep pending"
+        loading={rejectBankAccountMutation.isPending}
+        error={rejectBankAccountMutation.isError ? describeError(rejectBankAccountMutation.error) : null}
+        onCancel={() => setPendingBankAccountRejection(null)}
+        onConfirm={() => {
+          if (!pendingBankAccountRejection) return;
+          rejectBankAccountMutation.mutate({
+            bankAccountId: pendingBankAccountRejection.id,
+            reason: (bankAccountRejectReasonById[pendingBankAccountRejection.id] ?? "").trim(),
+          });
+        }}
+      >
+        {pendingBankAccountRejection ? (
+          <p className="text-sm text-fg-muted">
+            {pendingBankAccountRejection.label} —{" "}
+            <span className="font-medium text-fg">{bankAccountRejectReasonById[pendingBankAccountRejection.id] ?? ""}</span>
           </p>
         ) : null}
       </ConfirmDialog>

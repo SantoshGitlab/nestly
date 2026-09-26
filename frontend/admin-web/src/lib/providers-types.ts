@@ -101,6 +101,13 @@ export enum ProviderPayoutStatus {
   Failed = 3,
 }
 
+/** Mirrors Nestly.Domain.ProviderBankAccountVerificationStatus's declaration order exactly. */
+export enum ProviderBankAccountVerificationStatus {
+  Pending = 0,
+  Verified = 1,
+  Rejected = 2,
+}
+
 // ---- CRUD (task 150a) ----
 
 export interface ProviderSummary {
@@ -255,6 +262,55 @@ export interface ProviderDetail {
   photo: ProviderPhoto;
   /** Append-only status change log (Provider Management UX pass), most recent first. */
   statusHistory: ProviderStatusHistoryEntry[];
+  /** Structured bank account details for payouts (docs/PROVIDER.md OPEN DECISIONS #3). Appended last, same rule as `photo` above. Null when the provider has not submitted one yet. */
+  bankAccount: ProviderBankAccount | null;
+}
+
+// ---- Bank account (structured payout details, OPEN DECISIONS #3) ----
+
+/** Full bank account detail - what an admin sees on the provider detail page and the approve/reject view. */
+export interface ProviderBankAccount {
+  id: string;
+  providerId: string;
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  bankName: string;
+  verificationStatus: ProviderBankAccountVerificationStatus;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
+  updatedAt: string;
+}
+
+/** One row of the admin bank-account verification queue - `maskedAccountNumber` deliberately shows only the last 4 digits (see the matching C# doc comment on `ProviderBankAccountQueueItemResponse`). */
+export interface ProviderBankAccountQueueItem {
+  id: string;
+  providerId: string;
+  providerDisplayName: string;
+  accountHolderName: string;
+  maskedAccountNumber: string;
+  ifscCode: string;
+  bankName: string;
+  updatedAt: string;
+}
+
+export interface RejectProviderBankAccountRequest {
+  reason: string;
+}
+
+/**
+ * A provider's current bank account as surfaced on the payout screen
+ * (product decision - visible there so an admin processing a transfer does
+ * not have to navigate away). Full account number, unlike the queue row
+ * above - an admin about to process a real payout needs the real number.
+ */
+export interface ProviderPayoutBankAccountSummary {
+  accountHolderName: string;
+  accountNumber: string;
+  ifscCode: string;
+  bankName: string;
+  verificationStatus: ProviderBankAccountVerificationStatus;
 }
 
 /** One entry of a provider's append-only status change log (mirrors the booking status timeline). */
@@ -427,6 +483,8 @@ export interface ProviderPayout {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Product decision: visible "on the payout screen" - null when the provider has not submitted bank account details yet. Appended last, matching the C# record's own convention. */
+  bankAccount: ProviderPayoutBankAccountSummary | null;
 }
 
 export interface ProviderPayoutSearchResponse {

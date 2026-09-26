@@ -25,6 +25,7 @@ public sealed class ProviderKycApprovalServiceTests : IDisposable
         new ProviderRepository(context),
         new ProviderKycDocumentRepository(context),
         new ProviderBackgroundCheckRepository(context),
+        new ProviderBankAccountRepository(context),
         new ServiceabilityMappingManagementService(
             new CategoryCityMappingRepository(context), new ServicePincodeMappingRepository(context), new CategoryRepository(context),
             new CityRepository(context), new ServiceRepository(context), new PincodeRepository(context),

@@ -21,6 +21,11 @@ function labelFor(type: ProviderNotificationType): string {
       return "Account";
     case ProviderNotificationType.PayoutProcessed:
       return "Payout";
+    case ProviderNotificationType.SupportTicketReply:
+      return "Support";
+    case ProviderNotificationType.BankAccountApproved:
+    case ProviderNotificationType.BankAccountRejected:
+      return "Bank account";
     default:
       return "Notification";
   }

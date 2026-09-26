@@ -123,6 +123,11 @@ public sealed record ProviderBackgroundCheckResponse(
 /// parameter mid-list would silently re-bind every argument after it at the
 /// one call site (<c>ProviderDetailMapper</c>) that builds it.
 /// </param>
+/// <param name="BankAccount">
+/// Structured bank account details for payouts (OPEN DECISIONS #3), appended
+/// last for the same reason as <paramref name="Photo"/> above - null when the
+/// provider has not submitted any yet.
+/// </param>
 public sealed record ProviderDetailResponse(
     Guid Id,
     string LegalName,
@@ -139,7 +144,8 @@ public sealed record ProviderDetailResponse(
     IReadOnlyList<ProviderKycDocumentResponse> KycDocuments,
     IReadOnlyList<ProviderBackgroundCheckResponse> BackgroundChecks,
     ProviderPhotoResponse Photo,
-    IReadOnlyList<ProviderStatusHistoryEntryResponse> StatusHistory);
+    IReadOnlyList<ProviderStatusHistoryEntryResponse> StatusHistory,
+    ProviderBankAccountResponse? BankAccount);
 
 // ---- Photo moderation (task 293) ----
 
@@ -355,3 +361,63 @@ public sealed record ProviderOnboardingOverviewCounts(
     int PendingCount,
     int LiveCount,
     int ActiveCount);
+
+// ---- Bank account (structured payout details, OPEN DECISIONS #3) ----
+
+/// <summary>
+/// A provider submits/edits their own bank account details - the caller's
+/// provider id is taken from the JWT (see <c>ProfileController.CurrentProviderId</c>),
+/// never accepted here, so this is safe to bind straight from a request body
+/// with no risk of a spoofed <see cref="ProviderId"/> (SRS 28.3 IDOR).
+/// </summary>
+public sealed record SubmitProviderBankAccountRequest(Guid ProviderId, string AccountHolderName, string AccountNumber, string IfscCode, string BankName);
+
+/// <summary>Full bank account detail - the shape returned to the owning provider, and to an admin reviewing/approving one (full account number, unlike <see cref="ProviderBankAccountQueueItemResponse"/>'s masked queue row).</summary>
+public sealed record ProviderBankAccountResponse(
+    Guid Id,
+    Guid ProviderId,
+    string AccountHolderName,
+    string AccountNumber,
+    string IfscCode,
+    string BankName,
+    ProviderBankAccountVerificationStatus VerificationStatus,
+    Guid? VerifiedBy,
+    DateTime? VerifiedAt,
+    string? RejectionReason,
+    DateTime UpdatedAt);
+
+/// <summary>A rejection must say why - shown back to the provider so it is actionable (mirrors <see cref="RejectProviderKycDocumentRequest"/>).</summary>
+public sealed record RejectProviderBankAccountRequest(string Reason);
+
+/// <summary>
+/// One row of the admin bank-account verification queue - deliberately masks
+/// <see cref="AccountNumber"/> to its last 4 digits (e.g. "•••• 1234") so the
+/// cross-provider pending-review LIST does not dump every full account number
+/// onto one screen; the single-record detail/approve view
+/// (<see cref="ProviderBankAccountResponse"/>) still carries the full number,
+/// matching how a real back office works.
+/// </summary>
+public sealed record ProviderBankAccountQueueItemResponse(
+    Guid Id,
+    Guid ProviderId,
+    string ProviderDisplayName,
+    string AccountHolderName,
+    string MaskedAccountNumber,
+    string IfscCode,
+    string BankName,
+    DateTime UpdatedAt);
+
+/// <summary>
+/// A provider's current bank account, as surfaced on the payout screen so an
+/// admin processing a real bank transfer can see the account holder/number/
+/// IFSC/bank and its verification status without navigating away (product
+/// decision - see <c>ProviderPayoutResponse.BankAccount</c>). Full account
+/// number, unlike the queue's masked row: an admin about to process a payout
+/// needs the real number.
+/// </summary>
+public sealed record ProviderPayoutBankAccountSummaryResponse(
+    string AccountHolderName,
+    string AccountNumber,
+    string IfscCode,
+    string BankName,
+    ProviderBankAccountVerificationStatus VerificationStatus);

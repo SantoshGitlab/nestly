@@ -506,6 +506,14 @@ public static class DependencyInjection
         services.AddScoped<IProviderSessionRepository, ProviderSessionRepository>();
         services.AddScoped<IProviderLoginAttemptRepository, ProviderLoginAttemptRepository>();
         services.AddScoped<IProviderKycDocumentRepository, ProviderKycDocumentRepository>();
+        // Structured, admin-verifiable bank account details (docs/PROVIDER.md
+        // OPEN DECISIONS #3) - registered beside the KYC document repository
+        // since both back the provider's own onboarding/profile screens, and
+        // ahead of IProviderKycService below since ProviderManagementService/
+        // ProviderKycApprovalService (registered further down) both take a
+        // dependency on it for ProviderDetailResponse.BankAccount.
+        services.AddScoped<IProviderBankAccountRepository, ProviderBankAccountRepository>();
+        services.AddScoped<IProviderBankAccountService, ProviderBankAccountService>();
         services.AddScoped<IProviderStatusHistoryRepository, ProviderStatusHistoryRepository>();
         services.AddScoped<IProviderNotificationRepository, ProviderNotificationRepository>();
         services.AddScoped<IProviderNotificationService, ProviderNotificationService>();

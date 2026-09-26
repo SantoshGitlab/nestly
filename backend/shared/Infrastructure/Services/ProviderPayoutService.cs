@@ -35,6 +35,7 @@ public class ProviderPayoutService : IProviderPayoutService
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderPayoutRepository _payoutRepository;
     private readonly IProviderEarningLedgerRepository _ledgerRepository;
+    private readonly IProviderBankAccountRepository _bankAccountRepository;
     private readonly IAuditLogWriter _auditLogWriter;
     private readonly IProviderNotificationPublisher _notificationPublisher;
 
@@ -42,12 +43,14 @@ public class ProviderPayoutService : IProviderPayoutService
         IProviderRepository providerRepository,
         IProviderPayoutRepository payoutRepository,
         IProviderEarningLedgerRepository ledgerRepository,
+        IProviderBankAccountRepository bankAccountRepository,
         IAuditLogWriter auditLogWriter,
         IProviderNotificationPublisher notificationPublisher)
     {
         _providerRepository = providerRepository;
         _payoutRepository = payoutRepository;
         _ledgerRepository = ledgerRepository;
+        _bankAccountRepository = bankAccountRepository;
         _auditLogWriter = auditLogWriter;
         _notificationPublisher = notificationPublisher;
     }
@@ -78,7 +81,8 @@ public class ProviderPayoutService : IProviderPayoutService
 
         await _payoutRepository.AddAsync(payout);
 
-        return ToResponse(payout, provider.DisplayName);
+        var bankAccount = await _bankAccountRepository.GetByProviderIdAsync(providerId);
+        return ToResponse(payout, provider.DisplayName, bankAccount);
     }
 
     public async Task<Result<ProviderPayoutResponse>> GetByIdAsync(Guid payoutId)
@@ -90,7 +94,8 @@ public class ProviderPayoutService : IProviderPayoutService
         }
 
         var provider = await _providerRepository.GetByIdAsync(payout.ProviderId);
-        return ToResponse(payout, provider?.DisplayName ?? "(unknown provider)");
+        var bankAccount = await _bankAccountRepository.GetByProviderIdAsync(payout.ProviderId);
+        return ToResponse(payout, provider?.DisplayName ?? "(unknown provider)", bankAccount);
     }
 
     public async Task<Result<ProviderPayoutSearchResponse>> SearchAsync(Guid? providerId, ProviderPayoutStatus? status, int page, int pageSize)
@@ -112,11 +117,18 @@ public class ProviderPayoutService : IProviderPayoutService
         // already seen on this page - the first row for each distinct provider
         // still cost its own round trip, so an admin page spanning 100
         // providers issued 100 of them. One batched lookup instead.
-        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(
-            rows.Select(p => p.ProviderId).Distinct().ToList());
+        var providerIds = rows.Select(p => p.ProviderId).Distinct().ToList();
+        var displayNames = await _providerRepository.GetDisplayNamesByIdsAsync(providerIds);
+
+        // Same batched-lookup reasoning as displayNames just above (task
+        // 254) - a direct repository call, not a second N+1.
+        var bankAccounts = await _bankAccountRepository.GetByProviderIdsAsync(providerIds);
 
         var items = rows
-            .Select(payout => ToResponse(payout, displayNames.GetValueOrDefault(payout.ProviderId, "(unknown provider)")))
+            .Select(payout => ToResponse(
+                payout,
+                displayNames.GetValueOrDefault(payout.ProviderId, "(unknown provider)"),
+                bankAccounts.GetValueOrDefault(payout.ProviderId)))
             .ToList();
 
         return new ProviderPayoutSearchResponse(items, totalCount, page, pageSize);
@@ -178,10 +190,22 @@ public class ProviderPayoutService : IProviderPayoutService
         }
 
         var provider = await _providerRepository.GetByIdAsync(payout.ProviderId);
-        return ToResponse(payout, provider?.DisplayName ?? "(unknown provider)");
+        var bankAccount = await _bankAccountRepository.GetByProviderIdAsync(payout.ProviderId);
+        return ToResponse(payout, provider?.DisplayName ?? "(unknown provider)", bankAccount);
     }
 
-    private static ProviderPayoutResponse ToResponse(ProviderPayout payout, string providerDisplayName) => new(
+    /// <summary>
+    /// <paramref name="bankAccount"/> is the provider's CURRENT bank account
+    /// (product decision - visible "on the payout screen" so an admin does
+    /// not have to navigate away), not a snapshot of what it was when this
+    /// payout was created - store-and-display only, matching
+    /// <see cref="ProviderBankAccount"/>'s own "no enforcement" scope.
+    /// </summary>
+    private static ProviderPayoutResponse ToResponse(ProviderPayout payout, string providerDisplayName, ProviderBankAccount? bankAccount) => new(
         payout.Id, payout.ProviderId, providerDisplayName, payout.PeriodStart, payout.PeriodEnd,
-        payout.TotalAmount, payout.Status, payout.PayoutReference, payout.Notes, payout.CreatedAt, payout.UpdatedAt);
+        payout.TotalAmount, payout.Status, payout.PayoutReference, payout.Notes, payout.CreatedAt, payout.UpdatedAt,
+        bankAccount is null
+            ? null
+            : new ProviderPayoutBankAccountSummaryResponse(
+                bankAccount.AccountHolderName, bankAccount.AccountNumber, bankAccount.IfscCode, bankAccount.BankName, bankAccount.VerificationStatus));
 }

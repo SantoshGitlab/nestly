@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Nestly.Application;
 using Nestly.Application.Bookings;
 using Nestly.Application.Notifications;
+using Nestly.Application.Payments;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Reviews;
 using Nestly.Application.Serviceability;
@@ -18,6 +19,7 @@ public class ProviderManagementService : IProviderManagementService
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderKycDocumentRepository _kycDocumentRepository;
     private readonly IProviderBackgroundCheckRepository _backgroundCheckRepository;
+    private readonly IProviderBankAccountRepository _bankAccountRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IBookingProviderAssignmentRepository _assignmentRepository;
     private readonly IProviderEarningLedgerRepository _earningLedgerRepository;
@@ -36,6 +38,7 @@ public class ProviderManagementService : IProviderManagementService
         IProviderRepository providerRepository,
         IProviderKycDocumentRepository kycDocumentRepository,
         IProviderBackgroundCheckRepository backgroundCheckRepository,
+        IProviderBankAccountRepository bankAccountRepository,
         IBookingRepository bookingRepository,
         IBookingProviderAssignmentRepository assignmentRepository,
         IProviderEarningLedgerRepository earningLedgerRepository,
@@ -53,6 +56,7 @@ public class ProviderManagementService : IProviderManagementService
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
         _backgroundCheckRepository = backgroundCheckRepository;
+        _bankAccountRepository = bankAccountRepository;
         _bookingRepository = bookingRepository;
         _assignmentRepository = assignmentRepository;
         _earningLedgerRepository = earningLedgerRepository;
@@ -246,6 +250,16 @@ public class ProviderManagementService : IProviderManagementService
             await TryPurgeFileAsync(document.FileRef);
             document.PurgeFile();
             await _kycDocumentRepository.UpdateAsync(document);
+        }
+
+        // Same erasure reasoning as the KYC documents just above: a bank
+        // account/IFSC is live financial PII, not something a "deleted"
+        // account should leave sitting around intact.
+        var bankAccount = await _bankAccountRepository.GetByProviderIdAsync(providerId);
+        if (bankAccount is not null)
+        {
+            bankAccount.Erase();
+            await _bankAccountRepository.UpdateAsync(bankAccount);
         }
 
         // Bug 3 auto-disable: same as SuspendAsync - a deleted provider's
@@ -474,8 +488,9 @@ public class ProviderManagementService : IProviderManagementService
         var documents = await _kycDocumentRepository.GetByProviderAsync(provider.Id);
         var backgroundChecks = await _backgroundCheckRepository.ListByProviderAsync(provider.Id);
         var statusHistory = await _statusHistoryRepository.ListByProviderAsync(provider.Id);
+        var bankAccount = await _bankAccountRepository.GetByProviderIdAsync(provider.Id);
 
-        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks, statusHistory);
+        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks, statusHistory, bankAccount);
     }
 
     /// <inheritdoc/>

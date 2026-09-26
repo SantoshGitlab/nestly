@@ -29,10 +29,13 @@ import type {
   ProviderSearchParams,
   ProviderSearchResponse,
   ProviderBackgroundCheck,
+  ProviderBankAccount,
+  ProviderBankAccountQueueItem,
   ProviderPayoutStatus,
   RecordBackgroundCheckRequest,
   RecordProviderEarningAdjustmentRequest,
   RejectAssignmentRequest,
+  RejectProviderBankAccountRequest,
   RejectProviderKycDocumentRequest,
   RejectProviderPhotoRequest,
   SetProviderCapacityRequest,
@@ -143,6 +146,25 @@ export const approveProviderPhoto = (providerId: string) =>
 
 export const rejectProviderPhoto = (providerId: string, request: RejectProviderPhotoRequest) =>
   apiFetch<ProviderPhoto>(`${PROVIDERS_BASE}/${providerId}/photo/reject`, {
+    method: "POST",
+    authenticated: true,
+    body: JSON.stringify(request),
+  });
+
+// ---- Bank account verification (structured payout details, OPEN DECISIONS #3) ----
+
+/** The bank-account verification queue: every provider's submitted details still awaiting a verdict, oldest first. */
+export const listPendingBankAccounts = () =>
+  apiFetch<ProviderBankAccountQueueItem[]>(`${PROVIDERS_BASE}/bank-accounts/pending`, { authenticated: true });
+
+export const approveBankAccount = (bankAccountId: string) =>
+  apiFetch<ProviderBankAccount>(`${PROVIDERS_BASE}/bank-accounts/${bankAccountId}/approve`, {
+    method: "POST",
+    authenticated: true,
+  });
+
+export const rejectBankAccount = (bankAccountId: string, request: RejectProviderBankAccountRequest) =>
+  apiFetch<ProviderBankAccount>(`${PROVIDERS_BASE}/bank-accounts/${bankAccountId}/reject`, {
     method: "POST",
     authenticated: true,
     body: JSON.stringify(request),

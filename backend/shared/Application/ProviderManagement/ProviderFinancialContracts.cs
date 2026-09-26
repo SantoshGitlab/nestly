@@ -31,6 +31,13 @@ public sealed record CreateProviderPayoutRequest(DateOnly PeriodStart, DateOnly 
 
 public sealed record UpdateProviderPayoutStatusRequest(ProviderPayoutStatus Status, string? PayoutReference, string? Notes);
 
+/// <param name="BankAccount">
+/// The provider's current bank account (product decision: visible "on the
+/// payout screen" so an admin processing a real transfer does not have to
+/// navigate away to see it) - appended last, matching this positional
+/// record's own convention elsewhere in this module. Null when the provider
+/// has not submitted bank account details yet.
+/// </param>
 public sealed record ProviderPayoutResponse(
     Guid Id,
     Guid ProviderId,
@@ -42,7 +49,8 @@ public sealed record ProviderPayoutResponse(
     string? PayoutReference,
     string? Notes,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    ProviderPayoutBankAccountSummaryResponse? BankAccount = null);
 
 public sealed record ProviderPayoutSearchResponse(IReadOnlyList<ProviderPayoutResponse> Items, int TotalCount, int Page, int PageSize);
 

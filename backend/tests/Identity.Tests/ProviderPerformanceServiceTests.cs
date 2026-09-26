@@ -67,6 +67,7 @@ public class ProviderPerformanceServiceTests : IDisposable
         new ProviderRepository(context),
         new ProviderKycDocumentRepository(context),
         new ProviderBackgroundCheckRepository(context),
+        new ProviderBankAccountRepository(context),
         new BookingRepository(context),
         new BookingProviderAssignmentRepository(context),
         new ProviderEarningLedgerRepository(context),

@@ -19,7 +19,7 @@ import { PaymentsTabs } from "@/components/PaymentsTabs";
 import { describeError } from "@/lib/api";
 import { todayIsoDate } from "@/lib/date";
 import { searchPayouts, updatePayoutStatus } from "@/lib/providers-api";
-import { ProviderPayoutStatus } from "@/lib/providers-types";
+import { ProviderBankAccountVerificationStatus, ProviderPayoutStatus } from "@/lib/providers-types";
 import type { ProviderPayout } from "@/lib/providers-types";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
@@ -37,6 +37,18 @@ const PAYOUT_STATUS_TONES: Record<ProviderPayoutStatus, BadgeTone> = {
   [ProviderPayoutStatus.Processing]: "info",
   [ProviderPayoutStatus.Paid]: "success",
   [ProviderPayoutStatus.Failed]: "danger",
+};
+
+const BANK_ACCOUNT_STATUS_LABELS: Record<ProviderBankAccountVerificationStatus, string> = {
+  [ProviderBankAccountVerificationStatus.Pending]: "Pending review",
+  [ProviderBankAccountVerificationStatus.Verified]: "Verified",
+  [ProviderBankAccountVerificationStatus.Rejected]: "Rejected",
+};
+
+const BANK_ACCOUNT_STATUS_TONES: Record<ProviderBankAccountVerificationStatus, BadgeTone> = {
+  [ProviderBankAccountVerificationStatus.Pending]: "warning",
+  [ProviderBankAccountVerificationStatus.Verified]: "success",
+  [ProviderBankAccountVerificationStatus.Rejected]: "danger",
 };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -153,6 +165,26 @@ export default function PayoutsQueuePage() {
       ),
     },
     {
+      key: "bankAccount",
+      header: "Bank account",
+      cell: (payout) =>
+        payout.bankAccount ? (
+          <div className="flex flex-col gap-1">
+            <span className="nums text-xs text-fg-muted">
+              {payout.bankAccount.accountHolderName} · {payout.bankAccount.accountNumber}
+            </span>
+            <span className="nums text-xs text-fg-subtle">
+              {payout.bankAccount.ifscCode} · {payout.bankAccount.bankName}
+            </span>
+            <Badge tone={BANK_ACCOUNT_STATUS_TONES[payout.bankAccount.verificationStatus]}>
+              {BANK_ACCOUNT_STATUS_LABELS[payout.bankAccount.verificationStatus]}
+            </Badge>
+          </div>
+        ) : (
+          <span className="text-xs text-danger">Not on file</span>
+        ),
+    },
+    {
       key: "created",
       header: "Created",
       cell: (payout) => <span className="nums">{formatDate(payout.createdAt)}</span>,
@@ -266,7 +298,7 @@ export default function PayoutsQueuePage() {
           error={query.error}
           onRetry={() => query.refetch()}
           skeletonRows={8}
-          minWidth="960px"
+          minWidth="1180px"
           caption="Payout batches matching the current filter"
           emptyTitle="Nothing here"
           emptyDescription="No payout batches match this status. Batches are created from a provider's own Earnings tab."

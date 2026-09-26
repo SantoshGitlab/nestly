@@ -13,6 +13,9 @@ export enum ProviderNotificationType {
   KycRejected = 1,
   Suspended = 2,
   PayoutProcessed = 3,
+  SupportTicketReply = 4,
+  BankAccountApproved = 5,
+  BankAccountRejected = 6,
 }
 
 export interface ProviderNotification {

@@ -29,4 +29,10 @@ public enum ProviderNotificationType
 
     /// <summary>An admin replied to or resolved the provider's support ticket.</summary>
     SupportTicketReply,
+
+    /// <summary>An admin approved the provider's submitted bank account details.</summary>
+    BankAccountApproved,
+
+    /// <summary>An admin rejected the provider's submitted bank account details.</summary>
+    BankAccountRejected,
 }

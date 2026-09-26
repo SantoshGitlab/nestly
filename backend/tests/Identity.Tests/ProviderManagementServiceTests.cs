@@ -30,6 +30,7 @@ public sealed class ProviderManagementServiceTests : IDisposable
         new ProviderRepository(context),
         new ProviderKycDocumentRepository(context),
         new ProviderBackgroundCheckRepository(context),
+        new ProviderBankAccountRepository(context),
         new BookingRepository(context),
         new BookingProviderAssignmentRepository(context),
         new ProviderEarningLedgerRepository(context),
@@ -178,6 +179,31 @@ public sealed class ProviderManagementServiceTests : IDisposable
 
         var persistedDocument = await context.Set<ProviderKycDocument>().SingleAsync(d => d.Id == kycDocument.Id);
         persistedDocument.FileRef.Should().Be("[erased]", "the row is kept for audit history, but must stop pointing at a file that no longer exists");
+    }
+
+    /// <summary>
+    /// Same right-to-erasure gap as the photo/KYC test above, for the
+    /// provider's structured bank account details: a "deleted" account must
+    /// not leave a live account number/IFSC sitting in the database.
+    /// </summary>
+    [Fact]
+    public async Task DeleteAsync_erases_the_providers_bank_account_details()
+    {
+        await using var context = _database.CreateContext();
+        var (providerId, _, _) = await SeedSoleCoverageAsync(context);
+
+        var bankAccount = new ProviderBankAccount(Guid.NewGuid(), providerId, "Test Provider", "123456789012", "HDFC0001234", "HDFC Bank");
+        context.Add(bankAccount);
+        await context.SaveChangesAsync();
+
+        var result = await CreateService(context).DeleteAsync(providerId, new DeleteProviderRequest("Test deletion."));
+
+        result.IsSuccess.Should().BeTrue();
+        var persisted = await context.Set<ProviderBankAccount>().SingleAsync(b => b.Id == bankAccount.Id);
+        persisted.AccountNumber.Should().Be("[erased]", "the row is kept for audit history, but must stop carrying a live account number");
+        persisted.IfscCode.Should().Be("[erased]");
+        persisted.AccountHolderName.Should().Be("[erased]");
+        persisted.BankName.Should().Be("[erased]");
     }
 
     private sealed class RecordingFileStorageService : IFileStorageService

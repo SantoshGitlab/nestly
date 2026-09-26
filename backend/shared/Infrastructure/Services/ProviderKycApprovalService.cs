@@ -13,6 +13,7 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
     private readonly IProviderRepository _providerRepository;
     private readonly IProviderKycDocumentRepository _kycDocumentRepository;
     private readonly IProviderBackgroundCheckRepository _backgroundCheckRepository;
+    private readonly IProviderBankAccountRepository _bankAccountRepository;
     private readonly IServiceabilityMappingManagementService _serviceabilityMappingManagementService;
     private readonly IProviderStatusHistoryRepository _statusHistoryRepository;
     private readonly IProviderNotificationPublisher _notificationPublisher;
@@ -21,6 +22,7 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
         IProviderRepository providerRepository,
         IProviderKycDocumentRepository kycDocumentRepository,
         IProviderBackgroundCheckRepository backgroundCheckRepository,
+        IProviderBankAccountRepository bankAccountRepository,
         IServiceabilityMappingManagementService serviceabilityMappingManagementService,
         IProviderStatusHistoryRepository statusHistoryRepository,
         IProviderNotificationPublisher notificationPublisher)
@@ -28,6 +30,7 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
         _providerRepository = providerRepository;
         _kycDocumentRepository = kycDocumentRepository;
         _backgroundCheckRepository = backgroundCheckRepository;
+        _bankAccountRepository = bankAccountRepository;
         _serviceabilityMappingManagementService = serviceabilityMappingManagementService;
         _statusHistoryRepository = statusHistoryRepository;
         _notificationPublisher = notificationPublisher;
@@ -174,8 +177,9 @@ public class ProviderKycApprovalService : IProviderKycApprovalService
         var documents = await _kycDocumentRepository.GetByProviderAsync(providerId);
         var backgroundChecks = await _backgroundCheckRepository.ListByProviderAsync(providerId);
         var statusHistory = await _statusHistoryRepository.ListByProviderAsync(providerId);
+        var bankAccount = await _bankAccountRepository.GetByProviderIdAsync(providerId);
 
-        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks, statusHistory);
+        return ProviderDetailMapper.ToDetailResponse(provider, documents, backgroundChecks, statusHistory, bankAccount);
     }
 
     private static ProviderKycDocumentResponse ToResponse(ProviderKycDocument document) => new(
