@@ -240,6 +240,34 @@ breaking schema change, so a future phase can extend rather than migrate.
    of the Financial Domain, scheduled beyond task 146c — this decision
    governs its eventual implementation, not something built in this pass.)
 
+   **Update (2026-09-25, commit `479de6ab`):** until this point there was no
+   structured bank account data at all — the only bank-related record was a
+   `provider_kyc_document` of type `BankAccountProof` (an uploaded photo/PDF
+   of a cheque or passbook), so an admin processing a payout had to open that
+   image and manually transcribe an account number/IFSC, with real risk of a
+   transcription error. `provider_bank_account` now holds the provider's
+   account holder name, account number, IFSC and bank name as structured,
+   admin-verified data (its own Pending/Verified/Rejected lifecycle,
+   mirroring `provider_kyc_document`'s), surfaced directly on the payout
+   screen. This closes that specific gap but does not change the decision
+   above: it is still store-and-display only, the payout status machine is
+   unchanged, and the actual transfer is still a human doing an NEFT/IMPS
+   transfer outside Glavyx entirely — `Glavyx App ❌⟷❌ Bank`, no direct
+   connection between the two.
+
+   **Planned next step, not yet built:** PayU Payouts (docs.payu.in/reference/
+   introduction-payouts-api) is the identified path to close that remaining
+   gap — its Verify Account/Penny Test API would replace manual bank-detail
+   eyeballing with an automated, bank-confirmed check, and its Initiate
+   Transfer API + Transfer Success/Failed webhook would let an admin trigger
+   the real transfer from within Glavyx and have PayU's own UTR/reference
+   saved back automatically (`Glavyx App ✅⟷✅ PayU API ⟷✅ Bank`), instead of
+   an admin typing a reference in by hand. This requires a separate PayU
+   Payouts merchant activation and its own credentials (distinct product and
+   auth from the existing PayU Hosted Checkout integration) — a prerequisite
+   that does not yet exist, so this remains a planned direction, not a
+   decision to build against unverified/absent credentials.
+
 4. **Rating does not affect assignment in v1.** `provider_rating_summary`
    exists for display (provider performance views, admin provider detail) but
    the manual assignment flow (decision 1) does not read it to rank or
