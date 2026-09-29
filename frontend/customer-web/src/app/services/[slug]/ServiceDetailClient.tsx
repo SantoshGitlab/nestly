@@ -114,6 +114,7 @@ export default function ServiceDetailPage({
             quantityAllowed={service.isQuantityAllowed}
           />
           <ServiceAvailability serviceId={service.id} />
+          <RepeatServiceCard service={service} />
 
           {/* StickyActionBar: below `md`, `aside`'s own `md:sticky` doesn't
               apply (single-column grid), so without this "Book now" - the
@@ -160,6 +161,41 @@ function BookingCta({ service }: { service: ServiceDetail }) {
         </LinkButton>
       )}
     </StickyActionBar>
+  );
+}
+
+/**
+ * Surfaces the existing recurring-booking plan flow where the customer
+ * decides, instead of only at checkout. Purely a link into
+ * `/recurring-bookings/new`, which already pre-fills from `serviceSlug`; it
+ * changes nothing in the one-time booking funnel. Hidden when the service is
+ * definitely unserviceable, same rule as `BookingCta`.
+ */
+function RepeatServiceCard({ service }: { service: ServiceDetail }) {
+  const { isUnserviceable } = useServiceability(service.id);
+  if (isUnserviceable) return null;
+
+  return (
+    <section
+      aria-labelledby="repeat-service-heading"
+      className="rounded-2xl border border-line bg-surface p-4"
+    >
+      <h2 id="repeat-service-heading" className="text-sm font-semibold text-fg">
+        Need this regularly?
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+        Set up a weekly, fortnightly or monthly plan and we&apos;ll book it for you.
+      </p>
+      <LinkButton
+        href={`/recurring-bookings/new?serviceSlug=${encodeURIComponent(service.slug)}`}
+        size="md"
+        variant="secondary"
+        fullWidth
+        className="mt-3"
+      >
+        Set up a repeat plan
+      </LinkButton>
+    </section>
   );
 }
 
