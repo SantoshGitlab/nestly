@@ -42,6 +42,7 @@ import {
   getProviderDetail,
   getProviderEarnings,
   getProviderPerformance,
+  payViaPayU,
   reactivateProvider,
   recordBackgroundCheck,
   recordEarningAdjustment,
@@ -62,6 +63,7 @@ import {
   ProviderKycDocumentType,
   ProviderKycVerificationStatus,
   ProviderOnboardingStatus,
+  ProviderPayoutChannel,
   ProviderPayoutStatus,
   ProviderPhotoModerationStatus,
   ProviderStatus,
@@ -163,6 +165,12 @@ const BANK_ACCOUNT_STATUS_TONES: Record<ProviderBankAccountVerificationStatus, B
   [ProviderBankAccountVerificationStatus.Pending]: "warning",
   [ProviderBankAccountVerificationStatus.Verified]: "success",
   [ProviderBankAccountVerificationStatus.Rejected]: "danger",
+};
+
+/** Real PayU Payouts integration: admin-visibility label for which path processed a payout - shown once it has left Pending. */
+const PROCESSED_VIA_LABELS: Record<ProviderPayoutChannel, string> = {
+  [ProviderPayoutChannel.Manual]: "Manual",
+  [ProviderPayoutChannel.PayUAutomated]: "PayU",
 };
 
 /**
@@ -396,6 +404,12 @@ export default function ProviderDetailPage() {
       setPendingPayoutFailure(null);
       onSuccess("Payout status updated.");
     },
+    onError,
+  });
+
+  const payViaPayUMutation = useMutation({
+    mutationFn: (payoutId: string) => payViaPayU(payoutId),
+    onSuccess: () => onSuccess("PayU transfer initiated - the payout will settle once PayU's webhook confirms it."),
     onError,
   });
 
@@ -983,6 +997,9 @@ export default function ProviderDetailPage() {
                   <Badge tone={PAYOUT_STATUS_TONES[payout.status]}>{PAYOUT_STATUS_LABELS[payout.status]}</Badge>
                 </div>
                 <p className="nums mt-1 text-fg">{formatCurrency(payout.totalAmount)}</p>
+                {payout.status !== ProviderPayoutStatus.Pending ? (
+                  <p className="mt-1 text-xs text-fg-subtle">Processed via: {PROCESSED_VIA_LABELS[payout.processedVia]}</p>
+                ) : null}
                 {payout.payoutReference ? (
                   <p className="mt-1 text-xs text-fg-subtle">Reference: {payout.payoutReference}</p>
                 ) : null}
@@ -1016,6 +1033,15 @@ export default function ProviderDetailPage() {
                     >
                       Mark processing
                     </Button>
+                    {payout.isGatewayConfigured ? (
+                      <Button
+                        size="sm"
+                        loading={payViaPayUMutation.isPending && payViaPayUMutation.variables === payout.id}
+                        onClick={() => payViaPayUMutation.mutate(payout.id)}
+                      >
+                        Pay via PayU
+                      </Button>
+                    ) : null}
                   </FormActions>
                 ) : null}
 

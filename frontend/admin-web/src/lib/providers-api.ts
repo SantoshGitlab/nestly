@@ -233,6 +233,19 @@ export const updatePayoutStatus = (payoutId: string, request: UpdateProviderPayo
     body: JSON.stringify(request),
   });
 
+/**
+ * The automated counterpart to `updatePayoutStatus`'s manual Pending ->
+ * Processing move (real PayU Payouts integration) - triggers a real PayU
+ * transfer. Only call this when the payout's own `isGatewayConfigured` is
+ * true; the backend also enforces this (and the Pending/Verified-bank-
+ * account guards) independently.
+ */
+export const payViaPayU = (payoutId: string) =>
+  apiFetch<ProviderPayout>(`${PAYOUTS_BASE}/${payoutId}/pay-via-payu`, {
+    method: "POST",
+    authenticated: true,
+  });
+
 // ---- Booking assignment (task 147, 159 - used from the booking detail screen) ----
 
 export const assignProviderToBooking = (bookingId: string, request: AssignProviderRequest) =>

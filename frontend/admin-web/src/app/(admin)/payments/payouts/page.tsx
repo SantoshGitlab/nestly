@@ -18,8 +18,8 @@ import type { CsvColumn, DataTableColumn } from "@/components/data-table";
 import { PaymentsTabs } from "@/components/PaymentsTabs";
 import { describeError } from "@/lib/api";
 import { todayIsoDate } from "@/lib/date";
-import { searchPayouts, updatePayoutStatus } from "@/lib/providers-api";
-import { ProviderBankAccountVerificationStatus, ProviderPayoutStatus } from "@/lib/providers-types";
+import { payViaPayU, searchPayouts, updatePayoutStatus } from "@/lib/providers-api";
+import { ProviderBankAccountVerificationStatus, ProviderPayoutChannel, ProviderPayoutStatus } from "@/lib/providers-types";
 import type { ProviderPayout } from "@/lib/providers-types";
 import { useAdminClaims } from "@/lib/use-admin-claims";
 
@@ -49,6 +49,12 @@ const BANK_ACCOUNT_STATUS_TONES: Record<ProviderBankAccountVerificationStatus, B
   [ProviderBankAccountVerificationStatus.Pending]: "warning",
   [ProviderBankAccountVerificationStatus.Verified]: "success",
   [ProviderBankAccountVerificationStatus.Rejected]: "danger",
+};
+
+/** Real PayU Payouts integration: admin-visibility label for which path processed a payout - shown once it has left Pending. */
+const PROCESSED_VIA_LABELS: Record<ProviderPayoutChannel, string> = {
+  [ProviderPayoutChannel.Manual]: "Manual",
+  [ProviderPayoutChannel.PayUAutomated]: "PayU",
 };
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -126,6 +132,16 @@ export default function PayoutsQueuePage() {
     onError: (err) => setActionError(describeError(err)),
   });
 
+  const payViaPayUMutation = useMutation({
+    mutationFn: (payoutId: string) => payViaPayU(payoutId),
+    onSuccess: () => {
+      setActionError(null);
+      setActionNotice("PayU transfer initiated - the payout will settle once PayU's webhook confirms it.");
+      invalidate();
+    },
+    onError: (err) => setActionError(describeError(err)),
+  });
+
   const columns: DataTableColumn<ProviderPayout>[] = [
     {
       key: "provider",
@@ -160,6 +176,9 @@ export default function PayoutsQueuePage() {
       cell: (payout) => (
         <>
           <Badge tone={PAYOUT_STATUS_TONES[payout.status]}>{PAYOUT_STATUS_LABELS[payout.status]}</Badge>
+          {payout.status !== ProviderPayoutStatus.Pending ? (
+            <div className="mt-1 text-xs text-fg-subtle">Via: {PROCESSED_VIA_LABELS[payout.processedVia]}</div>
+          ) : null}
           {payout.payoutReference ? <div className="mt-1 text-xs text-fg-subtle">Ref: {payout.payoutReference}</div> : null}
         </>
       ),
@@ -199,14 +218,25 @@ export default function PayoutsQueuePage() {
 
         if (payout.status === ProviderPayoutStatus.Pending) {
           return (
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={statusMutation.isPending && statusMutation.variables?.payoutId === payout.id}
-              onClick={() => statusMutation.mutate({ payoutId: payout.id, newStatus: ProviderPayoutStatus.Processing })}
-            >
-              Mark processing
-            </Button>
+            <div className="flex flex-col items-start gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={statusMutation.isPending && statusMutation.variables?.payoutId === payout.id}
+                onClick={() => statusMutation.mutate({ payoutId: payout.id, newStatus: ProviderPayoutStatus.Processing })}
+              >
+                Mark processing
+              </Button>
+              {payout.isGatewayConfigured ? (
+                <Button
+                  size="sm"
+                  loading={payViaPayUMutation.isPending && payViaPayUMutation.variables === payout.id}
+                  onClick={() => payViaPayUMutation.mutate(payout.id)}
+                >
+                  Pay via PayU
+                </Button>
+              ) : null}
+            </div>
           );
         }
 

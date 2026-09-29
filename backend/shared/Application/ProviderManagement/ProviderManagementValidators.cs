@@ -165,6 +165,16 @@ public class UpdateProviderPayoutStatusRequestValidator : AbstractValidator<Upda
     }
 }
 
+/// <summary>Real PayU Payouts transfer webhook's raw JSON body - mirrors <c>PayUWebhookFormPayloadValidator</c>'s shallow "enough to normalize safely" scope, not full business validation (that lives in <c>ProviderPayoutService</c>).</summary>
+public class PayUPayoutWebhookPayloadValidator : AbstractValidator<PayUPayoutWebhookPayload>
+{
+    public PayUPayoutWebhookPayloadValidator()
+    {
+        RuleFor(x => x.Event).NotEmpty().MaximumLength(50);
+        RuleFor(x => x.MerchantReferenceId).NotEmpty().MaximumLength(100);
+    }
+}
+
 // ---- Bank account (structured payout details, OPEN DECISIONS #3) ----
 
 /// <summary>

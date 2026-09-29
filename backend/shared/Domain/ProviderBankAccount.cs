@@ -46,12 +46,17 @@ public enum ProviderBankAccountVerificationStatus
 /// since a changed account number/IFSC must always be re-verified before an
 /// admin can trust it again.
 ///
-/// Deliberately NOT a payout gate (product decision, task brief scope #3):
-/// <c>ProviderPayoutService.CreateBatchAsync</c>/<c>UpdateStatusAsync</c> do
-/// not check this entity's <see cref="VerificationStatus"/> and never refuse
-/// to proceed based on it - this is store-and-display only, surfaced to the
-/// admin processing a payout so they can visually double check it, not an
-/// enforced precondition.
+/// Deliberately NOT a payout gate for the manual flow (product decision,
+/// task brief scope #3): <c>ProviderPayoutService.CreateBatchAsync</c>/
+/// <c>UpdateStatusAsync</c> do not check this entity's <see cref="VerificationStatus"/>
+/// and never refuse to proceed based on it - store-and-display only,
+/// surfaced to the admin processing a manual payout so they can visually
+/// double check it, not an enforced precondition. The real PayU Payouts
+/// integration is the one exception: <c>ProviderPayoutService.PayViaPayUAsync</c>
+/// DOES require <see cref="ProviderBankAccountVerificationStatus.Verified"/>
+/// before it will call out to PayU with these details - a real, unattended
+/// bank transfer via someone else's API is a materially different risk than
+/// an admin manually typing a reference after eyeballing the same numbers.
 /// </summary>
 public class ProviderBankAccount : Entity<Guid>
 {

@@ -108,6 +108,12 @@ export enum ProviderBankAccountVerificationStatus {
   Rejected = 2,
 }
 
+/** Mirrors Nestly.Domain.ProviderPayoutChannel's declaration order exactly (real PayU Payouts integration). */
+export enum ProviderPayoutChannel {
+  Manual = 0,
+  PayUAutomated = 1,
+}
+
 // ---- CRUD (task 150a) ----
 
 export interface ProviderSummary {
@@ -485,6 +491,10 @@ export interface ProviderPayout {
   updatedAt: string;
   /** Product decision: visible "on the payout screen" - null when the provider has not submitted bank account details yet. Appended last, matching the C# record's own convention. */
   bankAccount: ProviderPayoutBankAccountSummary | null;
+  /** Real PayU Payouts integration: which of the two always-available paths moved this payout into Processing. Appended last, mirroring `bankAccount` above. */
+  processedVia: ProviderPayoutChannel;
+  /** Whether PayU Payouts is configured server-side right now - gates the "Pay via PayU" button. Appended last. */
+  isGatewayConfigured: boolean;
 }
 
 export interface ProviderPayoutSearchResponse {

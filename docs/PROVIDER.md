@@ -255,18 +255,32 @@ breaking schema change, so a future phase can extend rather than migrate.
    transfer outside Glavyx entirely — `Glavyx App ❌⟷❌ Bank`, no direct
    connection between the two.
 
-   **Planned next step, not yet built:** PayU Payouts (docs.payu.in/reference/
-   introduction-payouts-api) is the identified path to close that remaining
-   gap — its Verify Account/Penny Test API would replace manual bank-detail
-   eyeballing with an automated, bank-confirmed check, and its Initiate
-   Transfer API + Transfer Success/Failed webhook would let an admin trigger
-   the real transfer from within Glavyx and have PayU's own UTR/reference
-   saved back automatically (`Glavyx App ✅⟷✅ PayU API ⟷✅ Bank`), instead of
-   an admin typing a reference in by hand. This requires a separate PayU
-   Payouts merchant activation and its own credentials (distinct product and
-   auth from the existing PayU Hosted Checkout integration) — a prerequisite
-   that does not yet exist, so this remains a planned direction, not a
-   decision to build against unverified/absent credentials.
+   **Update (2026-09-29): PayU Payouts integration built, but dormant —
+   PayU has confirmed the product isn't available to this merchant yet.**
+   The automated path is fully implemented: `IProviderPayoutGateway`/
+   `PayUProviderPayoutGateway` (Initiate Transfer API), a `PayViaPayUAsync`
+   admin action requiring the provider's bank account to be
+   `Verified` first, and a Transfer Success/Failed webhook
+   (`HandlePayUTransferWebhookAsync`) that auto-applies PayU's own UTR-bearing
+   reference — closing the `Glavyx App ✅⟷✅ PayU API ⟷✅ Bank` gap exactly as
+   planned, as an ADDITION alongside the manual flow, never a replacement:
+   admin-web shows both a "Pay via PayU" button and the existing "Mark
+   processing" button on every Pending payout, admin picks per payout, and
+   the manual flow's own code is untouched by this work.
+
+   It ships safely inactive: `PayUPayoutOptions.IsConfigured` gates the whole
+   path, and with no credentials configured anywhere (true today), the
+   automated button simply doesn't render and the gateway throws rather than
+   silently no-opping if ever reached regardless. This is deliberate — PayU's
+   own customer care confirmed on 2026-09-29 that Payouts is not currently
+   available on this merchant account, with no activation timeline, so there
+   are no real credentials to configure and no sandbox to verify the final
+   integration details against (the OAuth token exchange and exact field
+   names were built against docs.payu.in and unit-tested against stubbed
+   responses, but never round-tripped against a live PayU Payouts account —
+   confirm those details one more time whenever real access exists, per
+   `PayUProviderPayoutGateway`'s own doc comment). Nothing further to build
+   here until PayU actually enables the product and provides credentials.
 
 4. **Rating does not affect assignment in v1.** `provider_rating_summary`
    exists for display (provider performance views, admin provider detail) but

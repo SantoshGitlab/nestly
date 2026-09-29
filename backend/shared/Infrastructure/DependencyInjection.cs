@@ -589,6 +589,11 @@ public static class DependencyInjection
         services.AddScoped<IProviderEarningLedgerRepository, ProviderEarningLedgerRepository>();
         services.AddScoped<IProviderEarningLedgerService, ProviderEarningLedgerService>();
         services.AddScoped<IProviderPayoutRepository, ProviderPayoutRepository>();
+        // Real PayU Payouts when PayUPayoutOptions is configured, a loudly-
+        // failing no-op otherwise - see ProviderPayoutGatewayRegistration.
+        // Manual bank transfer (UpdateStatusAsync) never depends on this;
+        // only the new PayViaPayUAsync/HandlePayUTransferWebhookAsync do.
+        services.AddProviderPayoutGateway(configuration);
         services.AddScoped<IProviderPayoutService, ProviderPayoutService>();
         services.AddScoped<IProviderBackgroundCheckRepository, ProviderBackgroundCheckRepository>();
         // Task 268: the append-only location trail behind Provider's single

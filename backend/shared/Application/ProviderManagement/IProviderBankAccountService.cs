@@ -10,8 +10,12 @@ namespace Nestly.Application.ProviderManagement;
 /// unlike KYC documents (submission and admin approval split across
 /// <c>IProviderKycService</c> and <c>IProviderKycApprovalService</c>), both
 /// sides of this lifecycle (provider submit, admin approve/reject/queue) live
-/// on this one interface. This is store-and-display only: nothing here blocks
-/// or gates a payout (<see cref="IProviderPayoutService"/> is unchanged).
+/// on this one interface. Store-and-display only for the manual payout flow
+/// (<see cref="IProviderPayoutService.UpdateStatusAsync"/> never checks it) -
+/// but the real PayU Payouts integration's <see cref="IProviderPayoutService.PayViaPayUAsync"/>
+/// DOES require <see cref="ProviderBankAccountVerificationStatus.Verified"/>
+/// before it will hand these details to PayU (see <c>ProviderBankAccount</c>'s
+/// own doc comment for why that one path is different).
 /// </summary>
 public interface IProviderBankAccountService
 {

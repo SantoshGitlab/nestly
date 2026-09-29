@@ -54,7 +54,12 @@ public class ProviderEarningsServiceTests : IDisposable
         new ProviderEarningLedgerRepository(context),
         new ProviderBankAccountRepository(context),
         new AuditLogWriter(context, new StubAuditContextProvider()),
-        TestServices.ProviderNotificationPublisher(context));
+        TestServices.ProviderNotificationPublisher(context),
+        // These tests only exercise the manual bank-transfer flow
+        // (UpdateStatusAsync) and read-side earnings/payout views - a
+        // not-configured no-op gateway is the correct stand-in, same as
+        // production when PayU Payouts credentials are absent.
+        new NoOpProviderPayoutGateway());
 
     private sealed class StubAuditContextProvider : IAuditContextProvider
     {
