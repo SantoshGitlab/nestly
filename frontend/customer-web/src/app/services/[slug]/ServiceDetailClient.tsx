@@ -17,6 +17,25 @@ import type { ServiceDetail } from "@/lib/types";
 const AMC_PROMO_CATEGORY_SLUG = "ac";
 
 /**
+ * Interim allowlist (until an admin-editable "repeatable" flag exists on the
+ * service): within the AC category only routine servicing recurs, so only
+ * these services get the repeat-plan and AMC cards. Repair, gas refill and
+ * (un)installation are one-off jobs and are deliberately absent. Local seed
+ * slugs - the production slugs must be confirmed before this ships there.
+ */
+const AC_RECURRING_SERVICE_SLUGS: ReadonlySet<string> = new Set([
+  "foam-jet-ac-service-e2e",
+  "foam-jet-service-2-acs-e2e",
+  "foam-jet-service-3-acs-e2e",
+  "foam-jet-service-4-acs-e2e",
+  "foam-jet-service-5-acs-e2e",
+]);
+
+/** AC services outside the allowlist are one-off jobs; every other category is unaffected. */
+const isOneOffAcService = (service: ServiceDetail) =>
+  service.categorySlug === AMC_PROMO_CATEGORY_SLUG && !AC_RECURRING_SERVICE_SLUGS.has(service.slug);
+
+/**
  * Service detail page (SRS 11.6.1): inclusions, exclusions, add-ons, pricing,
  * FAQs, cancellation/reschedule policy, and a reviews/rating summary.
  *
@@ -178,7 +197,7 @@ function BookingCta({ service }: { service: ServiceDetail }) {
  */
 function RepeatServiceCard({ service }: { service: ServiceDetail }) {
   const { isUnserviceable } = useServiceability(service.id);
-  if (isUnserviceable) return null;
+  if (isUnserviceable || isOneOffAcService(service)) return null;
 
   return (
     <section
@@ -213,7 +232,13 @@ function RepeatServiceCard({ service }: { service: ServiceDetail }) {
  */
 function AmcCoverCard({ service }: { service: ServiceDetail }) {
   const flags = useFeatureFlagsFailClosed();
-  if (!flags?.amcSubscriptionsEnabled || service.categorySlug !== AMC_PROMO_CATEGORY_SLUG) return null;
+  if (
+    !flags?.amcSubscriptionsEnabled ||
+    service.categorySlug !== AMC_PROMO_CATEGORY_SLUG ||
+    isOneOffAcService(service)
+  ) {
+    return null;
+  }
 
   return (
     <section aria-labelledby="amc-cover-heading" className="rounded-2xl border border-line bg-surface p-4">
