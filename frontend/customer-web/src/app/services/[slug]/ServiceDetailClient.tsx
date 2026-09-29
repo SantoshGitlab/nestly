@@ -8,9 +8,13 @@ import { ServiceFaqs } from "@/components/ServiceFaqs";
 import { STICKY_BAR_SPACER, StickyActionBar } from "@/components/patterns";
 import { Alert, Button, LinkButton, Skeleton, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
+import { useFeatureFlagsFailClosed } from "@/lib/feature-flags";
 import { useServiceability } from "@/hooks/useServiceability";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { ServiceDetail } from "@/lib/types";
+
+/** Category whose service pages promote AMC plans (AMC plans are seeded against AC). */
+const AMC_PROMO_CATEGORY_SLUG = "ac";
 
 /**
  * Service detail page (SRS 11.6.1): inclusions, exclusions, add-ons, pricing,
@@ -115,6 +119,7 @@ export default function ServiceDetailPage({
           />
           <ServiceAvailability serviceId={service.id} />
           <RepeatServiceCard service={service} />
+          <AmcCoverCard service={service} />
 
           {/* StickyActionBar: below `md`, `aside`'s own `md:sticky` doesn't
               apply (single-column grid), so without this "Book now" - the
@@ -194,6 +199,32 @@ function RepeatServiceCard({ service }: { service: ServiceDetail }) {
         className="mt-3"
       >
         Set up a repeat plan
+      </LinkButton>
+    </section>
+  );
+}
+
+/**
+ * AMC promo on AC services only. Fail-closed on the `amcSubscriptionsEnabled`
+ * flag (see `useFeatureFlagsFailClosed`): AMC purchase does not charge a
+ * payment yet (docs/AMC.md OPEN DECISIONS #4), so the card must stay hidden
+ * unless an admin has positively left the flag on. Links to the plan list
+ * (`/amc/new`), which does its own auth gating.
+ */
+function AmcCoverCard({ service }: { service: ServiceDetail }) {
+  const flags = useFeatureFlagsFailClosed();
+  if (!flags?.amcSubscriptionsEnabled || service.categorySlug !== AMC_PROMO_CATEGORY_SLUG) return null;
+
+  return (
+    <section aria-labelledby="amc-cover-heading" className="rounded-2xl border border-line bg-surface p-4">
+      <h2 id="amc-cover-heading" className="text-sm font-semibold text-fg">
+        Cover your AC for the year
+      </h2>
+      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
+        Pay once for a fixed number of AC service visits, and book them whenever you need.
+      </p>
+      <LinkButton href="/amc/new" size="md" variant="secondary" fullWidth className="mt-3">
+        View AMC plans
       </LinkButton>
     </section>
   );
