@@ -8,6 +8,7 @@ using Nestly.Application.Payments;
 using Nestly.Application.RecurringBookings;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Observability;
 using Nestly.Infrastructure.Persistence;
 
 namespace Nestly.Infrastructure.Services;
@@ -76,7 +77,10 @@ public class PaymentWebhookService : IPaymentWebhookService
         {
             // SRS 28.3 "payment callback abuse" - an unsigned/mis-signed
             // callback never touches any state below this point.
-            _logger.LogWarning("Rejected a payment webhook with an invalid signature for gateway order {GatewayOrderId}.", request.GatewayOrderId);
+            // The order id is unverified caller input at this point, so it is sanitised before it reaches the log.
+            _logger.LogWarning(
+                "Rejected a payment webhook with an invalid signature for gateway order {GatewayOrderId}.",
+                LogSanitizer.ForLog(request.GatewayOrderId));
             return Result.Failure(Error.Unauthorized("Payment.InvalidWebhookSignature", "The webhook signature could not be verified."));
         }
 
@@ -96,7 +100,7 @@ public class PaymentWebhookService : IPaymentWebhookService
                 // Same idempotent duplicate handling as a single attempt: the first resolution wins.
                 _logger.LogInformation(
                     "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (payment group already {Status}).",
-                    request.GatewayOrderId, group.Status);
+                    LogSanitizer.ForLog(group.GatewayOrderId), group.Status);
                 return Result.Success();
             }
 
@@ -122,7 +126,7 @@ public class PaymentWebhookService : IPaymentWebhookService
             // ResolveAttemptAsync (NESTLY-006).
             _logger.LogInformation(
                 "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (attempt already {Status}).",
-                request.GatewayOrderId, attempt.Status);
+                LogSanitizer.ForLog(attempt.GatewayOrderId), attempt.Status);
             return Result.Success();
         }
 

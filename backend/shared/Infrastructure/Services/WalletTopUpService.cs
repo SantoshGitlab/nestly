@@ -9,6 +9,7 @@ using Nestly.Application.Settings;
 using Nestly.Application.Wallet;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
+using Nestly.Infrastructure.Observability;
 using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence;
 
@@ -241,7 +242,10 @@ public class WalletTopUpService : IWalletTopUpService
         string canonicalPayload = _gateway.BuildCanonicalPayload(request);
         if (!_gateway.VerifyWebhookSignature(canonicalPayload, request.Signature))
         {
-            _logger.LogWarning("Rejected a wallet top-up webhook with an invalid signature for gateway order {GatewayOrderId}.", request.GatewayOrderId);
+            // The order id is unverified caller input at this point, so it is sanitised before it reaches the log.
+            _logger.LogWarning(
+                "Rejected a wallet top-up webhook with an invalid signature for gateway order {GatewayOrderId}.",
+                LogSanitizer.ForLog(request.GatewayOrderId));
             return Result.Failure(Error.Unauthorized("Payment.InvalidWebhookSignature", "The webhook signature could not be verified."));
         }
 
@@ -260,7 +264,7 @@ public class WalletTopUpService : IWalletTopUpService
         {
             _logger.LogInformation(
                 "Ignored a duplicate wallet top-up webhook for gateway order {GatewayOrderId} (top-up already {Status}).",
-                request.GatewayOrderId, topUp.Status);
+                LogSanitizer.ForLog(topUp.GatewayOrderId), topUp.Status);
             return Result.Success();
         }
 

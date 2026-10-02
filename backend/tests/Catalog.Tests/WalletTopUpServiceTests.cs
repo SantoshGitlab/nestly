@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Nestly.Application;
@@ -99,7 +100,8 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
     }
 
     private static WalletTopUpService BuildService(
-        NestlyDbContext context, IPaymentGateway gateway, WalletTopUpOptions options, ISandboxPaymentSimulator? simulator = null) => new(
+        NestlyDbContext context, IPaymentGateway gateway, WalletTopUpOptions options, ISandboxPaymentSimulator? simulator = null,
+        ILogger<WalletTopUpService>? logger = null) => new(
         new WalletTopUpRepository(context),
         new WalletService(new WalletLedgerRepository(context), context),
         new CustomerRepository(context),
@@ -110,7 +112,7 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
         TestServices.SystemSettings(context),
         Options.Create(options),
         TimeProvider.System,
-        NullLogger<WalletTopUpService>.Instance);
+        logger ?? NullLogger<WalletTopUpService>.Instance);
 
     private Customer SeedCustomer(decimal startingBalance = 0m)
     {
@@ -144,13 +146,14 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
     }
 
     private async Task<Result> DeliverAsync(
-        string gatewayOrderId, string status, IPaymentGateway? gateway = null, decimal? amount = null, string? signatureOverride = null)
+        string gatewayOrderId, string status, IPaymentGateway? gateway = null, decimal? amount = null, string? signatureOverride = null,
+        ILogger<WalletTopUpService>? logger = null)
     {
         gateway ??= Sandbox();
         var simulator = (ISandboxPaymentSimulator)gateway;
         string payload = PaymentWebhookPayload.Build(gatewayOrderId, "ref_123", status);
         using var context = _db.CreateContext();
-        return await BuildService(context, gateway, Enabled()).HandleCallbackAsync(
+        return await BuildService(context, gateway, Enabled(), logger: logger).HandleCallbackAsync(
             new PaymentWebhookRequest(gatewayOrderId, "ref_123", status, signatureOverride ?? simulator.SignPayload(payload), amount));
     }
 
@@ -385,6 +388,19 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
+    public async Task A_forged_callback_cannot_split_a_log_line_through_its_gateway_order_id()
+    {
+        var logger = new CapturingLogger<WalletTopUpService>();
+        const string forgedOrderId = "order_1\r\n[Error] Wallet top-up credited manually";
+
+        var result = await DeliverAsync(forgedOrderId, PaymentWebhookPayload.SuccessStatus, signatureOverride: "forged", logger: logger);
+
+        result.Error.Code.Should().Be("Payment.InvalidWebhookSignature");
+        logger.Messages.Should().ContainSingle();
+        logger.Messages[0].Should().NotContainAny("\r", "\n").And.Contain("order_1__[Error]");
+    }
+
+    [Fact]
     public async Task A_callback_whose_amount_differs_from_what_was_asked_for_is_not_credited()
     {
         var customer = SeedCustomer();
@@ -553,6 +569,19 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
     }
 
     // ---- Callback routing ---------------------------------------------------------------------------------------
+
+    /// <summary>Keeps the rendered text of every entry, so a test can see exactly what a plain-text log sink would print.</summary>
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
+    }
 
     private sealed class FakeBookingPayments : IPaymentWebhookService
     {
