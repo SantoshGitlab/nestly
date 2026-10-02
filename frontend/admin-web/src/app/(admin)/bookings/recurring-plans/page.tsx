@@ -38,6 +38,7 @@ const FREQUENCY_OPTIONS = [
   { value: String(RecurrenceFrequency.Weekly), label: "Weekly" },
   { value: String(RecurrenceFrequency.Biweekly), label: "Every 2 weeks" },
   { value: String(RecurrenceFrequency.Monthly), label: "Monthly" },
+  { value: String(RecurrenceFrequency.Daily), label: "Every day" },
 ];
 
 const STATUS_TONES: Record<RecurringPlanStatus, "success" | "warning" | "neutral"> = {

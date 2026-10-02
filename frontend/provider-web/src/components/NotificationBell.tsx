@@ -26,6 +26,7 @@ const TONE_CHIP = {
   brand: "bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300",
   success: "bg-success-soft text-success",
   danger: "bg-danger-soft text-danger",
+  warning: "bg-warning-soft text-warning",
 } as const;
 
 function toneFor(type: ProviderNotificationType): keyof typeof TONE_CHIP {
@@ -34,7 +35,11 @@ function toneFor(type: ProviderNotificationType): keyof typeof TONE_CHIP {
       return "success";
     case ProviderNotificationType.KycRejected:
     case ProviderNotificationType.Suspended:
+    case ProviderNotificationType.JobUnassigned:
+    case ProviderNotificationType.JobCancelled:
       return "danger";
+    case ProviderNotificationType.JobRescheduled:
+      return "warning";
     case ProviderNotificationType.JobOffered:
     default:
       return "brand";

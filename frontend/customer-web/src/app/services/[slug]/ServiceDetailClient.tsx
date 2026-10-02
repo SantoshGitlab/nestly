@@ -8,32 +8,9 @@ import { ServiceFaqs } from "@/components/ServiceFaqs";
 import { STICKY_BAR_SPACER, StickyActionBar } from "@/components/patterns";
 import { Alert, Button, LinkButton, Skeleton, cx } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
-import { useFeatureFlagsFailClosed } from "@/lib/feature-flags";
 import { useServiceability } from "@/hooks/useServiceability";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import type { ServiceDetail } from "@/lib/types";
-
-/** Category whose service pages promote AMC plans (AMC plans are seeded against AC). */
-const AMC_PROMO_CATEGORY_SLUG = "ac";
-
-/**
- * Interim allowlist (until an admin-editable "repeatable" flag exists on the
- * service): within the AC category only routine servicing recurs, so only
- * these services get the repeat-plan and AMC cards. Repair, gas refill and
- * (un)installation are one-off jobs and are deliberately absent. Local seed
- * slugs - the production slugs must be confirmed before this ships there.
- */
-const AC_RECURRING_SERVICE_SLUGS: ReadonlySet<string> = new Set([
-  "foam-jet-ac-service-e2e",
-  "foam-jet-service-2-acs-e2e",
-  "foam-jet-service-3-acs-e2e",
-  "foam-jet-service-4-acs-e2e",
-  "foam-jet-service-5-acs-e2e",
-]);
-
-/** AC services outside the allowlist are one-off jobs; every other category is unaffected. */
-const isOneOffAcService = (service: ServiceDetail) =>
-  service.categorySlug === AMC_PROMO_CATEGORY_SLUG && !AC_RECURRING_SERVICE_SLUGS.has(service.slug);
 
 /**
  * Service detail page (SRS 11.6.1): inclusions, exclusions, add-ons, pricing,
@@ -137,8 +114,6 @@ export default function ServiceDetailPage({
             quantityAllowed={service.isQuantityAllowed}
           />
           <ServiceAvailability serviceId={service.id} />
-          <RepeatServiceCard service={service} />
-          <AmcCoverCard service={service} />
 
           {/* StickyActionBar: below `md`, `aside`'s own `md:sticky` doesn't
               apply (single-column grid), so without this "Book now" - the
@@ -185,73 +160,6 @@ function BookingCta({ service }: { service: ServiceDetail }) {
         </LinkButton>
       )}
     </StickyActionBar>
-  );
-}
-
-/**
- * Surfaces the existing recurring-booking plan flow where the customer
- * decides, instead of only at checkout. Purely a link into
- * `/recurring-bookings/new`, which already pre-fills from `serviceSlug`; it
- * changes nothing in the one-time booking funnel. Hidden when the service is
- * definitely unserviceable, same rule as `BookingCta`.
- */
-function RepeatServiceCard({ service }: { service: ServiceDetail }) {
-  const { isUnserviceable } = useServiceability(service.id);
-  if (isUnserviceable || isOneOffAcService(service)) return null;
-
-  return (
-    <section
-      aria-labelledby="repeat-service-heading"
-      className="rounded-2xl border border-line bg-surface p-4"
-    >
-      <h2 id="repeat-service-heading" className="text-sm font-semibold text-fg">
-        Need this regularly?
-      </h2>
-      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-        Set up a weekly, fortnightly or monthly plan and we&apos;ll book it for you.
-      </p>
-      <LinkButton
-        href={`/recurring-bookings/new?serviceSlug=${encodeURIComponent(service.slug)}`}
-        size="md"
-        variant="secondary"
-        fullWidth
-        className="mt-3"
-      >
-        Set up a repeat plan
-      </LinkButton>
-    </section>
-  );
-}
-
-/**
- * AMC promo on AC services only. Fail-closed on the `amcSubscriptionsEnabled`
- * flag (see `useFeatureFlagsFailClosed`): AMC purchase does not charge a
- * payment yet (docs/AMC.md OPEN DECISIONS #4), so the card must stay hidden
- * unless an admin has positively left the flag on. Links to the plan list
- * (`/amc/new`), which does its own auth gating.
- */
-function AmcCoverCard({ service }: { service: ServiceDetail }) {
-  const flags = useFeatureFlagsFailClosed();
-  if (
-    !flags?.amcSubscriptionsEnabled ||
-    service.categorySlug !== AMC_PROMO_CATEGORY_SLUG ||
-    isOneOffAcService(service)
-  ) {
-    return null;
-  }
-
-  return (
-    <section aria-labelledby="amc-cover-heading" className="rounded-2xl border border-line bg-surface p-4">
-      <h2 id="amc-cover-heading" className="text-sm font-semibold text-fg">
-        Cover your AC for the year
-      </h2>
-      <p className="mt-1 text-sm leading-relaxed text-fg-muted">
-        Pay once for a fixed number of AC service visits, and book them whenever you need.
-      </p>
-      <LinkButton href="/amc/new" size="md" variant="secondary" fullWidth className="mt-3">
-        View AMC plans
-      </LinkButton>
-    </section>
   );
 }
 

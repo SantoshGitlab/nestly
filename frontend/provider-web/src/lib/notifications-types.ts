@@ -16,6 +16,9 @@ export enum ProviderNotificationType {
   SupportTicketReply = 4,
   BankAccountApproved = 5,
   BankAccountRejected = 6,
+  JobRescheduled = 7,
+  JobUnassigned = 8,
+  JobCancelled = 9,
 }
 
 export interface ProviderNotification {

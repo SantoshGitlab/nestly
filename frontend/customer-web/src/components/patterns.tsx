@@ -78,6 +78,23 @@ export function formatTimeRange(startTime: string, endTime: string): string {
   return `${startTime.slice(0, 5)}–${endTime.slice(0, 5)}`;
 }
 
+/**
+ * A business-local wall-clock date-time with no zone suffix ("2026-10-03T05:00:00" - what the API sends for a
+ * moment that is read against a slot's own time) as "Sat, 3 Oct, 05:00 AM". Parsed as local time on purpose: it is
+ * already the business's wall clock, and treating it as UTC would shift it by the viewer's offset.
+ */
+export function formatLocalDateTime(local: string): string {
+  const date = new Date(local);
+  if (Number.isNaN(date.getTime())) return local;
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 /** An ISO instant as a local date + time, for timeline and ledger rows. */
 export function formatInstant(utc: string): string {
   const date = new Date(utc);
@@ -228,6 +245,8 @@ export function recurringPlanStatusTone(status: RecurringBookingPlanStatus): Bad
  */
 export function recurringFrequencyLabel(frequency: RecurringBookingRecurrenceFrequency): string {
   switch (frequency) {
+    case RecurringBookingRecurrenceFrequency.Daily:
+      return "Every day";
     case RecurringBookingRecurrenceFrequency.Weekly:
       return "Every week";
     case RecurringBookingRecurrenceFrequency.Biweekly:
@@ -239,11 +258,12 @@ export function recurringFrequencyLabel(frequency: RecurringBookingRecurrenceFre
   }
 }
 
-/** Picker options, in the enum's own order. */
+/** Picker options, shortest interval first (not the enum's ordinal order - Daily was appended last for wire compatibility). */
 export const RECURRING_FREQUENCY_OPTIONS: {
   value: RecurringBookingRecurrenceFrequency;
   label: string;
 }[] = [
+  RecurringBookingRecurrenceFrequency.Daily,
   RecurringBookingRecurrenceFrequency.Weekly,
   RecurringBookingRecurrenceFrequency.Biweekly,
   RecurringBookingRecurrenceFrequency.Monthly,

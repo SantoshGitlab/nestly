@@ -206,7 +206,10 @@ export interface AdminBookingReschedule {
   toSlotDate: string;
   toSlotStartTime: string;
   isLate: boolean;
+  /** The late fee under the policy of the day. */
   feeAmount: number;
+  /** What was actually taken from the customer's wallet for it - 0 when nothing was (an admin's reschedule, a reschedule that was not late, or one made before late fees were collected). */
+  feeCollectedAmount: number;
   createdAtUtc: string;
 }
 

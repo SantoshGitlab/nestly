@@ -41,18 +41,6 @@ const ALL_ENABLED: CustomerFeatureFlags = {
  * shape either way so call sites never need a loading branch.
  */
 export function useFeatureFlags(): CustomerFeatureFlags {
-  return useFeatureFlagsFailClosed() ?? ALL_ENABLED;
-}
-
-/**
- * Fail-CLOSED variant: `null` until the flags have actually loaded, and stays
- * `null` if the fetch fails. For promoting a feature that must not be exposed
- * unless an admin has positively left it on (e.g. the AMC card, while AMC
- * purchase is not yet charged) - `useFeatureFlags`' fail-open default would
- * flash it, or keep it visible after a failed fetch, when the flag is off.
- * Shares `useFeatureFlags`' query key, so it costs no extra request.
- */
-export function useFeatureFlagsFailClosed(): CustomerFeatureFlags | null {
   const query = useQuery({
     queryKey: ["feature-flags"] as const,
     queryFn: () => apiFetch<CustomerFeatureFlags>(`${API_V1}/feature-flags`),
@@ -60,5 +48,5 @@ export function useFeatureFlagsFailClosed(): CustomerFeatureFlags | null {
     retry: false,
   });
 
-  return query.data ?? null;
+  return query.data ?? ALL_ENABLED;
 }
