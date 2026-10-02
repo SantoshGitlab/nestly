@@ -1,8 +1,10 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Domain;
 using Nestly.Domain.Events;
+using Nestly.Infrastructure.Options;
 using Nestly.Infrastructure.Persistence.Interceptors;
 using Nestly.Infrastructure.Persistence.Repositories;
 using Nestly.Infrastructure.Services;
@@ -25,7 +27,10 @@ public sealed class RecurringPlanOccurrenceReleaseHandlerTests : IClassFixture<T
     public RecurringPlanOccurrenceReleaseHandlerTests(TestDatabase db) => _db = db;
 
     private static RecurringPlanOccurrenceReleaseHandler BuildHandler(Nestly.Infrastructure.Persistence.NestlyDbContext context) =>
-        new(new BookingRepository(context), new RecurringBookingPlanRepository(context), NullLogger<RecurringPlanOccurrenceReleaseHandler>.Instance);
+        new(new BookingRepository(context), new RecurringBookingPlanRepository(context), releaseService: null!,
+            new CustomerRepository(context), new ServiceRepository(context), new DeviceTokenRepository(context),
+            notificationDispatchService: null!, Options.Create(new RecurringBookingOptions()),
+            NullLogger<RecurringPlanOccurrenceReleaseHandler>.Instance);
 
     /// <summary>
     /// Minimal real geography chain to satisfy RecurringBookingPlan's real

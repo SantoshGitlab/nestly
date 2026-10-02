@@ -185,11 +185,33 @@ public class RecurringOccurrenceAutoChargeJob : IRecurringOccurrenceAutoChargeJo
 
         if (booking.AutoChargeAttemptCount >= _options.AutoChargeRetryLimit)
         {
+            await PauseOpenEndedPlanAsync(booking);
             await NotifyAutoChargeExhaustedAsync(booking, cancellationToken);
             return AutoChargeAttemptOutcome.Exhausted;
         }
 
         return AutoChargeAttemptOutcome.Failed;
+    }
+
+    /// <summary>
+    /// An "until I cancel" plan has no end of its own, so a card that keeps
+    /// failing would otherwise keep generating unpaid occurrences forever.
+    /// Exhausting one occurrence's retries pauses such a plan (the customer
+    /// resumes it from the normal Paused state once payment is sorted out);
+    /// bounded plans are untouched - they end on their own.
+    /// </summary>
+    private async Task PauseOpenEndedPlanAsync(Booking booking)
+    {
+        var plan = await _planRepository.GetByIdAsync(booking.RecurringBookingPlanId!.Value);
+        if (plan is null || !plan.PauseForPaymentFailure())
+        {
+            return;
+        }
+
+        await _planRepository.UpdateAsync(plan);
+        _logger.LogWarning(
+            "Recurring plan {PlanId} is open-ended and auto-charge for booking {BookingId} exhausted its retries; plan paused.",
+            plan.Id, booking.Id);
     }
 
     /// <summary>

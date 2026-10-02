@@ -40,5 +40,13 @@ public enum EscrowSourceType
     /// escrow liability and never formally recognized as revenue.
     /// SourceReferenceId is the BookingCancellation's id.
     /// </summary>
-    CancellationFeeRetained
+    CancellationFeeRetained,
+
+    /// <summary>
+    /// A late-reschedule fee taken from the customer's wallet and recognised as platform revenue in the same breath: a
+    /// hold for the amount and a release for the same amount, both carrying this source, so the booking's own held
+    /// balance - what completion pays the provider out of - is left exactly as it was.
+    /// SourceReferenceId is the BookingReschedule's id.
+    /// </summary>
+    RescheduleFeeCollected
 }

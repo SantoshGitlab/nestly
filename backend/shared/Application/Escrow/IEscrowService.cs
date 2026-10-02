@@ -65,6 +65,13 @@ public interface IEscrowService
     /// </summary>
     Task ReleaseRetainedFeeAsync(Guid bookingId, Guid cancellationId, decimal feeAmount);
 
+    /// <summary>
+    /// Books a late-reschedule fee that was just taken from the customer's wallet as platform revenue: a hold and a
+    /// release of the same amount (<see cref="EscrowSourceType.RescheduleFeeCollected"/>), leaving the booking's held
+    /// balance - and so what completion pays the provider - untouched. No-op for a zero fee.
+    /// </summary>
+    Task RecordRescheduleFeeAsync(Guid bookingId, Guid rescheduleId, decimal feeAmount);
+
     /// <summary>The sum of a booking's Hold entries minus its Release entries - what remains held right now.</summary>
     Task<decimal> GetHeldBalanceAsync(Guid bookingId);
 }

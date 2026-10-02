@@ -151,6 +151,8 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
                     new SandboxRouteEstimateProvider(Options.Create(new SandboxRouteEstimateOptions())),
                     Options.Create(new AutoAssignmentOptions())),
                 BuildEligibilityService(context)),
+            new WalletService(new WalletLedgerRepository(context), context),
+            new NotificationEventRepository(context),
             Options.Create(new RecurringBookingOptions { LeadTimeDays = leadTimeDays }),
             NullLogger<RecurringBookingSchedulerService>.Instance);
     }
@@ -290,6 +292,45 @@ public sealed class RecurringBookingSchedulerServiceTests : IClassFixture<TestDa
 
         var bookings = await new BookingRepository(assertContext).ListByCustomerAsync(fixture.Customer.Id, Enum.GetValues<BookingStatus>());
         bookings.Should().ContainSingle(b => b.Id == history[0].BookingId);
+    }
+
+    /// <summary>
+    /// The sweep runs once a day, so a daily plan must be booked out to the lead-time
+    /// horizon in one pass - one date per sweep would only ever book the visit for the
+    /// day the sweep runs. Outcome-agnostic on purpose: a skipped date also advances the
+    /// pointer, so this pins the looping, not slot availability.
+    /// </summary>
+    [Fact]
+    public async Task ProcessDueOccurrencesAsync_books_a_daily_plan_out_to_the_lead_time_horizon_in_one_sweep()
+    {
+        Fixture fixture;
+        using (var seedContext = _db.CreateContext())
+        {
+            fixture = Seed(seedContext);
+        }
+
+        var start = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        RecurringBookingPlan plan;
+        using (var planContext = _db.CreateContext())
+        {
+            plan = new RecurringBookingPlan(
+                Guid.NewGuid(), fixture.Customer.Id, fixture.Service.Id, fixture.City.Id, fixture.Locality.Id,
+                fixture.Address.Id, fixture.Window.Id, quantity: 1, RecurringBookingRecurrenceFrequency.Daily,
+                recurrenceDayOfWeek: null, recurrenceDayOfMonth: null, startDate: start, endDate: null, occurrenceCount: null);
+            await new RecurringBookingPlanRepository(planContext).AddAsync(plan);
+        }
+
+        using var runContext = _db.CreateContext();
+        await BuildScheduler(runContext, leadTimeDays: 5).ProcessDueOccurrencesAsync(CancellationToken.None);
+
+        using var assertContext = _db.CreateContext();
+        var reloaded = await new RecurringBookingPlanRepository(assertContext).GetByIdAsync(plan.Id);
+        var history = await new RecurringBookingOccurrenceRepository(assertContext).ListByPlanAsync(plan.Id);
+
+        // Horizon is today + 5; the plan starts tomorrow, so tomorrow..today+5 = 5 dates.
+        history.Should().HaveCount(5);
+        reloaded!.NextOccurrenceDate.Should().Be(start.AddDays(5));
+        reloaded.Status.Should().Be(RecurringBookingPlanStatus.Active);
     }
 
     /// <summary>

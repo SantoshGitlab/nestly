@@ -145,11 +145,8 @@ public sealed class BookingExpirySweepJobTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            var job = new BookingExpirySweepJob(
-                new BookingRepository(context),
-                slotService,
-                new WalletService(new WalletLedgerRepository(context), context),
-                new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            var job = new BookingExpirySweepJob(new BookingRepository(context),
+                new UnpaidBookingReleaseService(new BookingRepository(context), slotService, new WalletService(new WalletLedgerRepository(context), context), new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System)),
                 Options.Create(new BookingExpiryOptions()),
                 Options.Create(new RecurringBookingOptions()),
                 NullLogger<BookingExpirySweepJob>.Instance);
@@ -184,11 +181,8 @@ public sealed class BookingExpirySweepJobTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            var job = new BookingExpirySweepJob(
-                new BookingRepository(context),
-                slotService,
-                new WalletService(new WalletLedgerRepository(context), context),
-                new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            var job = new BookingExpirySweepJob(new BookingRepository(context),
+                new UnpaidBookingReleaseService(new BookingRepository(context), slotService, new WalletService(new WalletLedgerRepository(context), context), new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System)),
                 Options.Create(new BookingExpiryOptions()),
                 Options.Create(new RecurringBookingOptions()),
                 NullLogger<BookingExpirySweepJob>.Instance);
@@ -290,11 +284,8 @@ public sealed class BookingExpirySweepJobTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            var job = new BookingExpirySweepJob(
-                new BookingRepository(context),
-                slotService,
-                new WalletService(new WalletLedgerRepository(context), context),
-                new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            var job = new BookingExpirySweepJob(new BookingRepository(context),
+                new UnpaidBookingReleaseService(new BookingRepository(context), slotService, new WalletService(new WalletLedgerRepository(context), context), new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System)),
                 Options.Create(new BookingExpiryOptions()),
                 Options.Create(new RecurringBookingOptions()),
                 NullLogger<BookingExpirySweepJob>.Instance);
@@ -352,11 +343,8 @@ public sealed class BookingExpirySweepJobTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            var job = new BookingExpirySweepJob(
-                new BookingRepository(context),
-                slotService,
-                new WalletService(new WalletLedgerRepository(context), context),
-                new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+            var job = new BookingExpirySweepJob(new BookingRepository(context),
+                new UnpaidBookingReleaseService(new BookingRepository(context), slotService, new WalletService(new WalletLedgerRepository(context), context), new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System)),
                 Options.Create(new BookingExpiryOptions()),
                 Options.Create(new RecurringBookingOptions()),
                 NullLogger<BookingExpirySweepJob>.Instance);
@@ -449,18 +437,15 @@ public sealed class BookingExpirySweepJobTests : IClassFixture<TestDatabase>
 
         using (var context = _db.CreateContext())
         {
-            var job = new BookingExpirySweepJob(
-                new BookingRepository(context),
-                new SlotAvailabilityService(
+            var job = new BookingExpirySweepJob(new BookingRepository(context),
+                new UnpaidBookingReleaseService(new BookingRepository(context), new SlotAvailabilityService(
                     new ServiceabilityRepository(context),
                     new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                     new SlotWindowRepository(context),
                     new SlotBlackoutRepository(context),
                     new SlotBookingPolicyRepository(context),
                     new SlotCapacityRepository(context),
-                    TestServices.Clock()),
-                new WalletService(new WalletLedgerRepository(context), context),
-                new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
+                    TestServices.Clock()), new WalletService(new WalletLedgerRepository(context), context), new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System)),
                 Options.Create(new BookingExpiryOptions()),
                 Options.Create(new RecurringBookingOptions()),
                 NullLogger<BookingExpirySweepJob>.Instance);

@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 using Nestly.Application.Abstractions.Auditing;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Notifications;
+using Nestly.Application.Wallet;
+using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Settings;
@@ -115,7 +117,54 @@ internal static class TestServices
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
             Clock(timeProvider),
             timeProvider,
-            Options.Create(policy ?? new CancellationPolicyOptions()));
+            Policies(policy), ProviderNotificationPublisher(context), new BookingRescheduleRepository(context));
+
+    /// <summary>
+    /// The cancellation/reschedule policy as a fixed answer - the given options, or the defaults. What every suite that is
+    /// not testing <see cref="BookingPolicyProvider"/> itself wants in place of the real, settings-backed provider.
+    /// </summary>
+    public static IBookingPolicyProvider Policies(CancellationPolicyOptions? cancellation = null, ReschedulePolicyOptions? reschedule = null) =>
+        new FixedBookingPolicyProvider(cancellation ?? new CancellationPolicyOptions(), reschedule ?? new ReschedulePolicyOptions());
+
+    /// <summary>
+    /// Admin-saved platform rules as a fixed answer: only the groups passed are "saved", every other one is null - which is
+    /// what an engine reads as "do what you always did".
+    /// </summary>
+    public static IPlatformRules Rules(
+        BookingSettings? booking = null, SlotSettings? slot = null, TaxSettings? tax = null,
+        WalletSettings? wallet = null, CouponSettings? coupon = null) =>
+        new FixedPlatformRules(booking, slot, tax, wallet, coupon);
+
+    private sealed class FixedPlatformRules(
+        BookingSettings? booking, SlotSettings? slot, TaxSettings? tax, WalletSettings? wallet, CouponSettings? coupon) : IPlatformRules
+    {
+        public Task<BookingSettings?> GetBookingAsync(CancellationToken cancellationToken = default) => Task.FromResult(booking);
+
+        public Task<SlotSettings?> GetSlotAsync(CancellationToken cancellationToken = default) => Task.FromResult(slot);
+
+        public Task<TaxSettings?> GetTaxAsync(CancellationToken cancellationToken = default) => Task.FromResult(tax);
+
+        public Task<WalletSettings?> GetWalletAsync(CancellationToken cancellationToken = default) => Task.FromResult(wallet);
+
+        public Task<CouponSettings?> GetCouponAsync(CancellationToken cancellationToken = default) => Task.FromResult(coupon);
+    }
+
+    /// <summary>Real <see cref="IWalletService"/> over the test database.</summary>
+    public static IWalletService Wallet(NestlyDbContext context) => new WalletService(new WalletLedgerRepository(context), context);
+
+    /// <summary>Real <see cref="IEscrowService"/> over the test database.</summary>
+    public static IEscrowService Escrow(NestlyDbContext context) => new EscrowService(new PlatformEscrowLedgerRepository(context));
+
+    private sealed class FixedBookingPolicyProvider(CancellationPolicyOptions cancellation, ReschedulePolicyOptions reschedule) : IBookingPolicyProvider
+    {
+        public Task<CancellationSettings> GetCancellationAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CancellationSettings(cancellation.FreeCancellationWindowHours, cancellation.LateCancellationFeePercentage, AllowAdminOverride: true));
+
+        public Task<RescheduleSettings> GetRescheduleAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new RescheduleSettings(
+                reschedule.MinHoursBeforeSlot, reschedule.MaxReschedulesPerBooking, reschedule.LateFeeThresholdHours, reschedule.LateRescheduleFeePercentage,
+                reschedule.CollectLateFeeFromWallet));
+    }
 
     public static SlotAvailabilityService SlotAvailability(NestlyDbContext context, TimeProvider? timeProvider = null) =>
         new(
@@ -153,6 +202,12 @@ internal static class TestServices
     /// </summary>
     public static IAuditLogWriter AuditLogWriter(NestlyDbContext context) =>
         new AuditLogWriter(context, SystemAuditContextProvider.Instance);
+
+    /// <summary>Real <see cref="IProviderPlanReservationService"/> over the test database, for suites that build a service that consults it but are not testing it.</summary>
+    public static IProviderPlanReservationService PlanReservations(NestlyDbContext context) =>
+        new ProviderPlanReservationService(
+            context, Clock(), Options.Create(new RecurringBookingOptions()),
+            NullLogger<ProviderPlanReservationService>.Instance);
 
     /// <summary>Real <see cref="ISystemSettingsService"/> over the test database, for suites that need one only as a collaborator (not under test).</summary>
     public static ISystemSettingsService SystemSettings(NestlyDbContext context) =>

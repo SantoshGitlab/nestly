@@ -5,6 +5,7 @@ using Nestly.Application.Abstractions.Observability;
 using Nestly.Application.Bookings;
 using Nestly.Application.Escrow;
 using Nestly.Application.Payments;
+using Nestly.Application.RecurringBookings;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
 using Nestly.Infrastructure.Persistence;
@@ -31,6 +32,8 @@ namespace Nestly.Infrastructure.Services;
 public class PaymentWebhookService : IPaymentWebhookService
 {
     private readonly IPaymentTransactionRepository _paymentRepository;
+    private readonly IPaymentGroupRepository _groupRepository;
+    private readonly IRecurringBookingPlanRepository _planRepository;
     private readonly IBookingRepository _bookingRepository;
     private readonly IServiceRepository _serviceRepository;
     private readonly IPaymentGateway _gateway;
@@ -42,6 +45,8 @@ public class PaymentWebhookService : IPaymentWebhookService
 
     public PaymentWebhookService(
         IPaymentTransactionRepository paymentRepository,
+        IPaymentGroupRepository groupRepository,
+        IRecurringBookingPlanRepository planRepository,
         IBookingRepository bookingRepository,
         IServiceRepository serviceRepository,
         IPaymentGateway gateway,
@@ -52,6 +57,8 @@ public class PaymentWebhookService : IPaymentWebhookService
         ILogger<PaymentWebhookService> logger)
     {
         _paymentRepository = paymentRepository;
+        _groupRepository = groupRepository;
+        _planRepository = planRepository;
         _bookingRepository = bookingRepository;
         _serviceRepository = serviceRepository;
         _gateway = gateway;
@@ -76,7 +83,26 @@ public class PaymentWebhookService : IPaymentWebhookService
         var transaction = await _paymentRepository.GetByGatewayOrderIdAsync(request.GatewayOrderId);
         if (transaction is null)
         {
-            return Result.Failure(Error.NotFound("Payment.OrderNotFound", "No payment attempt exists for this gateway order."));
+            // A prepaid checkout's order id belongs to its PaymentGroup: the gateway knows
+            // one order, this system settles several bookings against it.
+            var group = await _groupRepository.GetByGatewayOrderIdAsync(request.GatewayOrderId);
+            if (group is null)
+            {
+                return Result.Failure(Error.NotFound("Payment.OrderNotFound", "No payment attempt exists for this gateway order."));
+            }
+
+            if (group.Status != PaymentGroupStatus.Pending)
+            {
+                // Same idempotent duplicate handling as a single attempt: the first resolution wins.
+                _logger.LogInformation(
+                    "Ignored a duplicate payment webhook for gateway order {GatewayOrderId} (payment group already {Status}).",
+                    request.GatewayOrderId, group.Status);
+                return Result.Success();
+            }
+
+            bool groupSucceeded = string.Equals(request.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase);
+            await ResolveGroupAsync(group, groupSucceeded, request.Status, request.GatewayPaymentRef);
+            return Result.Success();
         }
 
         var attempt = transaction.Attempts.Single(a => a.GatewayOrderId == request.GatewayOrderId);
@@ -140,6 +166,13 @@ public class PaymentWebhookService : IPaymentWebhookService
             return Result.Success(transaction);
         }
 
+        if (attempt.PaymentGroupId is { } groupId)
+        {
+            // Part of a prepaid checkout: the gateway is asked about the group's order, and the
+            // outcome is applied to every member together.
+            return await VerifyPendingGroupAsync(transaction, groupId);
+        }
+
         var verifyResult = await _gateway.VerifyOrderStatusAsync(attempt.GatewayOrderId);
         if (string.Equals(verifyResult.Status, "pending", StringComparison.OrdinalIgnoreCase))
         {
@@ -160,6 +193,113 @@ public class PaymentWebhookService : IPaymentWebhookService
         string status = succeeded ? PaymentWebhookPayload.SuccessStatus : (verifyResult.FailureReason ?? "Payment was not completed.");
         await ResolveAttemptAsync(transaction, attempt, booking, succeeded, status, verifyResult.GatewayPaymentRef);
         return Result.Success(transaction);
+    }
+
+    private async Task<Result<PaymentTransaction>> VerifyPendingGroupAsync(PaymentTransaction transaction, Guid groupId)
+    {
+        var group = await _groupRepository.GetByIdAsync(groupId);
+        if (group is null || group.Status != PaymentGroupStatus.Pending)
+        {
+            return Result.Success(transaction);
+        }
+
+        var verifyResult = await _gateway.VerifyOrderStatusAsync(group.GatewayOrderId);
+        if (string.Equals(verifyResult.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Success(transaction);
+        }
+
+        bool succeeded = string.Equals(verifyResult.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase);
+        string status = succeeded ? PaymentWebhookPayload.SuccessStatus : (verifyResult.FailureReason ?? "Payment was not completed.");
+        await ResolveGroupAsync(group, succeeded, status, verifyResult.GatewayPaymentRef);
+
+        // The caller reads the lead's transaction back; reload so it reflects what was just applied.
+        return Result.Success(await _paymentRepository.GetByIdAsync(transaction.Id) ?? transaction);
+    }
+
+    /// <summary>
+    /// <see cref="ResolveAttemptAsync"/> for a prepaid checkout: applies one gateway
+    /// outcome to every booking the group covers, in a single database transaction, so
+    /// a payment can never leave some visits Confirmed and others still awaiting the
+    /// same money. The race guard is the group's own conditional Pending flip - of two
+    /// concurrent deliveries only one gets to apply anything.
+    ///
+    /// <para>
+    /// Everything downstream stays per booking: each member gets its own commission
+    /// and escrow hold from <see cref="ApplySuccessfulPaymentAsync"/>, which is what
+    /// keeps refunds and provider payouts per visit. On success the plan's pending
+    /// cycle is also released, so the daily jobs treat the cycle as paid.
+    /// </para>
+    /// </summary>
+    private async Task ResolveGroupAsync(PaymentGroup group, bool succeeded, string status, string? gatewayPaymentRef)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        await using var dbTransaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            bool wonRace = await _groupRepository.TryMarkResolvedAsync(
+                group.Id, succeeded ? PaymentGroupStatus.Success : PaymentGroupStatus.Failed);
+
+            if (!wonRace)
+            {
+                await dbTransaction.CommitAsync();
+                _logger.LogInformation(
+                    "Ignored a payment resolution for gateway order {GatewayOrderId} (payment group was already resolved by a concurrent delivery).",
+                    group.GatewayOrderId);
+                return;
+            }
+
+            var members = await _groupRepository.ListMemberTransactionsAsync(group.Id);
+            foreach (var transaction in members)
+            {
+                var attempt = transaction.Attempts.Single(a => a.PaymentGroupId == group.Id);
+                var booking = await _bookingRepository.GetByIdAsync(transaction.BookingId)
+                    ?? throw new InvalidOperationException($"Booking {transaction.BookingId} referenced by payment transaction {transaction.Id} was not found.");
+
+                if (!await _paymentRepository.TryMarkAttemptResolvedAsync(
+                        attempt.Id, succeeded ? PaymentAttemptStatus.Success : PaymentAttemptStatus.Failed))
+                {
+                    continue;
+                }
+
+                if (succeeded)
+                {
+                    transaction.MarkAttemptSucceeded(attempt.Id, gatewayPaymentRef ?? string.Empty);
+                    await ApplySuccessfulPaymentAsync(transaction, booking, "Payment succeeded.");
+                }
+                else
+                {
+                    transaction.MarkAttemptFailed(attempt.Id, status);
+                    booking.TransitionTo(BookingStatus.PaymentFailed, "Payment failed.");
+                    await _paymentRepository.UpdateAsync(transaction);
+                    await _bookingRepository.UpdateAsync(booking);
+                }
+            }
+
+            if (succeeded)
+            {
+                group.MarkSucceeded(gatewayPaymentRef ?? string.Empty);
+                await _groupRepository.UpdateAsync(group);
+
+                var plan = await _planRepository.GetByPendingPrepaymentLeadAsync(group.LeadBookingId);
+                if (plan is not null)
+                {
+                    plan.ConfirmPrepayment();
+                    await _planRepository.UpdateAsync(plan);
+                }
+            }
+
+            await dbTransaction.CommitAsync();
+        }
+        catch
+        {
+            await dbTransaction.RollbackAsync();
+            throw;
+        }
+
+        stopwatch.Stop();
+        _metricsService.RecordPaymentOutcome(succeeded, stopwatch.Elapsed, succeeded ? null : status);
     }
 
     /// <summary>

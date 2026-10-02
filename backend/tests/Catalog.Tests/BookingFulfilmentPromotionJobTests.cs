@@ -412,6 +412,7 @@ public sealed class BookingFulfilmentPromotionJobTests : IDisposable
         public Task<BookingSearchResult> SearchAsync(BookingSearchFilter filter) => inner.SearchAsync(filter);
         public Task<IReadOnlyList<Booking>> ListByAssignedProviderAsync(Guid providerId) => inner.ListByAssignedProviderAsync(providerId);
         public Task<IReadOnlyList<Booking>> ListByRecurringPlanAsync(Guid recurringBookingPlanId) => inner.ListByRecurringPlanAsync(recurringBookingPlanId);
+        public Task<IReadOnlyList<PlanVisitSummary>> ListVisitSummariesByPlansAsync(IReadOnlyCollection<Guid> planIds, DateOnly fromDate) => inner.ListVisitSummariesByPlansAsync(planIds, fromDate);
         public Task<int> CountCompletedByCustomerAsync(Guid customerId, Guid excludingBookingId) => inner.CountCompletedByCustomerAsync(customerId, excludingBookingId);
         public Task<int> CountCompletedByAssignedProviderAsync(Guid providerId, Guid excludingBookingId) => inner.CountCompletedByAssignedProviderAsync(providerId, excludingBookingId);
         public Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc, DateTime recurringOlderThanUtc) => inner.ListStalePaymentPendingAsync(olderThanUtc, recurringOlderThanUtc);

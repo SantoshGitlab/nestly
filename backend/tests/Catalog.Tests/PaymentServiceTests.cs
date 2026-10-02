@@ -84,13 +84,28 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var simulator = (ISandboxPaymentSimulator)gateway;
-        var webhookService = new PaymentWebhookService(
-            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
-            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
+        var webhookService = new PaymentWebhookService(paymentRepository,
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            bookingRepository,
+            new ServiceRepository(context),
+            gateway,
+            new CommissionService(Options.Create(new CommissionOptions())),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context,
+            new NoOpMetricsService(),
+            NullLogger<PaymentWebhookService>.Instance);
 
-        return new PaymentService(
-            paymentRepository, bookingRepository, gateway, simulator, webhookService, BuildEligibleProviderSearchService(context));
+        return new PaymentService(paymentRepository,
+            bookingRepository,
+            gateway,
+            simulator,
+            webhookService,
+            BuildEligibleProviderSearchService(context),
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            new RecurringBookingOccurrenceRepository(context),
+            null!);
     }
 
     // The real SandboxRouteEstimateProvider, not a stub - see
@@ -377,13 +392,27 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
     {
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
-        var webhookService = new PaymentWebhookService(
-            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
-            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
-        var paymentService = new PaymentService(
-            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
-            BuildEligibleProviderSearchService(context));
+        var webhookService = new PaymentWebhookService(paymentRepository,
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            bookingRepository,
+            new ServiceRepository(context),
+            gateway,
+            new CommissionService(Options.Create(new CommissionOptions())),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context,
+            new NoOpMetricsService(),
+            NullLogger<PaymentWebhookService>.Instance);
+        var paymentService = new PaymentService(paymentRepository,
+            bookingRepository,
+            gateway,
+            (ISandboxPaymentSimulator)gateway,
+            webhookService,
+            BuildEligibleProviderSearchService(context),
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            new RecurringBookingOccurrenceRepository(context),
+            null!);
 
         return (paymentService, webhookService);
     }
@@ -508,9 +537,16 @@ public sealed class PaymentServiceTests : IClassFixture<TestDatabase>
             NullLogger<PayUPaymentGateway>.Instance);
         var sandboxSimulator = BuildGateway();
 
-        var service = new PaymentService(
-            paymentRepository: null!, bookingRepository: null!, realGateway, sandboxSimulator,
-            webhookService: null!, eligibleProviderSearchService: null!);
+        var service = new PaymentService(paymentRepository: null!,
+            bookingRepository: null!,
+            realGateway,
+            sandboxSimulator,
+            webhookService: null!,
+            eligibleProviderSearchService: null!,
+            groupRepository: null!,
+            planRepository: null!,
+            occurrenceRepository: null!,
+            releaseService: null!);
 
         var result = await service.SimulateAsync(Guid.NewGuid(), new SimulatePaymentRequest("any-gateway-order-id"));
 

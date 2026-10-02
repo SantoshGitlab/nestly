@@ -66,6 +66,15 @@ public interface IPaymentGateway
 /// (the webhook looks attempts up by it), so re-running
 /// <see cref="IPaymentGateway.CreateOrderAsync"/> from scratch would mint a
 /// second, orphaned order id. Null (the default) means "mint a fresh one."
+///
+/// <para>
+/// <paramref name="BookingId"/> identifies what is being paid for: a booking's
+/// id for a booking payment (the original and still ordinary use), a wallet
+/// top-up's id for a top-up. <paramref name="ReturnPath"/> and
+/// <paramref name="ProductInfo"/> let a payment that is not a booking say where
+/// the customer comes back to and what the gateway should call it; both default
+/// to the booking payment's own values.
+/// </para>
 /// </summary>
 public sealed record GatewayCreateOrderRequest(
     Guid BookingId,
@@ -75,7 +84,9 @@ public sealed record GatewayCreateOrderRequest(
     string? CustomerName = null,
     string? CustomerMobile = null,
     string? CustomerEmail = null,
-    string? ExistingGatewayOrderId = null);
+    string? ExistingGatewayOrderId = null,
+    string? ReturnPath = null,
+    string? ProductInfo = null);
 
 /// <summary>
 /// <paramref name="CheckoutRedirectUrl"/>/<paramref name="CheckoutFormFields"/>

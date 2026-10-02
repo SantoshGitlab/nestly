@@ -48,10 +48,17 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
 
     private static PaymentWebhookService BuildWebhookService(
         Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway, CommissionService? commissionService = null) =>
-        new(
-            new PaymentTransactionRepository(context), new BookingRepository(context), new ServiceRepository(context), gateway,
-            commissionService ?? BuildCommissionService(), BuildEscrowService(context),
-            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
+        new(new PaymentTransactionRepository(context),
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            new BookingRepository(context),
+            new ServiceRepository(context),
+            gateway,
+            commissionService ?? BuildCommissionService(),
+            BuildEscrowService(context),
+            context,
+            new NoOpMetricsService(),
+            NullLogger<PaymentWebhookService>.Instance);
 
     private static RefundService BuildRefundService(Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
         new(
@@ -183,9 +190,16 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var webhookService = BuildWebhookService(context, gateway, commissionService);
-        var paymentService = new PaymentService(
-            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
-            new AlwaysEligibleProviderSearchStub());
+        var paymentService = new PaymentService(paymentRepository,
+            bookingRepository,
+            gateway,
+            (ISandboxPaymentSimulator)gateway,
+            webhookService,
+            new AlwaysEligibleProviderSearchStub(),
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            new RecurringBookingOccurrenceRepository(context),
+            null!);
 
         var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
         string payload = PaymentWebhookPayload.Build(order.Value.GatewayOrderId, "sandbox_pay_ref", PaymentWebhookPayload.SuccessStatus);
@@ -233,9 +247,16 @@ public sealed class CommissionAndEscrowTests : IClassFixture<TestDatabase>
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var webhookService = BuildWebhookService(context, gateway, commissionService);
-        var paymentService = new PaymentService(
-            paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway, webhookService,
-            new AlwaysEligibleProviderSearchStub());
+        var paymentService = new PaymentService(paymentRepository,
+            bookingRepository,
+            gateway,
+            (ISandboxPaymentSimulator)gateway,
+            webhookService,
+            new AlwaysEligibleProviderSearchStub(),
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            new RecurringBookingOccurrenceRepository(context),
+            null!);
 
         var order = await paymentService.CreateOrderAsync(fixture.Customer.Id, new CreatePaymentOrderRequest(fixture.BookingId, null));
         string payload = PaymentWebhookPayload.Build(order.Value.GatewayOrderId, "ref", PaymentWebhookPayload.SuccessStatus);

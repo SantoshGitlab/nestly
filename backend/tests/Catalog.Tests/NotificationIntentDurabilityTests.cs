@@ -58,11 +58,16 @@ public sealed class NotificationIntentDurabilityTests : IClassFixture<TestDataba
 
     private static BookingNotificationTriggerHandler BuildBookingHandler(
         NestlyDbContext context, INotificationIntentCoordinator coordinator) =>
-        new(
-            new BookingRepository(context), new PaymentTransactionRepository(context),
-            new BookingCancellationRepository(context), new RefundTransactionRepository(context),
-            new ProviderRepository(context), BuildDispatchService(context), coordinator,
-            TestServices.FulfilmentNotifications(), NullLogger<BookingNotificationTriggerHandler>.Instance);
+        new(new BookingRepository(context),
+            new PaymentTransactionRepository(context),
+            new PaymentGroupRepository(context),
+            new BookingCancellationRepository(context),
+            new RefundTransactionRepository(context),
+            new ProviderRepository(context),
+            BuildDispatchService(context),
+            coordinator,
+            TestServices.FulfilmentNotifications(),
+            NullLogger<BookingNotificationTriggerHandler>.Instance);
 
     private static SupportTicketNotificationTriggerHandler BuildTicketHandler(
         NestlyDbContext context, INotificationIntentCoordinator coordinator) =>

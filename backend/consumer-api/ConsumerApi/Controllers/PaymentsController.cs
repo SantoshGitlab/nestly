@@ -19,6 +19,7 @@ public class PaymentsController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
     private readonly IPaymentWebhookService _webhookService;
+    private readonly IPaymentCallbackRouter _callbackRouter;
     private readonly IValidator<CreatePaymentOrderRequest> _createOrderValidator;
     private readonly IValidator<PaymentWebhookRequest> _webhookValidator;
     private readonly IValidator<SimulatePaymentRequest> _simulateValidator;
@@ -27,6 +28,7 @@ public class PaymentsController : ControllerBase
     public PaymentsController(
         IPaymentService paymentService,
         IPaymentWebhookService webhookService,
+        IPaymentCallbackRouter callbackRouter,
         IValidator<CreatePaymentOrderRequest> createOrderValidator,
         IValidator<PaymentWebhookRequest> webhookValidator,
         IValidator<SimulatePaymentRequest> simulateValidator,
@@ -34,6 +36,7 @@ public class PaymentsController : ControllerBase
     {
         _paymentService = paymentService;
         _webhookService = webhookService;
+        _callbackRouter = callbackRouter;
         _createOrderValidator = createOrderValidator;
         _webhookValidator = webhookValidator;
         _simulateValidator = simulateValidator;
@@ -123,7 +126,9 @@ public class PaymentsController : ControllerBase
             return ValidationProblem(ToModelState(validation));
         }
 
-        var result = await _webhookService.HandleCallbackAsync(request);
+        // Through the router, not the booking handler directly: the same webhook URL also receives wallet
+        // top-up callbacks, which the router offers to the top-up handler once no booking claims the order.
+        var result = await _callbackRouter.HandleAsync(request);
         return result.IsSuccess ? Ok() : result.ToProblemResult();
     }
 
@@ -174,7 +179,7 @@ public class PaymentsController : ControllerBase
             FirstName: payload.Firstname,
             Email: payload.Email);
 
-        var result = await _webhookService.HandleCallbackAsync(request);
+        var result = await _callbackRouter.HandleAsync(request);
         return result.IsSuccess ? Ok() : result.ToProblemResult();
     }
 

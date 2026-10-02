@@ -2,6 +2,13 @@ using Nestly.Domain;
 
 namespace Nestly.Application.Bookings;
 
+/// <summary>
+/// One visit of a recurring plan, reduced to what a plan card needs - read in bulk for several plans in one query
+/// instead of loading each plan's visits as full aggregates.
+/// </summary>
+public record PlanVisitSummary(
+    Guid PlanId, Guid BookingId, DateOnly SlotDate, BookingStatus Status, decimal TotalPayable, decimal WalletCreditApplied);
+
 public interface IBookingRepository
 {
     Task AddAsync(Booking booking);
@@ -71,6 +78,13 @@ public interface IBookingRepository
     /// from this plan" must not depend on the audit log still being intact.
     /// </summary>
     Task<IReadOnlyList<Booking>> ListByRecurringPlanAsync(Guid recurringBookingPlanId);
+
+    /// <summary>
+    /// The visits of several recurring plans dated on or after <paramref name="fromDate"/>, in one query (the plan list
+    /// would otherwise load each plan's whole history). Bounded by the date because a long-running daily plan
+    /// accumulates a booking a day.
+    /// </summary>
+    Task<IReadOnlyList<PlanVisitSummary>> ListVisitSummariesByPlansAsync(IReadOnlyCollection<Guid> planIds, DateOnly fromDate);
 
     /// <summary>Nestly Coins' reorder check (docs/NESTLY-COINS.md GUIDELINES #2, task 201): does this customer have any OTHER Completed booking besides <paramref name="excludingBookingId"/>? A dedicated count query, mirroring <c>IReferralRepository.CountRewardedByReferrerAsync</c>'s convention, rather than listing and filtering full booking rows client-side.</summary>
     Task<int> CountCompletedByCustomerAsync(Guid customerId, Guid excludingBookingId);

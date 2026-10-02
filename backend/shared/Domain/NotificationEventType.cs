@@ -138,5 +138,39 @@ public enum NotificationEventType
     /// the more obvious name overran it by 5 characters and only surfaced
     /// when the seed migration actually ran against Postgres.
     /// </summary>
-    RecurringAutoChargeScheduled
+    RecurringAutoChargeScheduled,
+
+    /// <summary>
+    /// A pay-as-you-go recurring plan was paused by the system because its last
+    /// <c>RecurringBookingOptions.PauseAfterUnpaidVisits</c> visits expired unpaid (see
+    /// <see cref="Nestly.Domain.RecurringBookingPlan.PauseForUnpaidVisits"/>). Tells the customer the plan has
+    /// stopped creating visits and how to start it again; without it a paused plan would look like a plan that
+    /// silently stopped working. Variables: ServiceName, UnpaidVisits.
+    /// </summary>
+    RecurringPlanPaused,
+
+    /// <summary>
+    /// A plan that pays each visit from the customer's wallet created a visit and the remaining balance no
+    /// longer covers the next few - an early heads-up so the customer can add money before a visit is left
+    /// waiting on payment. At most one a day per customer. Variables: ServiceName, WalletBalance, Visits.
+    /// </summary>
+    WalletLowBalance,
+
+    /// <summary>
+    /// To the customer: they changed their own recurring plan (paused, resumed, skipped visits, changed its time or
+    /// cancelled it). The transactional confirmation of an action the customer took - what happened, from when,
+    /// what it did to visits already booked, and any fee or refund - so they have a record and nothing is left to
+    /// be inferred from a screen that has since closed. One event for every kind of change: the wording is built
+    /// per change (<c>RecurringPlanChangeMessages</c>) and arrives in the variables. Variables: CustomerName,
+    /// ServiceName, ActionTitle, Summary (short - SMS and push), Details (full - e-mail).
+    /// </summary>
+    RecurringPlanChanged,
+
+    /// <summary>
+    /// To the customer: a plan that pays each visit from the wallet created a visit the wallet could not fully
+    /// cover. Says how much the wallet paid, how much is still to pay and by when, so "the wallet ran out" is stated
+    /// rather than left to be worked out from a generic payment reminder. Variables: CustomerName, ServiceName,
+    /// SlotDate, SlotWindow, WalletNote, Amount (still to pay), PaymentWindowHours.
+    /// </summary>
+    RecurringWalletShortfall
 }

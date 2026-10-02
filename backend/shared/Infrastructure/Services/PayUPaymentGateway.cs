@@ -62,7 +62,7 @@ public sealed class PayUPaymentGateway : IPaymentGateway
     {
         string txnid = request.ExistingGatewayOrderId ?? $"NST{Guid.NewGuid():N}";
         string amount = request.Amount.ToString("F2", CultureInfo.InvariantCulture);
-        string productinfo = $"Nestly booking {request.BookingId:N}";
+        string productinfo = request.ProductInfo ?? $"Nestly booking {request.BookingId:N}";
         string firstname = string.IsNullOrWhiteSpace(request.CustomerName) ? "Nestly Customer" : request.CustomerName;
         string phone = request.CustomerMobile ?? string.Empty;
         // PayU's hash requires a non-empty email; a customer who registered
@@ -99,7 +99,8 @@ public sealed class PayUPaymentGateway : IPaymentGateway
         // Standard (dashed) GUID formatting - matches every other booking id
         // in a customer-web URL (e.g. /booking/payment/{id}), which is what
         // this page's own [id] route param parses.
-        string returnUrl = $"{baseUrl}/booking/payment/{request.BookingId}/return";
+        // A wallet top-up has no booking, so it names its own return page; every booking payment keeps this one.
+        string returnUrl = $"{baseUrl}{request.ReturnPath ?? $"/booking/payment/{request.BookingId}/return"}";
         var formFields = new Dictionary<string, string>
         {
             ["key"] = _options.MerchantKey ?? string.Empty,

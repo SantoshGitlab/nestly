@@ -77,10 +77,12 @@ public sealed record AdminBookingCancellationResponse(
     decimal CancellationFeeAmount, decimal RefundAmount, RefundMethod? RefundMethod, Guid? RefundTransactionId,
     string? InternalNotes, DateTime CreatedAtUtc);
 
+/// <param name="FeeAmount">The late fee the reschedule carried under the policy of the day.</param>
+/// <param name="FeeCollectedAmount">What was actually taken from the customer's wallet for it (0 for an admin's reschedule, one that was not late, and any made before late fees were collected).</param>
 public sealed record AdminBookingRescheduleResponse(
     Guid Id, RescheduleActor Actor, string? Reason,
     DateOnly FromSlotDate, TimeSpan FromSlotStartTime, DateOnly ToSlotDate, TimeSpan ToSlotStartTime,
-    bool IsLate, decimal FeeAmount, DateTime CreatedAtUtc);
+    bool IsLate, decimal FeeAmount, DateTime CreatedAtUtc, decimal FeeCollectedAmount = 0m);
 
 /// <summary>
 /// One refund settlement on the booking. <paramref name="FundingSource"/>

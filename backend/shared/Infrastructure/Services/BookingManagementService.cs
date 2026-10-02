@@ -492,7 +492,7 @@ public class BookingManagementService : IBookingManagementService
                 cancellation.CancellationFeeAmount, cancellation.RefundAmount, cancellation.RefundMethod, cancellation.RefundTransactionId,
                 cancellation.InternalNotes, cancellation.CreatedAtUtc),
             reschedules.Select(r => new AdminBookingRescheduleResponse(
-                r.Id, r.Actor, r.Reason, r.FromSlotDate, r.FromSlotStartTime, r.ToSlotDate, r.ToSlotStartTime, r.IsLate, r.FeeAmount, r.CreatedAtUtc)).ToList(),
+                r.Id, r.Actor, r.Reason, r.FromSlotDate, r.FromSlotStartTime, r.ToSlotDate, r.ToSlotStartTime, r.IsLate, r.FeeAmount, r.CreatedAtUtc, r.FeeCollectedAmount)).ToList(),
             refunds.Select(r => new AdminBookingRefundResponse(
                 r.Id, r.FundingSource, r.Type, r.Method, r.Amount, r.Status, r.GatewayRefundRef, r.Reason, r.CreatedAtUtc, r.ProcessedAtUtc)).ToList(),
             booking.CreatedAtUtc,

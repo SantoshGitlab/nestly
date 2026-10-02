@@ -83,13 +83,13 @@ public sealed class RecurringOccurrenceAutoChargeJobTests : IClassFixture<TestDa
         context.SaveChanges();
     }
 
-    private static async Task<Guid> SeedAutoChargePlanAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, Fixture fixture)
+    private static async Task<Guid> SeedAutoChargePlanAsync(Nestly.Infrastructure.Persistence.NestlyDbContext context, Fixture fixture, bool openEnded = false)
     {
         var plan = new RecurringBookingPlan(
             Guid.NewGuid(), fixture.Customer.Id, fixture.Service.Id, fixture.City.Id, fixture.Locality.Id,
             fixture.Address.Id, fixture.Window.Id, quantity: 1, RecurringBookingRecurrenceFrequency.Weekly,
             DayOfWeek.Monday, recurrenceDayOfMonth: null,
-            startDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30)), endDate: null, occurrenceCount: 52,
+            startDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30)), endDate: null, occurrenceCount: openEnded ? null : 52,
             addOns: null, applyWalletCredit: false, autoChargeEnabled: true);
         await new RecurringBookingPlanRepository(context).AddAsync(plan);
         return plan.Id;
@@ -124,12 +124,27 @@ public sealed class RecurringOccurrenceAutoChargeJobTests : IClassFixture<TestDa
         var paymentRepository = new PaymentTransactionRepository(context);
         var bookingRepository = new BookingRepository(context);
         var simulator = (ISandboxPaymentSimulator)gateway;
-        var webhookService = new PaymentWebhookService(
-            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
-            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, new NoOpMetricsService(), NullLogger<PaymentWebhookService>.Instance);
-        var paymentService = new PaymentService(
-            paymentRepository, bookingRepository, gateway, simulator, webhookService, BuildEligibleProviderSearchService(context));
+        var webhookService = new PaymentWebhookService(paymentRepository,
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            bookingRepository,
+            new ServiceRepository(context),
+            gateway,
+            new CommissionService(Options.Create(new CommissionOptions())),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context,
+            new NoOpMetricsService(),
+            NullLogger<PaymentWebhookService>.Instance);
+        var paymentService = new PaymentService(paymentRepository,
+            bookingRepository,
+            gateway,
+            simulator,
+            webhookService,
+            BuildEligibleProviderSearchService(context),
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            new RecurringBookingOccurrenceRepository(context),
+            null!);
 
         var notificationDispatchService = new NotificationDispatchService(
             new NotificationTemplateRenderer(new FakeNotificationTemplateRepository(), new MemoryCache(new MemoryCacheOptions())),
@@ -320,6 +335,39 @@ public sealed class RecurringOccurrenceAutoChargeJobTests : IClassFixture<TestDa
         {
             var reloaded = await new BookingRepository(context).GetByIdAsync(occurrence.Id);
             reloaded!.AutoChargeAttemptCount.Should().Be(2, "the retry budget is exhausted - no further attempts");
+        }
+    }
+
+    [Theory]
+    [InlineData(true, RecurringBookingPlanStatus.Paused)]
+    [InlineData(false, RecurringBookingPlanStatus.Active)]
+    public async Task ProcessDueAttemptsAsync_pauses_only_an_open_ended_plan_once_retries_are_exhausted(bool openEnded, RecurringBookingPlanStatus expectedStatus)
+    {
+        Fixture fixture;
+        Guid planId;
+        var now = DateTime.UtcNow;
+
+        using (var context = _db.CreateContext())
+        {
+            fixture = Seed(context);
+            AddEligibleProvider(context, fixture, now.AddDays(3).DayOfWeek);
+            planId = await SeedAutoChargePlanAsync(context, fixture, openEnded);
+            // .13 paisa - SandboxPaymentGateway.DetermineOutcome deterministically declines every attempt.
+            await SeedOccurrenceAsync(context, fixture, planId, totalPayable: 659.13m, createdAtUtc: now.AddHours(-3));
+        }
+
+        // Retry limit 1: the very first declined attempt exhausts the budget.
+        var options = new RecurringBookingOptions { AutoChargeInitialDelayHours = 2, AutoChargeRetryBackoffHours = 4, AutoChargeRetryLimit = 1 };
+        using (var context = _db.CreateContext())
+        {
+            var job = BuildJob(context, BuildGateway(), options, new FakeTimeProvider(now));
+            await job.ProcessDueAttemptsAsync();
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var plan = await new RecurringBookingPlanRepository(context).GetByIdAsync(planId);
+            plan!.Status.Should().Be(expectedStatus);
         }
     }
 

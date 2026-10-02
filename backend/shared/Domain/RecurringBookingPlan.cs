@@ -91,10 +91,18 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
 
     public DateOnly StartDate { get; private set; }
 
-    /// <summary>At least one of <see cref="EndDate"/>/<see cref="OccurrenceCount"/> must be set - an unbounded plan would schedule forever with nothing to ever mark it <see cref="RecurringBookingPlanStatus.Completed"/>.</summary>
+    /// <summary>Optional. With <see cref="OccurrenceCount"/> also null the plan is open-ended ("until I cancel") - see <see cref="IsOpenEnded"/>.</summary>
     public DateOnly? EndDate { get; private set; }
 
     public int? OccurrenceCount { get; private set; }
+
+    /// <summary>
+    /// True when neither <see cref="EndDate"/> nor <see cref="OccurrenceCount"/> is set: the plan never
+    /// completes on its own and runs until the customer cancels it (or it is auto-paused, see
+    /// <see cref="PauseForPaymentFailure"/>). Safe for the scheduler because it only ever books
+    /// <c>RecurringBookingOptions.LeadTimeDays</c> ahead, never the whole future at once.
+    /// </summary>
+    public bool IsOpenEnded => EndDate is null && OccurrenceCount is null;
 
     /// <summary>Successfully booked occurrences only - a skipped occurrence never increments this. See the class doc comment's OPEN DECISION note.</summary>
     public int CompletedOccurrenceCount { get; private set; }
@@ -105,6 +113,48 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     public RecurringBookingPlanStatus Status { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
+
+    /// <summary>
+    /// True when the customer pays for a whole cycle of visits in one checkout
+    /// instead of each visit as it is generated. The plan's bookings are then
+    /// created together up front (see <c>IRecurringBookingSchedulerService.MaterializePrepaidCycleAsync</c>)
+    /// and settled by one <see cref="PaymentGroup"/>; the daily scheduler never
+    /// generates occurrences for such a plan itself. Fixed at creation.
+    /// </summary>
+    public bool PrepaidUpfront { get; private set; }
+
+    /// <summary>
+    /// For a prepaid plan: the booking whose payment page settles the cycle
+    /// that is still unpaid - the booking placed together with the plan for
+    /// the first cycle, the first visit of the cycle for a renewal. Null once
+    /// that cycle is paid (and always null for a pay-per-visit plan).
+    /// </summary>
+    public Guid? PendingPrepaymentLeadBookingId { get; private set; }
+
+    /// <summary>True while a prepaid cycle exists that the customer has not paid yet.</summary>
+    public bool IsAwaitingPrepayment => PendingPrepaymentLeadBookingId is not null;
+
+    /// <summary>How many prepaid cycles have been paid; 0 means the plan has never been started (its first cycle is still unpaid or was abandoned).</summary>
+    public int PrepaidCyclesPaid { get; private set; }
+
+    /// <summary>The last date covered by a <i>paid</i> prepaid cycle; drives renewal of an open-ended prepaid plan. Never advanced by a cycle that is still unpaid.</summary>
+    public DateOnly? PrepaidThroughDate { get; private set; }
+
+    /// <summary>The last date of the cycle that is awaiting payment; becomes <see cref="PrepaidThroughDate"/> when it is paid, and is discarded if it never is.</summary>
+    public DateOnly? PendingPrepaymentThroughDate { get; private set; }
+
+    /// <summary>Why the plan is Paused; null whenever it is not. See <see cref="RecurringBookingPauseReason"/>.</summary>
+    public RecurringBookingPauseReason? PauseReason { get; private set; }
+
+    /// <summary>
+    /// When the customer last asked to skip visits until a date (<see cref="SkipVisitsUntil"/>): no visit
+    /// is generated before it. Informational once it has passed - the plan is Active throughout and the
+    /// scheduler simply finds nothing due until <see cref="NextOccurrenceDate"/> comes within its lead time.
+    /// </summary>
+    public DateOnly? SkipUntilDate { get; private set; }
+
+    /// <summary>How many "skip visits until" requests this plan has used - capped by policy so it cannot be chained into a permanent gap.</summary>
+    public int SkipRangesUsed { get; private set; }
 
     public IReadOnlyList<RecurringBookingPlanAddOn> AddOns => _addOns;
 
@@ -127,7 +177,9 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         int? occurrenceCount,
         IReadOnlyList<(Guid AddOnId, int Quantity)>? addOns = null,
         bool applyWalletCredit = false,
-        bool autoChargeEnabled = false)
+        bool autoChargeEnabled = false,
+        bool prepaidUpfront = false,
+        Guid? prepaidLeadBookingId = null)
         : base(id)
     {
         if (quantity <= 0)
@@ -135,12 +187,17 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
             throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be positive.");
         }
 
-        ValidateRecurrenceFields(frequency, recurrenceDayOfWeek, recurrenceDayOfMonth);
-
-        if (endDate is null && occurrenceCount is null)
+        if (prepaidUpfront && prepaidLeadBookingId is null)
         {
-            throw new ArgumentException("A recurring plan must be bounded by an end date, an occurrence count, or both.");
+            throw new ArgumentException("A prepaid plan needs the booking that its first payment page is keyed by.", nameof(prepaidLeadBookingId));
         }
+
+        if (prepaidUpfront && (autoChargeEnabled || applyWalletCredit))
+        {
+            throw new ArgumentException("A prepaid plan is paid for at checkout; auto-charge and per-visit wallet credit do not apply to it.");
+        }
+
+        ValidateRecurrenceFields(frequency, recurrenceDayOfWeek, recurrenceDayOfMonth);
 
         if (endDate is { } end && end < startDate)
         {
@@ -161,6 +218,8 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         Quantity = quantity;
         ApplyWalletCredit = applyWalletCredit;
         AutoChargeEnabled = autoChargeEnabled;
+        PrepaidUpfront = prepaidUpfront;
+        PendingPrepaymentLeadBookingId = prepaidUpfront ? prepaidLeadBookingId : null;
         Frequency = frequency;
         RecurrenceDayOfWeek = recurrenceDayOfWeek;
         RecurrenceDayOfMonth = recurrenceDayOfMonth;
@@ -223,6 +282,136 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         }
 
         Status = RecurringBookingPlanStatus.Paused;
+        PauseReason = RecurringBookingPauseReason.Customer;
+    }
+
+    /// <summary>
+    /// The prepaid cycle's payment landed: the plan no longer waits on
+    /// <see cref="PendingPrepaymentLeadBookingId"/>, and the paid coverage now
+    /// reaches the cycle's last date.
+    /// </summary>
+    public void ConfirmPrepayment()
+    {
+        PendingPrepaymentLeadBookingId = null;
+        PrepaidCyclesPaid++;
+        if (PendingPrepaymentThroughDate is { } through)
+        {
+            PrepaidThroughDate = through;
+        }
+
+        PendingPrepaymentThroughDate = null;
+    }
+
+    /// <summary>
+    /// A renewal window produced nothing to pay for (no date in it could be
+    /// booked): move the paid coverage forward anyway, so the renewal job does
+    /// not pick this plan up again on every run.
+    /// </summary>
+    public void AdvancePrepaidCoverage(DateOnly coveredThroughDate)
+    {
+        PrepaidThroughDate = coveredThroughDate;
+    }
+
+    /// <summary>
+    /// Records that the prepaid cycle has been created and now waits for payment
+    /// - the first cycle at plan creation, a renewal cycle later.
+    /// </summary>
+    public void BeginPrepaymentCycle(Guid leadBookingId, DateOnly coveredThroughDate)
+    {
+        if (!PrepaidUpfront)
+        {
+            throw new InvalidOperationException("Only a prepaid plan has prepayment cycles.");
+        }
+
+        PendingPrepaymentLeadBookingId = leadBookingId;
+        PendingPrepaymentThroughDate = coveredThroughDate;
+    }
+
+    /// <summary>
+    /// The customer never paid the first cycle (its bookings expired or were
+    /// cancelled): the plan was never really started, so it ends here rather
+    /// than sitting Active with nothing behind it. A no-op unless a cycle is
+    /// still awaiting payment. For an unpaid <i>renewal</i> of an open-ended
+    /// plan use <see cref="PauseForPaymentFailure"/> instead - that plan has
+    /// already delivered visits and can be resumed.
+    /// </summary>
+    public bool AbandonUnpaidFirstCycle()
+    {
+        if (!PrepaidUpfront || PendingPrepaymentLeadBookingId is null || PrepaidCyclesPaid > 0)
+        {
+            return false;
+        }
+
+        PendingPrepaymentLeadBookingId = null;
+        PendingPrepaymentThroughDate = null;
+        if (Status is RecurringBookingPlanStatus.Active or RecurringBookingPlanStatus.Paused or RecurringBookingPlanStatus.Completed)
+        {
+            Status = RecurringBookingPlanStatus.Cancelled;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// A renewal cycle of an open-ended prepaid plan went unpaid (its bookings
+    /// expired or were cancelled). The plan has already delivered paid visits,
+    /// so it is paused rather than ended - the customer can resume it, which
+    /// starts a fresh renewal. A no-op unless a renewal is actually pending.
+    /// </summary>
+    public bool AbandonUnpaidRenewal()
+    {
+        if (!PrepaidUpfront || PendingPrepaymentLeadBookingId is null || PrepaidCyclesPaid == 0)
+        {
+            return false;
+        }
+
+        PendingPrepaymentLeadBookingId = null;
+        PendingPrepaymentThroughDate = null;
+        if (Status == RecurringBookingPlanStatus.Active)
+        {
+            Status = RecurringBookingPlanStatus.Paused;
+            PauseReason = RecurringBookingPauseReason.UnpaidVisits;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Safety net for open-ended plans: pauses the plan after its auto-charge ran out of retries, so an
+    /// "until I cancel" plan cannot keep generating unpaid occurrences indefinitely. Returns whether the plan
+    /// was paused - false (a no-op) for a bounded plan, which ends on its own, or one that is not Active.
+    /// Uses the same Paused state as <see cref="Pause"/>, so the customer resumes it the normal way.
+    /// </summary>
+    public bool PauseForPaymentFailure()
+    {
+        if (!IsOpenEnded || Status != RecurringBookingPlanStatus.Active)
+        {
+            return false;
+        }
+
+        Status = RecurringBookingPlanStatus.Paused;
+        PauseReason = RecurringBookingPauseReason.PaymentFailure;
+        return true;
+    }
+
+    /// <summary>
+    /// Pauses a pay-as-you-go plan whose recent visits keep expiring unpaid. Nothing here changes whether
+    /// an unpaid visit happens - it never does: a booking is only assigned a professional once it is paid,
+    /// and an unpaid one expires. What this stops is the plan carrying on creating a new booking a day,
+    /// holding a slot for the payment window and sending a reminder each time, for a customer who is not
+    /// paying. Returns whether the plan was paused; false (a no-op) for a prepaid plan - its visits are
+    /// paid for up front, so there is nothing to pay per visit - or one that is not Active.
+    /// </summary>
+    public bool PauseForUnpaidVisits()
+    {
+        if (PrepaidUpfront || Status != RecurringBookingPlanStatus.Active)
+        {
+            return false;
+        }
+
+        Status = RecurringBookingPlanStatus.Paused;
+        PauseReason = RecurringBookingPauseReason.UnpaidVisits;
+        return true;
     }
 
     /// <summary>
@@ -234,7 +423,14 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     /// the same next date rather than fast-forwarding, so the customer never
     /// loses a date they were still owed.
     /// </summary>
-    public void Resume()
+    /// <param name="today">
+    /// When given (the service always gives it), a cursor that has fallen into the past while the plan was
+    /// paused is moved forward to the first occurrence on or after today. Dates that have already gone by
+    /// cannot be booked, so leaving the cursor there would make the scheduler walk through them one by one,
+    /// recording a skipped visit and notifying the customer for each, before it ever reached a real date.
+    /// A date that is still ahead is never touched, so the customer keeps every date they were still owed.
+    /// </param>
+    public void Resume(DateOnly? today = null)
     {
         if (Status != RecurringBookingPlanStatus.Paused)
         {
@@ -242,6 +438,101 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
         }
 
         Status = RecurringBookingPlanStatus.Active;
+        PauseReason = null;
+
+        if (today is { } now && NextOccurrenceDate < now)
+        {
+            NextOccurrenceDate = NextOccurrenceOnOrAfter(now, Frequency, RecurrenceDayOfWeek, RecurrenceDayOfMonth);
+
+            if (EndDate is { } end && NextOccurrenceDate > end)
+            {
+                Status = RecurringBookingPlanStatus.Completed;
+            }
+        }
+    }
+
+    /// <summary>
+    /// "I'm away until <paramref name="resumeOn"/>": no visit is generated before that date. The plan stays
+    /// Active - the cursor simply moves to the first occurrence on or after <paramref name="resumeOn"/>, so
+    /// nothing has to run to bring the plan back; the scheduler finds nothing due until that date comes
+    /// within its lead time.
+    ///
+    /// <para>
+    /// Visits already generated before the cursor are untouched (the caller may cancel them separately).
+    /// Skipped dates are not consumed from <see cref="OccurrenceCount"/>, and a plan bounded by
+    /// <see cref="EndDate"/> has that date pushed out by the days skipped, so the customer still gets
+    /// everything they were promised.
+    /// </para>
+    /// </summary>
+    /// <param name="today">The business-local date today; <paramref name="resumeOn"/> must be after it.</param>
+    /// <returns>The number of days the cursor moved.</returns>
+    public int SkipVisitsUntil(DateOnly resumeOn, DateOnly today)
+    {
+        if (Status != RecurringBookingPlanStatus.Active)
+        {
+            throw new InvalidOperationException($"Visits can only be skipped on an active plan (current status: {Status}).");
+        }
+
+        if (PrepaidUpfront)
+        {
+            throw new InvalidOperationException(
+                "A prepaid plan's visits are already booked and paid for - cancel or reschedule those visits instead.");
+        }
+
+        if (resumeOn <= today)
+        {
+            throw new ArgumentOutOfRangeException(nameof(resumeOn), "Choose a date after today.");
+        }
+
+        var newCursor = NextOccurrenceOnOrAfter(resumeOn, Frequency, RecurrenceDayOfWeek, RecurrenceDayOfMonth);
+        if (newCursor <= NextOccurrenceDate)
+        {
+            throw new InvalidOperationException("No visit of this plan falls before that date, so there is nothing to skip.");
+        }
+
+        int movedDays = newCursor.DayNumber - NextOccurrenceDate.DayNumber;
+        if (EndDate is { } end)
+        {
+            EndDate = end.AddDays(movedDays);
+        }
+
+        NextOccurrenceDate = newCursor;
+        SkipUntilDate = resumeOn;
+        SkipRangesUsed++;
+        return movedDays;
+    }
+
+    /// <summary>
+    /// Moves every visit generated from now on to a different time-of-day window. It deliberately touches
+    /// nothing already booked: those few visits (at most the scheduler's lead time ahead) keep their slot
+    /// unless the customer reschedules them one by one, so a change here can never fail half-way through a
+    /// batch of bookings. The caller is responsible for having checked that the new window can serve
+    /// <see cref="NextOccurrenceDate"/>.
+    /// </summary>
+    public void ChangeSlotWindow(Guid newSlotWindowId)
+    {
+        if (Status is RecurringBookingPlanStatus.Cancelled or RecurringBookingPlanStatus.Completed)
+        {
+            throw new InvalidOperationException($"Cannot change the time of a {Status} plan.");
+        }
+
+        if (PrepaidUpfront)
+        {
+            throw new InvalidOperationException(
+                "A prepaid plan's visits are already booked; reschedule individual visits instead.");
+        }
+
+        if (newSlotWindowId == Guid.Empty)
+        {
+            throw new ArgumentException("A time window is required.", nameof(newSlotWindowId));
+        }
+
+        if (newSlotWindowId == SlotWindowId)
+        {
+            throw new InvalidOperationException("The plan already uses that time window.");
+        }
+
+        SlotWindowId = newSlotWindowId;
     }
 
     /// <summary>
@@ -261,6 +552,11 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
             throw new InvalidOperationException($"Cannot change auto-charge on a {Status} plan.");
         }
 
+        if (PrepaidUpfront && enabled)
+        {
+            throw new InvalidOperationException("A prepaid plan is paid for at checkout; auto-charge does not apply to it.");
+        }
+
         AutoChargeEnabled = enabled;
     }
 
@@ -277,9 +573,9 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     /// budget is pure bookkeeping this aggregate can safely own on its own.
     ///
     /// <para>
-    /// Same boundedness rule the constructor enforces (at least one of the
-    /// two, <see cref="EndDate"/> not before <see cref="StartDate"/>,
-    /// <see cref="OccurrenceCount"/> positive), plus one more specific to
+    /// Same rules the constructor enforces (<see cref="EndDate"/> not before
+    /// <see cref="StartDate"/>, <see cref="OccurrenceCount"/> positive; both
+    /// null is allowed and makes the plan open-ended), plus one more specific to
     /// editing: <see cref="OccurrenceCount"/> can never drop below
     /// <see cref="CompletedOccurrenceCount"/> - a customer who already
     /// received 5 visits cannot have their plan's promise cut to 3. Applies
@@ -297,9 +593,9 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
             throw new InvalidOperationException($"Cannot edit a {Status} plan's occurrence bounds.");
         }
 
-        if (endDate is null && occurrenceCount is null)
+        if (PrepaidUpfront && PrepaidCyclesPaid > 0)
         {
-            throw new ArgumentException("A recurring plan must be bounded by an end date, an occurrence count, or both.");
+            throw new InvalidOperationException("A paid prepaid plan's visits are fixed at purchase; cancel it and buy a new one to change them.");
         }
 
         if (endDate is { } end && end < StartDate)
@@ -336,7 +632,10 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     /// <summary>Active or Paused -> Cancelled. Terminal - a cancelled plan can never be resumed (create a new one instead), same one-way-door convention <c>BookingLifecycle</c> uses for its own terminal states.</summary>
     public void Cancel()
     {
-        if (Status is RecurringBookingPlanStatus.Cancelled or RecurringBookingPlanStatus.Completed)
+        // A prepaid plan reads Completed as soon as its last visit is *booked* (all of them are
+        // created at purchase), while most of those visits are still ahead - the customer must
+        // still be able to cancel what is left, so Completed is not final for it.
+        if (Status == RecurringBookingPlanStatus.Cancelled || (Status == RecurringBookingPlanStatus.Completed && !PrepaidUpfront))
         {
             throw new InvalidOperationException($"A {Status} plan cannot be cancelled.");
         }
@@ -407,7 +706,10 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
             CompletedOccurrenceCount--;
         }
 
-        if (Status != RecurringBookingPlanStatus.Completed)
+        // A prepaid plan never makes up a missed visit: it sold exactly the visits it created, and
+        // the daily job never generates for it, so "reopening" it would only leave it looking
+        // Active with nothing left to do.
+        if (Status != RecurringBookingPlanStatus.Completed || PrepaidUpfront)
         {
             return;
         }
@@ -468,6 +770,14 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
 
                 break;
 
+            case RecurringBookingRecurrenceFrequency.Daily:
+                if (dayOfWeek is not null || dayOfMonth is not null)
+                {
+                    throw new ArgumentException("Neither a day of week nor a day of month may be set for a daily plan.");
+                }
+
+                break;
+
             case RecurringBookingRecurrenceFrequency.Monthly:
                 if (dayOfMonth is null || dayOfMonth is < 1 or > 31)
                 {
@@ -489,6 +799,11 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     private static DateOnly NextOccurrenceOnOrAfter(
         DateOnly from, RecurringBookingRecurrenceFrequency frequency, DayOfWeek? dayOfWeek, int? dayOfMonth)
     {
+        if (frequency == RecurringBookingRecurrenceFrequency.Daily)
+        {
+            return from;
+        }
+
         if (frequency is RecurringBookingRecurrenceFrequency.Weekly or RecurringBookingRecurrenceFrequency.Biweekly)
         {
             var candidate = from;
@@ -515,6 +830,7 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     {
         return frequency switch
         {
+            RecurringBookingRecurrenceFrequency.Daily => current.AddDays(1),
             RecurringBookingRecurrenceFrequency.Weekly => current.AddDays(7),
             RecurringBookingRecurrenceFrequency.Biweekly => current.AddDays(14),
             RecurringBookingRecurrenceFrequency.Monthly => NextMonthOccurrence(current, dayOfMonth!.Value),

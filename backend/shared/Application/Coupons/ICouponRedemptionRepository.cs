@@ -24,4 +24,11 @@ public interface ICouponRedemptionRepository
     /// used a coupon.
     /// </summary>
     Task DeleteByBookingIdAsync(Guid bookingId);
+
+    /// <summary>
+    /// How many <i>different</i> coupons the customer is holding on bookings that are still live
+    /// (<see cref="BookingStatusSets.Committed"/>), not counting <paramref name="exceptCouponId"/> - the one being checked,
+    /// which adds nothing new if they already hold it.
+    /// </summary>
+    Task<int> CountDistinctOnLiveBookingsAsync(Guid customerId, Guid exceptCouponId);
 }
