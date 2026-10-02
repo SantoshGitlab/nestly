@@ -486,6 +486,87 @@ approach as the five above.
    gist` constraint on `booking`; that constraint is not reproducible on the
    SQLite test provider and the divergence is documented in the migration.
 
+8. **A recurring plan's regular professional is reserved for the plan's visits
+   (decision on the daily/prepaid plans work).** Decision 7's overlap rule only
+   sees jobs that are already *assigned*. A plan's visit is created
+   `RecurringBookings:LeadTimeDays` (3) ahead and assigned only inside the
+   fulfilment window (`AutoAssignmentOptions.PromotionLeadTimeHours`, 24), so
+   for any date further out the plan's professional looked free and an
+   unrelated order at the same time could be handed to them - after which the
+   plan's visit lost the person the customer was promised. Now the regular
+   professional (whoever served the plan's newest assigned, non-cancelled visit)
+   is treated as booked at the plan's visit times: for visits that exist but have
+   no professional yet, and for the dates an `Active` plan has yet to create
+   (its own projection - cadence, end date, remaining visit count). Only dates up
+   to `RecurringBookings:ProviderReservationHorizonDays` (30; 0 = off) ahead; a
+   one-off booking yields to every such plan, a plan's visit yields only to plans
+   created *before* its own (so two plans sharing a professional cannot exclude
+   each other); paused, cancelled and completed plans reserve nothing they have
+   not already booked. It is a **filter on the automatic paths** - auto-assignment,
+   the booking-creation and payment provider-availability gates, and a plan
+   visit's own regular-professional check - implemented as a decorator around the
+   eligibility gate (`PlanReservationAwareEligibilityService`) that runs first, so
+   a reserved provider never costs the billed route lookup. **Manual admin
+   assignment is deliberately not affected** (it applies decision 7's overlap
+   check only), so an admin can override a reservation. Expected consequence: with
+   few professionals, a slot a daily plan holds answers "no professional
+   available" for other customers sooner than it used to. Details in
+   DATABASE.md, "The regular professional is reserved for the plan's visits".
+
+9. **Rescheduling a booking that already has a professional.** `Booking.Reschedule`
+   moves the slot and lands the booking on `AwaitingFulfilment` again with its
+   professional still set, and saving that dispatches automatic assignment
+   in-process. Found by a live end-to-end check: left alone, the ranked walk gave
+   the job to whoever was nearest, so a customer promised "your professional stays
+   when the new time works for them" (task 290's design, and now the reschedule
+   screen's own wording) could find someone else on the job - and the professional
+   replaced was told nothing, because nothing in the system tells a superseded
+   professional anything. Now:
+
+   - **The professional on the job gets first call.** On the reschedule hop
+     (`BookingStatusChangedEvent.FromStatus == Rescheduled`) `ProviderAutoAssignmentHandler`
+     tries them before the plan's standing provider and the ranked walk, under the same
+     eligibility gate as any candidate (availability, blackout, capacity, double-booking,
+     travel, plan reservations). Eligible: they keep the job. Not eligible: the ranked walk
+     replaces them. Every other way back to `AwaitingFulfilment` (reject, expiry, unassign)
+     has already cleared the professional, so nothing changes there.
+   - **They are re-offered, not carried over.** Keeping goes through the normal assignment
+     path: a fresh assignment row (the old one becomes `Reassigned`, which raises no
+     customer-facing "professional changed" for the same person), so a professional who had
+     accepted must confirm the **new** time - deliberately.
+   - **The outcome is judged by who was on the job before the move**, not by who is on it
+     after (`RescheduleService.ReconcileProviderAssignmentAfterRescheduleAsync`):
+     `ProfessionalAfterReschedule` is `Kept`, `Released` (somebody else has it now, or nobody
+     can) or `NoneAssigned` (nobody was on it; whoever the assigner picks was offered a new
+     job, not told about a change). The customer's result screen reads this, so it never says
+     "your professional stays" when they do not.
+   - **Who hears what.** Customer: `BookingRescheduled` (SMS / email / push, with the short
+     booking reference) always; `ProviderChanged` only if the replaced professional had
+     accepted. Professional kept: the assigner's `New job offer` for the new date and nothing
+     more (`JobRescheduled` is sent only when automatic assignment did not re-offer, e.g.
+     it is switched off). Professional replaced: `JobUnassigned` ("Job taken off your
+     schedule") - and the new one gets `New job offer`. In-app provider notification types
+     `JobRescheduled` / `JobUnassigned` were added for this; the bell and the notifications
+     page label them "Job moved" / "Job removed".
+
+   Known limits, deliberately left: an **admin's** reschedule into a time another plan holds the
+   professional for keeps them only when automatic assignment is off (the assigner's eligibility
+   gate has no notion of who rescheduled; admin can still assign by hand). The capacity counters
+   in the eligibility gate count the booking's own row on the new date, so a professional with a
+   one-job-a-day limit can look full to their own job. A job released with nobody eligible goes
+   back to the unassigned queue; no admin alert is raised for it.
+
+10. **A cancelled booking tells its professional.** `CancellationService` withdraws the live assignment when a booking
+    is cancelled, and used to stop there: the job simply vanished from the professional's list, so someone could
+    still be planning their day around it. Now, right after the withdrawal, the professional gets an in-app
+    `JobCancelled` notification ("Job cancelled" - "The booking on 8 Oct at 00:00-23:59 was cancelled by the customer
+    / by Glavyx. It has been taken off your schedule - nothing else to do.", link `/jobs`). It names who called it
+    off (the customer, or an admin as "Glavyx") but never the customer's reason, and is sent whatever happens to the
+    refund afterwards - the booking is cancelled either way. It fires for a live (Assigned/Accepted) assignment
+    only, so a booking nobody was on sends nothing. Best effort, like every provider notification. The provider-web
+    bell and notifications page label it "Job cancelled". Not covered: bookings cancelled by the system outside
+    `CancellationService` (an unpaid booking expiring has no professional to tell).
+
 ## NEXT STEPS
 
 1. ~~Resolve the open decisions above.~~ Done (task 144; automatic-assignment decisions done task 242).

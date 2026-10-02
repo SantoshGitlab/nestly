@@ -235,6 +235,13 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(RecurringBookingOptions.SectionName))
             .ValidateDataAnnotations();
 
+        // Letting customers add their own money to the wallet. Not a secret; defaults to OFF - see the
+        // options class for why it must stay off in production until the business groundwork is done.
+        services
+            .AddOptions<WalletTopUpOptions>()
+            .Bind(configuration.GetSection(WalletTopUpOptions.SectionName))
+            .ValidateDataAnnotations();
+
         // docs/AMC.md's scheduled expiry sweep: not a secret, has a safe
         // production-sensible default - same reasoning as
         // SubscriptionBillingOptions above.
@@ -571,7 +578,13 @@ public static class DependencyInjection
         // and one instance per scope is what caps a whole eligibility pass
         // rather than each candidate separately.
         services.AddScoped<IProviderTravelFeasibilityService, ProviderTravelFeasibilityService>();
-        services.AddScoped<IProviderAssignmentEligibilityService, ProviderAssignmentEligibilityService>();
+        // The gate every automatic path uses is the plan-reservation check wrapped around the existing eligibility
+        // rules (see PlanReservationAwareEligibilityService); the inner one stays registered as itself.
+        services.AddScoped<ProviderAssignmentEligibilityService>();
+        services.AddScoped<IProviderPlanReservationService, ProviderPlanReservationService>();
+        services.AddScoped<IProviderAssignmentEligibilityService>(sp => new PlanReservationAwareEligibilityService(
+            sp.GetRequiredService<ProviderAssignmentEligibilityService>(),
+            sp.GetRequiredService<IProviderPlanReservationService>()));
         // Provider-queue model: when a job overran, re-checks this provider's
         // other same-day queued jobs against the new, later "free from"
         // instant and returns any now-infeasible one for reassignment.
@@ -691,6 +704,8 @@ public static class DependencyInjection
         // sandbox otherwise - see PaymentGatewayRegistration.
         services.AddPaymentGateway(configuration);
         services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IPaymentGroupRepository, PaymentGroupRepository>();
+        services.AddScoped<IUnpaidBookingReleaseService, UnpaidBookingReleaseService>();
         services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         services.AddScoped<IPaymentService, PaymentService>();
 
@@ -726,6 +741,10 @@ public static class DependencyInjection
 
         services.AddScoped<IWalletLedgerRepository, WalletLedgerRepository>();
         services.AddScoped<IWalletService, WalletService>();
+        services.AddScoped<IWalletTopUpRepository, WalletTopUpRepository>();
+        services.AddScoped<IWalletTopUpService, WalletTopUpService>();
+        services.AddScoped<IWalletTopUpSweepJob, WalletTopUpSweepJob>();
+        services.AddScoped<IPaymentCallbackRouter, PaymentCallbackRouter>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();
         services.AddScoped<IRecurringOccurrenceAutoChargeJob, RecurringOccurrenceAutoChargeJob>();
@@ -782,6 +801,7 @@ public static class DependencyInjection
         services.AddScoped<IRecurringBookingPlanRepository, RecurringBookingPlanRepository>();
         services.AddScoped<IRecurringBookingOccurrenceRepository, RecurringBookingOccurrenceRepository>();
         services.AddScoped<IRecurringBookingPlanService, RecurringBookingPlanService>();
+        services.AddScoped<IRecurringPlanNotifier, RecurringPlanNotifier>();
         services.AddScoped<IRecurringBookingSchedulerService, RecurringBookingSchedulerService>();
         // Task 297: who a plan's standing provider is, derived from the plan's
         // own booking history (task 296's FK) rather than stored - read by
@@ -804,6 +824,14 @@ public static class DependencyInjection
             .ValidateDataAnnotations();
         services.AddScoped<IRescheduleRepository, BookingRescheduleRepository>();
         services.AddScoped<IRescheduleService, RescheduleService>();
+
+        // The cancellation/reschedule policy the engines enforce: what an admin saved in Settings, else the configuration
+        // bound above. Registered once for every host, since each of them builds these services.
+        services.AddScoped<IBookingPolicyProvider, BookingPolicyProvider>();
+
+        // The platform-wide rules an admin has saved for the groups with no configuration fallback of their own (booking, slot,
+        // tax, wallet, coupon). Null for an unsaved group, which every engine reads as "do what you always did".
+        services.AddScoped<IPlatformRules, PlatformRulesProvider>();
 
         // Tasks 115a-117c: admin booking management (SRS 12.11, 12.13.2-3) -
         // composes IBookingRepository plus the Cancellation/Reschedule/Refund

@@ -57,6 +57,10 @@ export enum NotificationEventType {
   AmcContractExhausted = 26,
   RecurringBookingPaymentDue = 27,
   RecurringAutoChargeScheduled = 28,
+  RecurringPlanPaused = 29,
+  WalletLowBalance = 30,
+  RecurringPlanChanged = 31,
+  RecurringWalletShortfall = 32,
 }
 
 /** Mirrors Nestly.Domain.NotificationChannel's declaration order exactly. */
@@ -96,6 +100,10 @@ export const NOTIFICATION_EVENT_TYPE_LABELS: Record<NotificationEventType, strin
   [NotificationEventType.AmcContractExhausted]: "AMC contract exhausted",
   [NotificationEventType.RecurringBookingPaymentDue]: "Recurring booking payment due",
   [NotificationEventType.RecurringAutoChargeScheduled]: "Recurring booking auto-charge scheduled",
+  [NotificationEventType.RecurringPlanPaused]: "Recurring plan paused (unpaid visits)",
+  [NotificationEventType.WalletLowBalance]: "Wallet balance low for recurring plan",
+  [NotificationEventType.RecurringPlanChanged]: "Recurring plan changed by the customer",
+  [NotificationEventType.RecurringWalletShortfall]: "Wallet couldn't cover a recurring visit",
 };
 
 export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {

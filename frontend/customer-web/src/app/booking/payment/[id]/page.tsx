@@ -23,31 +23,9 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { Alert, Button, Card, Skeleton, Spinner, cx, useToast } from "@/components/ui";
 import { API_V1, apiFetch, describeError, errorCode } from "@/lib/api";
 import { clearDraft } from "@/lib/booking-draft";
+import { submitToPayU } from "@/lib/payu-checkout";
 import { BookingStatus } from "@/lib/types";
 import type { BookingDetail, PaymentOrderResponse, PaymentTransactionResponse } from "@/lib/types";
-
-/**
- * Builds a hidden form and submits it - the only way to POST a full-page,
- * top-level navigation to PayU's Hosted Checkout (`fields` includes PayU's
- * signed hash; see PayUPaymentGateway.CreateOrderAsync on the backend for
- * where they come from). This never resolves - the browser navigates away
- * to PayU before any code after the call would run.
- */
-function submitToPayU(actionUrl: string, fields: Record<string, string>): void {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = actionUrl;
-  form.style.display = "none";
-  for (const [name, value] of Object.entries(fields)) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-  document.body.appendChild(form);
-  form.submit();
-}
 
 /**
  * Payment page (tasks 76a-c, PayU integration): initiates a gateway order
@@ -279,6 +257,12 @@ function BookingPaymentScreen() {
 
   const amount = orderQuery.data?.amount ?? booking.price.totalPayable;
 
+  // A prepaid plan settles every one of its visits with this one payment: the order's amount is
+  // then the whole total, not this booking's own price.
+  const visitCount = orderQuery.data?.visitCount ?? 1;
+  const isPlanPayment = visitCount > 1;
+  const skippedDates = orderQuery.data?.skippedDates ?? [];
+
   return (
     <main className="flex w-full flex-col animate-rise">
       <PageBanner
@@ -318,7 +302,35 @@ function BookingPaymentScreen() {
           </DetailList>
         </Card>
 
-        <Card title="Price breakdown">
+        {isPlanPayment || skippedDates.length > 0 ? (
+          <Card
+            title="Your plan"
+            description={
+              isPlanPayment
+                ? `One payment covers all ${visitCount} visits.`
+                : "None of the planned repeat visits could be booked."
+            }
+          >
+            <div className="flex flex-col gap-3 text-sm leading-relaxed text-fg-muted">
+              {isPlanPayment ? (
+                <p>
+                  This booking is the first of <span className="nums font-medium text-fg">{visitCount}</span>{" "}
+                  visits. Each one is confirmed separately once you pay, and you can cancel any visit
+                  that hasn&apos;t happened yet — it&apos;s refunded as per the cancellation policy.
+                </p>
+              ) : null}
+              {skippedDates.length > 0 ? (
+                <Alert tone="warning" title="Some dates couldn't be booked">
+                  No professional is available on{" "}
+                  {skippedDates.map((date) => formatCalendarDate(date)).join(", ")}. You are not
+                  charged for {skippedDates.length === 1 ? "that date" : "those dates"}.
+                </Alert>
+              ) : null}
+            </div>
+          </Card>
+        ) : null}
+
+        <Card title={isPlanPayment ? "Price breakdown (this first visit)" : "Price breakdown"}>
           <PriceBreakdownList
             breakdown={booking.price}
             discount={
@@ -409,7 +421,7 @@ function BookingPaymentScreen() {
             <div className="flex flex-col gap-4">
               <div className="rounded-xl border border-line bg-surface-2 px-4 py-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                  Amount payable
+                  {isPlanPayment ? `Total for ${visitCount} visits` : "Amount payable"}
                 </p>
                 <p className="nums mt-1 text-2xl font-semibold text-fg">
                   {inr(orderQuery.data.amount)}{" "}
@@ -440,7 +452,7 @@ function BookingPaymentScreen() {
           <StickyActionBar>
             <div className="flex items-baseline justify-between gap-3 md:hidden">
               <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">
-                Amount payable
+                {isPlanPayment ? `Total for ${visitCount} visits` : "Amount payable"}
               </span>
               <span className="nums text-lg font-semibold text-fg">{inr(amount)}</span>
             </div>

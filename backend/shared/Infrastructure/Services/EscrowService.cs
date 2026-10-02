@@ -115,6 +115,24 @@ public class EscrowService : IEscrowService
         await _repository.AddAsync(entry);
     }
 
+    public async Task RecordRescheduleFeeAsync(Guid bookingId, Guid rescheduleId, decimal feeAmount)
+    {
+        if (feeAmount <= 0)
+        {
+            return;
+        }
+
+        decimal currentBalance = (await _repository.GetLatestAsync())?.BalanceAfter ?? 0m;
+        await _repository.AddAsync(new PlatformEscrowLedger(
+            Guid.NewGuid(), bookingId, EscrowEntryType.Hold, feeAmount, currentBalance + feeAmount,
+            EscrowSourceType.RescheduleFeeCollected, rescheduleId,
+            "Late-reschedule fee taken from the customer's wallet."));
+        await _repository.AddAsync(new PlatformEscrowLedger(
+            Guid.NewGuid(), bookingId, EscrowEntryType.Release, feeAmount, currentBalance,
+            EscrowSourceType.RescheduleFeeCollected, rescheduleId,
+            "Late-reschedule fee recognised as platform revenue."));
+    }
+
     public async Task<decimal> GetHeldBalanceAsync(Guid bookingId)
     {
         var entries = await _repository.ListByBookingAsync(bookingId);

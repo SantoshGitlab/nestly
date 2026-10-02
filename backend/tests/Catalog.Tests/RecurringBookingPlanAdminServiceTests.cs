@@ -196,6 +196,7 @@ public sealed class RecurringBookingPlanAdminServiceTests : IClassFixture<TestDa
             new RecurringPlanFrequencyCountRow(RecurringBookingRecurrenceFrequency.Weekly, 1),
             new RecurringPlanFrequencyCountRow(RecurringBookingRecurrenceFrequency.Biweekly, 1),
             new RecurringPlanFrequencyCountRow(RecurringBookingRecurrenceFrequency.Monthly, 1),
+            new RecurringPlanFrequencyCountRow(RecurringBookingRecurrenceFrequency.Daily, 0),
         });
     }
 

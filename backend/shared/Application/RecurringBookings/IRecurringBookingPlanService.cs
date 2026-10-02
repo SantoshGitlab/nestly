@@ -35,6 +35,19 @@ public interface IRecurringBookingPlanService
     Task<Result<RecurringBookingPlanResponse>> SetAutoChargeAsync(Guid customerId, Guid planId, bool enabled);
 
     /// <summary>
+    /// "I'm away until a date": nothing is generated before it. The plan stays Active; see
+    /// <see cref="Domain.RecurringBookingPlan.SkipVisitsUntil"/>. Limited by policy to a few requests per plan and a
+    /// maximum look-ahead, so it cannot be chained into a permanent gap.
+    /// </summary>
+    Task<Result<RecurringBookingPlanResponse>> SkipVisitsAsync(Guid customerId, Guid planId, SkipVisitsRequest request);
+
+    /// <summary>
+    /// Changes the time-of-day window for every visit generated from now on, after checking that the new window can
+    /// serve the plan's next visit. Visits already booked are untouched - reschedule those individually.
+    /// </summary>
+    Task<Result<RecurringBookingPlanResponse>> ChangeSlotAsync(Guid customerId, Guid planId, ChangePlanSlotRequest request);
+
+    /// <summary>
     /// Occurrence-count integrity fix: the plan's own "edit" capability,
     /// scoped to only its occurrence budget (see
     /// <see cref="Domain.RecurringBookingPlan.SetOccurrenceBounds"/>'s doc

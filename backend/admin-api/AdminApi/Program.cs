@@ -200,6 +200,16 @@ if (app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Backgr
         job => job.SweepAsync(CancellationToken.None),
         "*/5 * * * *");
 
+    // Wallet top-ups: the safety net under the gateway webhook. A pending top-up old enough to have been
+    // abandoned (or whose webhook never arrived) is checked directly with the gateway and given its real
+    // outcome. Every ten minutes - a lost callback is worth resolving within the hour, not the day, but there
+    // is no need to ask the gateway more often than that. Registered whether or not top-ups are enabled: with
+    // the feature off there are simply no pending rows and a pass is one empty indexed query.
+    RecurringJob.AddOrUpdate<IWalletTopUpSweepJob>(
+        "wallet-top-up-reconciliation",
+        job => job.SweepAsync(CancellationToken.None),
+        "*/10 * * * *");
+
     // Expires system-assigned BookingProviderAssignment rows a provider never
     // answered within AutoAssignmentOptions.ResponseWindowMinutes, and hands
     // the booking back to ProviderAutoAssignmentHandler for the next

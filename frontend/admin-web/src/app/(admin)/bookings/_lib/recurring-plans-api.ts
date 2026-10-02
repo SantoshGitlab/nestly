@@ -30,6 +30,7 @@ export enum RecurrenceFrequency {
   Weekly = 0,
   Biweekly = 1,
   Monthly = 2,
+  Daily = 3,
 }
 
 export const PLAN_STATUS_LABELS: Record<RecurringPlanStatus, string> = {
@@ -43,6 +44,7 @@ export const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
   [RecurrenceFrequency.Weekly]: "Weekly",
   [RecurrenceFrequency.Biweekly]: "Every 2 weeks",
   [RecurrenceFrequency.Monthly]: "Monthly",
+  [RecurrenceFrequency.Daily]: "Every day",
 };
 
 const DAY_NAMES = [

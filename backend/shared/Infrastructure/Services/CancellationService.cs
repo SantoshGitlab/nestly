@@ -1,17 +1,18 @@
-using Microsoft.Extensions.Options;
 using Nestly.Application;
 using Nestly.Application.Abstractions.Time;
 using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.Coupons;
 using Nestly.Application.Escrow;
+using Nestly.Application.Notifications;
 using Nestly.Application.Payments;
 using Nestly.Application.Refunds;
+using Nestly.Application.Reschedules;
+using Nestly.Application.Settings;
 using Nestly.Application.Slots;
 using Nestly.Application.Subscriptions;
 using Nestly.BuildingBlocks.Results;
 using Nestly.Domain;
-using Nestly.Infrastructure.Options;
 
 namespace Nestly.Infrastructure.Services;
 
@@ -47,7 +48,21 @@ public class CancellationService : ICancellationService
     private readonly IEscrowService _escrowService;
     private readonly IBusinessClock _businessClock;
     private readonly TimeProvider _timeProvider;
-    private readonly CancellationPolicyOptions _policy;
+    private readonly IBookingPolicyProvider _policies;
+    private readonly IProviderNotificationPublisher _providerNotifications;
+    private readonly IRescheduleRepository _rescheduleRepository;
+
+    /// <summary>
+    /// What a cancellation of one booking comes to right now: the policy it was worked out under, the fee as the policy
+    /// sets it (<paramref name="FeeBeforeCredit"/>), how much of that the customer already paid as a late-reschedule fee
+    /// (<paramref name="RescheduleFeeCredited"/>), and the outcome the customer actually faces - the fee still retained from
+    /// the refund and the refund itself.
+    /// </summary>
+    private sealed record Computation(
+        CancellationSettings Policy,
+        CancellationFeeCalculator.Outcome Outcome,
+        decimal FeeBeforeCredit,
+        decimal RescheduleFeeCredited);
 
     public CancellationService(
         IBookingRepository bookingRepository,
@@ -62,7 +77,9 @@ public class CancellationService : ICancellationService
         IEscrowService escrowService,
         IBusinessClock businessClock,
         TimeProvider timeProvider,
-        IOptions<CancellationPolicyOptions> policy)
+        IBookingPolicyProvider policies,
+        IProviderNotificationPublisher providerNotifications,
+        IRescheduleRepository rescheduleRepository)
     {
         _bookingRepository = bookingRepository;
         _paymentRepository = paymentRepository;
@@ -76,7 +93,9 @@ public class CancellationService : ICancellationService
         _escrowService = escrowService;
         _businessClock = businessClock;
         _timeProvider = timeProvider;
-        _policy = policy.Value;
+        _policies = policies;
+        _providerNotifications = providerNotifications;
+        _rescheduleRepository = rescheduleRepository;
     }
 
     public async Task<Result<CancellationPolicyResponse>> GetPolicyAsync(Guid customerId, Guid bookingId)
@@ -90,6 +109,7 @@ public class CancellationService : ICancellationService
         bool eligible = BookingLifecycle.IsValidTransition(booking.Status, BookingStatus.CancelledByCustomer);
         if (!eligible)
         {
+            var policy = await _policies.GetCancellationAsync();
             return Result.Success(new CancellationPolicyResponse(
                 IsEligible: false,
                 IneligibilityReason: $"A booking in status '{booking.Status}' can no longer be cancelled by the customer.",
@@ -97,11 +117,13 @@ public class CancellationService : ICancellationService
                 CancellationFeeAmount: 0m,
                 RefundAmount: 0m,
                 RefundMethod: RefundMethod.Gateway,
-                _policy.FreeCancellationWindowHours,
-                _policy.LateCancellationFeePercentage));
+                policy.FreeCancellationWindowHours,
+                policy.LateCancellationFeePercentage));
         }
 
-        var outcome = await ComputeOutcomeAsync(booking);
+        var computation = await ComputeAsync(booking);
+        var outcome = computation.Outcome;
+        var explanation = Explain(booking, computation, _timeProvider.GetUtcNow().UtcDateTime);
 
         return Result.Success(new CancellationPolicyResponse(
             IsEligible: true,
@@ -110,8 +132,13 @@ public class CancellationService : ICancellationService
             outcome.FeeAmount,
             outcome.RefundAmount,
             RefundMethod.Gateway,
-            _policy.FreeCancellationWindowHours,
-            _policy.LateCancellationFeePercentage));
+            computation.Policy.FreeCancellationWindowHours,
+            computation.Policy.LateCancellationFeePercentage,
+            explanation.FreeEndsAt,
+            explanation.FeeBasis,
+            explanation.EarlierRescheduleCharge,
+            computation.FeeBeforeCredit,
+            computation.RescheduleFeeCredited));
     }
 
     public async Task<Result<CancellationOutcomeResponse>> CancelAsync(Guid customerId, Guid bookingId, CancelBookingRequest request)
@@ -171,7 +198,8 @@ public class CancellationService : ICancellationService
     private async Task<Result<CancellationOutcomeResponse>> ExecuteCancellationAsync(
         Booking booking, BookingStatus targetStatus, CancellationActor actor, string reason, string? internalNotes)
     {
-        var outcome = await ComputeOutcomeAsync(booking);
+        var computation = await ComputeAsync(booking);
+        var outcome = computation.Outcome;
 
         // NESTLY-002: reserve this booking's one-and-only BookingCancellation
         // row (unique index on BookingId, BookingCancellationConfiguration)
@@ -254,6 +282,11 @@ public class CancellationService : ICancellationService
         {
             activeAssignment.Withdraw();
             await _assignmentRepository.UpdateAsync(activeAssignment);
+
+            // The job vanishing from their list is not a notification: without this a professional could still be
+            // planning their day around a booking that no longer exists. Best effort (the publisher never throws) and
+            // sent whatever happens to the refund below - the booking is cancelled either way.
+            await TellProfessionalAsync(activeAssignment.ProviderId, booking, actor);
         }
 
         Guid? refundTransactionId = null;
@@ -305,6 +338,8 @@ public class CancellationService : ICancellationService
         // CancelledByCustomer/CancelledByAdmin to RefundPending/Refunded
         // inside IRefundService.
         var finalBooking = await _bookingRepository.GetByIdAsync(booking.Id) ?? booking;
+        // The same clock the fee itself was computed against (ComputeAsync), so the two can never disagree.
+        var explanation = Explain(booking, computation, _timeProvider.GetUtcNow().UtcDateTime);
 
         return Result.Success(new CancellationOutcomeResponse(
             booking.Id,
@@ -315,7 +350,26 @@ public class CancellationService : ICancellationService
             refundStatus,
             refundMethod,
             refundTransactionId,
-            cancellation.CreatedAtUtc));
+            cancellation.CreatedAtUtc,
+            explanation.FreeEndsAt,
+            explanation.FeeBasis,
+            explanation.EarlierRescheduleCharge,
+            computation.FeeBeforeCredit,
+            computation.RescheduleFeeCredited));
+    }
+
+    /// <summary>Best effort, after the cancellation is saved: the professional on the booking is told it is off, and who called it off.</summary>
+    private Task TellProfessionalAsync(Guid providerId, Booking booking, CancellationActor actor)
+    {
+        string slot = $"{booking.SlotDate:d MMM} at {booking.SlotStartTimeSnapshot:hh\\:mm}-{booking.SlotEndTimeSnapshot:hh\\:mm}";
+        string by = actor == CancellationActor.Customer ? "the customer" : "Glavyx";
+
+        return _providerNotifications.NotifyAsync(
+            providerId,
+            ProviderNotificationType.JobCancelled,
+            "Job cancelled",
+            $"The booking on {slot} was cancelled by {by}. It has been taken off your schedule - nothing else to do.",
+            deepLinkPath: "/jobs");
     }
 
     /// <summary>
@@ -336,6 +390,23 @@ public class CancellationService : ICancellationService
             ? await _refundTransactionRepository.GetByIdAsync(refundId)
             : null;
 
+        // Worked out afresh for the moment the winner cancelled: what was retained and what was refunded add back up to
+        // what the booking was still worth, and that is all the fee has to be rebuilt from.
+        var policy = await _policies.GetCancellationAsync();
+        decimal payable = winner.CancellationFeeAmount + winner.RefundAmount;
+        var gross = GrossOutcome(
+            payable, _businessClock.ToUtc(winnerBooking.SlotDate, winnerBooking.SlotStartTimeSnapshot) - winner.CreatedAtUtc,
+            policy, winnerBooking.LockedCancellationFeeSnapshot);
+        decimal credited = Math.Min(await _rescheduleRepository.SumCollectedFeesAsync(winnerBooking.Id), gross.FeeAmount);
+        var explanation = Explain(
+            winnerBooking,
+            new Computation(
+                policy,
+                new CancellationFeeCalculator.Outcome(winner.WithinFreeCancellationWindow, winner.CancellationFeeAmount, winner.RefundAmount),
+                gross.FeeAmount,
+                credited),
+            winner.CreatedAtUtc);
+
         return Result.Success(new CancellationOutcomeResponse(
             booking.Id,
             winnerBooking.Status,
@@ -345,11 +416,67 @@ public class CancellationService : ICancellationService
             winnerRefund?.Status,
             winner.RefundMethod,
             winner.RefundTransactionId,
-            winner.CreatedAtUtc));
+            winner.CreatedAtUtc,
+            explanation.FreeEndsAt,
+            explanation.FeeBasis,
+            explanation.EarlierRescheduleCharge,
+            gross.FeeAmount,
+            credited));
     }
 
-    private async Task<CancellationFeeCalculator.Outcome> ComputeOutcomeAsync(Booking booking)
+    /// <summary>
+    /// What the customer needs to understand a cancellation's numbers: when free cancellation stopped (business-local
+    /// wall clock, so it reads the same as the slot's own time), what the fee percentage applied to, and whether a
+    /// charge carried over from an earlier late reschedule - not the clock - set the fee. The last one is the case
+    /// where "within the free window: No" would otherwise look wrong to someone who cancelled well ahead.
+    /// </summary>
+    private (DateTime FreeEndsAt, decimal FeeBasis, decimal EarlierRescheduleCharge) Explain(
+        Booking booking, Computation computation, DateTime atUtc)
     {
+        var slotStartLocal = booking.SlotDate.ToDateTime(TimeOnly.FromTimeSpan(booking.SlotStartTimeSnapshot));
+        var freeEndsAt = slotStartLocal.AddHours(-(double)computation.Policy.FreeCancellationWindowHours);
+
+        // The paid amount the percentage applies to: the refund is "payable minus fee", so the two add back up (and
+        // stay that way whether or not a reschedule fee was credited - the credit lowers the fee and raises the refund).
+        decimal basis = computation.Outcome.FeeAmount + computation.Outcome.RefundAmount;
+
+        // What timing alone would have charged. A fee above that was raised by the locked-in reschedule charge - judged on
+        // the fee before any credit, so that crediting a reschedule fee never hides the charge that set it.
+        TimeSpan timeUntilSlot = _businessClock.ToUtc(booking.SlotDate, booking.SlotStartTimeSnapshot) - atUtc;
+        decimal timingFee = CancellationFeeCalculator.Compute(
+            basis, timeUntilSlot, computation.Policy.FreeCancellationWindowHours, computation.Policy.LateCancellationFeePercentage).FeeAmount;
+        decimal earlierCharge = computation.FeeBeforeCredit > timingFee ? computation.FeeBeforeCredit : 0m;
+
+        return (freeEndsAt, basis, earlierCharge);
+    }
+
+    /// <summary>
+    /// The fee the policy sets for cancelling <paramref name="payable"/> this far from the slot, raised to whatever a prior
+    /// reschedule already locked in (see <see cref="Booking.LockedCancellationFeeSnapshot"/>). One place, so the fee charged
+    /// and the explanation of it can never be worked out two ways.
+    /// </summary>
+    private static CancellationFeeCalculator.Outcome GrossOutcome(
+        decimal payable, TimeSpan timeUntilSlot, CancellationSettings policy, decimal lockedFloor)
+    {
+        var outcome = CancellationFeeCalculator.Compute(
+            payable, timeUntilSlot, policy.FreeCancellationWindowHours, policy.LateCancellationFeePercentage);
+
+        // Floor at whatever a prior reschedule already locked in - the live computation above is only against the
+        // *current* slot, which a reschedule can move arbitrarily far out. Without this floor, rescheduling a booking
+        // that already owed a late-cancellation fee to a distant slot and then immediately cancelling would compute a
+        // full refund, erasing a fee that was already earned on the slot given up.
+        if (lockedFloor > outcome.FeeAmount)
+        {
+            decimal fee = Math.Min(lockedFloor, payable);
+            outcome = new CancellationFeeCalculator.Outcome(false, fee, payable - fee);
+        }
+
+        return outcome;
+    }
+
+    private async Task<Computation> ComputeAsync(Booking booking)
+    {
+        var policy = await _policies.GetCancellationAsync();
         decimal payableAmount = await ResolveRefundableAmountAsync(booking);
 
         // Business wall-clock lifted to a real instant before it meets UTC
@@ -361,23 +488,18 @@ public class CancellationService : ICancellationService
         DateTime now = _timeProvider.GetUtcNow().UtcDateTime;
         TimeSpan timeUntilSlot = slotStartUtc - now;
 
-        var outcome = CancellationFeeCalculator.Compute(
-            payableAmount, timeUntilSlot, _policy.FreeCancellationWindowHours, _policy.LateCancellationFeePercentage);
+        var gross = GrossOutcome(payableAmount, timeUntilSlot, policy, booking.LockedCancellationFeeSnapshot);
 
-        // Floor at whatever a prior reschedule already locked in (see
-        // Booking.LockedCancellationFeeSnapshot) - the live computation above
-        // is only against the *current* slot, which a reschedule can move
-        // arbitrarily far out. Without this floor, rescheduling a booking
-        // that already owed a late-cancellation fee to a distant slot and
-        // then immediately cancelling would compute a full refund, erasing a
-        // fee that was already earned on the slot given up.
-        if (booking.LockedCancellationFeeSnapshot > outcome.FeeAmount)
-        {
-            decimal fee = Math.Min(booking.LockedCancellationFeeSnapshot, payableAmount);
-            outcome = new CancellationFeeCalculator.Outcome(false, fee, payableAmount - fee);
-        }
+        // A late-reschedule fee the customer already paid out of their wallet is counted against this fee, not charged on
+        // top of it: they owe only what is left, and the refund grows by the same amount. Never more than the fee itself -
+        // what was paid beyond it is not handed back (a reschedule fee is not refundable), it simply has nothing left to
+        // offset. The retained fee is therefore only ever the remainder, which is also all that is released to platform
+        // revenue below; the credited part was recognised when it was paid.
+        decimal credited = Math.Min(await _rescheduleRepository.SumCollectedFeesAsync(booking.Id), gross.FeeAmount);
+        decimal netFee = gross.FeeAmount - credited;
+        var net = new CancellationFeeCalculator.Outcome(gross.WithinFreeWindow, netFee, payableAmount - netFee);
 
-        return outcome;
+        return new Computation(policy, net, gross.FeeAmount, credited);
     }
 
     /// <summary>

@@ -304,7 +304,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
             new CustomerSubscriptionRepository(context),
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions()));
+            TestServices.Clock(), TimeProvider.System, TestServices.Policies(), TestServices.ProviderNotificationPublisher(context), new BookingRescheduleRepository(context));
 
         var result = await service.GetPolicyAsync(customer.Id, bookingId);
 
@@ -324,7 +324,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
             new CouponService(new CouponRepository(context), new CouponRedemptionRepository(context), new BookingRepository(context), TimeProvider.System),
             new CustomerSubscriptionRepository(context),
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            TestServices.Clock(), TimeProvider.System, Options.Create(new CancellationPolicyOptions()));
+            TestServices.Clock(), TimeProvider.System, TestServices.Policies(), TestServices.ProviderNotificationPublisher(context), new BookingRescheduleRepository(context));
 
         var result = await service.GetPolicyAsync(customer.Id, bookingId);
 
@@ -343,7 +343,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                 new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
-            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()), Options.Create(new CancellationPolicyOptions()));
+            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, TestServices.Policies(), TestServices.ProviderNotificationPublisher(context), TestServices.PlanReservations(context), TestServices.Wallet(context), TestServices.Escrow(context), Microsoft.Extensions.Logging.Abstractions.NullLogger<RescheduleService>.Instance);
 
         var result = await service.GetEligibilityAsync(customer.Id, bookingId);
 
@@ -362,7 +362,7 @@ public sealed class PostBookingQaSuiteTests : IClassFixture<TestDatabase>
                 new ServiceabilityRepository(context),
                 new ServiceabilityValidationService(new ServiceabilityRepository(context), new InMemoryCacheService()),
                 new SlotWindowRepository(context), new SlotBlackoutRepository(context), new SlotBookingPolicyRepository(context), new SlotCapacityRepository(context), TestServices.Clock()),
-            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, Options.Create(new ReschedulePolicyOptions()), Options.Create(new CancellationPolicyOptions()));
+            new BookingRescheduleRepository(context), new BookingProviderAssignmentRepository(context), new ProviderScheduleConflictService(context, TestServices.Occupancy()), context, TestServices.Clock(), TimeProvider.System, TestServices.Policies(), TestServices.ProviderNotificationPublisher(context), TestServices.PlanReservations(context), TestServices.Wallet(context), TestServices.Escrow(context), Microsoft.Extensions.Logging.Abstractions.NullLogger<RescheduleService>.Instance);
 
         var result = await service.GetEligibilityAsync(customer.Id, bookingId);
 

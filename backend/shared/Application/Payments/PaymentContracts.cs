@@ -28,7 +28,13 @@ public record PaymentOrderResponse(
     int AttemptNumber,
     DateTime CreatedAtUtc,
     string? CheckoutRedirectUrl = null,
-    IReadOnlyDictionary<string, string>? CheckoutFormFields = null);
+    IReadOnlyDictionary<string, string>? CheckoutFormFields = null,
+    // A prepaid plan's checkout settles several bookings in one payment:
+    // Amount is then the whole total, VisitCount how many bookings it covers,
+    // and SkippedDates the dates of the purchase that could not be booked (not
+    // charged for). Both stay at their single-booking defaults otherwise.
+    int VisitCount = 1,
+    IReadOnlyList<DateOnly>? SkippedDates = null);
 
 public record PaymentAttemptResponse(
     Guid Id,
@@ -57,7 +63,11 @@ public record PaymentTransactionResponse(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     decimal? CommissionRatePercentage,
-    decimal? CommissionAmount);
+    decimal? CommissionAmount,
+    // Set when this booking was paid together with others in one prepaid checkout: what that single
+    // payment came to in total and how many bookings it covered. Null for an ordinary payment.
+    decimal? PrepaidCheckoutTotal = null,
+    int? PrepaidCheckoutVisitCount = null);
 
 /// <summary>
 /// The webhook callback shape both the sandbox and PayU are normalized into

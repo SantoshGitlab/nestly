@@ -248,6 +248,21 @@ public class BookingRepository : IBookingRepository
             .OrderByDescending(b => b.SlotDate)
             .ToListAsync();
 
+    public async Task<IReadOnlyList<PlanVisitSummary>> ListVisitSummariesByPlansAsync(IReadOnlyCollection<Guid> planIds, DateOnly fromDate)
+    {
+        if (planIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await _context.Bookings
+            .AsNoTracking()
+            .Where(b => b.RecurringBookingPlanId != null && planIds.Contains(b.RecurringBookingPlanId.Value) && b.SlotDate >= fromDate)
+            .Select(b => new PlanVisitSummary(
+                b.RecurringBookingPlanId!.Value, b.Id, b.SlotDate, b.Status, b.TotalPayableSnapshot, b.WalletCreditAppliedSnapshot ?? 0m))
+            .ToListAsync();
+    }
+
     public Task<int> CountCompletedByCustomerAsync(Guid customerId, Guid excludingBookingId) =>
         _context.Bookings.CountAsync(b =>
             b.CustomerId == customerId && b.Status == BookingStatus.Completed && b.Id != excludingBookingId);
@@ -260,7 +275,13 @@ public class BookingRepository : IBookingRepository
     public async Task<IReadOnlyList<Booking>> ListStalePaymentPendingAsync(DateTime olderThanUtc, DateTime recurringOlderThanUtc) =>
         await FullyLoaded()
             .Where(b => b.Status == BookingStatus.PaymentPending &&
-                (b.RecurringBookingPlanId == null ? b.CreatedAtUtc < olderThanUtc : b.CreatedAtUtc < recurringOlderThanUtc))
+                // A prepaid plan's first cycle is bought in a live checkout, so it
+                // expires on the ordinary checkout window like a one-off booking;
+                // only unattended occurrences (and later renewals) get the longer one.
+                (b.RecurringBookingPlanId == null
+                    || _context.RecurringBookingPlans.Any(p => p.Id == b.RecurringBookingPlanId && p.PrepaidUpfront && p.PrepaidCyclesPaid == 0)
+                    ? b.CreatedAtUtc < olderThanUtc
+                    : b.CreatedAtUtc < recurringOlderThanUtc))
             .ToListAsync();
 
     /// <summary>Task (recurring auto-charge): RecurringOccurrenceAutoChargeJob's candidate set - see the interface doc comment for why PaymentFailed is included alongside PaymentPending.</summary>

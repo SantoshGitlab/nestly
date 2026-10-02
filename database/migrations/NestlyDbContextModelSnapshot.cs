@@ -1194,6 +1194,13 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("fee_amount");
 
+                    b.Property<decimal>("FeeCollectedAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("fee_collected_amount");
+
                     b.Property<DateOnly>("FromSlotDate")
                         .HasColumnType("date")
                         .HasColumnName("from_slot_date");
@@ -3176,6 +3183,10 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("gateway_payment_ref");
 
+                    b.Property<Guid?>("PaymentGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_group_id");
+
                     b.Property<Guid>("PaymentTransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("payment_transaction_id");
@@ -3193,11 +3204,85 @@ namespace Nestly.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_payment_attempt_gateway_order_id");
 
+                    b.HasIndex("PaymentGroupId")
+                        .HasDatabaseName("ix_payment_attempt_payment_group_id");
+
                     b.HasIndex("PaymentTransactionId", "AttemptNumber")
                         .IsUnique()
                         .HasDatabaseName("ix_payment_attempt_payment_transaction_id_attempt_number");
 
                     b.ToTable("payment_attempt", (string)null);
+                });
+
+            modelBuilder.Entity("Nestly.Domain.PaymentGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("GatewayOrderId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_order_id");
+
+                    b.Property<string>("GatewayPaymentRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_payment_ref");
+
+                    b.Property<Guid>("LeadBookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lead_booking_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<int>("VisitCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("visit_count");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_group");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("ix_payment_group_customer_id");
+
+                    b.HasIndex("GatewayOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payment_group_gateway_order_id");
+
+                    b.HasIndex("LeadBookingId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_payment_group_lead_booking_id_created_at_utc");
+
+                    b.ToTable("payment_group", (string)null);
                 });
 
             modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
@@ -4731,6 +4816,35 @@ namespace Nestly.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("occurrence_count");
 
+                    b.Property<string>("PauseReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("pause_reason");
+
+                    b.Property<Guid?>("PendingPrepaymentLeadBookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pending_prepayment_lead_booking_id");
+
+                    b.Property<DateOnly?>("PendingPrepaymentThroughDate")
+                        .HasColumnType("date")
+                        .HasColumnName("pending_prepayment_through_date");
+
+                    b.Property<int>("PrepaidCyclesPaid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("prepaid_cycles_paid");
+
+                    b.Property<DateOnly?>("PrepaidThroughDate")
+                        .HasColumnType("date")
+                        .HasColumnName("prepaid_through_date");
+
+                    b.Property<bool>("PrepaidUpfront")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("prepaid_upfront");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
@@ -4747,6 +4861,16 @@ namespace Nestly.Infrastructure.Migrations
                     b.Property<Guid>("ServiceId")
                         .HasColumnType("uuid")
                         .HasColumnName("service_id");
+
+                    b.Property<int>("SkipRangesUsed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("skip_ranges_used");
+
+                    b.Property<DateOnly?>("SkipUntilDate")
+                        .HasColumnType("date")
+                        .HasColumnName("skip_until_date");
 
                     b.Property<Guid>("SlotWindowId")
                         .HasColumnType("uuid")
@@ -6364,6 +6488,78 @@ namespace Nestly.Infrastructure.Migrations
                     b.ToTable("wallet_ledger", (string)null);
                 });
 
+            modelBuilder.Entity("Nestly.Domain.WalletTopUp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_id");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<string>("GatewayOrderId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_order_id");
+
+                    b.Property<string>("GatewayPaymentRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("gateway_payment_ref");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("WalletLedgerEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wallet_ledger_entry_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wallet_top_up");
+
+                    b.HasIndex("GatewayOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_wallet_top_up_gateway_order_id");
+
+                    b.HasIndex("CustomerId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_wallet_top_up_customer_id_created_at_utc");
+
+                    b.HasIndex("Status", "CreatedAtUtc")
+                        .HasDatabaseName("ix_wallet_top_up_status_created_at_utc");
+
+                    b.ToTable("wallet_top_up", (string)null);
+                });
+
             modelBuilder.Entity("Nestly.Domain.Zone", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6791,12 +6987,35 @@ namespace Nestly.Infrastructure.Migrations
 
             modelBuilder.Entity("Nestly.Domain.PaymentAttempt", b =>
                 {
+                    b.HasOne("Nestly.Domain.PaymentGroup", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_payment_attempt_payment_groups_payment_group_id");
+
                     b.HasOne("Nestly.Domain.PaymentTransaction", null)
                         .WithMany("Attempts")
                         .HasForeignKey("PaymentTransactionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_payment_attempt_payment_transactions_payment_transaction_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.PaymentGroup", b =>
+                {
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_group_customer_customer_id");
+
+                    b.HasOne("Nestly.Domain.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("LeadBookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_group_booking_lead_booking_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.PaymentTransaction", b =>
@@ -7332,6 +7551,16 @@ namespace Nestly.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_wallet_ledger_customer_customer_id");
+                });
+
+            modelBuilder.Entity("Nestly.Domain.WalletTopUp", b =>
+                {
+                    b.HasOne("Nestly.Application.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_wallet_top_up_customer_customer_id");
                 });
 
             modelBuilder.Entity("Nestly.Domain.Zone", b =>

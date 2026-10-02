@@ -380,6 +380,127 @@ public sealed class ProviderAutoAssignmentHandlerTests : IClassFixture<TestDatab
         _ = eligibleProvider; // present only to prove a real candidate existed and was still correctly ignored
     }
 
+    private static DomainEventNotification<BookingStatusChangedEvent> RescheduledEvent(Guid bookingId) =>
+        new(new BookingStatusChangedEvent(bookingId, BookingStatus.Rescheduled, BookingStatus.AwaitingFulfilment));
+
+    /// <summary>
+    /// Puts the booking in the state a reschedule leaves it in: assigned to <paramref name="onTheJob"/>, then moved
+    /// (<c>Booking.Reschedule</c> walks Assigned -> Rescheduled -> AwaitingFulfilment and leaves the professional and
+    /// their live assignment row alone). Returns the id of that original assignment row.
+    /// </summary>
+    private async Task<Guid> RescheduleAssignedBookingAsync(Fixture f, Guid onTheJob)
+    {
+        using var context = _db.CreateContext();
+        var assignment = new BookingProviderAssignment(Guid.NewGuid(), f.BookingId, onTheJob, BookingAssignedByType.System, null, null);
+        context.Add(assignment);
+
+        var booking = await new BookingRepository(context).GetByIdAsync(f.BookingId);
+        booking!.TransitionTo(BookingStatus.Assigned, "Provider assigned by admin.");
+        booking.AssignProvider(onTheJob);
+        booking.Reschedule(f.SlotWindowId, SlotDate, "Morning", TimeSpan.FromHours(9), TimeSpan.FromHours(13), "Customer asked", 0m);
+        await new BookingRepository(context).UpdateAsync(booking);
+        return assignment.Id;
+    }
+
+    /// <summary>
+    /// A reschedule re-runs matching, and without a preference it would hand the job to the nearest eligible professional:
+    /// a customer who had been told who is coming would find somebody else, and the professional replaced would never be
+    /// told. The one already on the job gets first call - and keeps it when the new time works for them.
+    /// </summary>
+    [Fact]
+    public async Task Handle_keeps_the_professional_already_on_a_rescheduled_booking_even_when_another_is_nearer()
+    {
+        Fixture f;
+        Provider onTheJob, nearer;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            onTheJob = AddActiveEligibleProvider(context, f, 13.0827m, 80.2707m);
+            nearer = AddActiveEligibleProvider(context, f, 12.9352m, 77.6146m);
+            context.SaveChanges();
+        }
+
+        var originalAssignmentId = await RescheduleAssignedBookingAsync(f, onTheJob.Id);
+
+        using (var context = _db.CreateContext())
+        {
+            await BuildHandler(context).Handle(RescheduledEvent(f.BookingId), CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(f.BookingId);
+        booking!.Status.Should().Be(BookingStatus.Assigned);
+        booking.AssignedProviderId.Should().Be(onTheJob.Id, "the professional already on the job is still eligible, so the nearer one must not take it from them");
+
+        var history = await new BookingProviderAssignmentRepository(readContext).ListByBookingAsync(f.BookingId);
+        history.Should().OnlyContain(a => a.ProviderId == onTheJob.Id, "nobody else was ever offered the job");
+        var live = await new BookingProviderAssignmentRepository(readContext).GetActiveByBookingAsync(f.BookingId);
+        live!.Id.Should().NotBe(originalAssignmentId, "they are re-offered the job for the new time, which is how every assignment of a booking works");
+        _ = nearer;
+    }
+
+    [Fact]
+    public async Task Handle_replaces_the_professional_on_a_rescheduled_booking_when_the_new_time_does_not_suit_them()
+    {
+        Fixture f;
+        Provider onTheJob, other;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            onTheJob = AddActiveEligibleProvider(context, f, 12.9352m, 77.6146m);
+            other = AddActiveEligibleProvider(context, f, 13.0827m, 80.2707m);
+            // On leave on the new date: not eligible for it, however close they are.
+            context.Add(new ProviderBlackoutDate(Guid.NewGuid(), onTheJob.Id, SlotDate, SlotDate, "On leave"));
+            context.SaveChanges();
+        }
+
+        await RescheduleAssignedBookingAsync(f, onTheJob.Id);
+
+        using (var context = _db.CreateContext())
+        {
+            await BuildHandler(context).Handle(RescheduledEvent(f.BookingId), CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        var booking = await new BookingRepository(readContext).GetByIdAsync(f.BookingId);
+        booking!.Status.Should().Be(BookingStatus.Assigned);
+        booking.AssignedProviderId.Should().Be(other.Id, "the professional on the job cannot take the new time, so the ranked walk gives it to the next eligible one");
+
+        var history = await new BookingProviderAssignmentRepository(readContext).ListByBookingAsync(f.BookingId);
+        history.Single(a => a.ProviderId == onTheJob.Id).Status.Should().Be(BookingProviderAssignmentStatus.Reassigned);
+    }
+
+    /// <summary>A hop back to AwaitingFulfilment that is not a reschedule has no professional to prefer: a stale display id must not be mistaken for one.</summary>
+    [Fact]
+    public async Task Handle_prefers_nobody_when_the_booking_did_not_come_back_from_a_reschedule()
+    {
+        Fixture f;
+        Provider stale, nearest;
+        using (var context = _db.CreateContext())
+        {
+            f = Seed(context);
+            stale = AddActiveEligibleProvider(context, f, 13.0827m, 80.2707m);
+            nearest = AddActiveEligibleProvider(context, f, 12.9352m, 77.6146m);
+            context.SaveChanges();
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            var booking = await new BookingRepository(context).GetByIdAsync(f.BookingId);
+            booking!.AssignProvider(stale.Id);
+            await new BookingRepository(context).UpdateAsync(booking);
+        }
+
+        using (var context = _db.CreateContext())
+        {
+            await BuildHandler(context).Handle(AwaitingFulfilmentEvent(f.BookingId), CancellationToken.None);
+        }
+
+        using var readContext = _db.CreateContext();
+        var after = await new BookingRepository(readContext).GetByIdAsync(f.BookingId);
+        after!.AssignedProviderId.Should().Be(nearest.Id, "outside a reschedule the ranking alone decides");
+    }
+
     /// <summary>Task 248: the kill switch must produce zero behaviour change from before this whole phase existed - not a new error path, just untouched.</summary>
     [Fact]
     public async Task Handle_does_nothing_when_AutoAssignmentOptions_Enabled_is_false()

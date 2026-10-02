@@ -35,4 +35,13 @@ public enum ProviderNotificationType
 
     /// <summary>An admin rejected the provider's submitted bank account details.</summary>
     BankAccountRejected,
+
+    /// <summary>A job assigned to this provider was moved to a new time (by the customer or an admin) and it is still theirs.</summary>
+    JobRescheduled,
+
+    /// <summary>A job was taken off this provider - the customer moved it to a time that does not work with their schedule.</summary>
+    JobUnassigned,
+
+    /// <summary>The booking a professional was assigned to was cancelled (by the customer or an admin).</summary>
+    JobCancelled,
 }

@@ -63,6 +63,15 @@ namespace Nestly.Infrastructure.Services;
 /// <c>BookingProviderAssignment.MarkReassigned</c>, that substitution raises
 /// <c>BookingProviderChangedEvent</c> and the customer is told their
 /// professional changed (task 295).
+///
+/// A reschedule is the other time the job is offered back to someone already on it. <c>Booking.Reschedule</c> lands the
+/// booking on AwaitingFulfilment again while the professional it was assigned to is still set, and without a preference
+/// the ranked walk would hand the job to whoever is nearest - silently replacing a professional the customer was
+/// already expecting (and the one replaced is told nothing). So on that hop (<c>FromStatus == Rescheduled</c>) the
+/// professional already on the job is tried first, under the same eligibility gate as every other candidate: they keep
+/// the job when the new time works for them and are replaced by the ranked walk only when it does not. They are
+/// re-offered the job (a fresh assignment row, so they confirm the new time) rather than having their old row carried
+/// over, which is how every other assignment of a booking already works.
 /// </summary>
 public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainEventNotification<BookingStatusChangedEvent>>
 {
@@ -161,14 +170,37 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
             .Select(a => a.ProviderId)
             .ToList();
 
-        await TryAssignAsync(domainEvent.BookingId, excludeProviderIds, cancellationToken);
+        // Only the reschedule hop: every other way back to AwaitingFulfilment (a rejection, an expiry, an admin
+        // unassigning) has already cleared the professional, so there is nobody to prefer.
+        Guid? professionalOnTheJob = domainEvent.FromStatus == BookingStatus.Rescheduled ? currentBooking.AssignedProviderId : null;
+
+        await TryAssignAsync(domainEvent.BookingId, excludeProviderIds, cancellationToken, professionalOnTheJob);
     }
 
-    /// <summary>Assigns the first eligible ranked candidate not in <paramref name="excludeProviderIds"/>, after first offering the job back to a recurring plan's standing provider (task 297). Returns whether a provider was assigned, so callers can tell an eligible pick from "nothing left to try."</summary>
-    public async Task<bool> TryAssignAsync(Guid bookingId, IReadOnlyCollection<Guid>? excludeProviderIds, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Assigns the first eligible ranked candidate not in <paramref name="excludeProviderIds"/>, after first offering the
+    /// job back to <paramref name="currentProviderId"/> - the professional already on a booking that is only being moved
+    /// (a reschedule) - and then to a recurring plan's standing provider (task 297). Returns whether a provider was
+    /// assigned, so callers can tell an eligible pick from "nothing left to try."
+    /// </summary>
+    public async Task<bool> TryAssignAsync(
+        Guid bookingId, IReadOnlyCollection<Guid>? excludeProviderIds, CancellationToken cancellationToken = default, Guid? currentProviderId = null)
     {
+        if (currentProviderId is { } current)
+        {
+            // Not subject to excludeProviderIds: they hold the live assignment right now, so whatever they once did on
+            // this booking (an earlier rejection, say, before an admin put them back on it) has been overtaken.
+            if (await _eligibilityService.IsEligibleAsync(current, bookingId, cancellationToken)
+                && await TryAssignStandingProviderAsync(bookingId, current, "the professional already on the rescheduled booking"))
+            {
+                return true;
+            }
+
+            excludeProviderIds = [.. excludeProviderIds ?? [], current];
+        }
+
         var standingProviderId = await FindStandingProviderAsync(bookingId, excludeProviderIds, cancellationToken);
-        if (standingProviderId is not null && await TryAssignStandingProviderAsync(bookingId, standingProviderId.Value))
+        if (standingProviderId is not null && await TryAssignStandingProviderAsync(bookingId, standingProviderId.Value, "its recurring plan's standing provider"))
         {
             return true;
         }
@@ -244,20 +276,20 @@ public sealed class ProviderAutoAssignmentHandler : INotificationHandler<DomainE
             : null;
     }
 
-    private async Task<bool> TryAssignStandingProviderAsync(Guid bookingId, Guid standingProviderId)
+    private async Task<bool> TryAssignStandingProviderAsync(Guid bookingId, Guid standingProviderId, string who)
     {
         var result = await _assignmentService.AssignBySystemAsync(bookingId, standingProviderId);
         if (result.IsSuccess)
         {
             _logger.LogInformation(
-                "Auto-assigned booking {BookingId} back to its recurring plan's standing provider {ProviderId}.",
-                bookingId, standingProviderId);
+                "Auto-assigned booking {BookingId} back to {Who} {ProviderId}.",
+                bookingId, who, standingProviderId);
             return true;
         }
 
         _logger.LogWarning(
-            "Could not keep the standing provider {ProviderId} on recurring booking {BookingId} ({ErrorCode}); falling back to reassignment.",
-            standingProviderId, bookingId, result.Error.Code);
+            "Could not keep {Who} {ProviderId} on booking {BookingId} ({ErrorCode}); falling back to reassignment.",
+            who, standingProviderId, bookingId, result.Error.Code);
         return false;
     }
 }

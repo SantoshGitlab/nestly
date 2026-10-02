@@ -5,6 +5,7 @@ using Nestly.Application.Bookings;
 using Nestly.Application.Cancellations;
 using Nestly.Application.ProviderManagement;
 using Nestly.Application.Payments;
+using Nestly.Application.Settings;
 using Nestly.Application.Pricing;
 using Nestly.Application.Refunds;
 using Nestly.Application.Serviceability;
@@ -80,13 +81,21 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
     private static PaymentWebhookService BuildWebhookService(
         IPaymentTransactionRepository paymentRepository, IBookingRepository bookingRepository,
         Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway) =>
-        new(
-            paymentRepository, bookingRepository, new ServiceRepository(context), gateway,
-            new CommissionService(Options.Create(new CommissionOptions())), new EscrowService(new PlatformEscrowLedgerRepository(context)),
-            context, new NoOpMetricsService(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance);
+        new(paymentRepository,
+            new PaymentGroupRepository(context),
+            new RecurringBookingPlanRepository(context),
+            bookingRepository,
+            new ServiceRepository(context),
+            gateway,
+            new CommissionService(Options.Create(new CommissionOptions())),
+            new EscrowService(new PlatformEscrowLedgerRepository(context)),
+            context,
+            new NoOpMetricsService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentWebhookService>.Instance);
 
     private static CancellationService BuildCancellationService(
-        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway, TimeProvider timeProvider, CancellationPolicyOptions? policy = null) =>
+        Nestly.Infrastructure.Persistence.NestlyDbContext context, IPaymentGateway gateway, TimeProvider timeProvider, CancellationPolicyOptions? policy = null,
+        IBookingPolicyProvider? policies = null) =>
         new(
             new BookingRepository(context),
             new PaymentTransactionRepository(context),
@@ -100,7 +109,7 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
             new EscrowService(new PlatformEscrowLedgerRepository(context)),
             TestServices.Clock(timeProvider),
             timeProvider,
-            Options.Create(policy ?? new CancellationPolicyOptions()));
+            policies ?? TestServices.Policies(policy), TestServices.ProviderNotificationPublisher(context), new BookingRescheduleRepository(context));
 
     private sealed record Fixture(Customer Customer, Guid BookingId, decimal Total, DateTime SlotStartUtc);
 
@@ -180,10 +189,16 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         {
             var paymentRepository = new PaymentTransactionRepository(orderContext);
             var bookingRepository = new BookingRepository(orderContext);
-            var paymentService = new PaymentService(
-                paymentRepository, bookingRepository, gateway, (ISandboxPaymentSimulator)gateway,
-                BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway),
-                new AlwaysEligibleProviderSearchStub());
+            var paymentService = new PaymentService(paymentRepository,
+            bookingRepository,
+            gateway,
+            (ISandboxPaymentSimulator)gateway,
+            BuildWebhookService(paymentRepository, bookingRepository, orderContext, gateway),
+            new AlwaysEligibleProviderSearchStub(),
+            new PaymentGroupRepository(orderContext),
+            new RecurringBookingPlanRepository(orderContext),
+            new RecurringBookingOccurrenceRepository(orderContext),
+            null!);
             var order = await paymentService.CreateOrderAsync(customer.Id, new CreatePaymentOrderRequest(bookingId, null));
             gatewayOrderId = order.Value.GatewayOrderId;
         }
@@ -395,6 +410,111 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
         result.Value.WithinFreeCancellationWindow.Should().BeTrue();
         result.Value.CancellationFeeAmount.Should().Be(0m);
         result.Value.RefundAmount.Should().Be(fixture.Total);
+    }
+
+    private Task<DateTime> SlotStartLocalAsync(Guid bookingId)
+    {
+        using var context = _db.CreateContext();
+        var booking = context.Bookings.Single(b => b.Id == bookingId);
+        return Task.FromResult(booking.SlotDate.ToDateTime(TimeOnly.FromTimeSpan(booking.SlotStartTimeSnapshot)));
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_says_when_free_cancellation_ends_and_what_a_late_fee_would_apply_to()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m);
+        var policy = new CancellationPolicyOptions { FreeCancellationWindowHours = 4m, LateCancellationFeePercentage = 20m };
+
+        using var context = _db.CreateContext();
+        var result = await BuildCancellationService(context, gateway, new FakeTimeProvider(fixture.SlotStartUtc), policy)
+            .GetPolicyAsync(fixture.Customer.Id, fixture.BookingId);
+
+        var slotStart = await SlotStartLocalAsync(fixture.BookingId);
+        result.Value.FreeCancellationEndsAt.Should().Be(slotStart.AddHours(-4), "free cancellation stops the free-window hours before the slot starts");
+        result.Value.FeeBasisAmount.Should().Be(fixture.Total, "a late fee is a percentage of what was paid");
+        result.Value.EarlierRescheduleCharge.Should().Be(0m);
+    }
+
+    /// <summary>
+    /// The settings an admin saves are what the next cancellation enforces: configuration says free cancellation lasts 4 hours
+    /// and a late fee is 20%, the admin has made it 72 hours and 25%, and a booking 48 hours out is therefore late.
+    /// </summary>
+    [Fact]
+    public async Task A_policy_an_admin_saved_in_Settings_is_what_the_next_cancellation_charges()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m);
+
+        using var context = _db.CreateContext();
+        var adminValue = new SystemSetting(Guid.NewGuid(), SystemSettingGroups.Cancellation, "{}");
+        adminValue.UpdateValue("{\"freeCancellationWindowHours\":72,\"lateCancellationFeePercentage\":25,\"allowAdminOverride\":true}", Guid.NewGuid());
+        var provider = new BookingPolicyProvider(
+            new SingleRowSettings(adminValue), Options.Create(new CancellationPolicyOptions()), Options.Create(new ReschedulePolicyOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingPolicyProvider>.Instance);
+
+        var result = await BuildCancellationService(context, gateway, new FakeTimeProvider(fixture.SlotStartUtc), policies: provider)
+            .GetPolicyAsync(fixture.Customer.Id, fixture.BookingId);
+
+        result.Value.FreeCancellationWindowHours.Should().Be(72m, "the admin's value, not the configured 4");
+        result.Value.LateCancellationFeePercentage.Should().Be(25m);
+        result.Value.WithinFreeCancellationWindow.Should().BeFalse("48 hours out is inside the admin's 72-hour window");
+        result.Value.CancellationFeeAmount.Should().Be(fixture.Total * 0.25m);
+    }
+
+    private sealed class SingleRowSettings(SystemSetting row) : ISystemSettingRepository
+    {
+        public Task<SystemSetting?> GetByGroupKeyAsync(string groupKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult<SystemSetting?>(row.GroupKey == groupKey ? row : null);
+
+        public Task<IReadOnlyList<SystemSetting>> GetAllAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SystemSetting>>([row]);
+
+        public Task UpdateAsync(SystemSetting setting, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task CancelAsync_late_reports_the_cutoff_it_missed_and_the_amount_the_fee_was_charged_on()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 1, servicePrice: 1000m);
+        var policy = new CancellationPolicyOptions { FreeCancellationWindowHours = 4m, LateCancellationFeePercentage = 20m };
+
+        using var context = _db.CreateContext();
+        var result = await BuildCancellationService(context, gateway, new FakeTimeProvider(fixture.SlotStartUtc), policy)
+            .CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Too late"));
+
+        var slotStart = await SlotStartLocalAsync(fixture.BookingId);
+        result.Value.WithinFreeCancellationWindow.Should().BeFalse();
+        result.Value.FreeCancellationEndsAt.Should().Be(slotStart.AddHours(-4));
+        result.Value.FeeBasisAmount.Should().Be(1000m);
+        result.Value.CancellationFeeAmount.Should().Be(200m, "20% of the 1000 it was charged on");
+        result.Value.EarlierRescheduleCharge.Should().Be(0m, "the clock alone set this fee");
+    }
+
+    [Fact]
+    public async Task CancelAsync_far_ahead_but_carrying_a_late_reschedule_charge_says_the_fee_came_from_that_not_the_clock()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m);
+        var policy = new CancellationPolicyOptions { FreeCancellationWindowHours = 4m, LateCancellationFeePercentage = 20m };
+
+        // A late reschedule earlier locked in 150 as owed on the slot given up (Booking.LockedCancellationFeeSnapshot).
+        using (var lockContext = _db.CreateContext())
+        {
+            var booking = lockContext.Bookings.Single(b => b.Id == fixture.BookingId);
+            lockContext.Entry(booking).Property(b => b.LockedCancellationFeeSnapshot).CurrentValue = 150m;
+            lockContext.SaveChanges();
+        }
+
+        using var context = _db.CreateContext();
+        var result = await BuildCancellationService(context, gateway, new FakeTimeProvider(fixture.SlotStartUtc), policy)
+            .CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Changed my mind"));
+
+        result.Value.WithinFreeCancellationWindow.Should().BeFalse("the carried-over charge overrides the clock");
+        result.Value.CancellationFeeAmount.Should().Be(150m);
+        result.Value.EarlierRescheduleCharge.Should().Be(150m, "this is what lets the screen explain a fee on a booking cancelled 48 hours ahead");
+        result.Value.RefundAmount.Should().Be(fixture.Total - 150m);
     }
 
     [Fact]

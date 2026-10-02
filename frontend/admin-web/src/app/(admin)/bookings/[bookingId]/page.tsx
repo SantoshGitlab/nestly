@@ -822,7 +822,12 @@ export default function BookingDetailPage() {
                       <span className="text-xs text-fg-subtle">{RESCHEDULE_ACTOR_LABELS[reschedule.actor]}</span>
                     </div>
                     {reschedule.feeAmount > 0 ? (
-                      <p className="mt-1 text-xs text-fg-muted">Fee: {formatCurrency(reschedule.feeAmount)}</p>
+                      <p className="mt-1 text-xs text-fg-muted">
+                        Late fee: {formatCurrency(reschedule.feeAmount)} -{" "}
+                        {reschedule.feeCollectedAmount > 0
+                          ? `${formatCurrency(reschedule.feeCollectedAmount)} taken from the customer's wallet`
+                          : "not charged to the customer"}
+                      </p>
                     ) : null}
                   </li>
                 ))}

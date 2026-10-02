@@ -197,13 +197,14 @@ public sealed class RecurringBookingPlanTests
     }
 
     [Fact]
-    public void SetOccurrenceBounds_throws_when_neither_bound_is_supplied()
+    public void SetOccurrenceBounds_with_neither_bound_makes_the_plan_open_ended_and_keeps_it_active()
     {
         var plan = WeeklyPlan(new DateOnly(2026, 8, 4), DayOfWeek.Tuesday, occurrenceCount: 10);
 
-        var act = () => plan.SetOccurrenceBounds(endDate: null, occurrenceCount: null);
+        plan.SetOccurrenceBounds(endDate: null, occurrenceCount: null);
 
-        act.Should().Throw<ArgumentException>();
+        plan.IsOpenEnded.Should().BeTrue();
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active);
     }
 
     [Fact]
@@ -317,14 +318,15 @@ public sealed class RecurringBookingPlanTests
     }
 
     [Fact]
-    public void Ctor_throws_when_neither_end_date_nor_occurrence_count_is_set()
+    public void Ctor_without_end_date_or_occurrence_count_creates_an_open_ended_plan()
     {
-        var act = () => new RecurringBookingPlan(
+        var plan = new RecurringBookingPlan(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             quantity: 1, RecurringBookingRecurrenceFrequency.Weekly, DayOfWeek.Monday, recurrenceDayOfMonth: null,
             startDate: new DateOnly(2026, 8, 1), endDate: null, occurrenceCount: null);
 
-        act.Should().Throw<ArgumentException>();
+        plan.IsOpenEnded.Should().BeTrue();
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active);
     }
 
     // ---- Task 296: frequency date arithmetic ----------------------------
@@ -523,5 +525,201 @@ public sealed class RecurringBookingPlanTests
         preview.Should().HaveCount(2); // only 2 occurrences left in the budget
         preview.Should().BeInAscendingOrder();
         preview[0].Should().Be(plan.NextOccurrenceDate);
+    }
+
+    private static RecurringBookingPlan DailyPlan(DateOnly startDate, int? occurrenceCount = null, DateOnly? endDate = null) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            quantity: 1, RecurringBookingRecurrenceFrequency.Daily, recurrenceDayOfWeek: null, recurrenceDayOfMonth: null,
+            startDate, endDate, occurrenceCount);
+
+    [Fact]
+    public void Ctor_daily_plan_starts_on_the_start_date_and_advances_one_day_at_a_time()
+    {
+        var start = new DateOnly(2026, 8, 1);
+        var plan = DailyPlan(start, occurrenceCount: 3);
+
+        plan.NextOccurrenceDate.Should().Be(start);
+
+        plan.RecordOccurrenceBooked(start);
+        plan.NextOccurrenceDate.Should().Be(start.AddDays(1));
+    }
+
+    [Fact]
+    public void Ctor_daily_plan_rejects_a_day_of_week_or_day_of_month()
+    {
+        var withDayOfWeek = () => new RecurringBookingPlan(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            1, RecurringBookingRecurrenceFrequency.Daily, DayOfWeek.Monday, null, new DateOnly(2026, 8, 1), null, 5);
+        var withDayOfMonth = () => new RecurringBookingPlan(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            1, RecurringBookingRecurrenceFrequency.Daily, null, 15, new DateOnly(2026, 8, 1), null, 5);
+
+        withDayOfWeek.Should().Throw<ArgumentException>();
+        withDayOfMonth.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Daily_plan_completes_after_its_occurrence_count()
+    {
+        var plan = DailyPlan(new DateOnly(2026, 8, 1), occurrenceCount: 2);
+
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed);
+    }
+
+    [Fact]
+    public void Open_ended_plan_never_completes_on_its_own()
+    {
+        var plan = DailyPlan(new DateOnly(2026, 8, 1));
+
+        for (var i = 0; i < 400; i++)
+        {
+            plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        }
+
+        plan.IsOpenEnded.Should().BeTrue();
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active);
+        plan.PreviewUpcomingOccurrenceDates(5).Should().HaveCount(5);
+    }
+
+    [Fact]
+    public void PauseForPaymentFailure_pauses_an_open_ended_plan()
+    {
+        var plan = DailyPlan(new DateOnly(2026, 8, 1));
+
+        plan.PauseForPaymentFailure().Should().BeTrue();
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Paused);
+        plan.Resume();
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active);
+    }
+
+    [Fact]
+    public void PauseForPaymentFailure_leaves_a_bounded_plan_alone()
+    {
+        var plan = DailyPlan(new DateOnly(2026, 8, 1), occurrenceCount: 10);
+
+        plan.PauseForPaymentFailure().Should().BeFalse();
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Active);
+    }
+
+    [Fact]
+    public void PauseForPaymentFailure_is_a_no_op_on_a_cancelled_open_ended_plan()
+    {
+        var plan = DailyPlan(new DateOnly(2026, 8, 1));
+        plan.Cancel();
+
+        plan.PauseForPaymentFailure().Should().BeFalse();
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Cancelled);
+    }
+
+    // ---- Prepaid plans ------------------------------------------------------------------------
+
+    private static RecurringBookingPlan PrepaidDailyPlan(DateOnly startDate, int? occurrenceCount, Guid? leadBookingId = null) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            quantity: 1, RecurringBookingRecurrenceFrequency.Daily, recurrenceDayOfWeek: null, recurrenceDayOfMonth: null,
+            startDate, endDate: null, occurrenceCount,
+            prepaidUpfront: true, prepaidLeadBookingId: leadBookingId ?? Guid.NewGuid());
+
+    [Fact]
+    public void Ctor_prepaid_plan_needs_the_booking_its_payment_page_is_keyed_by()
+    {
+        var act = () => new RecurringBookingPlan(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            1, RecurringBookingRecurrenceFrequency.Daily, null, null, new DateOnly(2026, 8, 1), null, 3,
+            prepaidUpfront: true, prepaidLeadBookingId: null);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Ctor_prepaid_plan_rejects_auto_charge_and_per_visit_wallet_credit()
+    {
+        var lead = Guid.NewGuid();
+        var withAutoCharge = () => new RecurringBookingPlan(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            1, RecurringBookingRecurrenceFrequency.Daily, null, null, new DateOnly(2026, 8, 1), null, 3,
+            autoChargeEnabled: true, prepaidUpfront: true, prepaidLeadBookingId: lead);
+        var withWallet = () => new RecurringBookingPlan(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            1, RecurringBookingRecurrenceFrequency.Daily, null, null, new DateOnly(2026, 8, 1), null, 3,
+            applyWalletCredit: true, prepaidUpfront: true, prepaidLeadBookingId: lead);
+
+        withAutoCharge.Should().Throw<ArgumentException>();
+        withWallet.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void A_prepaid_plan_waits_on_its_lead_booking_until_the_cycle_is_paid()
+    {
+        var lead = Guid.NewGuid();
+        var plan = PrepaidDailyPlan(new DateOnly(2026, 8, 2), occurrenceCount: null, lead);
+        plan.BeginPrepaymentCycle(lead, new DateOnly(2026, 8, 30));
+
+        plan.IsAwaitingPrepayment.Should().BeTrue();
+        plan.PrepaidThroughDate.Should().BeNull("an unpaid cycle is not coverage");
+
+        plan.ConfirmPrepayment();
+
+        plan.IsAwaitingPrepayment.Should().BeFalse();
+        plan.PrepaidCyclesPaid.Should().Be(1);
+        plan.PrepaidThroughDate.Should().Be(new DateOnly(2026, 8, 30));
+        plan.PendingPrepaymentThroughDate.Should().BeNull();
+    }
+
+    [Fact]
+    public void An_unpaid_first_cycle_ends_the_plan()
+    {
+        var plan = PrepaidDailyPlan(new DateOnly(2026, 8, 2), occurrenceCount: 3);
+
+        plan.AbandonUnpaidFirstCycle().Should().BeTrue();
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Cancelled);
+        plan.IsAwaitingPrepayment.Should().BeFalse();
+    }
+
+    [Fact]
+    public void An_unpaid_renewal_pauses_a_plan_that_has_already_delivered_paid_visits_and_first_cycle_abandonment_leaves_it_alone()
+    {
+        var plan = PrepaidDailyPlan(new DateOnly(2026, 8, 2), occurrenceCount: null);
+        plan.BeginPrepaymentCycle(Guid.NewGuid(), new DateOnly(2026, 8, 30));
+        plan.ConfirmPrepayment();
+        plan.BeginPrepaymentCycle(Guid.NewGuid(), new DateOnly(2026, 9, 29));
+
+        plan.AbandonUnpaidFirstCycle().Should().BeFalse("the first cycle was paid; only the renewal is unpaid");
+        plan.AbandonUnpaidRenewal().Should().BeTrue();
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Paused);
+        plan.PrepaidThroughDate.Should().Be(new DateOnly(2026, 8, 30), "the unpaid renewal never counted as coverage");
+    }
+
+    [Fact]
+    public void A_prepaid_plan_that_has_generated_all_its_visits_can_still_be_cancelled()
+    {
+        var plan = PrepaidDailyPlan(new DateOnly(2026, 8, 2), occurrenceCount: 1);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed);
+
+        plan.Cancel();
+
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Cancelled);
+    }
+
+    [Fact]
+    public void A_prepaid_plans_visits_cannot_be_edited_once_paid_and_it_never_reopens_to_make_up_a_missed_visit()
+    {
+        var plan = PrepaidDailyPlan(new DateOnly(2026, 8, 2), occurrenceCount: 1);
+        plan.RecordOccurrenceBooked(plan.NextOccurrenceDate);
+        plan.ConfirmPrepayment();
+
+        var edit = () => plan.SetOccurrenceBounds(endDate: null, occurrenceCount: 5);
+        edit.Should().Throw<InvalidOperationException>();
+
+        plan.ReleaseOccurrence();
+        plan.Status.Should().Be(RecurringBookingPlanStatus.Completed, "a prepaid plan sold exactly the visits it created");
     }
 }

@@ -15,6 +15,12 @@ function labelFor(type: ProviderNotificationType): string {
   switch (type) {
     case ProviderNotificationType.JobOffered:
       return "New job";
+    case ProviderNotificationType.JobRescheduled:
+      return "Job moved";
+    case ProviderNotificationType.JobUnassigned:
+      return "Job removed";
+    case ProviderNotificationType.JobCancelled:
+      return "Job cancelled";
     case ProviderNotificationType.KycRejected:
       return "Document";
     case ProviderNotificationType.Suspended:
