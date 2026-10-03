@@ -184,6 +184,18 @@ function PausedNotice({
     );
   }
 
+  if (plan.pauseReason === RecurringBookingPauseReason.Admin) {
+    return (
+      <Alert tone="warning" title="Paused by our support team">
+        No new visits are booked while it&apos;s paused.
+        {bookedAhead > 0
+          ? ` The ${visitsLabel(bookedAhead)} already booked still ${bookedAhead === 1 ? "goes" : "go"} ahead and ${bookedAhead === 1 ? "is" : "are"} still charged unless you cancel ${bookedAhead === 1 ? "it" : "them"} from My bookings.`
+          : ""}{" "}
+        Only our support team can resume it, so please contact support when you&apos;re ready.
+      </Alert>
+    );
+  }
+
   if (plan.pauseReason === RecurringBookingPauseReason.PaymentFailure) {
     return (
       <Alert tone="warning" title="Paused - a payment didn't go through">
@@ -254,6 +266,9 @@ function PlanCard({ plan }: { plan: RecurringBookingPlanResponse }) {
   // plan's visits already exist (and are paid for), so those are rescheduled or cancelled individually.
   const isActive = plan.status === RecurringBookingPlanStatus.Active;
   const canAdjustVisits = isActive && !plan.prepaidUpfront;
+  // Support paused it: the server refuses a customer's Resume, so the card does not offer one.
+  const pausedBySupport =
+    plan.status === RecurringBookingPlanStatus.Paused && plan.pauseReason === RecurringBookingPauseReason.Admin;
   const isSkipping = isActive && plan.skipUntilDate !== null && plan.skipUntilDate > todayIsoDate();
 
   // Visits already booked: a pause and a time change leave them exactly as they are, so the card says how many.
@@ -416,13 +431,16 @@ function PlanCard({ plan }: { plan: RecurringBookingPlanResponse }) {
           </Alert>
         ) : null}
 
-        {plan.prepaidUpfront && plan.status === RecurringBookingPlanStatus.Paused && !plan.pendingPrepaymentBookingId ? (
+        {plan.prepaidUpfront
+          && plan.status === RecurringBookingPlanStatus.Paused
+          && !plan.pendingPrepaymentBookingId
+          && !pausedBySupport ? (
           <Alert tone="info" title="This plan is paused">
             Resume it and we&apos;ll set up your next visits, ready to pay for in one payment.
           </Alert>
         ) : null}
 
-        {!plan.prepaidUpfront && plan.status === RecurringBookingPlanStatus.Paused ? (
+        {plan.status === RecurringBookingPlanStatus.Paused && (!plan.prepaidUpfront || pausedBySupport) ? (
           <PausedNotice plan={plan} canAddMoney={canAddMoney} bookedAhead={bookedAhead.length} />
         ) : null}
 
@@ -442,7 +460,7 @@ function PlanCard({ plan }: { plan: RecurringBookingPlanResponse }) {
               Pause
             </Button>
           ) : null}
-          {plan.status === RecurringBookingPlanStatus.Paused ? (
+          {plan.status === RecurringBookingPlanStatus.Paused && !pausedBySupport ? (
             <Button
               type="button"
               variant="secondary"

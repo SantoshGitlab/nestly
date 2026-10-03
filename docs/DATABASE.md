@@ -587,6 +587,8 @@ A customer adding their own money to the wallet through the payment gateway
 | `failure_reason` | `varchar(500)` NULL | |
 | `wallet_ledger_entry_id` | `uuid` NULL | The credit this top-up produced; set exactly once |
 | `created_at_utc` / `completed_at_utc` | `timestamptz` | |
+| `review_reason` | `varchar(300)` NULL | Why a person must look at this top-up. Set when a gateway callback disagrees with the amount asked for (nothing is credited); cleared when the top-up resolves. Surfaces in the admin top-up list |
+| `review_flagged_at_utc` | `timestamptz` | When it was flagged. Both review columns were added by `AddWalletTopUpReviewFlag` (additive, nullable) |
 
 Indexes: `(customer_id, created_at_utc)`, unique `gateway_order_id`,
 `(status, created_at_utc)` (the reconciliation sweep's filter).
@@ -607,7 +609,19 @@ Indexes: `(customer_id, created_at_utc)`, unique `gateway_order_id`,
 * **Reconciliation.** Hangfire job `wallet-top-up-reconciliation` (admin-api,
   every 10 minutes, only where `BackgroundJobs:ServerEnabled`) asks the gateway
   about a `Pending` top-up once it is `ReconcileAfterMinutes` (15) old, and stops
-  after `ReconcileUpToDays` (7).
+  after `ReconcileUpToDays` (7). The admin's **Reconcile now** runs the same check
+  (`IWalletTopUpService.ReconcileNowAsync`) for one named top-up whatever its age,
+  and also for a `Failed` one, so a payment that lands after a write-off can still
+  be credited without waiting for a webhook. It runs in admin-api, which therefore
+  needs the same `PayU__*` settings as consumer-api (see DEVOPS.md) - on the
+  sandbox gateway every answer is "pending".
+* **Admin view.** `GET /admin/wallet-top-ups` lists top-ups newest first with
+  status / needs-attention / search filters. A top-up is **Stuck** when still
+  `Pending` after 30 minutes (`IAdminWalletTopUpService.StuckAfterMinutes`) and
+  **Needs review** when `review_reason` is set; the list also carries the pending,
+  stuck and needs-review counts and the total credited in the last 24 hours, to set
+  against the gateway's settlement report. Reconciling is audited (`AdminReconcile`
+  on entity `WalletTopUp`). Permissions: `payments.read` / `payments.write`.
 * **Switches.** Off by default and must stay off in production until the
   business and legal groundwork for holding customers' money is done. Starting a
   top-up needs **both** `WalletTopUp:Enabled` (deployment) **and** the admin

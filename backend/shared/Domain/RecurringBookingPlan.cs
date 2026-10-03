@@ -286,6 +286,22 @@ public class RecurringBookingPlan : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Active -> Paused by an admin. Same effect on the scheduler as a customer pause, but recorded as
+    /// <see cref="RecurringBookingPauseReason.Admin"/> so the customer is told the truth about who paused it and
+    /// cannot undo what support did by tapping Resume.
+    /// </summary>
+    public void PauseByAdmin()
+    {
+        if (Status != RecurringBookingPlanStatus.Active)
+        {
+            throw new InvalidOperationException($"Only an active plan can be paused (current status: {Status}).");
+        }
+
+        Status = RecurringBookingPlanStatus.Paused;
+        PauseReason = RecurringBookingPauseReason.Admin;
+    }
+
+    /// <summary>
     /// The prepaid cycle's payment landed: the plan no longer waits on
     /// <see cref="PendingPrepaymentLeadBookingId"/>, and the paid coverage now
     /// reaches the cycle's last date.

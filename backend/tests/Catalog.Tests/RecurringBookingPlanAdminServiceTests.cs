@@ -2,6 +2,7 @@ using System.Data.Common;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nestly.Application;
 using Nestly.Application.RecurringBookings;
 using Nestly.Domain;
@@ -36,7 +37,10 @@ public sealed class RecurringBookingPlanAdminServiceTests : IClassFixture<TestDa
     private static RecurringBookingPlanAdminService CreateService(NestlyDbContext context) => new(
         context,
         new RecurringBookingPlanRepository(context),
-        TestServices.AuditLogWriter(context));
+        TestServices.AuditLogWriter(context),
+        RecurringTestWiring.PlanNotifier(context),
+        TestServices.Clock(),
+        NullLogger<RecurringBookingPlanAdminService>.Instance);
 
     private static readonly DateOnly Today = new(2026, 8, 10);
 

@@ -275,6 +275,15 @@ public class WalletTopUpService : IWalletTopUpService
             _logger.LogError(
                 "Wallet top-up {TopUpId}: the gateway reports {Paid} paid but {Expected} was requested. Not credited; needs manual review.",
                 topUp.Id, paid, topUp.Amount);
+
+            // Surface it in the admin top-up list as well as the log, where a person will actually see it.
+            if (!topUp.NeedsReview)
+            {
+                topUp.FlagForReview(
+                    $"The gateway reported {Rupees(paid)} paid but {Rupees(topUp.Amount)} was requested. Nothing was credited.");
+                await _repository.UpdateAsync(topUp);
+            }
+
             return Result.Failure(Error.Business("WalletTopUp.AmountMismatch", "The amount paid does not match the top-up."));
         }
 
@@ -290,22 +299,50 @@ public class WalletTopUpService : IWalletTopUpService
             return false;
         }
 
+        var outcome = await VerifyWithGatewayAsync(topUp);
+        return outcome is WalletTopUpReconcileOutcome.Credited or WalletTopUpReconcileOutcome.MarkedFailed;
+    }
+
+    public async Task<Result<WalletTopUpReconcileOutcome>> ReconcileNowAsync(Guid topUpId, CancellationToken cancellationToken = default)
+    {
+        var topUp = await _repository.GetByIdAsync(topUpId);
+        if (topUp is null)
+        {
+            return Error.NotFound("WalletTopUp.NotFound", "That top-up does not exist.");
+        }
+
+        // A Failed top-up is asked about too: a payment that lands after the sweep wrote it off must still credit
+        // (see WalletTopUp.MarkSucceeded), and an admin chasing a customer's "money was deducted" report needs to
+        // be able to make that happen without waiting for a webhook.
+        if (topUp.Status == WalletTopUpStatus.Success)
+        {
+            return WalletTopUpReconcileOutcome.Unchanged;
+        }
+
         return await VerifyWithGatewayAsync(topUp);
     }
 
     /// <summary>Asks the gateway and applies a definite answer; "pending" (including a transport error) changes nothing.</summary>
-    private async Task<bool> VerifyWithGatewayAsync(WalletTopUp topUp)
+    private async Task<WalletTopUpReconcileOutcome> VerifyWithGatewayAsync(WalletTopUp topUp)
     {
         var verify = await _gateway.VerifyOrderStatusAsync(topUp.GatewayOrderId);
         if (string.Equals(verify.Status, "pending", StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            return WalletTopUpReconcileOutcome.StillPending;
         }
 
         bool succeeded = string.Equals(verify.Status, PaymentWebhookPayload.SuccessStatus, StringComparison.OrdinalIgnoreCase);
-        return await ResolveAsync(
+        bool applied = await ResolveAsync(
             topUp, succeeded, verify.GatewayPaymentRef,
             succeeded ? null : verify.FailureReason ?? "The payment was not completed.");
+
+        if (!applied)
+        {
+            // Nothing to apply: another route already resolved it, or it was already Failed and the gateway still says so.
+            return WalletTopUpReconcileOutcome.Unchanged;
+        }
+
+        return succeeded ? WalletTopUpReconcileOutcome.Credited : WalletTopUpReconcileOutcome.MarkedFailed;
     }
 
     /// <summary>

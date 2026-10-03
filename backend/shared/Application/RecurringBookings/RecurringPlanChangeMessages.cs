@@ -29,6 +29,9 @@ public static class RecurringPlanChangeMessages
             RecurringPlanChangeKind.VisitsSkipped => Skipped(plan, change),
             RecurringPlanChangeKind.TimeChanged => TimeChanged(plan, windowLabel, change),
             RecurringPlanChangeKind.Cancelled => Cancelled(plan, change),
+            RecurringPlanChangeKind.PausedBySupport => PausedBySupport(change),
+            RecurringPlanChangeKind.ResumedBySupport => ResumedBySupport(plan, windowLabel),
+            RecurringPlanChangeKind.CancelledBySupport => CancelledBySupport(plan, change),
             _ => throw new ArgumentOutOfRangeException(nameof(change), change.Kind, "Unknown plan change.")
         };
 
@@ -49,6 +52,55 @@ public static class RecurringPlanChangeMessages
             + "\n\nResume any time from Recurring bookings and the plan carries on from your next visit.";
 
         return new("Plan paused", summary, details);
+    }
+
+    private static RecurringPlanChangeMessage PausedBySupport(RecurringPlanChange change)
+    {
+        string alreadyBooked = change.BookedVisitsStillAhead > 0
+            ? $"{Visits(change.BookedVisitsStillAhead)} already booked{Next(change.NextBookedVisitDate)} {GoAheadAndCharged(change.BookedVisitsStillAhead)}"
+            : string.Empty;
+
+        string summary = change.BookedVisitsStillAhead > 0
+            ? $"Our support team paused this plan, so no new visits will be booked. {Capitalise(alreadyBooked)} Contact support to resume it."
+            : "Our support team paused this plan, so no new visits will be booked. Contact support to resume it.";
+
+        string details = "Our support team paused this plan. No new visits will be booked while it is paused."
+            + (change.BookedVisitsStillAhead > 0
+                ? $"\n\n{Capitalise(alreadyBooked)} To stop one, cancel it from My bookings - the usual cancellation policy applies, so a visit cancelled shortly before it starts can carry a fee."
+                : string.Empty)
+            + "\n\nYou cannot resume it yourself because support paused it - contact support and we will get it running again.";
+
+        return new("Plan paused by support", summary, details);
+    }
+
+    private static RecurringPlanChangeMessage ResumedBySupport(RecurringBookingPlan plan, string windowLabel)
+    {
+        string next = $"Next visit {Day(plan.NextOccurrenceDate)}{Window(windowLabel)}.";
+        string payment = PaymentSentence(plan);
+
+        string summary = $"Our support team resumed your plan. {next} {payment}";
+        string details = $"Our support team resumed your plan, so it is running again. {next} {payment}"
+            + (plan.PrepaidUpfront
+                ? string.Empty
+                : "\n\nA visit that isn't paid in time is released and no professional is sent for it.");
+
+        return new("Plan resumed by support", summary, details);
+    }
+
+    private static RecurringPlanChangeMessage CancelledBySupport(RecurringBookingPlan plan, RecurringPlanChange change)
+    {
+        string stillAhead = change.BookedVisitsStillAhead > 0
+            ? $"{Visits(change.BookedVisitsStillAhead)} already booked{Next(change.NextBookedVisitDate)} {GoAheadAndCharged(change.BookedVisitsStillAhead, " from My bookings")}"
+            : "There are no visits already booked.";
+
+        string prepaid = plan.PrepaidUpfront
+            ? " If you had paid for visits in advance, contact support about the ones that will not happen."
+            : string.Empty;
+
+        return new(
+            "Plan cancelled by support",
+            $"Our support team cancelled this plan, so no further visits will be booked. {stillAhead}{prepaid}",
+            $"Our support team cancelled this plan. No further visits will be booked.\n\n{stillAhead} The usual cancellation policy applies to a visit you cancel, so one close to its start can carry a fee.{prepaid}");
     }
 
     private static RecurringPlanChangeMessage Resumed(RecurringBookingPlan plan, string windowLabel)

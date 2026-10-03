@@ -9,7 +9,12 @@ public enum RecurringPlanChangeKind
     Resumed,
     VisitsSkipped,
     TimeChanged,
-    Cancelled
+    Cancelled,
+
+    // Done by an admin (support) on the customer's behalf - worded as "our support team", not "you".
+    PausedBySupport,
+    ResumedBySupport,
+    CancelledBySupport
 }
 
 /// <summary>

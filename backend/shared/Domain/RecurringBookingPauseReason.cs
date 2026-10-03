@@ -15,5 +15,8 @@ public enum RecurringBookingPauseReason
     UnpaidVisits,
 
     /// <summary>Paused by the system after an open-ended plan's auto-charge ran out of retries - see <see cref="RecurringBookingPlan.PauseForPaymentFailure"/>.</summary>
-    PaymentFailure
+    PaymentFailure,
+
+    /// <summary>Paused by an admin (support) - see <see cref="RecurringBookingPlan.PauseByAdmin"/>. The customer cannot resume it themselves; support does.</summary>
+    Admin
 }

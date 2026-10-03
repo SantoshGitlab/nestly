@@ -661,6 +661,8 @@ export enum RecurringBookingPauseReason {
   Customer = 0,
   UnpaidVisits = 1,
   PaymentFailure = 2,
+  /** Paused by our support team: only support can resume it, so the card offers no Resume. */
+  Admin = 3,
 }
 
 /** Mirrors Nestly.Domain.RecurringBookingPlanStatus's declaration order exactly. */

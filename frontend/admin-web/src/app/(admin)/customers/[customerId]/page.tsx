@@ -19,7 +19,7 @@ import { DetailError, DetailSkeleton } from "@/components/screen-states";
 import { BookingStatusBadge, CustomerStatusBadge, TicketStatusBadge } from "@/components/status-badges";
 import { API_V1, apiFetch, describeError } from "@/lib/api";
 import { useAdminClaims } from "@/lib/use-admin-claims";
-import { BookingStatus, CustomerStatus, SupportTicketStatus, WalletEntryType } from "@/lib/types";
+import { BookingStatus, CustomerStatus, SupportTicketStatus, WALLET_SOURCE_LABELS, WalletEntryType } from "@/lib/types";
 import type { CustomerDetail, CustomerNote } from "@/lib/types";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -418,7 +418,7 @@ export default function CustomerDetailPage() {
       {detailTab === "wallet" ? (
       <div className="flex flex-col gap-6">
       <Card
-        title="Wallet / refund history"
+        title="Wallet history"
         description={`Current balance: ${formatCurrency(customer.walletBalance)}`}
       >
         {canWrite ? (
@@ -462,7 +462,7 @@ export default function CustomerDetailPage() {
         ) : null}
 
         {customer.walletEntries.length === 0 ? (
-          <EmptyState title="No wallet activity" description="Refunds and wallet credits will appear here." />
+          <EmptyState title="No wallet activity" description="Top-ups, refunds, credits and what the wallet paid for will appear here." />
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {customer.walletEntries.map((entry) => (
@@ -470,8 +470,13 @@ export default function CustomerDetailPage() {
                 key={entry.id}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-3"
               >
-                <span className="min-w-0 flex-1 text-fg">{entry.description}</span>
-                <span className="nums text-xs text-fg-subtle">{formatDate(entry.createdAtUtc)}</span>
+                <span className="min-w-0 flex-1 text-fg">
+                  {entry.description}
+                  <span className="mt-0.5 block text-xs text-fg-subtle">
+                    {WALLET_SOURCE_LABELS[entry.sourceType] ?? "Other"}
+                  </span>
+                </span>
+                <span className="nums text-xs text-fg-subtle">{formatDateTime(entry.createdAtUtc)}</span>
                 <span
                   className={
                     entry.entryType === WalletEntryType.Credit
@@ -482,6 +487,7 @@ export default function CustomerDetailPage() {
                   {entry.entryType === WalletEntryType.Credit ? "+" : "−"}
                   {formatCurrency(entry.amount)}
                 </span>
+                <span className="nums w-32 text-right text-xs text-fg-subtle">Balance {formatCurrency(entry.balanceAfter)}</span>
               </li>
             ))}
           </ul>

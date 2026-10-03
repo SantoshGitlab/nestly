@@ -230,6 +230,18 @@ and pause thresholds) purely so the UI can stop at the limit; the API is the aut
 minutes. It is registered even with top-ups off - with no pending rows a pass is one empty
 indexed query.
 
+**admin-api needs the PayU settings too.** The reconciliation job, the admin's *Reconcile
+now* on the Wallet top-ups screen, admin-initiated refunds (`RefundService`) and the
+subscription billing job all talk to the payment gateway from **admin-api**. The gateway is
+chosen by configuration (`PaymentGatewayRegistration`): with `PayU__MerchantKey`,
+`PayU__MerchantSalt` and `PayU__CheckoutReturnBaseUrl` set it is real PayU, otherwise the
+sandbox - whose verify always answers "pending" and whose refund always "succeeds" without
+moving money. consumer-api has those variables on Render; **admin-api must carry the same
+four** (`PayU__MerchantKey`, `PayU__MerchantSalt`, `PayU__CheckoutReturnBaseUrl`,
+`PayU__UseProductionEnvironment`) or those four things silently run against the sandbox.
+Check by key name in Render -> glavyx-admin-api -> Environment; never paste the values into
+the repo or a chat.
+
 **Payment return and webhook.** PayU's single webhook URL (`/payments/webhook/payu`) is
 unchanged; `PaymentCallbackRouter` hands an order to the booking-payment handler first and
 only an order no booking claims to the wallet top-up service. PayU returns the browser to
@@ -288,6 +300,11 @@ customer whose wallet cannot cover it cannot reschedule at that time. Turn it on
 credited against a later cancellation after it is turned off. A reschedule setting saved before the toggle existed reads
 as off. (Note the Settings page shows the stored value, not a configuration override: if production is switched on by
 configuration, the toggle will read off until an admin saves the card.)
+
+**The admin follow-up release (wallet top-up list, plan controls).** One more EF migration,
+`AddWalletTopUpReviewFlag` (two nullable columns on `wallet_top_up`; additive, so the previous
+version keeps working while it is applied). No new configuration - but see *admin-api needs the PayU
+settings too* above: *Reconcile now* only does anything real when admin-api has them.
 
 **Rolling out the plans / wallet / reschedule release.** The release carries five EF migrations
 (`20260930115211_AddPrepaidRecurringPlanAndPaymentGroup`, `20261001095302_AddWalletTopUpAndPlanPauseFields`,

@@ -66,7 +66,7 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
     }
 
     /// <summary>A gateway whose verify answer the test scripts, to exercise the reconciliation paths a real gateway drives.</summary>
-    private sealed class ScriptedGateway : IPaymentGateway, ISandboxPaymentSimulator
+    internal sealed class ScriptedGateway : IPaymentGateway, ISandboxPaymentSimulator
     {
         public GatewayVerifyResult NextVerify { get; set; } = new("pending");
 
@@ -92,14 +92,14 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
     private static SandboxPaymentGateway Sandbox() =>
         new(Options.Create(new SandboxGatewayOptions { WebhookSigningSecret = "unit-test-signing-secret-value" }));
 
-    private static WalletTopUpOptions Enabled(Action<WalletTopUpOptions>? tweak = null)
+    internal static WalletTopUpOptions Enabled(Action<WalletTopUpOptions>? tweak = null)
     {
         var options = new WalletTopUpOptions { Enabled = true };
         tweak?.Invoke(options);
         return options;
     }
 
-    private static WalletTopUpService BuildService(
+    internal static WalletTopUpService BuildService(
         NestlyDbContext context, IPaymentGateway gateway, WalletTopUpOptions options, ISandboxPaymentSimulator? simulator = null,
         ILogger<WalletTopUpService>? logger = null) => new(
         new WalletTopUpRepository(context),
@@ -621,6 +621,8 @@ public sealed class WalletTopUpServiceTests : IClassFixture<TestDatabase>
         public Task<Result<WalletTopUpResponse>> VerifyPendingAsync(Guid customerId, Guid topUpId) => throw new NotSupportedException();
         public Task<Result<WalletTopUpResponse>> SimulateAsync(Guid customerId, Guid topUpId) => throw new NotSupportedException();
         public Task<bool> ReconcileAsync(Guid topUpId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Result<WalletTopUpReconcileOutcome>> ReconcileNowAsync(Guid topUpId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private static PaymentWebhookRequest Callback(string orderId, string signature = "ok") =>

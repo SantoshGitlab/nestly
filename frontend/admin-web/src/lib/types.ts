@@ -120,7 +120,34 @@ export enum WalletSourceType {
   Refund = 0,
   PromotionalCredit = 1,
   ManualAdjustment = 2,
+  ReferralReward = 3,
+  ReferralMilestoneBonus = 4,
+  ReferralCreditExpiry = 5,
+  NestlyCoinsReward = 6,
+  NestlyCoinsClawback = 7,
+  BookingWalletCredit = 8,
+  BookingWalletCreditReversal = 9,
+  TopUp = 10,
+  RescheduleFee = 11,
+  RescheduleFeeReversal = 12,
 }
+
+/** Plain-language label for where a wallet ledger entry came from. */
+export const WALLET_SOURCE_LABELS: Record<WalletSourceType, string> = {
+  [WalletSourceType.Refund]: "Refund",
+  [WalletSourceType.PromotionalCredit]: "Promotional credit",
+  [WalletSourceType.ManualAdjustment]: "Manual adjustment",
+  [WalletSourceType.ReferralReward]: "Referral reward",
+  [WalletSourceType.ReferralMilestoneBonus]: "Referral milestone bonus",
+  [WalletSourceType.ReferralCreditExpiry]: "Referral credit expired",
+  [WalletSourceType.NestlyCoinsReward]: "Coins reward",
+  [WalletSourceType.NestlyCoinsClawback]: "Coins clawback",
+  [WalletSourceType.BookingWalletCredit]: "Used on a booking",
+  [WalletSourceType.BookingWalletCreditReversal]: "Booking credit returned",
+  [WalletSourceType.TopUp]: "Top-up",
+  [WalletSourceType.RescheduleFee]: "Late reschedule fee",
+  [WalletSourceType.RescheduleFeeReversal]: "Late reschedule fee returned",
+};
 
 /** Mirrors Nestly.Domain.SupportTicketCategory's declaration order exactly. */
 export enum SupportTicketCategory {

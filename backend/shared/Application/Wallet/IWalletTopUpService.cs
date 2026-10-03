@@ -35,4 +35,27 @@ public interface IWalletTopUpService
 
     /// <summary>The reconciliation sweep's per-top-up step: verify with the gateway and apply a definite outcome. Returns whether the top-up was resolved.</summary>
     Task<bool> ReconcileAsync(Guid topUpId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The admin's "Reconcile now": the same gateway check as the sweep, but for one named top-up, whatever its age,
+    /// and also for a Failed one (a late payment after a write-off still credits), reporting what happened.
+    /// NotFound when the top-up does not exist.
+    /// </summary>
+    Task<Result<WalletTopUpReconcileOutcome>> ReconcileNowAsync(Guid topUpId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>What asking the gateway about a top-up changed. Crosses the wire as its ordinal - append only.</summary>
+public enum WalletTopUpReconcileOutcome
+{
+    /// <summary>The gateway confirmed the payment and the wallet was credited.</summary>
+    Credited,
+
+    /// <summary>The gateway said the payment did not happen; the top-up is now Failed and nothing was credited.</summary>
+    MarkedFailed,
+
+    /// <summary>The gateway has no final answer yet (or could not be reached); nothing changed.</summary>
+    StillPending,
+
+    /// <summary>Nothing to apply: already credited, or already Failed and the gateway agrees.</summary>
+    Unchanged
 }

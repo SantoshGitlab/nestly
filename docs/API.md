@@ -867,8 +867,8 @@ with each controller action's `/// <summary>` doc comment and
 `IncludeXmlComments` wired, so the raw OpenAPI JSON's own summaries are
 empty and the real one-line descriptions have to come from source.
 
-**Generated against commit `dc7b77f7` on 2026-10-02**: 92 controllers,
-551 operations across the three APIs. Routes, request/response shapes
+**Generated against commit `564ca806` on 2026-10-03**: 93 controllers,
+557 operations across the three APIs. Routes, request/response shapes
 and status codes are reflection-derived from the code and cannot drift from
 it *as of that commit*; controller doc comments can still be edited without
 re-running this script, and new controllers won't appear until it's re-run.
@@ -1650,9 +1650,12 @@ Admin visibility into recurring booking plans (task 299, PRODUCT-ENHANCEMENTS.md
 
 | Method | Path | Summary | Auth | Request | Success Response |
 |---|---|---|---|---|---|
-| GET | `/api/v{version}/admin/recurring-plans` | Every recurring plan on the platform, newest first, filterable by lifecycle status, cadence, customer or service. | Admin JWT + permission `bookings.read` | — | 200 → AdminRecurringPlanSearchResponse |
+| GET | `/api/v{version}/admin/recurring-plans` | Every recurring plan on the platform, newest first, filterable by lifecycle status, cadence, customer, service, pause reason or whether it is paid in advance. | Admin JWT + permission `bookings.read` | — | 200 → AdminRecurringPlanSearchResponse |
 | GET | `/api/v{version}/admin/recurring-plans/report` | Active/paused/cancelled/completed plan counts, the active-plan cadence mix, and upcoming occurrence volume over a horizon (defaults to the next four weeks). | Admin JWT + permission `bookings.read` | — | 200 → AdminRecurringPlanReportResponse |
+| GET | `/api/v{version}/admin/recurring-plans/{planId}` | One plan with the customer's contact and wallet balance and the visits it has generated (upcoming first, then the latest past ones). | Admin JWT + permission `bookings.read` | — | 200 → AdminRecurringPlanDetailResponse |
 | POST | `/api/v{version}/admin/recurring-plans/{planId}/cancel` | Cancels the whole standing instruction - no further occurrences are ever generated. Distinct from cancelling the individual bookings it has already produced, which is unaffected and still goes through `BookingsController`. | Admin JWT + permission `bookings.write` | AdminCancelRecurringPlanRequest | 200 → AdminRecurringPlanSummaryResponse |
+| POST | `/api/v{version}/admin/recurring-plans/{planId}/pause` | Pauses an active plan on the customer's behalf: no new visits are booked while it is paused, visits already booked are untouched. The customer is told support paused it and cannot resume it themselves; the reason goes to the audit trail. | Admin JWT + permission `bookings.write` | AdminPauseRecurringPlanRequest | 200 → AdminRecurringPlanSummaryResponse |
+| POST | `/api/v{version}/admin/recurring-plans/{planId}/resume` | Resumes a paused plan, whoever or whatever paused it (including one the system paused for unpaid visits). The customer is told; the reason goes to the audit trail. | Admin JWT + permission `bookings.write` | AdminResumeRecurringPlanRequest | 200 → AdminRecurringPlanSummaryResponse |
 
 ### ReferralProgramConfig
 
@@ -1898,6 +1901,16 @@ Admin-configurable system settings/feature-flag management (SRS 12.19, tasks 131
 | PUT | `/api/v{version}/settings/tax` | _(no doc comment)_ | Admin JWT + permission `settings.write` | TaxSettings | 200 → TaxSettings |
 | GET | `/api/v{version}/settings/wallet` | _(no doc comment)_ | Admin JWT + permission `settings.read` | — | 200 → WalletSettings |
 | PUT | `/api/v{version}/settings/wallet` | _(no doc comment)_ | Admin JWT + permission `settings.write` | WalletSettings | 200 → WalletSettings |
+
+### WalletTopUps
+
+Admin view of customers' wallet top-ups: a filterable list that says which ones need attention (stuck, or a gateway callback that disagreed with the amount asked for), one top-up's detail, and "Reconcile now" to ask the gateway about a stuck one. Part of the Payments module - reading needs "payments.read", reconciling needs "payments.write" - because it is money moving through the payment gateway, the same surface `PaymentsController` covers for bookings. Reconciling cannot invent a credit: it runs the same gateway check, behind the same conditional update, as the background sweep. Crediting a wallet by hand stays the customer page's audited wallet adjustment.
+
+| Method | Path | Summary | Auth | Request | Success Response |
+|---|---|---|---|---|---|
+| GET | `/api/v{version}/admin/wallet-top-ups` | Top-ups, newest first, filterable by status, "needs attention", search text and creation date, with the day's summary figures. | Admin JWT + permission `payments.read` | — | 200 → PagedAdminWalletTopUpResponse |
+| GET | `/api/v{version}/admin/wallet-top-ups/{topUpId}` | One top-up. 404 when the id is not a top-up. | Admin JWT + permission `payments.read` | — | 200 → AdminWalletTopUpResponse |
+| POST | `/api/v{version}/admin/wallet-top-ups/{topUpId}/reconcile` | Asks the gateway how this top-up ended and applies a definite answer (credit on success, Failed on a declined payment, nothing while the gateway still says pending). Audited. Safe to repeat. | Admin JWT + permission `payments.write` | — | 200 → AdminWalletTopUpReconcileResponse |
 
 ## PROVIDER-API (provider mobile/web)
 

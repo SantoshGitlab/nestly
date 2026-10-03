@@ -266,6 +266,18 @@ public class RecurringBookingPlanService : IRecurringBookingPlanService
     // about - each date that has already gone by (see RecurringBookingPlan.Resume).
     public async Task<Result<RecurringBookingPlanResponse>> ResumeAsync(Guid customerId, Guid planId)
     {
+        // A plan support paused stays paused until support resumes it - otherwise the pause would last only until the
+        // customer next opened the app.
+        var owned = await ResolveOwnedPlanAsync(customerId, planId);
+        if (owned.IsSuccess
+            && owned.Value.Status == RecurringBookingPlanStatus.Paused
+            && owned.Value.PauseReason == RecurringBookingPauseReason.Admin)
+        {
+            return Error.Business(
+                "RecurringBookingPlan.PausedBySupport",
+                "Our support team paused this plan, so it has to be resumed by them. Please contact support.");
+        }
+
         var result = await TransitionAsync(customerId, planId, plan => plan.Resume(_clock.Today), "RecurringBookingPlan.InvalidResume");
         if (result.IsSuccess)
         {

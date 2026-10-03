@@ -40,4 +40,20 @@ public interface IRecurringBookingPlanAdminService
     /// is the acting admin, for the audit trail.
     /// </summary>
     Task<Result<AdminRecurringPlanSummaryResponse>> CancelAsync(Guid planId, Guid adminUserId, AdminCancelRecurringPlanRequest request);
+
+    /// <summary>NotFound ("RecurringBookingPlan.NotFound") when the id is not a plan.</summary>
+    Task<Result<AdminRecurringPlanDetailResponse>> GetAsync(Guid planId);
+
+    /// <summary>
+    /// Pauses an active plan on the customer's behalf (the scheduler stops booking new visits; visits already booked
+    /// are untouched). Recorded as paused by an admin, which the customer cannot undo themselves; the customer is
+    /// told, and the action is audited with the reason.
+    /// </summary>
+    Task<Result<AdminRecurringPlanSummaryResponse>> PauseAsync(Guid planId, Guid adminUserId, AdminPauseRecurringPlanRequest request);
+
+    /// <summary>
+    /// Resumes a paused plan, whoever or whatever paused it (a plan the system paused for unpaid visits is resumed
+    /// the same way). The customer is told, and the action is audited with the reason.
+    /// </summary>
+    Task<Result<AdminRecurringPlanSummaryResponse>> ResumeAsync(Guid planId, Guid adminUserId, AdminResumeRecurringPlanRequest request);
 }
