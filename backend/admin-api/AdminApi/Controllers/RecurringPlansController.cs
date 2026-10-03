@@ -68,20 +68,26 @@ public class RecurringPlansController : ControllerBase
     private readonly IValidator<AdminRecurringPlanSearchRequest> _searchValidator;
     private readonly IValidator<AdminRecurringPlanReportRequest> _reportValidator;
     private readonly IValidator<AdminCancelRecurringPlanRequest> _cancelValidator;
+    private readonly IValidator<AdminPauseRecurringPlanRequest> _pauseValidator;
+    private readonly IValidator<AdminResumeRecurringPlanRequest> _resumeValidator;
 
     public RecurringPlansController(
         IRecurringBookingPlanAdminService adminService,
         IValidator<AdminRecurringPlanSearchRequest> searchValidator,
         IValidator<AdminRecurringPlanReportRequest> reportValidator,
-        IValidator<AdminCancelRecurringPlanRequest> cancelValidator)
+        IValidator<AdminCancelRecurringPlanRequest> cancelValidator,
+        IValidator<AdminPauseRecurringPlanRequest> pauseValidator,
+        IValidator<AdminResumeRecurringPlanRequest> resumeValidator)
     {
         _adminService = adminService;
         _searchValidator = searchValidator;
         _reportValidator = reportValidator;
         _cancelValidator = cancelValidator;
+        _pauseValidator = pauseValidator;
+        _resumeValidator = resumeValidator;
     }
 
-    /// <summary>Every recurring plan on the platform, newest first, filterable by lifecycle status, cadence, customer or service.</summary>
+    /// <summary>Every recurring plan on the platform, newest first, filterable by lifecycle status, cadence, customer, service, pause reason or whether it is paid in advance.</summary>
     [HttpGet]
     [Authorize(Policy = ReadPolicy)]
     [ProducesResponseType(typeof(AdminRecurringPlanSearchResponse), StatusCodes.Status200OK)]
@@ -91,10 +97,12 @@ public class RecurringPlansController : ControllerBase
         [FromQuery] RecurringBookingRecurrenceFrequency? frequency,
         [FromQuery] Guid? customerId,
         [FromQuery] Guid? serviceId,
+        [FromQuery] RecurringBookingPauseReason? pauseReason,
+        [FromQuery] bool? prepaidUpfront,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var request = new AdminRecurringPlanSearchRequest(status, frequency, customerId, serviceId, page, pageSize);
+        var request = new AdminRecurringPlanSearchRequest(status, frequency, customerId, serviceId, page, pageSize, pauseReason, prepaidUpfront);
 
         var validation = await _searchValidator.ValidateAsync(request);
         if (!validation.IsValid)
@@ -123,6 +131,59 @@ public class RecurringPlansController : ControllerBase
         }
 
         var result = await _adminService.GetReportAsync(request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>One plan with the customer's contact and wallet balance and the visits it has generated (upcoming first, then the latest past ones).</summary>
+    [HttpGet("{planId:guid}")]
+    [Authorize(Policy = ReadPolicy)]
+    [ProducesResponseType(typeof(AdminRecurringPlanDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDetail(Guid planId)
+    {
+        var result = await _adminService.GetAsync(planId);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>
+    /// Pauses an active plan on the customer's behalf: no new visits are booked while it is paused, visits already
+    /// booked are untouched. The customer is told support paused it and cannot resume it themselves; the reason goes
+    /// to the audit trail.
+    /// </summary>
+    [HttpPost("{planId:guid}/pause")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminRecurringPlanSummaryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Pause(Guid planId, [FromBody] AdminPauseRecurringPlanRequest request)
+    {
+        var validation = await _pauseValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _adminService.PauseAsync(planId, User.GetSubjectId(), request);
+        return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
+    }
+
+    /// <summary>Resumes a paused plan, whoever or whatever paused it (including one the system paused for unpaid visits). The customer is told; the reason goes to the audit trail.</summary>
+    [HttpPost("{planId:guid}/resume")]
+    [Authorize(Policy = WritePolicy)]
+    [ProducesResponseType(typeof(AdminRecurringPlanSummaryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> Resume(Guid planId, [FromBody] AdminResumeRecurringPlanRequest request)
+    {
+        var validation = await _resumeValidator.ValidateAsync(request);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(ToModelState(validation));
+        }
+
+        var result = await _adminService.ResumeAsync(planId, User.GetSubjectId(), request);
         return result.IsSuccess ? Ok(result.Value) : result.ToProblemResult();
     }
 
