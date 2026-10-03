@@ -18,6 +18,7 @@ import { listJobs } from "@/lib/jobs-api";
 import { requestPushToken } from "@/lib/push";
 import type { ProviderSessionClaims } from "@/lib/types";
 import { useOfferRinging } from "@/hooks/useOfferRinging";
+import { openJobIdFromPath } from "@/lib/offer-ringing";
 
 /**
  * Authenticated app shell: header + navigation + content area, shown once
@@ -59,7 +60,7 @@ export default function AuthenticatedLayout({ children }: { children: ReactNode 
     retry: false,
   });
   const pendingOffers = useMemo(() => listPendingOffers(jobsQuery.data ?? []), [jobsQuery.data]);
-  useOfferRinging(pendingOffers);
+  useOfferRinging(pendingOffers, openJobIdFromPath(pathname));
 
   // Fires once per mount of the authenticated shell (i.e. once per sign-in,
   // since this layout unmounts on sign-out) - job offers are time-sensitive
