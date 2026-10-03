@@ -116,6 +116,14 @@ What covers the daily/prepaid plan, wallet top-up and provider-reservation work:
   once and cancelled, plan-type tiles) and `wallet-topup.spec.ts` (sandbox top-up credits
   and shows in the ledger, the summary's "Add money" link, the return page's way back).
   The wallet spec needs the consumer API started with `WalletTopUp__Enabled=true`.
+- **What an admin sees and does** (Catalog.Tests): `AdminWalletTopUpServiceTests` (the list newest
+  first, the 24-hour summary, stuck vs needs-review, filters and search, paging, a mismatched
+  callback flagged and shown, Reconcile now - credit once, mark failed, still pending, late
+  payment after a write-off, audit entry) and `RecurringBookingPlanAdminControlsTests` (how
+  each plan is paid for and why a paused one is paused, the plan detail with wallet balance
+  and visits, admin pause / resume / cancel with the customer told and the reason audited,
+  a support-paused plan the customer cannot resume, a failing notifier never undoing the
+  action, the wording never saying "you" for something support did).
 - **What the customer is told** (Catalog.Tests): `RecurringPlanChangeMessagesTests` (the wording of every
   confirmation - free pause, booked visits still charged, singular/plural, fees and refunds),
   `RecurringPlanConfirmationsTests` (each action sends its confirmation with real facts; a failed action sends
