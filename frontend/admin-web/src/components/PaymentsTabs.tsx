@@ -15,7 +15,9 @@ import { NavTabs } from "@/components/nav-tabs";
  * gated behind "payments.read"; "Auto-charge retries" is "bookings.read"/
  * "bookings.write" (it is booking-domain data, same reasoning
  * `RecurringPlansController` gives for its own "bookings.read" gate);
- * "Payouts" is the separate "payout.read"/"payout.write" module (PROVIDER.md
+ * "Wallet top-ups" (customers adding money to their wallet through the gateway - the
+ * stuck / needs-review list and "Reconcile now") is "payments.read"/"payments.write" like the other two payment
+ * views; "Payouts" is the separate "payout.read"/"payout.write" module (PROVIDER.md
  * RBAC ADDITIONS). All three ride along this one strip anyway, for the same
  * reason AMC contracts live under `BookingsTabs` despite their own distinct
  * gating: an admin doing day-to-day payment operations looks for it here,
@@ -29,6 +31,7 @@ export function PaymentsTabs() {
       tabs={[
         { href: "/payments", label: "All transactions" },
         { href: "/payments/reconciliation", label: "Reconciliation" },
+        { href: "/payments/wallet-top-ups", label: "Wallet top-ups" },
         { href: "/payments/auto-charge", label: "Auto-charge retries" },
         { href: "/payments/payouts", label: "Payouts" },
       ]}
