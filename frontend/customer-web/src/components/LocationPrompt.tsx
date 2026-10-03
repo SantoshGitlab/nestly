@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Button, Modal, useToast } from "@/components/ui";
 import { useSelectedCity } from "@/hooks/useSelectedCity";
 import { API_V1, apiFetch } from "@/lib/api";
+import { isPermissionDenied, locateCustomer } from "@/lib/geolocation";
 import { openCityPicker, setDetectedAddressLabel, setSelectedCity, setSelectedLocality } from "@/lib/location";
 import type { City, LocalitySearchResult } from "@/lib/types";
 
@@ -54,7 +55,9 @@ export function LocationPrompt() {
   const { city } = useSelectedCity();
   const isMobile = useSyncExternalStore(subscribeToMobileQuery, getIsMobile, getIsMobileServerSnapshot);
   const [visible, setVisible] = useState(false);
-  const [status, setStatus] = useState<"idle" | "locating" | "no-match" | "unsupported" | "failed">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "awaiting-permission" | "locating" | "no-match" | "unsupported" | "failed" | "denied"
+  >("idle");
   const pushToast = useToast();
 
   // "Adjusting state when a prop changes" (react.dev/learn/you-might-not-
@@ -96,14 +99,18 @@ export function LocationPrompt() {
 
     let position: GeolocationPosition;
     try {
-      position = await getPositionWithRetry();
+      // One tap is enough: this waits for the customer to answer the browser's
+      // own prompt (see lib/geolocation.ts) instead of racing a timer against it.
+      position = await locateCustomer(undefined, {
+        onPhase: (phase) => setStatus(phase === "awaiting-permission" ? "awaiting-permission" : "locating"),
+      });
     } catch (error) {
-      // Permission denied, or both the high-accuracy and coarse fixes timed
-      // out - a real technical failure, not "you're outside our service
-      // area", so it gets its own status/message and a logged cause instead
-      // of collapsing into "no-match" like every other failure used to.
+      // A real "no", or permission never answered, or both the high-accuracy
+      // and coarse fixes timed out - none of them is "you're outside our
+      // service area", so each gets its own message and a logged cause
+      // instead of collapsing into "no-match" like every failure used to.
       console.error("Location prompt: couldn't get a GPS fix.", error);
-      setStatus("failed");
+      setStatus(isPermissionDenied(error) ? "denied" : "failed");
       return;
     }
 
@@ -185,21 +192,25 @@ export function LocationPrompt() {
 
   if (!visible) return null;
 
-  const busy = status === "locating";
+  const busy = status === "locating" || status === "awaiting-permission";
 
   return (
     <Modal open={visible} onClose={() => setVisible(false)} title="Enable your location" size="sm">
       <div className="flex flex-col gap-4">
         <p className="text-sm text-fg-muted">
-          {status === "locating"
-            ? "Getting your location - this can take a few seconds on a real GPS fix..."
-            : status === "no-match"
-              ? "We couldn't match that to a city we serve yet - pick one manually instead."
-              : status === "failed"
-                ? "We couldn't detect your location just now - pick a city manually instead."
-                : status === "unsupported"
-                  ? "Your browser doesn't support location access here - pick a city manually instead."
-                  : "Allow location access so we can show services available near you."}
+          {status === "awaiting-permission"
+            ? "Tap Allow on your browser's location prompt - we'll carry on as soon as you do."
+            : status === "locating"
+              ? "Getting your location - this can take a few seconds on a real GPS fix..."
+              : status === "no-match"
+                ? "We couldn't match that to a city we serve yet - pick one manually instead."
+                : status === "denied"
+                  ? "Location is blocked for this site - pick a city manually instead. You can allow it later in your browser's site settings."
+                  : status === "failed"
+                    ? "We couldn't detect your location just now - pick a city manually instead."
+                    : status === "unsupported"
+                      ? "Your browser doesn't support location access here - pick a city manually instead."
+                      : "Allow location access so we can show services available near you."}
         </p>
         <div className="flex flex-col gap-2">
           {status !== "unsupported" && (
@@ -207,85 +218,13 @@ export function LocationPrompt() {
               Allow location
             </Button>
           )}
-          <Button fullWidth variant="secondary" disabled={busy} onClick={chooseManually}>
+          <Button fullWidth variant="secondary" disabled={status === "locating"} onClick={chooseManually}>
             Choose city manually
           </Button>
         </div>
       </div>
     </Modal>
   );
-}
-
-/**
- * Requests a GPS fix, preferring a high-accuracy one but never letting the
- * accuracy request itself become a hard failure. `enableHighAccuracy: true`
- * asks the device to hold out for a real GPS-chip lock instead of a fast,
- * coarse WiFi/cell-tower fix - needed for building-level precision (see
- * `buildDetectedAddressLabel`'s doc comment) - but iOS Safari/WebKit has a
- * well-known quirk where a high-accuracy request can time out or fail
- * outright far more often than on Android, especially indoors (reported:
- * the location permission prompt appeared and was granted, on both Safari
- * and Chrome-on-iOS - which share the same WebKit engine under Apple's
- * platform rules, so this isn't a per-browser quirk - yet the request never
- * resolved). 8s is enough time to catch a fast high-accuracy lock without
- * making every iOS customer wait through a doomed 20s attempt first; on
- * failure or timeout, one retry without `enableHighAccuracy` almost always
- * still succeeds (that's the same "coarse but reliable" fix an unmodified
- * getCurrentPosition call would have returned). That retry gets a much
- * shorter 10s budget, not the original 20s: without a real GPS lock to wait
- * out, it resolves from WiFi/cell-tower data, which is fast - reported as
- * "takes longer to get live location" once the two budgets could stack
- * worst-case to 28s total, most of which was this retry sitting well past
- * when a coarse fix actually arrives.
- */
-function getPositionWithFallback(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
-      resolve,
-      () => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: false,
-          timeout: 10000,
-        });
-      },
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  });
-}
-
-/** `GeolocationPositionError.code` for an explicit "no" - the one failure a retry can never turn into a yes. */
-const GEOLOCATION_PERMISSION_DENIED = 1;
-
-function isPermissionDenied(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code: unknown }).code === GEOLOCATION_PERMISSION_DENIED;
-}
-
-/**
- * Reported: on a customer's very first "Allow location" tap this session,
- * nothing comes back - tapping the same button again immediately succeeds.
- * Cause: that first `getCurrentPosition` call is also what triggers the
- * browser's native OS-level permission dialog, and neither of
- * `getPositionWithFallback`'s two budgets above pause while that dialog is
- * up - the clock runs from the moment the call is made, not from when the
- * customer actually taps Allow on it. Add the time a real person takes to
- * read and tap that dialog to the device's own location-services cold start
- * (freshly enabled by that same grant), and both the 8s high-accuracy and
- * 10s coarse attempts can be spent before any fix arrives - a real timeout,
- * not a sign anything is actually wrong. A second attempt moments later, with
- * permission already settled and location services already warm, reliably
- * succeeds - this makes that second attempt automatic instead of relying on
- * the customer noticing the failure message and tapping "Allow location"
- * again themselves. Skipped entirely for an explicit PERMISSION_DENIED: that
- * is the customer's real answer, and retrying would either fail identically
- * or, worse, look like this app is nagging past a "no".
- */
-async function getPositionWithRetry(): Promise<GeolocationPosition> {
-  try {
-    return await getPositionWithFallback();
-  } catch (error) {
-    if (isPermissionDenied(error)) throw error;
-    return await getPositionWithFallback();
-  }
 }
 
 interface NominatimAddress {

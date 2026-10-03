@@ -116,6 +116,10 @@ What covers the daily/prepaid plan, wallet top-up and provider-reservation work:
   once and cancelled, plan-type tiles) and `wallet-topup.spec.ts` (sandbox top-up credits
   and shows in the ledger, the summary's "Add money" link, the return page's way back).
   The wallet spec needs the consumer API started with `WalletTopUp__Enabled=true`.
+- **customer-web unit tests:** `npm run test:unit` (Node's built-in runner through `tsx`, no extra dependency) runs
+  `src/lib/geolocation.test.ts` - "Allow location" in one tap: permission already granted, a prompt still open (the
+  browser failing the call at once, or the call just waiting), a real refusal, a prompt nobody answers, and a location
+  provider that is not ready yet. Not wired into CI yet.
 - **What an admin sees and does** (Catalog.Tests): `AdminWalletTopUpServiceTests` (the list newest
   first, the 24-hour summary, stuck vs needs-review, filters and search, paging, a mismatched
   callback flagged and shown, Reconcile now - credit once, mark failed, still pending, late
