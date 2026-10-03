@@ -1,24 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { JobListItem } from "@/lib/jobs-types";
+import { hasOpenOffer, offersToRingFor } from "@/lib/offer-ringing";
 
 /** Chime + vibration cadence. Matches VIBRATION_PATTERN's own total length below, so each cycle's buzz starts right as the previous one's tail pause ends. */
 const RING_INTERVAL_MS = 2500;
 const VIBRATION_PATTERN = [400, 200, 400, 1500];
-
-function hasUnexpiredOffer(offers: readonly JobListItem[], nowMs: number): boolean {
-  // No deadline at all is defensive-only (ProviderJobService always sets one
-  // on assignment, per listPendingOffers's own comment) - treated as "not
-  // expired" rather than dropped, same as that function's own sort does.
-  return offers.some((offer) => !offer.responseDeadline || new Date(offer.responseDeadline).getTime() > nowMs);
-}
 
 /**
  * Loops a ringtone + vibration for as long as at least one offer in
  * `offers` is still open (status Assigned, deadline not yet passed),
  * stopping the instant that stops being true - the provider accepted or
  * declined it (it drops out of the list), or its response window ran out.
+ * It is also silent while the provider has that offer's own job page open
+ * (`openJobId`), and starts again the moment they leave it unanswered.
  *
  * Called once, from `(provider)/layout.tsx` - the authenticated app shell,
  * not any one screen - fed by that layout's own actively-polled `GET /jobs`
@@ -75,8 +71,13 @@ function hasUnexpiredOffer(offers: readonly JobListItem[], nowMs: number): boole
  * elapsing with nothing new fetched is still caught by this effect's own
  * setInterval re-check, not by a dependency-array restart.
  */
-export function useOfferRinging(offers: readonly JobListItem[]): void {
+export function useOfferRinging(offers: readonly JobListItem[], openJobId: string | null = null): void {
   const audioContextRef = useRef<AudioContext | null>(null);
+
+  // The offer whose job page is open is not rung for (see lib/offer-ringing.ts): the provider is already reading it.
+  // The moment they leave that page without answering, this list includes it again, the effect below restarts and
+  // the ring resumes at once. Memoised so an unrelated re-render does not restart the ring.
+  const ringingOffers = useMemo(() => offersToRingFor(offers, openJobId), [offers, openJobId]);
 
   useEffect(() => {
     return () => {
@@ -85,7 +86,7 @@ export function useOfferRinging(offers: readonly JobListItem[]): void {
   }, []);
 
   useEffect(() => {
-    if (!hasUnexpiredOffer(offers, Date.now())) return;
+    if (!hasOpenOffer(ringingOffers, Date.now())) return;
 
     const AudioContextClass =
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -128,7 +129,7 @@ export function useOfferRinging(offers: readonly JobListItem[]): void {
       // the closure is already current for the whole interval's lifetime -
       // what this re-check catches is pure time passing (a deadline
       // elapsing), not a stale snapshot.
-      if (!hasUnexpiredOffer(offers, Date.now())) {
+      if (!hasOpenOffer(ringingOffers, Date.now())) {
         clearInterval(intervalId);
         return;
       }
@@ -141,5 +142,5 @@ export function useOfferRinging(offers: readonly JobListItem[]): void {
         navigator.vibrate(0); // cancels any in-flight pattern
       }
     };
-  }, [offers]);
+  }, [ringingOffers]);
 }
