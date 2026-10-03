@@ -35,6 +35,10 @@ public class WalletTopUpConfiguration : IEntityTypeConfiguration<WalletTopUp>
         builder.Property(x => x.CreatedAtUtc).IsRequired();
         builder.Property(x => x.CompletedAtUtc);
 
+        builder.Property(x => x.ReviewReason).HasMaxLength(WalletTopUp.MaxReviewReasonLength);
+        builder.Property(x => x.ReviewFlaggedAtUtc);
+        builder.Ignore(x => x.NeedsReview);
+
         // The velocity limit and the "reuse a recent pending" lookup both read one customer's recent rows.
         builder.HasIndex(x => new { x.CustomerId, x.CreatedAtUtc });
         // The reconciliation sweep's work list: pending rows by age.

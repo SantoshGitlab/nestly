@@ -744,6 +744,7 @@ public static class DependencyInjection
         services.AddScoped<IWalletTopUpRepository, WalletTopUpRepository>();
         services.AddScoped<IWalletTopUpService, WalletTopUpService>();
         services.AddScoped<IWalletTopUpSweepJob, WalletTopUpSweepJob>();
+        services.AddScoped<IAdminWalletTopUpService, AdminWalletTopUpService>();
         services.AddScoped<IPaymentCallbackRouter, PaymentCallbackRouter>();
         services.AddScoped<IWalletCreditExpirySweepJob, WalletCreditExpirySweepJob>();
         services.AddScoped<IBookingExpirySweepJob, BookingExpirySweepJob>();

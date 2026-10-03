@@ -38,6 +38,17 @@ public class WalletTopUp : AggregateRoot<Guid>
 
     public DateTime? CompletedAtUtc { get; private set; }
 
+    /// <summary>
+    /// Why a person must look at this top-up, or null when nothing is wrong. Set when a gateway callback
+    /// disagrees with what was asked for (the wallet is never credited from the callback's figures), so the
+    /// problem shows up in the admin top-up list instead of only in a log line. Cleared once the top-up resolves.
+    /// </summary>
+    public string? ReviewReason { get; private set; }
+
+    public DateTime? ReviewFlaggedAtUtc { get; private set; }
+
+    public bool NeedsReview => ReviewReason is not null;
+
     protected WalletTopUp() { }
 
     public WalletTopUp(Guid id, Guid customerId, decimal amount, string currency, string gatewayOrderId)
@@ -74,6 +85,7 @@ public class WalletTopUp : AggregateRoot<Guid>
         WalletLedgerEntryId = walletLedgerEntryId;
         FailureReason = null;
         CompletedAtUtc = DateTime.UtcNow;
+        ClearReviewFlag();
     }
 
     public void MarkFailed(string? reason)
@@ -86,5 +98,36 @@ public class WalletTopUp : AggregateRoot<Guid>
         Status = WalletTopUpStatus.Failed;
         FailureReason = reason;
         CompletedAtUtc = DateTime.UtcNow;
+        ClearReviewFlag();
     }
+
+    /// <summary>
+    /// Marks the top-up as needing a person's attention. Idempotent: a redelivered callback that disagrees the
+    /// same way keeps the original reason and time rather than rewriting them. A top-up that already succeeded
+    /// has nothing left to review.
+    /// </summary>
+    public void FlagForReview(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("A review reason is required.", nameof(reason));
+        }
+
+        if (Status == WalletTopUpStatus.Success || NeedsReview)
+        {
+            return;
+        }
+
+        ReviewReason = reason.Length > MaxReviewReasonLength ? reason[..MaxReviewReasonLength] : reason;
+        ReviewFlaggedAtUtc = DateTime.UtcNow;
+    }
+
+    private void ClearReviewFlag()
+    {
+        ReviewReason = null;
+        ReviewFlaggedAtUtc = null;
+    }
+
+    /// <summary>Column length of <see cref="ReviewReason"/>.</summary>
+    public const int MaxReviewReasonLength = 300;
 }
