@@ -119,7 +119,10 @@ What covers the daily/prepaid plan, wallet top-up and provider-reservation work:
 - **customer-web unit tests:** `npm run test:unit` (Node's built-in runner through `tsx`, no extra dependency) runs
   `src/lib/geolocation.test.ts` - "Allow location" in one tap: permission already granted, a prompt still open (the
   browser failing the call at once, or the call just waiting), a real refusal, a prompt nobody answers, and a location
-  provider that is not ready yet. Not wired into CI yet.
+  provider that is not ready yet. It also runs `src/lib/booking-actions.test.ts` - what the booking detail page offers
+  at each status (cancel and reschedule follow `BookingLifecycle`, review only once completed, "Amount due" vs
+  "Amount paid", and "On the way" / "Arrived" / "Service in progress" instead of a stale "Professional confirmed").
+  Not wired into CI yet.
 - **What an admin sees and does** (Catalog.Tests): `AdminWalletTopUpServiceTests` (the list newest
   first, the 24-hour summary, stuck vs needs-review, filters and search, paging, a mismatched
   callback flagged and shown, Reconcile now - credit once, mark failed, still pending, late

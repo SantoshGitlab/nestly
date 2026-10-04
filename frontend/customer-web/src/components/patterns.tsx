@@ -7,6 +7,7 @@ import { useVisibleAccountLinks } from "@/components/SiteHeader";
 import { Badge, Card, Skeleton, cx } from "@/components/ui";
 import type { BadgeTone } from "@/components/ui";
 import { SPRING } from "@/components/motion";
+import { professionalProgress } from "@/lib/booking-actions";
 import { motion } from "motion/react";
 import {
   BookingProviderAssignmentStatus,
@@ -847,6 +848,7 @@ export function Timeline({
   providerAssignmentStatus: BookingProviderAssignmentStatus | null;
 }) {
   const hasAssignment = providerAssignmentStatus !== null;
+  const progress = professionalProgress(currentStatus, providerAssignmentStatus);
 
   if (entries.length === 0 && !hasAssignment) {
     return <p className="text-sm text-fg-muted">No status history yet.</p>;
@@ -880,13 +882,15 @@ export function Timeline({
           filled
           isCurrent
           showRail={false}
-          title={providerAssignmentLabel(providerAssignmentStatus)}
+          title={progress?.label ?? providerAssignmentLabel(providerAssignmentStatus)}
           meta="Professional assignment"
         >
           <p className="mt-1 text-sm text-fg-muted">
-            {providerAssignmentStatus === BookingProviderAssignmentStatus.Accepted
-              ? "Your professional has confirmed and will arrive in your slot window."
-              : "This updates on its own — no action needed from you."}
+            {progress
+              ? progress.detail
+              : providerAssignmentStatus === BookingProviderAssignmentStatus.Accepted
+                ? "Your professional has confirmed and will arrive in your slot window."
+                : "This updates on its own — no action needed from you."}
           </p>
         </TimelineNode>
       ) : null}

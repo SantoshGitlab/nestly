@@ -617,7 +617,7 @@ public class RescheduleService : IRescheduleService
         if (!BookingLifecycle.IsValidTransition(booking.Status, BookingStatus.Rescheduled))
         {
             return new RescheduleEligibilityResponse(
-                false, $"A booking in status '{booking.Status}' cannot be rescheduled.", 0, policy.MaxReschedulesPerBooking, policy.MinHoursBeforeSlot);
+                false, $"This booking is \"{BookingStatusMapper.LabelFor(booking.Status)}\", so it can't be rescheduled.", 0, policy.MaxReschedulesPerBooking, policy.MinHoursBeforeSlot);
         }
 
         int reschedulesUsed = await _rescheduleRepository.CountByBookingAsync(booking.Id);
