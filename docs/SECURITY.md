@@ -160,6 +160,19 @@ Guidelines:
 - Prevent session fixation.
 - Protect against session hijacking.
 
+Where the web apps keep the signed-in session (customer-web and provider-web, `src/lib/session-storage.ts`):
+
+- In a browser tab: `sessionStorage`, so the session ends with the tab.
+- In an app installed to the home screen: `localStorage`. An installed app has no tab to keep open, so with
+  `sessionStorage` a customer or provider would be signed out every time they closed it, and a provider would
+  miss job offers until they logged in again. Installed apps are the main way both are used, on phones.
+- Signing out clears both stores.
+- Known limitation, unchanged: tokens in Web Storage can be read by any script on the origin, so an XSS bug
+  is a session-theft bug. Moving token issuance to an httpOnly cookie is the real fix and is tracked as
+  hardening work. Keeping the session on an installed phone widens that window. What limits it: the access
+  token lasts 15 minutes, the refresh token lasts 30 days and is revoked and replaced every time it is used,
+  and signing out revokes it.
+
 ## COMMUNICATION SECURITY
 
 All communication must:
