@@ -652,6 +652,41 @@ public sealed class CancellationServiceTests : IClassFixture<TestDatabase>
     }
 
     /// <summary>
+    /// The customer reads the refusal, so it names the status the way the app shows it ("Service in Progress"), not the
+    /// internal enum name ("InProgress"). The service has started, so only an admin can cancel from here.
+    /// </summary>
+    [Fact]
+    public async Task CancelAsync_refusal_names_the_status_the_way_the_customer_sees_it()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, hoursFromNow: 48, servicePrice: 1000m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc);
+
+        using (var context = _db.CreateContext())
+        {
+            var repository = new BookingRepository(context);
+            var booking = await repository.GetByIdAsync(fixture.BookingId);
+            foreach (var step in new[] { BookingStatus.AwaitingFulfilment, BookingStatus.Assigned, BookingStatus.InProgress })
+            {
+                booking!.TransitionTo(step, "test");
+            }
+
+            await repository.UpdateAsync(booking!);
+        }
+
+        var service = BuildCancellationService(_db.CreateContext(), gateway, timeProvider);
+
+        var refused = await service.CancelAsync(fixture.Customer.Id, fixture.BookingId, new CancelBookingRequest("Too late"));
+        refused.IsSuccess.Should().BeFalse();
+        refused.Error.Code.Should().Be("Cancellation.NotEligible");
+        refused.Error.Message.Should().Contain("Service in Progress").And.NotContain("InProgress");
+
+        var policy = await service.GetPolicyAsync(fixture.Customer.Id, fixture.BookingId);
+        policy.Value.IsEligible.Should().BeFalse();
+        policy.Value.IneligibilityReason.Should().Contain("Service in Progress").And.NotContain("InProgress");
+    }
+
+    /// <summary>
     /// NESTLY-002 regression: two near-simultaneous cancel requests for the
     /// same booking (double-click, client retry, two tabs) both read the
     /// booking while it is still Confirmed and both pass the eligibility

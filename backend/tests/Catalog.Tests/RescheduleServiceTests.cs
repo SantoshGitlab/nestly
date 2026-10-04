@@ -305,6 +305,32 @@ public sealed class RescheduleServiceTests : IClassFixture<TestDatabase>
     }
 
     [Fact]
+    public async Task GetEligibilityAsync_names_the_status_the_way_the_customer_sees_it()
+    {
+        var gateway = BuildGateway();
+        var fixture = await SeedPaidBookingAsync(gateway, 1002m);
+        var timeProvider = new FakeTimeProvider(fixture.SlotStartUtc.AddDays(-5));
+
+        using (var setupContext = _db.CreateContext())
+        {
+            var repository = new BookingRepository(setupContext);
+            var booking = await repository.GetByIdAsync(fixture.BookingId);
+            foreach (var step in new[] { BookingStatus.AwaitingFulfilment, BookingStatus.Assigned, BookingStatus.InProgress })
+            {
+                booking!.TransitionTo(step, "test");
+            }
+
+            await repository.UpdateAsync(booking!);
+        }
+
+        using var context = _db.CreateContext();
+        var result = await BuildRescheduleService(context, timeProvider).GetEligibilityAsync(fixture.Customer.Id, fixture.BookingId);
+
+        result.Value.IsEligible.Should().BeFalse();
+        result.Value.IneligibilityReason.Should().Contain("Service in Progress").And.NotContain("InProgress");
+    }
+
+    [Fact]
     public async Task ConfirmRescheduleAsync_updates_the_booking_slot_and_records_history()
     {
         var gateway = BuildGateway();

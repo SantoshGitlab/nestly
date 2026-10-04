@@ -112,7 +112,7 @@ public class CancellationService : ICancellationService
             var policy = await _policies.GetCancellationAsync();
             return Result.Success(new CancellationPolicyResponse(
                 IsEligible: false,
-                IneligibilityReason: $"A booking in status '{booking.Status}' can no longer be cancelled by the customer.",
+                IneligibilityReason: $"This booking is \"{BookingStatusMapper.LabelFor(booking.Status)}\", so it can no longer be cancelled.",
                 WithinFreeCancellationWindow: false,
                 CancellationFeeAmount: 0m,
                 RefundAmount: 0m,
@@ -158,7 +158,7 @@ public class CancellationService : ICancellationService
         {
             return Error.Business(
                 "Cancellation.NotEligible",
-                $"A booking in status '{booking.Status}' can no longer be cancelled by the customer.");
+                $"This booking is \"{BookingStatusMapper.LabelFor(booking.Status)}\", so it can no longer be cancelled.");
         }
 
         return await ExecuteCancellationAsync(booking, BookingStatus.CancelledByCustomer, CancellationActor.Customer, request.Reason, internalNotes: null);
